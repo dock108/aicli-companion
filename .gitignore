@@ -1,21 +1,22 @@
-# Task List (Confidential)
+# Claude Code Mobile Companion - .gitignore
+
+# =================================
+# Project-specific files
+# =================================
 task_list.ignore.md
+server.log
+test-*.js
+certs/
 
-# Xcode
-#
-# gitignore contributors: remember to update Global/Xcode.gitignore, Objective-C.gitignore & Swift.gitignore
+# =================================
+# iOS / Xcode
+# =================================
 
-## User settings
-xcuserdata/
-
-## compatibility with Xcode 8 and earlier (ignoring not required starting Xcode 9)
-*.xcscmblueprint
-*.xccheckout
-
-## compatibility with Xcode 3 and earlier (ignoring not required starting Xcode 4)
+# Build generated
 build/
 DerivedData/
-*.moved-aside
+
+# Various settings
 *.pbxuser
 !default.pbxuser
 *.mode1v3
@@ -24,49 +25,34 @@ DerivedData/
 !default.mode2v3
 *.perspectivev3
 !default.perspectivev3
+xcuserdata/
 
-## Obj-C/Swift specific
+# Other
+*.moved-aside
+*.xccheckout
+*.xcscmblueprint
+
+# Obj-C/Swift specific
 *.hmap
-
-## App packaging
 *.ipa
 *.dSYM.zip
 *.dSYM
 
-## Playgrounds
+# Playgrounds
 timeline.xctimeline
 playground.xcworkspace
 
 # Swift Package Manager
-#
-# Add this line if you want to avoid checking in source code from Swift Package Manager dependencies.
-# Packages/
-# Package.pins
-# Package.resolved
-# *.xcodeproj
-#
-# Xcode automatically generates this directory with a .xcworkspacedata file and xcuserdata
-# hence it is not needed unless you have added a package configuration file to your project
-# .swiftpm
-
+.swiftpm/
+Package.resolved
 .build/
 
 # CocoaPods
-#
-# We recommend against adding the Pods directory to your .gitignore. However
-# you should judge for yourself, the pros and cons are mentioned at:
-# https://guides.cocoapods.org/using/using-cocoapods.html#should-i-check-the-pods-directory-into-source-control
-#
-# Pods/
-#
-# Add this line if you want to avoid checking in source code from the Xcode workspace
-# *.xcworkspace
+Pods/
+*.xcworkspace
 
 # Carthage
-#
-# Add this line if you want to avoid checking in source code from Carthage dependencies.
-# Carthage/Checkouts
-
+Carthage/Checkouts
 Carthage/Build/
 
 # Accio dependency management
@@ -74,37 +60,21 @@ Dependencies/
 .accio/
 
 # fastlane
-#
-# It is recommended to not store the screenshots in the git repo.
-# Instead, use fastlane to re-generate the screenshots whenever they are needed.
-# For more information about the recommended setup visit:
-# https://docs.fastlane.tools/best-practices/source-control/
-
 fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
 
 # Code Injection
-#
-# After new code Injection tools there's a generated folder /iOSInjectionProject
-# https://github.com/johnno1962/injectionforxcode
-
 iOSInjectionProject/
 
-# macOS
-.DS_Store
+# =================================
+# Node.js Server
+# =================================
 
-# Development Environment
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# IDE
-.vscode/
-.idea/
+# Dependencies
+node_modules/
+jspm_packages/
 
 # Logs
 logs
@@ -112,28 +82,245 @@ logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+lerna-debug.log*
 
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+
+# nyc test coverage
+.nyc_output
+
+# Grunt intermediate storage
+.grunt
+
+# Bower dependency directory
+bower_components
+
+# node-waf configuration
+.lock-wscript
+
+# Compiled binary addons
+build/Release
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# parcel-bundler cache
+.cache
+.parcel-cache
+
+# Next.js build output
+.next
+
+# Nuxt.js build / generate output
+.nuxt
+dist
+
+# Serverless directories
+.serverless/
+
+# FuseBox cache
+.fusebox/
+
+# DynamoDB Local files
+.dynamodb/
+
+# TernJS port file
+.tern-port
+
+# =================================
+# macOS System Files
+# =================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# =================================
+# Security & Secrets
+# =================================
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# API Keys and tokens
+*.key
+*.pem
+*.p12
+*.mobileprovision
+auth_tokens.txt
+secrets.json
+config/secrets.json
+secrets/
+
+# Certificate files
+*.crt
+*.csr
+server.key
+server.crt
+certificate.crt
+
+# App Store Connect API Key
+AuthKey_*.p8
+
+# =================================
+# Development Tools
+# =================================
+
+# VSCode
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# JetBrains IDEs
+.idea/
+*.swp
+*.swo
+*~
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*.tmp
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# =================================
+# Testing & CI
+# =================================
+
+# Test results
+test-results/
+test-reports/
+coverage/
+*.coverage
+
+# Cypress
+cypress/videos/
+cypress/screenshots/
+
+# Jest
+jest_*/
+
+# =================================
 # Temporary files
+# =================================
 *.tmp
 *.temp
 temp/
 tmp/
 
-# API Keys and Secrets
-config/secrets.json
-secrets/
-*.key
-*.pem
-*.p12
-certificate.crt
+# =================================
+# Documentation & Assets
+# =================================
 
-# Testing
-coverage/
-test-results/
-*.coverage
-
-# Documentation (generated)
+# Generated documentation
 docs/build/
+docs/generated/
+*.docset
 
-# App Store Connect API Key
-AuthKey_*.p8
+# Archives
+*.zip
+*.tar.gz
+*.rar
+
+# =================================
+# Database & Storage
+# =================================
+
+# SQLite
+*.sqlite
+*.sqlite3
+*.db
+
+# Redis
+dump.rdb
+
+# =================================
+# Deployment & Production
+# =================================
+
+# Production builds
+dist/
+build/
+out/
+
+# Docker
+.dockerignore
+Dockerfile.prod
+
+# AWS
+.aws/
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+
+# =================================
+# Backup Files
+# =================================
+
+*.bak
+*.backup
+*.old
+*.orig
+
+# =================================
+# OS Generated Files
+# =================================
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*

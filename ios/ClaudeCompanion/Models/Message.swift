@@ -7,14 +7,18 @@ struct Message: Identifiable, Codable {
     let timestamp: Date
     let type: MessageType
     let metadata: ClaudeMessageMetadata?
+    let streamingState: StreamingState?
+    let requestId: String?
     
-    init(id: UUID = UUID(), content: String, sender: MessageSender, timestamp: Date = Date(), type: MessageType = .text, metadata: ClaudeMessageMetadata? = nil) {
+    init(id: UUID = UUID(), content: String, sender: MessageSender, timestamp: Date = Date(), type: MessageType = .text, metadata: ClaudeMessageMetadata? = nil, streamingState: StreamingState? = nil, requestId: String? = nil) {
         self.id = id
         self.content = content
         self.sender = sender
         self.timestamp = timestamp
         self.type = type
         self.metadata = metadata
+        self.streamingState = streamingState
+        self.requestId = requestId
     }
 }
 
@@ -29,6 +33,15 @@ enum MessageType: String, Codable, CaseIterable {
     case code = "code"
     case error = "error"
     case permission = "permission"
+    case toolUse = "tool_use"
+    case system = "system"
+}
+
+enum StreamingState: String, Codable, CaseIterable {
+    case pending = "pending"
+    case streaming = "streaming"
+    case completed = "completed"
+    case failed = "failed"
 }
 
 struct ClaudeMessageMetadata: Codable {
@@ -132,6 +145,232 @@ struct DiscoveredServer {
 
 // MARK: - Error Types
 
+// MARK: - WebSocket Message Models
+
+struct WebSocketMessage: Codable {
+    let type: WebSocketMessageType
+    let requestId: String?
+    let timestamp: Date
+    let data: Data
+    
+    enum Data: Codable {
+        case ask(AskRequest)
+        case streamStart(StreamStartRequest)
+        case streamSend(StreamSendRequest)
+        case permission(PermissionResponse)
+        case streamClose(StreamCloseRequest)
+        case ping(PingRequest)
+        case subscribe(SubscribeRequest)
+        case welcome(WelcomeResponse)
+        case askResponse(AskResponseData)
+        case streamStarted(StreamStartedResponse)
+        case streamData(StreamDataResponse)
+        case streamToolUse(StreamToolUseResponse)
+        case permissionRequest(PermissionRequestData)
+        case streamComplete(StreamCompleteResponse)
+        case error(ErrorResponse)
+        case sessionStatus(SessionStatusResponse)
+        case pong(PongResponse)
+    }
+}
+
+enum WebSocketMessageType: String, Codable {
+    // Client → Server
+    case ask = "ask"
+    case streamStart = "streamStart"
+    case streamSend = "streamSend"
+    case permission = "permission"
+    case streamClose = "streamClose"
+    case ping = "ping"
+    case subscribe = "subscribe"
+    
+    // Server → Client
+    case welcome = "welcome"
+    case askResponse = "askResponse"
+    case streamStarted = "streamStarted"
+    case streamData = "streamData"
+    case streamToolUse = "streamToolUse"
+    case permissionRequest = "permissionRequest"
+    case streamComplete = "streamComplete"
+    case error = "error"
+    case sessionStatus = "sessionStatus"
+    case pong = "pong"
+}
+
+// MARK: - Client Request Models
+
+struct AskRequest: Codable {
+    let prompt: String
+    let workingDirectory: String?
+    let options: AskOptions?
+}
+
+struct AskOptions: Codable {
+    let format: String
+    let timeout: TimeInterval
+}
+
+struct StreamStartRequest: Codable {
+    let prompt: String
+    let workingDirectory: String?
+    let options: StreamOptions?
+}
+
+struct StreamOptions: Codable {
+    let sessionName: String?
+    let preserveContext: Bool
+}
+
+struct StreamSendRequest: Codable {
+    let sessionId: String
+    let prompt: String
+}
+
+struct PermissionResponse: Codable {
+    let sessionId: String
+    let response: String
+    let remember: Bool
+}
+
+struct StreamCloseRequest: Codable {
+    let sessionId: String
+    let reason: String
+}
+
+struct PingRequest: Codable {}
+
+struct SubscribeRequest: Codable {
+    let events: [String]
+    let sessionIds: [String]?
+}
+
+// MARK: - Server Response Models
+
+struct WelcomeResponse: Codable {
+    let clientId: String
+    let serverVersion: String
+    let claudeCodeVersion: String?
+    let capabilities: [String]
+    let maxSessions: Int
+}
+
+struct AskResponseData: Codable {
+    let success: Bool
+    let response: ClaudeCodeResponse?
+    let error: String?
+}
+
+struct StreamStartedResponse: Codable {
+    let sessionId: String
+    let sessionName: String?
+    let workingDirectory: String
+}
+
+struct StreamDataResponse: Codable {
+    let sessionId: String
+    let streamType: String
+    let content: StreamContent
+    let isComplete: Bool
+}
+
+struct StreamContent: Codable {
+    let type: String
+    let text: String?
+    let data: [String: AnyCodable]?
+}
+
+struct StreamToolUseResponse: Codable {
+    let sessionId: String
+    let toolName: String
+    let toolInput: [String: AnyCodable]
+    let status: String
+}
+
+struct PermissionRequestData: Codable {
+    let sessionId: String
+    let prompt: String
+    let options: [String]
+    let defaultOption: String
+    let timeout: TimeInterval
+}
+
+struct StreamCompleteResponse: Codable {
+    let sessionId: String
+    let finalResult: String
+    let duration: TimeInterval
+    let cost: Double?
+    let usage: Usage?
+}
+
+struct ErrorResponse: Codable {
+    let code: String
+    let message: String
+    let details: [String: AnyCodable]?
+}
+
+struct SessionStatusResponse: Codable {
+    let sessionId: String
+    let status: String
+    let lastActivity: Date
+    let messageCount: Int
+    let totalCost: Double?
+}
+
+struct PongResponse: Codable {
+    let serverTime: Date
+}
+
+// MARK: - Helper Types
+
+struct AnyCodable: Codable {
+    let value: Any
+    
+    init<T>(_ value: T) {
+        self.value = value
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        
+        if let string = try? container.decode(String.self) {
+            value = string
+        } else if let int = try? container.decode(Int.self) {
+            value = int
+        } else if let double = try? container.decode(Double.self) {
+            value = double
+        } else if let bool = try? container.decode(Bool.self) {
+            value = bool
+        } else if let array = try? container.decode([AnyCodable].self) {
+            value = array.map { $0.value }
+        } else if let dictionary = try? container.decode([String: AnyCodable].self) {
+            value = dictionary.mapValues { $0.value }
+        } else {
+            value = NSNull()
+        }
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        
+        switch value {
+        case let string as String:
+            try container.encode(string)
+        case let int as Int:
+            try container.encode(int)
+        case let double as Double:
+            try container.encode(double)
+        case let bool as Bool:
+            try container.encode(bool)
+        case let array as [Any]:
+            try container.encode(array.map { AnyCodable($0) })
+        case let dictionary as [String: Any]:
+            try container.encode(dictionary.mapValues { AnyCodable($0) })
+        default:
+            try container.encodeNil()
+        }
+    }
+}
+
 enum ClaudeCompanionError: LocalizedError {
     case connectionFailed(String)
     case authenticationFailed
@@ -139,6 +378,11 @@ enum ClaudeCompanionError: LocalizedError {
     case invalidResponse
     case networkError(Error)
     case jsonParsingError(Error)
+    case webSocketError(String)
+    case sessionNotFound(String)
+    case permissionDenied
+    case rateLimited
+    case timeout
     
     var errorDescription: String? {
         switch self {
@@ -154,6 +398,16 @@ enum ClaudeCompanionError: LocalizedError {
             return "Network error: \(error.localizedDescription)"
         case .jsonParsingError(let error):
             return "Failed to parse response: \(error.localizedDescription)"
+        case .webSocketError(let message):
+            return "WebSocket error: \(message)"
+        case .sessionNotFound(let sessionId):
+            return "Session not found: \(sessionId)"
+        case .permissionDenied:
+            return "Permission denied"
+        case .rateLimited:
+            return "Too many requests. Please try again later."
+        case .timeout:
+            return "Request timed out"
         }
     }
 }

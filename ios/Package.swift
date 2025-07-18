@@ -14,7 +14,8 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/daltoniam/Starscream.git", from: "4.0.0"),
         .package(url: "https://github.com/apple/swift-markdown.git", from: "0.3.0"),
-        .package(url: "https://github.com/kishikawakatsumi/KeychainAccess.git", from: "4.2.2")
+        .package(url: "https://github.com/kishikawakatsumi/KeychainAccess.git", from: "4.2.2"),
+        .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0")
     ],
     targets: [
         .target(
@@ -22,7 +23,8 @@ let package = Package(
             dependencies: [
                 "Starscream",
                 .product(name: "Markdown", package: "swift-markdown"),
-                "KeychainAccess"
+                "KeychainAccess",
+                .product(name: "Crypto", package: "swift-crypto")
             ]
         ),
         .testTarget(

@@ -6,7 +6,20 @@
       "Bash(node:*)",
       "Bash(claude -p \"test\" --output-format json)",
       "Bash(find:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(npm install:*)",
+      "Bash(claude -p \"Hello, can you tell me what directory I''m in?\" --output-format json)",
+      "Bash(timeout 10s npm start)",
+      "Bash(pkill:*)",
+      "Bash(true)",
+      "WebFetch(domain:github.com)",
+      "Bash(killall:*)",
+      "Bash(curl:*)",
+      "Bash(grep:*)",
+      "Bash(claude --output-format json \"What is 2+2?\")",
+      "Bash(kill:*)",
+      "Bash(claude --print --output-format json \"What is 2+2?\")",
+      "Bash(timeout:*)"
     ],
     "deny": []
   }

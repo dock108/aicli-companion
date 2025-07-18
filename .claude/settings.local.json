@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(claude --version)",
+      "Bash(xcode-select:*)",
+      "Bash(node:*)",
+      "Bash(claude -p \"test\" --output-format json)",
+      "Bash(find:*)",
+      "Bash(mkdir:*)"
+    ],
+    "deny": []
+  }
+}

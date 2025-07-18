@@ -205,6 +205,23 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
         sendMessage(request, type: .streamClose)
     }
     
+    func setWorkingDirectory(_ workingDirectory: String, completion: @escaping (Result<Bool, ClaudeCompanionError>) -> Void) {
+        let request = SetWorkingDirectoryRequest(workingDirectory: workingDirectory)
+        
+        sendMessage(request, type: .setWorkingDirectory) { result in
+            switch result {
+            case .success(let message):
+                if case .workingDirectorySet(let response) = message.data {
+                    completion(.success(response.success))
+                } else {
+                    completion(.failure(.invalidResponse))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+    
     // MARK: - Message Handling
     
     func setMessageHandler(for type: WebSocketMessageType, handler: @escaping (WebSocketMessage) -> Void) {
@@ -249,6 +266,21 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
                 handleSessionStatus(message)
             case .pong:
                 handlePongMessage(message)
+            
+            // New rich message types
+            case .systemInit:
+                handleSystemInit(message)
+            case .assistantMessage:
+                handleAssistantMessage(message)
+            case .toolUse:
+                handleToolUse(message)
+            case .toolResult:
+                handleToolResult(message)
+            case .conversationResult:
+                handleConversationResult(message)
+            case .workingDirectorySet:
+                handleWorkingDirectorySet(message)
+            
             default:
                 break
             }
@@ -303,6 +335,50 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
     
     private func handlePongMessage(_ message: WebSocketMessage) {
         // Heartbeat acknowledged
+    }
+    
+    // MARK: - Rich Message Handlers
+    
+    private func handleSystemInit(_ message: WebSocketMessage) {
+        if case .systemInit(let systemInit) = message.data {
+            print("System initialized: \(systemInit.type), Tools: \(systemInit.availableTools.joined(separator: ", "))")
+        }
+        // This will be handled by registered handlers in the UI
+    }
+    
+    private func handleAssistantMessage(_ message: WebSocketMessage) {
+        if case .assistantMessage(let assistantMsg) = message.data {
+            print("Assistant message: \(assistantMsg.type), Content blocks: \(assistantMsg.content.count)")
+        }
+        // This will be handled by registered handlers in the UI
+    }
+    
+    private func handleToolUse(_ message: WebSocketMessage) {
+        if case .toolUse(let toolUse) = message.data {
+            print("Tool use: \(toolUse.toolName) with ID \(toolUse.toolId)")
+        }
+        // This will be handled by registered handlers in the UI
+    }
+    
+    private func handleToolResult(_ message: WebSocketMessage) {
+        if case .toolResult(let toolResult) = message.data {
+            print("Tool result: \(toolResult.toolName) - Success: \(toolResult.success)")
+        }
+        // This will be handled by registered handlers in the UI
+    }
+    
+    private func handleConversationResult(_ message: WebSocketMessage) {
+        if case .conversationResult(let result) = message.data {
+            print("Conversation result: Success: \(result.success), Duration: \(result.duration ?? 0)ms")
+        }
+        // This will be handled by registered handlers in the UI
+    }
+    
+    private func handleWorkingDirectorySet(_ message: WebSocketMessage) {
+        if case .workingDirectorySet(let response) = message.data {
+            print("Working directory set: \(response.workingDirectory) - Success: \(response.success)")
+        }
+        // This will be handled by registered handlers in the UI
     }
     
     // MARK: - Utility Methods

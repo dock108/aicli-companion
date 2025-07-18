@@ -10,6 +10,7 @@ export class ClaudeCodeService extends EventEmitter {
     super();
     this.activeSessions = new Map();
     this.claudeCommand = 'claude';
+    this.defaultWorkingDirectory = process.cwd();
   }
   
   async checkAvailability() {
@@ -141,13 +142,18 @@ export class ClaudeCodeService extends EventEmitter {
   }
   
   async createInteractiveSession(sessionId, initialPrompt, workingDirectory) {
+    // Use streaming format with verbose for full tool output
     const args = ['--output-format', 'stream-json', '--verbose'];
     
-    console.log(`🚀 Starting streaming session with args:`, args);
+    console.log(`🚀 Starting Claude Code interactive session with args:`, args);
+    console.log(`   Session ID: ${sessionId}`);
+    console.log(`   Working directory: ${workingDirectory}`);
+    console.log(`   Initial prompt: "${initialPrompt?.substring(0, 100)}${initialPrompt?.length > 100 ? '...' : ''}"`);
     
     const claudeProcess = spawn(this.claudeCommand, args, {
       cwd: workingDirectory,
-      stdio: ['pipe', 'pipe', 'pipe']
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env }
     });
     
     const session = {
@@ -159,20 +165,23 @@ export class ClaudeCodeService extends EventEmitter {
     
     this.activeSessions.set(sessionId, session);
     
-    // Set up event handlers
+    // Set up event handlers for Claude Code output
     claudeProcess.stdout.on('data', (data) => {
       const dataStr = data.toString();
-      console.log(`📊 Stream ${sessionId} STDOUT:`, dataStr.length, 'chars');
+      console.log(`📊 Claude ${sessionId} STDOUT:`, dataStr.length, 'chars');
       
       const lines = dataStr.split('\n').filter(line => line.trim());
       
       for (const line of lines) {
-        console.log(`   Processing line:`, line.substring(0, 100) + (line.length > 100 ? '...' : ''));
+        console.log(`   Processing line:`, line.substring(0, 150) + (line.length > 150 ? '...' : ''));
         try {
           const message = JSON.parse(line);
-          console.log(`   Parsed JSON message:`, message.type);
+          console.log(`   📋 Message type: ${message.type}, subtype: ${message.subtype || 'none'}`);
           
-          // Check for permission prompts in the message
+          // Classify and handle different types of Claude Code messages
+          const classifiedMessage = this.classifyClaudeMessage(message);
+          
+          // Check for permission prompts
           if (this.isPermissionPrompt(message)) {
             console.log(`   🔐 Permission prompt detected`);
             this.emit('permissionRequired', {
@@ -182,19 +191,24 @@ export class ClaudeCodeService extends EventEmitter {
               default: 'n'
             });
           } else {
-            console.log(`   📡 Emitting streamData`);
-            this.emit('streamData', { 
+            console.log(`   📡 Emitting ${classifiedMessage.eventType}`);
+            this.emit(classifiedMessage.eventType, { 
               sessionId, 
-              data: message,
+              data: classifiedMessage.data,
+              originalMessage: message,
               isComplete: message.type === 'result'
             });
           }
         } catch (error) {
-          // Not JSON, treat as raw text
+          // Not JSON, treat as raw text output
           console.log(`   📝 Raw text line`);
           this.emit('streamData', { 
             sessionId, 
-            data: { text: line },
+            data: { 
+              type: 'text',
+              content: line,
+              timestamp: new Date().toISOString()
+            },
             isComplete: false
           });
         }
@@ -304,6 +318,143 @@ export class ClaudeCodeService extends EventEmitter {
     }
   }
   
+  // Classify different types of Claude Code messages
+  classifyClaudeMessage(message) {
+    if (!message || typeof message !== 'object') {
+      return { eventType: 'streamData', data: message };
+    }
+
+    switch (message.type) {
+      case 'system':
+        return this.handleSystemMessage(message);
+      
+      case 'assistant':
+        return this.handleAssistantMessage(message);
+      
+      case 'result':
+        return this.handleResultMessage(message);
+      
+      case 'tool_use':
+        return this.handleToolUseMessage(message);
+      
+      case 'tool_result':
+        return this.handleToolResultMessage(message);
+      
+      default:
+        return { 
+          eventType: 'streamData', 
+          data: {
+            type: 'unknown',
+            content: message,
+            timestamp: new Date().toISOString()
+          }
+        };
+    }
+  }
+
+  handleSystemMessage(message) {
+    // System initialization messages
+    if (message.subtype === 'init') {
+      return {
+        eventType: 'systemInit',
+        data: {
+          type: 'system_init',
+          sessionId: message.session_id,
+          workingDirectory: message.cwd,
+          availableTools: message.tools || [],
+          mcpServers: message.mcp_servers || [],
+          model: message.model,
+          timestamp: new Date().toISOString()
+        }
+      };
+    }
+    
+    return {
+      eventType: 'streamData',
+      data: {
+        type: 'system',
+        content: message,
+        timestamp: new Date().toISOString()
+      }
+    };
+  }
+
+  handleAssistantMessage(message) {
+    // Claude's response messages
+    const content = message.message?.content;
+    
+    if (Array.isArray(content)) {
+      // Handle multi-part content (text + tool usage)
+      return {
+        eventType: 'assistantMessage',
+        data: {
+          type: 'assistant_response',
+          messageId: message.message?.id,
+          content: content,
+          model: message.message?.model,
+          usage: message.message?.usage,
+          timestamp: new Date().toISOString()
+        }
+      };
+    }
+    
+    return {
+      eventType: 'streamData',
+      data: {
+        type: 'assistant',
+        content: message,
+        timestamp: new Date().toISOString()
+      }
+    };
+  }
+
+  handleResultMessage(message) {
+    // Final result of the conversation
+    return {
+      eventType: 'conversationResult',
+      data: {
+        type: 'final_result',
+        success: !message.is_error,
+        result: message.result,
+        sessionId: message.session_id,
+        duration: message.duration_ms,
+        cost: message.total_cost_usd,
+        usage: message.usage,
+        timestamp: new Date().toISOString()
+      }
+    };
+  }
+
+  handleToolUseMessage(message) {
+    // Tool usage notifications
+    return {
+      eventType: 'toolUse',
+      data: {
+        type: 'tool_use',
+        toolName: message.tool_name,
+        toolInput: message.tool_input,
+        toolId: message.tool_id,
+        timestamp: new Date().toISOString()
+      }
+    };
+  }
+
+  handleToolResultMessage(message) {
+    // Tool execution results
+    return {
+      eventType: 'toolResult',
+      data: {
+        type: 'tool_result',
+        toolName: message.tool_name,
+        toolId: message.tool_id,
+        result: message.result,
+        success: !message.is_error,
+        error: message.error,
+        timestamp: new Date().toISOString()
+      }
+    };
+  }
+
   // Permission prompt detection
   isPermissionPrompt(message) {
     if (!message || typeof message !== 'object') return false;

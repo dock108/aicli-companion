@@ -9,8 +9,9 @@ struct Message: Identifiable, Codable {
     let metadata: ClaudeMessageMetadata?
     let streamingState: StreamingState?
     let requestId: String?
+    let richContent: RichContent?
     
-    init(id: UUID = UUID(), content: String, sender: MessageSender, timestamp: Date = Date(), type: MessageType = .text, metadata: ClaudeMessageMetadata? = nil, streamingState: StreamingState? = nil, requestId: String? = nil) {
+    init(id: UUID = UUID(), content: String, sender: MessageSender, timestamp: Date = Date(), type: MessageType = .text, metadata: ClaudeMessageMetadata? = nil, streamingState: StreamingState? = nil, requestId: String? = nil, richContent: RichContent? = nil) {
         self.id = id
         self.content = content
         self.sender = sender
@@ -19,7 +20,76 @@ struct Message: Identifiable, Codable {
         self.metadata = metadata
         self.streamingState = streamingState
         self.requestId = requestId
+        self.richContent = richContent
     }
+}
+
+// MARK: - Rich Content Models
+
+struct RichContent: Codable {
+    let contentType: RichContentType
+    let data: RichContentData
+}
+
+enum RichContentType: String, Codable {
+    case codeBlock = "code_block"
+    case fileContent = "file_content"
+    case commandOutput = "command_output"
+    case toolResult = "tool_result"
+    case markdown = "markdown"
+}
+
+enum RichContentData: Codable {
+    case codeBlock(CodeBlockData)
+    case fileContent(FileContentData)
+    case commandOutput(CommandOutputData)
+    case toolResult(ToolResultData)
+    case markdown(MarkdownData)
+}
+
+struct CodeBlockData: Codable {
+    let code: String
+    let language: String?
+    let filename: String?
+    let startLine: Int?
+    let endLine: Int?
+}
+
+struct FileContentData: Codable {
+    let filename: String
+    let filePath: String
+    let content: String
+    let language: String?
+    let lineCount: Int
+    let size: Int?
+}
+
+struct CommandOutputData: Codable {
+    let command: String
+    let output: String
+    let exitCode: Int?
+    let workingDirectory: String?
+    let duration: TimeInterval?
+}
+
+struct ToolResultData: Codable {
+    let toolName: String
+    let input: [String: AnyCodable]?
+    let output: String
+    let success: Bool
+    let error: String?
+    let duration: TimeInterval?
+}
+
+struct MarkdownData: Codable {
+    let markdown: String
+    let renderMode: MarkdownRenderMode
+}
+
+enum MarkdownRenderMode: String, Codable {
+    case full = "full"
+    case inline = "inline"
+    case stripped = "stripped"
 }
 
 enum MessageSender: String, Codable, CaseIterable {
@@ -30,7 +100,11 @@ enum MessageSender: String, Codable, CaseIterable {
 
 enum MessageType: String, Codable, CaseIterable {
     case text = "text"
+    case markdown = "markdown"
     case code = "code"
+    case fileContent = "file_content"
+    case commandOutput = "command_output"
+    case toolResult = "tool_result"
     case error = "error"
     case permission = "permission"
     case toolUse = "tool_use"
@@ -161,6 +235,7 @@ struct WebSocketMessage: Codable {
         case streamClose(StreamCloseRequest)
         case ping(PingRequest)
         case subscribe(SubscribeRequest)
+        case setWorkingDirectory(SetWorkingDirectoryRequest)
         case welcome(WelcomeResponse)
         case askResponse(AskResponseData)
         case streamStarted(StreamStartedResponse)
@@ -171,6 +246,14 @@ struct WebSocketMessage: Codable {
         case error(ErrorResponse)
         case sessionStatus(SessionStatusResponse)
         case pong(PongResponse)
+        
+        // New rich message types
+        case systemInit(SystemInitResponse)
+        case assistantMessage(AssistantMessageResponse)
+        case toolUse(ToolUseResponse)
+        case toolResult(ToolResultResponse)
+        case conversationResult(ConversationResultResponse)
+        case workingDirectorySet(WorkingDirectorySetResponse)
     }
 }
 
@@ -183,6 +266,7 @@ enum WebSocketMessageType: String, Codable {
     case streamClose = "streamClose"
     case ping = "ping"
     case subscribe = "subscribe"
+    case setWorkingDirectory = "setWorkingDirectory"
     
     // Server → Client
     case welcome = "welcome"
@@ -195,6 +279,14 @@ enum WebSocketMessageType: String, Codable {
     case error = "error"
     case sessionStatus = "sessionStatus"
     case pong = "pong"
+    
+    // New rich message types from enhanced server
+    case systemInit = "systemInit"
+    case assistantMessage = "assistantMessage"
+    case toolUse = "toolUse"
+    case toolResult = "toolResult"
+    case conversationResult = "conversationResult"
+    case workingDirectorySet = "workingDirectorySet"
 }
 
 // MARK: - Client Request Models
@@ -242,6 +334,10 @@ struct PingRequest: Codable {}
 struct SubscribeRequest: Codable {
     let events: [String]
     let sessionIds: [String]?
+}
+
+struct SetWorkingDirectoryRequest: Codable {
+    let workingDirectory: String
 }
 
 // MARK: - Server Response Models
@@ -318,6 +414,76 @@ struct SessionStatusResponse: Codable {
 
 struct PongResponse: Codable {
     let serverTime: Date
+}
+
+// MARK: - Rich Message Response Models
+
+struct SystemInitResponse: Codable {
+    let type: String
+    let sessionId: String?
+    let workingDirectory: String?
+    let availableTools: [String]
+    let mcpServers: [String]
+    let model: String?
+    let timestamp: Date
+}
+
+struct AssistantMessageResponse: Codable {
+    let type: String
+    let messageId: String?
+    let content: [MessageContentBlock]
+    let model: String?
+    let usage: Usage?
+    let timestamp: Date
+}
+
+struct MessageContentBlock: Codable {
+    let type: String
+    let text: String?
+    let toolName: String?
+    let toolInput: [String: AnyCodable]?
+    let toolId: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case type, text
+        case toolName = "name"
+        case toolInput = "input"
+        case toolId = "id"
+    }
+}
+
+struct ToolUseResponse: Codable {
+    let type: String
+    let toolName: String
+    let toolInput: [String: AnyCodable]
+    let toolId: String
+    let timestamp: Date
+}
+
+struct ToolResultResponse: Codable {
+    let type: String
+    let toolName: String
+    let toolId: String
+    let result: String?
+    let success: Bool
+    let error: String?
+    let timestamp: Date
+}
+
+struct ConversationResultResponse: Codable {
+    let type: String
+    let success: Bool
+    let result: String?
+    let sessionId: String?
+    let duration: TimeInterval?
+    let cost: Double?
+    let usage: Usage?
+    let timestamp: Date
+}
+
+struct WorkingDirectorySetResponse: Codable {
+    let workingDirectory: String
+    let success: Bool
 }
 
 // MARK: - Helper Types

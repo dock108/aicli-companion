@@ -95,7 +95,7 @@ export function setupWebSocket(wss, claudeService, authToken) {
     });
   });
   
-  // Set up Claude Code event listeners
+  // Set up Claude Code event listeners for rich message types
   claudeService.on('streamData', (data) => {
     broadcastToSessionClients(data.sessionId, {
       type: 'streamData',
@@ -105,8 +105,59 @@ export function setupWebSocket(wss, claudeService, authToken) {
         sessionId: data.sessionId,
         streamType: determineStreamType(data.data),
         content: formatStreamContent(data.data),
-        isComplete: data.isComplete || false
+        isComplete: data.isComplete || false,
+        originalMessage: data.originalMessage
       }
+    }, clients);
+  });
+
+  // Handle system initialization messages
+  claudeService.on('systemInit', (data) => {
+    broadcastToSessionClients(data.sessionId, {
+      type: 'systemInit',
+      requestId: null,
+      timestamp: new Date().toISOString(),
+      data: data.data
+    }, clients);
+  });
+
+  // Handle assistant responses with rich content
+  claudeService.on('assistantMessage', (data) => {
+    broadcastToSessionClients(data.sessionId, {
+      type: 'assistantMessage',
+      requestId: null,
+      timestamp: new Date().toISOString(),
+      data: data.data
+    }, clients);
+  });
+
+  // Handle tool usage notifications
+  claudeService.on('toolUse', (data) => {
+    broadcastToSessionClients(data.sessionId, {
+      type: 'toolUse',
+      requestId: null,
+      timestamp: new Date().toISOString(),
+      data: data.data
+    }, clients);
+  });
+
+  // Handle tool results
+  claudeService.on('toolResult', (data) => {
+    broadcastToSessionClients(data.sessionId, {
+      type: 'toolResult',
+      requestId: null,
+      timestamp: new Date().toISOString(),
+      data: data.data
+    }, clients);
+  });
+
+  // Handle conversation results
+  claudeService.on('conversationResult', (data) => {
+    broadcastToSessionClients(data.sessionId, {
+      type: 'conversationResult',
+      requestId: null,
+      timestamp: new Date().toISOString(),
+      data: data.data
     }, clients);
   });
   
@@ -205,6 +256,10 @@ async function handleWebSocketMessage(clientId, message, claudeService, clients)
         handleSubscribeMessage(clientId, requestId, data, clients);
         break;
         
+      case 'setWorkingDirectory':
+        await handleSetWorkingDirectoryMessage(clientId, requestId, data, claudeService, clients);
+        break;
+        
       default:
         sendErrorMessage(clientId, requestId, 'INVALID_REQUEST', `Unknown message type: ${type}`, clients);
     }
@@ -261,9 +316,15 @@ async function handleStreamStartMessage(clientId, requestId, data, claudeService
   
   try {
     const sessionId = uuidv4();
+    const finalWorkingDirectory = workingDirectory || claudeService.defaultWorkingDirectory || process.cwd();
+    
+    console.log(`🚀 Starting Claude conversation session ${sessionId}`);
+    console.log(`   Working directory: ${finalWorkingDirectory}`);
+    console.log(`   Initial prompt: "${prompt?.substring(0, 100)}${prompt?.length > 100 ? '...' : ''}"`);
+    
     const response = await claudeService.sendStreamingPrompt(prompt, {
       sessionId,
-      workingDirectory: workingDirectory || process.cwd()
+      workingDirectory: finalWorkingDirectory
     });
     
     // Associate this session with the client
@@ -382,6 +443,47 @@ function handleSubscribeMessage(clientId, requestId, data, clients) {
         success: true
       }
     }, clients);
+  }
+}
+
+async function handleSetWorkingDirectoryMessage(clientId, requestId, data, claudeService, clients) {
+  const { workingDirectory } = data;
+  
+  try {
+    // Validate the directory exists
+    const fs = await import('fs');
+    const path = await import('path');
+    
+    const resolvedPath = path.resolve(workingDirectory);
+    
+    // Check if directory exists
+    if (!fs.existsSync(resolvedPath)) {
+      sendErrorMessage(clientId, requestId, 'DIRECTORY_NOT_FOUND', `Directory does not exist: ${resolvedPath}`, clients);
+      return;
+    }
+    
+    // Check if it's actually a directory
+    const stats = fs.statSync(resolvedPath);
+    if (!stats.isDirectory()) {
+      sendErrorMessage(clientId, requestId, 'NOT_A_DIRECTORY', `Path is not a directory: ${resolvedPath}`, clients);
+      return;
+    }
+    
+    // Update the default working directory for future sessions
+    claudeService.defaultWorkingDirectory = resolvedPath;
+    
+    sendMessage(clientId, {
+      type: 'workingDirectorySet',
+      requestId,
+      timestamp: new Date().toISOString(),
+      data: {
+        workingDirectory: resolvedPath,
+        success: true
+      }
+    }, clients);
+    
+  } catch (error) {
+    sendErrorMessage(clientId, requestId, 'WORKING_DIRECTORY_ERROR', error.message, clients);
   }
 }
 

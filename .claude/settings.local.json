@@ -19,7 +19,15 @@
       "Bash(claude --output-format json \"What is 2+2?\")",
       "Bash(kill:*)",
       "Bash(claude --print --output-format json \"What is 2+2?\")",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(npx husky:*)",
+      "Bash(npx:*)",
+      "Bash(chmod:*)",
+      "Bash(npm test)",
+      "Bash(rm:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(mv:*)"
     ],
     "deny": []
   }

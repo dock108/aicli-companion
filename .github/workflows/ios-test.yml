@@ -1,0 +1,69 @@
+name: iOS Tests
+
+on:
+  push:
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios-test.yml'
+  pull_request:
+    paths:
+      - 'ios/**'
+
+jobs:
+  test:
+    name: iOS Unit Tests
+    runs-on: macos-latest
+    
+    strategy:
+      matrix:
+        xcode: ['15.0', '15.1']
+        swift: ['5.9']
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Select Xcode ${{ matrix.xcode }}
+      run: sudo xcode-select -s /Applications/Xcode_${{ matrix.xcode }}.app
+    
+    - name: Swift version
+      run: swift --version
+    
+    - name: Install SwiftLint
+      run: brew install swiftlint
+    
+    - name: Run SwiftLint
+      run: |
+        cd ios
+        swiftlint lint --strict --reporter json > swiftlint-report.json || true
+    
+    - name: Upload SwiftLint Report
+      uses: actions/upload-artifact@v3
+      with:
+        name: swiftlint-report-xcode-${{ matrix.xcode }}
+        path: ios/swiftlint-report.json
+    
+    - name: Build Package
+      run: |
+        cd ios
+        swift build -v
+    
+    - name: Run Tests
+      run: |
+        cd ios
+        swift test -v --enable-code-coverage
+    
+    - name: Generate Coverage Report
+      run: |
+        cd ios
+        xcrun llvm-cov export \
+          .build/debug/ClaudeCompanionPackageTests.xctest/Contents/MacOS/ClaudeCompanionPackageTests \
+          -instr-profile .build/debug/codecov/default.profdata \
+          -format lcov > coverage.lcov || true
+    
+    - name: Upload Coverage
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./ios/coverage.lcov
+        flags: ios
+        name: ios-coverage-xcode-${{ matrix.xcode }}
+      continue-on-error: true

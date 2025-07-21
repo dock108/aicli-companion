@@ -1,84 +1,41 @@
-import { describe, it, beforeEach, afterEach } from 'node:test';
+import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import DiscoveryService from '../../services/discovery.js';
+import { setupBonjour } from '../../services/discovery.js';
 
-describe('DiscoveryService', () => {
-  let service;
-
-  beforeEach(() => {
-    service = new DiscoveryService();
-  });
-
-  afterEach(() => {
-    // Clean up
-    if (service) {
-      service.stop();
-    }
-  });
-
-  describe('constructor', () => {
-    it('should initialize with null service', () => {
-      assert.strictEqual(service.service, null);
-      assert.ok(service.bonjour);
-    });
-  });
-
-  describe('start', () => {
-    it('should publish service on specified port', () => {
+describe('Discovery Service', () => {
+  describe('setupBonjour', () => {
+    it('should create Bonjour service with correct configuration', () => {
       const port = 3001;
+      const enableTLS = false;
 
-      service.start(port);
+      const service = setupBonjour(port, enableTLS);
 
-      assert.ok(service.service);
-      assert.strictEqual(service.service.name, 'claude-companion');
-      assert.strictEqual(service.service.port, port);
+      assert.ok(service);
+      assert.strictEqual(service.port, port);
+      assert.strictEqual(service.name, 'Claude Companion Server');
+      assert.strictEqual(service.type, '_claudecode._tcp');
     });
 
-    it('should not publish twice if already started', () => {
+    it('should set TLS configuration correctly', () => {
       const port = 3001;
+      const enableTLS = true;
 
-      service.start(port);
-      const firstService = service.service;
+      const service = setupBonjour(port, enableTLS);
 
-      service.start(port);
-      const secondService = service.service;
-
-      assert.strictEqual(firstService, secondService);
-    });
-  });
-
-  describe('stop', () => {
-    it('should stop published service', () => {
-      service.start(3001);
-      assert.ok(service.service);
-
-      service.stop();
-      assert.strictEqual(service.service, null);
+      assert.ok(service);
+      assert.strictEqual(service.txt.tls, 'enabled');
+      assert.strictEqual(service.txt.protocol, 'wss');
     });
 
-    it('should handle stop when not started', () => {
-      assert.doesNotThrow(() => {
-        service.stop();
-      });
-    });
-  });
-
-  describe('getServiceInfo', () => {
-    it('should return service info when running', () => {
+    it('should set non-TLS configuration correctly', () => {
       const port = 3001;
-      service.start(port);
+      const enableTLS = false;
 
-      const info = service.getServiceInfo();
+      const service = setupBonjour(port, enableTLS);
 
-      assert.ok(info);
-      assert.strictEqual(info.name, 'claude-companion');
-      assert.strictEqual(info.port, port);
-      assert.strictEqual(info.type, 'http');
-    });
-
-    it('should return null when not running', () => {
-      const info = service.getServiceInfo();
-      assert.strictEqual(info, null);
+      assert.ok(service);
+      assert.strictEqual(service.txt.tls, 'disabled');
+      assert.strictEqual(service.txt.protocol, 'ws');
     });
   });
 });

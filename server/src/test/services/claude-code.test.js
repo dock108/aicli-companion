@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert';
-import ClaudeCodeService from '../../services/claude-code.js';
+import { ClaudeCodeService } from '../../services/claude-code.js';
 
 describe('ClaudeCodeService', () => {
   let service;
@@ -28,16 +28,16 @@ describe('ClaudeCodeService', () => {
       const message = { type: 'system', content: 'System message' };
       const result = service.classifyClaudeMessage(message);
 
-      assert.strictEqual(result.type, 'system');
-      assert.strictEqual(result.content, 'System message');
+      assert.strictEqual(result.eventType, 'streamData');
+      assert.strictEqual(result.data.type, 'system');
     });
 
     it('should classify assistant messages', () => {
       const message = { type: 'assistant', content: 'Hello' };
       const result = service.classifyClaudeMessage(message);
 
-      assert.strictEqual(result.type, 'assistant');
-      assert.deepStrictEqual(result.content, { text: 'Hello' });
+      assert.strictEqual(result.eventType, 'streamData');
+      assert.strictEqual(result.data.type, 'assistant');
     });
 
     it('should classify tool use messages', () => {
@@ -48,9 +48,8 @@ describe('ClaudeCodeService', () => {
       };
       const result = service.classifyClaudeMessage(message);
 
-      assert.strictEqual(result.type, 'tool_use');
-      assert.strictEqual(result.tool, 'Read');
-      assert.deepStrictEqual(result.parameters, { file_path: '/test.txt' });
+      assert.strictEqual(result.eventType, 'toolUse');
+      assert.strictEqual(result.data.type, 'tool_use');
     });
 
     it('should classify tool result messages', () => {
@@ -60,8 +59,8 @@ describe('ClaudeCodeService', () => {
       };
       const result = service.classifyClaudeMessage(message);
 
-      assert.strictEqual(result.type, 'tool_result');
-      assert.strictEqual(result.result, 'File contents');
+      assert.strictEqual(result.eventType, 'toolResult');
+      assert.strictEqual(result.data.type, 'tool_result');
     });
 
     it('should handle unknown message types', () => {

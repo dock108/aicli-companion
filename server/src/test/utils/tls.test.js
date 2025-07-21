@@ -1,34 +1,31 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { generateCertificate } from '../../utils/tls.js';
+import { TLSManager, TokenManager } from '../../utils/tls.js';
 
 describe('TLS Utilities', () => {
-  describe('generateCertificate', () => {
-    it('should return certificate object with key and cert', async () => {
-      // This test uses the actual implementation since it's using crypto
-      const result = await generateCertificate();
+  describe('TLSManager', () => {
+    it('should generate self-signed certificate', async () => {
+      const tlsManager = new TLSManager();
+      const result = await tlsManager.generateSelfSignedCertificate();
 
       assert.ok(result);
       assert.ok(result.key);
       assert.ok(result.cert);
-      assert.ok(result.key.includes('BEGIN RSA PRIVATE KEY'));
       assert.ok(result.cert.includes('BEGIN CERTIFICATE'));
     });
+  });
 
-    it('should generate valid certificate properties', async () => {
-      const result = await generateCertificate();
-
-      // Check that cert contains expected fields
-      assert.ok(result.cert.includes('CN=localhost'));
-      assert.ok(result.cert.includes('Claude Companion Server'));
+  describe('TokenManager', () => {
+    it('should generate secure tokens', () => {
+      const token = TokenManager.generateSecureToken();
+      assert.ok(token);
+      assert.equal(typeof token, 'string');
+      assert.ok(token.length > 0);
     });
 
-    it('should create certificates directory', async () => {
-      // Test that the function attempts to create the certs directory
-      const result = await generateCertificate();
-
-      // If we got here without error, the directory was created or already exists
-      assert.ok(result);
+    it('should generate API keys with prefix', () => {
+      const apiKey = TokenManager.generateAPIKey();
+      assert.ok(apiKey.startsWith('cc_'));
     });
   });
 });

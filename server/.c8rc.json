@@ -1,13 +1,7 @@
 {
   "all": true,
   "include": ["src/**/*.js"],
-  "exclude": [
-    "src/**/*.test.js",
-    "src/test/**/*.js",
-    "src/__tests__/**/*.js",
-    "src/index.js",
-    "test-*.js"
-  ],
+  "exclude": ["src/**/*.test.js", "src/test/**/*.js", "src/__tests__/**/*.js", "test-*.js"],
   "reporter": ["text", "lcov", "html"],
   "check-coverage": true,
   "branches": 80,

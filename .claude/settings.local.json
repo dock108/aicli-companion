@@ -28,7 +28,26 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(mv:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(npm test:*)",
+      "Bash(.c8rc.json)",
+      "Bash(NODE_ENV=test node --test src/test/services/claude-code.test.js)",
+      "Bash(NODE_ENV=test node --test src/test/services/websocket.test.js)",
+      "Bash(NODE_ENV=test node --test src/test/routes/routes-coverage.test.js)",
+      "Bash(NODE_ENV=test node --test src/test/routes/index.test.js)",
+      "Bash(NODE_ENV=test node --test src/test/services/websocket-v2.test.js)",
+      "Bash(NODE_ENV=test timeout 60s node --test src/test/services/claude-code.test.js)",
+      "Bash(sed:*)",
+      "Bash(NODE_ENV=test node --test src/test/services/websocket-v2-enhanced.test.js)",
+      "Bash(NODE_ENV=test npx c8 --reporter=text --include=\"**/websocket-v2.js\" node --test src/test/services/websocket-v2*.test.js)",
+      "Bash(NODE_ENV=test npx c8 --reporter=text node --test src/test/services/websocket-v2*.test.js)",
+      "Bash(NODE_ENV=test npx c8 --include=\"src/services/websocket-v2.js\" --reporter=text node --test src/test/services/websocket-v2*.test.js)",
+      "Bash(NODE_ENV=test c8 --reporter=text --reporter=lcov node --test src/test/services/websocket-v2-targeted.test.js src/test/services/websocket-v2-enhanced.test.js src/test/services/claude-code.test.js)",
+      "Bash(NODE_ENV=test c8 --reporter=text node --test src/test/index-execution.test.js)",
+      "Bash(NODE_ENV=test npx c8 --reporter=text node --test src/test/index-execution.test.js)",
+      "Bash(NODE_ENV=test node --test src/test/index.test.js src/test/index-execution.test.js)",
+      "Bash(NODE_ENV=test npx c8 --reporter=text node --test src/test/index.test.js)",
+      "Bash(NODE_ENV=test npx c8 --reporter=text node --test src/test/**/*.test.js)"
     ],
     "deny": []
   }

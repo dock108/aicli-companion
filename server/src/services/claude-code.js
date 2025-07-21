@@ -40,9 +40,9 @@ export class ClaudeCodeService extends EventEmitter {
 
     try {
       if (streaming) {
-        return this.sendStreamingPrompt(prompt, { sessionId, workingDirectory });
+        return await this.sendStreamingPrompt(prompt, { sessionId, workingDirectory });
       } else {
-        return this.sendOneTimePrompt(prompt, { format, workingDirectory });
+        return await this.sendOneTimePrompt(prompt, { format, workingDirectory });
       }
     } catch (error) {
       console.error('Error sending prompt to Claude Code:', error);

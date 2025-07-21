@@ -13,16 +13,16 @@ struct ToolActivity: Identifiable, Equatable {
     var input: [String: Any]?
     var output: String?
     var error: String?
-    
+
     var duration: TimeInterval? {
         guard let endTime = endTime else { return nil }
         return endTime.timeIntervalSince(startTime)
     }
-    
+
     var isActive: Bool {
         return status == .running
     }
-    
+
     static func == (lhs: ToolActivity, rhs: ToolActivity) -> Bool {
         return lhs.id == rhs.id
     }
@@ -33,7 +33,7 @@ enum ToolActivityStatus: String, CaseIterable {
     case completed = "completed"
     case failed = "failed"
     case cancelled = "cancelled"
-    
+
     var color: Color {
         switch self {
         case .running:
@@ -46,7 +46,7 @@ enum ToolActivityStatus: String, CaseIterable {
             return .orange
         }
     }
-    
+
     var icon: String {
         switch self {
         case .running:
@@ -66,9 +66,9 @@ enum ToolActivityStatus: String, CaseIterable {
 class ToolActivityManager: ObservableObject {
     @Published var activeTools: [ToolActivity] = []
     @Published var recentTools: [ToolActivity] = []
-    
+
     private let maxRecentTools = 10
-    
+
     func startTool(id: String, name: String, sessionId: String, input: [String: Any]? = nil) {
         let activity = ToolActivity(
             id: id,
@@ -78,24 +78,24 @@ class ToolActivityManager: ObservableObject {
             status: .running,
             input: input
         )
-        
+
         DispatchQueue.main.async {
             self.activeTools.append(activity)
         }
     }
-    
+
     func completeTool(id: String, output: String? = nil) {
         updateTool(id: id, status: .completed, output: output)
     }
-    
+
     func failTool(id: String, error: String) {
         updateTool(id: id, status: .failed, error: error)
     }
-    
+
     func cancelTool(id: String) {
         updateTool(id: id, status: .cancelled)
     }
-    
+
     private func updateTool(id: String, status: ToolActivityStatus, output: String? = nil, error: String? = nil) {
         DispatchQueue.main.async {
             if let index = self.activeTools.firstIndex(where: { $0.id == id }) {
@@ -104,13 +104,13 @@ class ToolActivityManager: ObservableObject {
                 activity.endTime = Date()
                 activity.output = output
                 activity.error = error
-                
+
                 // Remove from active tools
                 self.activeTools.remove(at: index)
-                
+
                 // Add to recent tools
                 self.recentTools.insert(activity, at: 0)
-                
+
                 // Keep only recent tools
                 if self.recentTools.count > self.maxRecentTools {
                     self.recentTools = Array(self.recentTools.prefix(self.maxRecentTools))
@@ -118,17 +118,17 @@ class ToolActivityManager: ObservableObject {
             }
         }
     }
-    
+
     func clearRecentTools() {
         DispatchQueue.main.async {
             self.recentTools.removeAll()
         }
     }
-    
+
     func hasActiveTools(for sessionId: String) -> Bool {
         return activeTools.contains { $0.sessionId == sessionId }
     }
-    
+
     func getActiveTools(for sessionId: String) -> [ToolActivity] {
         return activeTools.filter { $0.sessionId == sessionId }
     }
@@ -139,7 +139,7 @@ class ToolActivityManager: ObservableObject {
 struct ToolActivityIndicator: View {
     let activity: ToolActivity
     @State private var isAnimating = false
-    
+
     var body: some View {
         HStack(spacing: 8) {
             // Tool icon with animation
@@ -147,12 +147,12 @@ struct ToolActivityIndicator: View {
                 .foregroundColor(activity.status.color)
                 .scaleEffect(isAnimating && activity.isActive ? 1.2 : 1.0)
                 .animation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true), value: isAnimating)
-            
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(activity.toolName)
                     .font(.caption)
                     .fontWeight(.medium)
-                
+
                 if activity.isActive {
                     Text("Running...")
                         .font(.caption2)
@@ -163,9 +163,9 @@ struct ToolActivityIndicator: View {
                         .foregroundColor(.secondary)
                 }
             }
-            
+
             Spacer()
-            
+
             if activity.isActive {
                 ProgressView()
                     .scaleEffect(0.7)
@@ -189,14 +189,14 @@ struct ToolActivityIndicator: View {
 struct ToolActivityList: View {
     @ObservedObject var activityManager: ToolActivityManager
     let sessionId: String?
-    
+
     var filteredActiveTools: [ToolActivity] {
         if let sessionId = sessionId {
             return activityManager.activeTools.filter { $0.sessionId == sessionId }
         }
         return activityManager.activeTools
     }
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             if !filteredActiveTools.isEmpty {
@@ -211,37 +211,37 @@ struct ToolActivityList: View {
 struct ToolActivityOverlay: View {
     @ObservedObject var activityManager: ToolActivityManager
     let sessionId: String?
-    
+
     var filteredActiveTools: [ToolActivity] {
         if let sessionId = sessionId {
             return activityManager.activeTools.filter { $0.sessionId == sessionId }
         }
         return activityManager.activeTools
     }
-    
+
     var body: some View {
         if !filteredActiveTools.isEmpty {
             VStack {
                 Spacer()
-                
+
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text("Tool Activity")
                             .font(.caption)
                             .fontWeight(.medium)
                             .foregroundColor(.secondary)
-                        
+
                         Spacer()
-                        
+
                         Text("\(filteredActiveTools.count) active")
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
-                    
+
                     ForEach(filteredActiveTools.prefix(3)) { activity in
                         ToolActivityIndicator(activity: activity)
                     }
-                    
+
                     if filteredActiveTools.count > 3 {
                         Text("... and \(filteredActiveTools.count - 3) more")
                             .font(.caption2)
@@ -265,7 +265,7 @@ struct ToolActivityOverlay: View {
 struct ToolActivitySheet: View {
     @ObservedObject var activityManager: ToolActivityManager
     @Environment(\.dismiss) private var dismiss
-    
+
     var body: some View {
         NavigationView {
             List {
@@ -276,7 +276,7 @@ struct ToolActivitySheet: View {
                         }
                     }
                 }
-                
+
                 if !activityManager.recentTools.isEmpty {
                     Section("Recent Activity") {
                         ForEach(activityManager.recentTools) { activity in
@@ -284,7 +284,7 @@ struct ToolActivitySheet: View {
                         }
                     }
                 }
-                
+
                 if activityManager.activeTools.isEmpty && activityManager.recentTools.isEmpty {
                     Section {
                         Text("No tool activity yet")
@@ -301,7 +301,7 @@ struct ToolActivitySheet: View {
                         dismiss()
                     }
                 }
-                
+
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Clear") {
                         activityManager.clearRecentTools()
@@ -316,30 +316,30 @@ struct ToolActivitySheet: View {
 struct ToolActivityDetailRow: View {
     let activity: ToolActivity
     @State private var isExpanded = false
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Image(systemName: activity.status.icon)
                     .foregroundColor(activity.status.color)
-                
+
                 VStack(alignment: .leading, spacing: 2) {
                     Text(activity.toolName)
                         .font(.headline)
-                    
+
                     Text(activity.startTime, style: .time)
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
-                
+
                 Spacer()
-                
+
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(activity.status.rawValue.capitalized)
                         .font(.caption)
                         .fontWeight(.medium)
                         .foregroundColor(activity.status.color)
-                    
+
                     if let duration = activity.duration {
                         Text("\(Int(duration * 1000))ms")
                             .font(.caption2)
@@ -350,7 +350,7 @@ struct ToolActivityDetailRow: View {
                             .foregroundColor(.secondary)
                     }
                 }
-                
+
                 Button(action: {
                     isExpanded.toggle()
                 }) {
@@ -359,7 +359,7 @@ struct ToolActivityDetailRow: View {
                         .foregroundColor(.secondary)
                 }
             }
-            
+
             if isExpanded {
                 VStack(alignment: .leading, spacing: 8) {
                     if let output = activity.output, !output.isEmpty {
@@ -367,7 +367,7 @@ struct ToolActivityDetailRow: View {
                             Text("Output:")
                                 .font(.caption)
                                 .fontWeight(.medium)
-                            
+
                             Text(output)
                                 .font(.caption)
                                 .fontFamily(.monospaced)
@@ -376,14 +376,14 @@ struct ToolActivityDetailRow: View {
                                 .cornerRadius(4)
                         }
                     }
-                    
+
                     if let error = activity.error {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Error:")
                                 .font(.caption)
                                 .fontWeight(.medium)
                                 .foregroundColor(.red)
-                            
+
                             Text(error)
                                 .font(.caption)
                                 .fontFamily(.monospaced)

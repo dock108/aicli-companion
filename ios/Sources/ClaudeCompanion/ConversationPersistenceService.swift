@@ -12,7 +12,7 @@ struct Conversation: Identifiable, Codable {
     var createdAt: Date
     var updatedAt: Date
     var metadata: ConversationMetadata
-    
+
     init(title: String = "New Conversation", sessionId: String? = nil, workingDirectory: String? = nil) {
         self.id = UUID()
         self.title = title
@@ -23,16 +23,16 @@ struct Conversation: Identifiable, Codable {
         self.updatedAt = Date()
         self.metadata = ConversationMetadata()
     }
-    
+
     mutating func addMessage(_ message: Message) {
         messages.append(message)
         updatedAt = Date()
-        
+
         // Update metadata
         metadata.messageCount = messages.count
         metadata.hasToolUsage = messages.contains { $0.type == .toolUse || $0.type == .toolResult }
         metadata.hasRichContent = messages.contains { $0.richContent != nil }
-        
+
         // Auto-generate title from first user message if still default
         if title == "New Conversation" || title.isEmpty {
             if let firstUserMessage = messages.first(where: { $0.sender == .user }) {
@@ -40,13 +40,13 @@ struct Conversation: Identifiable, Codable {
             }
         }
     }
-    
+
     private func generateTitle(from content: String) -> String {
         let words = content.components(separatedBy: .whitespacesAndNewlines)
             .filter { !$0.isEmpty }
             .prefix(6)
-        
-        if words.count > 0 {
+
+        if !words.isEmpty {
             return words.joined(separator: " ")
         }
         return "Conversation \(DateFormatter.shortDate.string(from: createdAt))"
@@ -58,10 +58,10 @@ struct ConversationMetadata: Codable {
     var hasToolUsage: Bool = false
     var hasRichContent: Bool = false
     var hasErrors: Bool = false
-    var totalCost: Double? = nil
+    var totalCost: Double?
     var tags: [String] = []
-    var projectPath: String? = nil
-    var language: String? = nil
+    var projectPath: String?
+    var language: String?
     var isFavorite: Bool = false
     var isArchived: Bool = false
 }
@@ -72,7 +72,7 @@ enum ExportFormat: String, CaseIterable {
     case text = "Text"
     case html = "HTML"
     case csv = "CSV"
-    
+
     var fileExtension: String {
         switch self {
         case .json: return "json"
@@ -82,7 +82,7 @@ enum ExportFormat: String, CaseIterable {
         case .csv: return "csv"
         }
     }
-    
+
     var icon: String {
         switch self {
         case .json: return "doc.text"
@@ -105,105 +105,105 @@ struct MultipleConversationsExport: Codable {
 class ConversationPersistenceService: ObservableObject {
     @Published var conversations: [Conversation] = []
     @Published var currentConversation: Conversation?
-    
+
     private let fileManager = FileManager.default
     private let documentsDirectory: URL
     private let conversationsDirectory: URL
-    
+
     init() {
         documentsDirectory = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
         conversationsDirectory = documentsDirectory.appendingPathComponent("Conversations")
-        
+
         createDirectoriesIfNeeded()
         loadConversations()
     }
-    
+
     // MARK: - Directory Management
-    
+
     private func createDirectoriesIfNeeded() {
         if !fileManager.fileExists(atPath: conversationsDirectory.path) {
             try? fileManager.createDirectory(at: conversationsDirectory, withIntermediateDirectories: true)
         }
     }
-    
+
     // MARK: - Conversation Management
-    
+
     func createNewConversation(title: String? = nil, sessionId: String? = nil, workingDirectory: String? = nil) -> Conversation {
         let conversation = Conversation(
             title: title ?? "New Conversation",
             sessionId: sessionId,
             workingDirectory: workingDirectory
         )
-        
+
         conversations.insert(conversation, at: 0)
         currentConversation = conversation
         saveConversation(conversation)
-        
+
         return conversation
     }
-    
+
     func addMessageToCurrentConversation(_ message: Message) {
         guard var conversation = currentConversation else {
             currentConversation = createNewConversation()
             addMessageToCurrentConversation(message)
             return
         }
-        
+
         conversation.addMessage(message)
-        
+
         // Update in array
         if let index = conversations.firstIndex(where: { $0.id == conversation.id }) {
             conversations[index] = conversation
         }
-        
+
         currentConversation = conversation
         saveConversation(conversation)
     }
-    
+
     func updateCurrentConversationTitle(_ title: String) {
         guard var conversation = currentConversation else { return }
-        
+
         conversation.title = title
         conversation.updatedAt = Date()
-        
+
         if let index = conversations.firstIndex(where: { $0.id == conversation.id }) {
             conversations[index] = conversation
         }
-        
+
         currentConversation = conversation
         saveConversation(conversation)
     }
-    
+
     func updateCurrentConversationWorkingDirectory(_ workingDirectory: String) {
         guard var conversation = currentConversation else { return }
-        
+
         conversation.workingDirectory = workingDirectory
         conversation.updatedAt = Date()
-        
+
         if let index = conversations.firstIndex(where: { $0.id == conversation.id }) {
             conversations[index] = conversation
         }
-        
+
         currentConversation = conversation
         saveConversation(conversation)
     }
-    
+
     func switchToConversation(_ conversation: Conversation) {
         currentConversation = conversation
     }
-    
+
     func deleteConversation(_ conversation: Conversation) {
         conversations.removeAll { $0.id == conversation.id }
-        
+
         if currentConversation?.id == conversation.id {
             currentConversation = conversations.first
         }
-        
+
         // Delete file
         let fileURL = conversationsDirectory.appendingPathComponent("\(conversation.id.uuidString).json")
         try? fileManager.removeItem(at: fileURL)
     }
-    
+
     func duplicateConversation(_ conversation: Conversation) -> Conversation {
         var newConversation = conversation
         newConversation.id = UUID()
@@ -211,44 +211,44 @@ class ConversationPersistenceService: ObservableObject {
         newConversation.createdAt = Date()
         newConversation.updatedAt = Date()
         newConversation.sessionId = nil // Reset session ID for copy
-        
+
         conversations.insert(newConversation, at: 0)
         saveConversation(newConversation)
-        
+
         return newConversation
     }
-    
+
     // MARK: - Search and Filtering
-    
+
     func searchConversations(query: String) -> [Conversation] {
         guard !query.isEmpty else { return conversations }
-        
+
         return conversations.filter { conversation in
             conversation.title.localizedCaseInsensitiveContains(query) ||
-            conversation.messages.contains { message in
-                message.content.localizedCaseInsensitiveContains(query)
-            }
+                conversation.messages.contains { message in
+                    message.content.localizedCaseInsensitiveContains(query)
+                }
         }
     }
-    
+
     func getConversationsWithTag(_ tag: String) -> [Conversation] {
         return conversations.filter { $0.metadata.tags.contains(tag) }
     }
-    
+
     func getConversationsWithToolUsage() -> [Conversation] {
         return conversations.filter { $0.metadata.hasToolUsage }
     }
-    
+
     func getAllTags() -> [String] {
         let allTags = conversations.flatMap { $0.metadata.tags }
         return Array(Set(allTags)).sorted()
     }
-    
+
     // MARK: - File Operations
-    
+
     private func saveConversation(_ conversation: Conversation) {
         let fileURL = conversationsDirectory.appendingPathComponent("\(conversation.id.uuidString).json")
-        
+
         do {
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
@@ -258,14 +258,14 @@ class ConversationPersistenceService: ObservableObject {
             print("Failed to save conversation: \(error)")
         }
     }
-    
+
     private func loadConversations() {
         do {
             let files = try fileManager.contentsOfDirectory(at: conversationsDirectory, includingPropertiesForKeys: nil)
             let jsonFiles = files.filter { $0.pathExtension == "json" }
-            
+
             var loadedConversations: [Conversation] = []
-            
+
             for file in jsonFiles {
                 do {
                     let data = try Data(contentsOf: file)
@@ -277,31 +277,30 @@ class ConversationPersistenceService: ObservableObject {
                     print("Failed to load conversation from \(file): \(error)")
                 }
             }
-            
+
             // Sort by updated date, most recent first
             conversations = loadedConversations.sorted { $0.updatedAt > $1.updatedAt }
-            
         } catch {
             print("Failed to load conversations directory: \(error)")
         }
     }
-    
+
     // MARK: - Conversation Management
-    
+
     func archiveConversation(_ conversation: Conversation) {
         if let index = conversations.firstIndex(where: { $0.id == conversation.id }) {
             conversations[index].metadata.isArchived = true
             saveConversation(conversations[index])
         }
     }
-    
+
     func unarchiveConversation(_ conversation: Conversation) {
         if let index = conversations.firstIndex(where: { $0.id == conversation.id }) {
             conversations[index].metadata.isArchived = false
             saveConversation(conversations[index])
         }
     }
-    
+
     func addTagToConversation(_ conversation: Conversation, tag: String) {
         if let index = conversations.firstIndex(where: { $0.id == conversation.id }) {
             if !conversations[index].metadata.tags.contains(tag) {
@@ -310,40 +309,40 @@ class ConversationPersistenceService: ObservableObject {
             }
         }
     }
-    
+
     func removeTagFromConversation(_ conversation: Conversation, tag: String) {
         if let index = conversations.firstIndex(where: { $0.id == conversation.id }) {
             conversations[index].metadata.tags.removeAll { $0 == tag }
             saveConversation(conversations[index])
         }
     }
-    
+
     func favoriteConversation(_ conversation: Conversation) {
         if let index = conversations.firstIndex(where: { $0.id == conversation.id }) {
             conversations[index].metadata.isFavorite = true
             saveConversation(conversations[index])
         }
     }
-    
+
     func unfavoriteConversation(_ conversation: Conversation) {
         if let index = conversations.firstIndex(where: { $0.id == conversation.id }) {
             conversations[index].metadata.isFavorite = false
             saveConversation(conversations[index])
         }
     }
-    
+
     func getFavoriteConversations() -> [Conversation] {
         return conversations.filter { $0.metadata.isFavorite }
     }
-    
+
     func getArchivedConversations() -> [Conversation] {
         return conversations.filter { $0.metadata.isArchived }
     }
-    
+
     func getActiveConversations() -> [Conversation] {
         return conversations.filter { !$0.metadata.isArchived }
     }
-    
+
     func bulkDeleteConversations(_ conversationIds: [UUID]) {
         for id in conversationIds {
             if let conversation = conversations.first(where: { $0.id == id }) {
@@ -351,7 +350,7 @@ class ConversationPersistenceService: ObservableObject {
             }
         }
     }
-    
+
     func bulkArchiveConversations(_ conversationIds: [UUID]) {
         for id in conversationIds {
             if let conversation = conversations.first(where: { $0.id == id }) {
@@ -359,19 +358,19 @@ class ConversationPersistenceService: ObservableObject {
             }
         }
     }
-    
+
     func bulkExportConversations(_ conversationIds: [UUID], format: ExportFormat) -> URL? {
         let conversationsToExport = conversations.filter { conversationIds.contains($0.id) }
         return exportMultipleConversations(conversationsToExport, format: format)
     }
-    
+
     // MARK: - Export and Import
-    
+
     func exportConversation(_ conversation: Conversation) -> URL? {
         let tempDirectory = fileManager.temporaryDirectory
         let fileName = "\(conversation.title.replacingOccurrences(of: " ", with: "_"))_\(DateFormatter.filenameSafe.string(from: conversation.createdAt)).json"
         let tempURL = tempDirectory.appendingPathComponent(fileName)
-        
+
         do {
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
@@ -384,29 +383,29 @@ class ConversationPersistenceService: ObservableObject {
             return nil
         }
     }
-    
+
     func exportConversationAsText(_ conversation: Conversation) -> URL? {
         let tempDirectory = fileManager.temporaryDirectory
         let fileName = "\(conversation.title.replacingOccurrences(of: " ", with: "_"))_\(DateFormatter.filenameSafe.string(from: conversation.createdAt)).txt"
         let tempURL = tempDirectory.appendingPathComponent(fileName)
-        
+
         var content = "# \(conversation.title)\n\n"
         content += "Created: \(DateFormatter.readable.string(from: conversation.createdAt))\n"
         content += "Updated: \(DateFormatter.readable.string(from: conversation.updatedAt))\n"
-        
+
         if let workingDir = conversation.workingDirectory {
             content += "Working Directory: \(workingDir)\n"
         }
-        
+
         content += "\n---\n\n"
-        
+
         for message in conversation.messages {
             let sender = message.sender.rawValue.capitalized
             let timestamp = DateFormatter.timeOnly.string(from: message.timestamp)
-            
+
             content += "**\(sender)** (\(timestamp)):\n"
             content += "\(message.content)\n\n"
-            
+
             if let richContent = message.richContent {
                 switch richContent.data {
                 case .codeBlock(let codeData):
@@ -421,10 +420,10 @@ class ConversationPersistenceService: ObservableObject {
                     content += "\(markdownData.markdown)\n\n"
                 }
             }
-            
+
             content += "---\n\n"
         }
-        
+
         do {
             try content.write(to: tempURL, atomically: true, encoding: .utf8)
             return tempURL
@@ -433,9 +432,9 @@ class ConversationPersistenceService: ObservableObject {
             return nil
         }
     }
-    
+
     // MARK: - Enhanced Export Methods
-    
+
     func exportConversation(_ conversation: Conversation, format: ExportFormat) -> URL? {
         switch format {
         case .json:
@@ -450,48 +449,48 @@ class ConversationPersistenceService: ObservableObject {
             return exportConversationAsCSV(conversation)
         }
     }
-    
+
     func exportConversationAsMarkdown(_ conversation: Conversation) -> URL? {
         let tempDirectory = fileManager.temporaryDirectory
         let fileName = "\(conversation.title.replacingOccurrences(of: " ", with: "_"))_\(DateFormatter.filenameSafe.string(from: conversation.createdAt)).md"
         let tempURL = tempDirectory.appendingPathComponent(fileName)
-        
+
         var content = "# \(conversation.title)\n\n"
-        
+
         // Metadata section
         content += "## Conversation Details\n\n"
         content += "- **Created:** \(DateFormatter.readable.string(from: conversation.createdAt))\n"
         content += "- **Updated:** \(DateFormatter.readable.string(from: conversation.updatedAt))\n"
         content += "- **Messages:** \(conversation.messages.count)\n"
-        
+
         if let workingDir = conversation.workingDirectory {
             content += "- **Working Directory:** `\(workingDir)`\n"
         }
-        
+
         if !conversation.metadata.tags.isEmpty {
             content += "- **Tags:** \(conversation.metadata.tags.joined(separator: ", "))\n"
         }
-        
+
         if conversation.metadata.hasToolUsage {
             content += "- **Tool Usage:** Yes\n"
         }
-        
+
         if let cost = conversation.metadata.totalCost {
             content += "- **Cost:** $\(String(format: "%.4f", cost))\n"
         }
-        
+
         content += "\n---\n\n"
-        
+
         // Messages section
         content += "## Conversation History\n\n"
-        
+
         for (index, message) in conversation.messages.enumerated() {
             let sender = message.sender.rawValue.capitalized
             let timestamp = DateFormatter.timeOnly.string(from: message.timestamp)
-            
+
             content += "### \(sender) - \(timestamp)\n\n"
             content += "\(message.content)\n\n"
-            
+
             // Handle rich content
             if let richContent = message.richContent {
                 switch richContent.data {
@@ -522,12 +521,12 @@ class ConversationPersistenceService: ObservableObject {
                     content += "```\n\(commandData.output)\n```\n\n"
                 }
             }
-            
+
             if index < conversation.messages.count - 1 {
                 content += "---\n\n"
             }
         }
-        
+
         do {
             try content.write(to: tempURL, atomically: true, encoding: .utf8)
             return tempURL
@@ -536,12 +535,12 @@ class ConversationPersistenceService: ObservableObject {
             return nil
         }
     }
-    
+
     func exportConversationAsHTML(_ conversation: Conversation) -> URL? {
         let tempDirectory = fileManager.temporaryDirectory
         let fileName = "\(conversation.title.replacingOccurrences(of: " ", with: "_"))_\(DateFormatter.filenameSafe.string(from: conversation.createdAt)).html"
         let tempURL = tempDirectory.appendingPathComponent(fileName)
-        
+
         var html = """
         <!DOCTYPE html>
         <html lang="en">
@@ -583,26 +582,26 @@ class ConversationPersistenceService: ObservableObject {
                         <span><strong>Created:</strong> \(DateFormatter.readable.string(from: conversation.createdAt))</span>
                         <span><strong>Messages:</strong> \(conversation.messages.count)</span>
         """
-        
+
         if let workingDir = conversation.workingDirectory {
             html += "<span><strong>Working Directory:</strong> <code>\(workingDir)</code></span>"
         }
-        
+
         if conversation.metadata.hasToolUsage {
             html += "<span><strong>Tool Usage:</strong> Yes</span>"
         }
-        
+
         html += """
                     </div>
                 </div>
                 <div class="messages">
         """
-        
+
         for message in conversation.messages {
             let sender = message.sender.rawValue
             let timestamp = DateFormatter.timeOnly.string(from: message.timestamp)
             let senderDisplay = message.sender.rawValue.capitalized
-            
+
             html += """
                     <div class="message \(sender)">
                         <div class="message-header">
@@ -612,10 +611,10 @@ class ConversationPersistenceService: ObservableObject {
                         <div class="message-content">
                             <p>\(message.content.replacingOccurrences(of: "\n", with: "<br>"))</p>
             """
-            
+
             if let richContent = message.richContent {
                 html += "<div class=\"rich-content\">"
-                
+
                 switch richContent.data {
                 case .codeBlock(let codeData):
                     html += "<h4>Code Block</h4>"
@@ -639,23 +638,23 @@ class ConversationPersistenceService: ObservableObject {
                     html += "<p><strong>Exit Code:</strong> \(commandData.exitCode)</p>"
                     html += "<pre><code>\(commandData.output)</code></pre>"
                 }
-                
+
                 html += "</div>"
             }
-            
+
             html += """
                         </div>
                     </div>
             """
         }
-        
+
         html += """
                 </div>
             </div>
         </body>
         </html>
         """
-        
+
         do {
             try html.write(to: tempURL, atomically: true, encoding: .utf8)
             return tempURL
@@ -664,24 +663,24 @@ class ConversationPersistenceService: ObservableObject {
             return nil
         }
     }
-    
+
     func exportConversationAsCSV(_ conversation: Conversation) -> URL? {
         let tempDirectory = fileManager.temporaryDirectory
         let fileName = "\(conversation.title.replacingOccurrences(of: " ", with: "_"))_\(DateFormatter.filenameSafe.string(from: conversation.createdAt)).csv"
         let tempURL = tempDirectory.appendingPathComponent(fileName)
-        
+
         var csv = "Timestamp,Sender,Type,Content,HasRichContent,ToolName,Success\n"
-        
+
         for message in conversation.messages {
             let timestamp = DateFormatter.iso8601.string(from: message.timestamp)
             let sender = message.sender.rawValue
             let type = message.type.rawValue
             let content = "\"" + message.content.replacingOccurrences(of: "\"", with: "\"\"") + "\""
             let hasRichContent = message.richContent != nil ? "Yes" : "No"
-            
+
             var toolName = ""
             var success = ""
-            
+
             if let richContent = message.richContent {
                 switch richContent.data {
                 case .toolResult(let toolData):
@@ -694,10 +693,10 @@ class ConversationPersistenceService: ObservableObject {
                     break
                 }
             }
-            
+
             csv += "\(timestamp),\(sender),\(type),\(content),\(hasRichContent),\(toolName),\(success)\n"
         }
-        
+
         do {
             try csv.write(to: tempURL, atomically: true, encoding: .utf8)
             return tempURL
@@ -706,13 +705,13 @@ class ConversationPersistenceService: ObservableObject {
             return nil
         }
     }
-    
+
     func exportMultipleConversations(_ conversations: [Conversation], format: ExportFormat) -> URL? {
         let tempDirectory = fileManager.temporaryDirectory
         let timestamp = DateFormatter.filenameSafe.string(from: Date())
         let fileName = "conversations_export_\(timestamp).\(format.fileExtension)"
         let tempURL = tempDirectory.appendingPathComponent(fileName)
-        
+
         switch format {
         case .json:
             return exportMultipleConversationsAsJSON(conversations, to: tempURL)
@@ -726,14 +725,14 @@ class ConversationPersistenceService: ObservableObject {
             return exportMultipleConversationsAsText(conversations, to: tempURL)
         }
     }
-    
+
     private func exportMultipleConversationsAsJSON(_ conversations: [Conversation], to url: URL) -> URL? {
         let exportData = MultipleConversationsExport(
             exportDate: Date(),
             conversationCount: conversations.count,
             conversations: conversations
         )
-        
+
         do {
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
@@ -746,28 +745,28 @@ class ConversationPersistenceService: ObservableObject {
             return nil
         }
     }
-    
+
     private func exportMultipleConversationsAsMarkdown(_ conversations: [Conversation], to url: URL) -> URL? {
         var content = "# Conversation Export\n\n"
         content += "**Export Date:** \(DateFormatter.readable.string(from: Date()))\n"
         content += "**Total Conversations:** \(conversations.count)\n\n"
         content += "---\n\n"
-        
+
         for (index, conversation) in conversations.enumerated() {
             content += "## \(index + 1). \(conversation.title)\n\n"
             content += "**Created:** \(DateFormatter.readable.string(from: conversation.createdAt))\n"
             content += "**Messages:** \(conversation.messages.count)\n\n"
-            
+
             for message in conversation.messages {
                 let sender = message.sender.rawValue.capitalized
                 content += "**\(sender):** \(message.content)\n\n"
             }
-            
+
             if index < conversations.count - 1 {
                 content += "\n---\n\n"
             }
         }
-        
+
         do {
             try content.write(to: url, atomically: true, encoding: .utf8)
             return url
@@ -776,7 +775,7 @@ class ConversationPersistenceService: ObservableObject {
             return nil
         }
     }
-    
+
     private func exportMultipleConversationsAsHTML(_ conversations: [Conversation], to url: URL) -> URL? {
         var html = """
         <!DOCTYPE html>
@@ -801,7 +800,7 @@ class ConversationPersistenceService: ObservableObject {
             <p><strong>Export Date:</strong> \(DateFormatter.readable.string(from: Date()))</p>
             <p><strong>Total Conversations:</strong> \(conversations.count)</p>
         """
-        
+
         for conversation in conversations {
             html += """
             <div class="conversation">
@@ -811,18 +810,18 @@ class ConversationPersistenceService: ObservableObject {
                 </div>
                 <div class="conversation-content">
             """
-            
+
             for message in conversation.messages {
                 html += "<div class=\"message \(message.sender.rawValue)\">"
                 html += "<strong>\(message.sender.rawValue.capitalized):</strong> \(message.content.replacingOccurrences(of: "\n", with: "<br>"))"
                 html += "</div>"
             }
-            
+
             html += "</div></div>"
         }
-        
+
         html += "</body></html>"
-        
+
         do {
             try html.write(to: url, atomically: true, encoding: .utf8)
             return url
@@ -831,10 +830,10 @@ class ConversationPersistenceService: ObservableObject {
             return nil
         }
     }
-    
+
     private func exportMultipleConversationsAsCSV(_ conversations: [Conversation], to url: URL) -> URL? {
         var csv = "ConversationID,ConversationTitle,Timestamp,Sender,Type,Content\n"
-        
+
         for conversation in conversations {
             for message in conversation.messages {
                 let timestamp = DateFormatter.iso8601.string(from: message.timestamp)
@@ -842,7 +841,7 @@ class ConversationPersistenceService: ObservableObject {
                 csv += "\(conversation.id),\"\(conversation.title)\",\(timestamp),\(message.sender.rawValue),\(message.type.rawValue),\(content)\n"
             }
         }
-        
+
         do {
             try csv.write(to: url, atomically: true, encoding: .utf8)
             return url
@@ -851,26 +850,26 @@ class ConversationPersistenceService: ObservableObject {
             return nil
         }
     }
-    
+
     private func exportMultipleConversationsAsText(_ conversations: [Conversation], to url: URL) -> URL? {
         var content = "CONVERSATION EXPORT\n"
         content += "==================\n\n"
         content += "Export Date: \(DateFormatter.readable.string(from: Date()))\n"
         content += "Total Conversations: \(conversations.count)\n\n"
-        
+
         for (index, conversation) in conversations.enumerated() {
             content += "\(index + 1). \(conversation.title)\n"
             content += String(repeating: "-", count: conversation.title.count + 3) + "\n"
             content += "Created: \(DateFormatter.readable.string(from: conversation.createdAt))\n"
             content += "Messages: \(conversation.messages.count)\n\n"
-            
+
             for message in conversation.messages {
                 content += "[\(message.sender.rawValue.uppercased())] \(message.content)\n\n"
             }
-            
+
             content += "\n"
         }
-        
+
         do {
             try content.write(to: url, atomically: true, encoding: .utf8)
             return url
@@ -879,14 +878,14 @@ class ConversationPersistenceService: ObservableObject {
             return nil
         }
     }
-    
+
     func importConversation(from url: URL) -> Bool {
         do {
             let data = try Data(contentsOf: url)
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
             let conversation = try decoder.decode(Conversation.self, from: data)
-            
+
             // Check if conversation already exists
             if !conversations.contains(where: { $0.id == conversation.id }) {
                 conversations.insert(conversation, at: 0)
@@ -898,16 +897,16 @@ class ConversationPersistenceService: ObservableObject {
         }
         return false
     }
-    
+
     // MARK: - Statistics
-    
+
     func getStatistics() -> ConversationStatistics {
         let totalMessages = conversations.reduce(0) { $0 + $1.messages.count }
         let totalConversations = conversations.count
         let conversationsWithTools = conversations.filter { $0.metadata.hasToolUsage }.count
         let conversationsWithRichContent = conversations.filter { $0.metadata.hasRichContent }.count
         let totalCost = conversations.compactMap { $0.metadata.totalCost }.reduce(0, +)
-        
+
         return ConversationStatistics(
             totalConversations: totalConversations,
             totalMessages: totalMessages,
@@ -936,20 +935,20 @@ extension DateFormatter {
         formatter.dateStyle = .short
         return formatter
     }()
-    
+
     static let readable: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
         return formatter
     }()
-    
+
     static let timeOnly: DateFormatter = {
         let formatter = DateFormatter()
         formatter.timeStyle = .short
         return formatter
     }()
-    
+
     static let filenameSafe: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"

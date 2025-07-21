@@ -6,7 +6,7 @@ enum ConversationFilter: String, CaseIterable {
     case favorites = "Favorites"
     case archived = "Archived"
     case withTools = "With Tools"
-    
+
     var icon: String {
         switch self {
         case .all: return "list.bullet"
@@ -21,7 +21,7 @@ enum ConversationFilter: String, CaseIterable {
 struct ConversationHistoryView: View {
     @ObservedObject var persistenceService: ConversationPersistenceService
     @Environment(\.dismiss) private var dismiss
-    
+
     @State private var searchText = ""
     @State private var showingExportOptions = false
     @State private var selectedConversation: Conversation?
@@ -32,12 +32,12 @@ struct ConversationHistoryView: View {
     @State private var selectedConversations: Set<UUID> = []
     @State private var isSelectMode = false
     @State private var filterMode: ConversationFilter = .all
-    
+
     let onConversationSelected: (Conversation) -> Void
-    
+
     var filteredConversations: [Conversation] {
         var conversations: [Conversation]
-        
+
         // Apply filter mode
         switch filterMode {
         case .all:
@@ -51,20 +51,20 @@ struct ConversationHistoryView: View {
         case .withTools:
             conversations = persistenceService.getConversationsWithToolUsage()
         }
-        
+
         // Apply search filter
         if !searchText.isEmpty {
             conversations = conversations.filter { conversation in
                 conversation.title.localizedCaseInsensitiveContains(searchText) ||
-                conversation.messages.contains { message in
-                    message.content.localizedCaseInsensitiveContains(searchText)
-                }
+                    conversation.messages.contains { message in
+                        message.content.localizedCaseInsensitiveContains(searchText)
+                    }
             }
         }
-        
+
         return conversations
     }
-    
+
     var body: some View {
         NavigationView {
             VStack {
@@ -92,15 +92,15 @@ struct ConversationHistoryView: View {
                     .padding(.horizontal)
                 }
                 .padding(.vertical, 8)
-                
+
                 // Search bar
                 HStack {
                     Image(systemName: "magnifyingglass")
                         .foregroundColor(.secondary)
-                    
+
                     TextField("Search conversations...", text: $searchText)
                         .textFieldStyle(RoundedBorderTextFieldStyle())
-                    
+
                     if isSelectMode {
                         Button(isSelectMode ? "Cancel" : "Select") {
                             isSelectMode.toggle()
@@ -112,18 +112,18 @@ struct ConversationHistoryView: View {
                     }
                 }
                 .padding(.horizontal)
-                
+
                 // Conversations list
                 if filteredConversations.isEmpty {
                     VStack(spacing: 16) {
                         Image(systemName: "bubble.left.and.bubble.right")
                             .font(.largeTitle)
                             .foregroundColor(.secondary)
-                        
+
                         Text(searchText.isEmpty ? "No conversations yet" : "No conversations found")
                             .font(.headline)
                             .foregroundColor(.secondary)
-                        
+
                         if searchText.isEmpty {
                             Text("Start a new conversation to see it here")
                                 .font(.caption)
@@ -160,7 +160,7 @@ struct ConversationHistoryView: View {
                                     showingExportOptions = true
                                 },
                                 onDuplicate: {
-                                    let _ = persistenceService.duplicateConversation(conversation)
+                                    _ = persistenceService.duplicateConversation(conversation)
                                 },
                                 onFavorite: {
                                     if conversation.metadata.isFavorite {
@@ -197,7 +197,7 @@ struct ConversationHistoryView: View {
                         }
                     }
                 }
-                
+
                 ToolbarItem(placement: .navigationBarTrailing) {
                     if isSelectMode {
                         Menu {
@@ -205,16 +205,16 @@ struct ConversationHistoryView: View {
                                 showingBulkActions = true
                             }
                             .disabled(selectedConversations.isEmpty)
-                            
+
                             Button("Archive Selected") {
                                 persistenceService.bulkArchiveConversations(Array(selectedConversations))
                                 selectedConversations.removeAll()
                                 isSelectMode = false
                             }
                             .disabled(selectedConversations.isEmpty)
-                            
+
                             Divider()
-                            
+
                             Button("Delete Selected", role: .destructive) {
                                 persistenceService.bulkDeleteConversations(Array(selectedConversations))
                                 selectedConversations.removeAll()
@@ -229,20 +229,20 @@ struct ConversationHistoryView: View {
                             Button("Select") {
                                 isSelectMode = true
                             }
-                            
+
                             Button("Statistics") {
                                 showingStatistics = true
                             }
-                            
+
                             Button("New Conversation") {
                                 let newConversation = persistenceService.createNewConversation()
                                 onConversationSelected(newConversation)
                                 dismiss()
                             }
-                            
+
                             if !persistenceService.conversations.isEmpty {
                                 Divider()
-                                
+
                                 Button("Export All") {
                                     selectedConversations = Set(persistenceService.conversations.map { $0.id })
                                     showingBulkActions = true
@@ -289,7 +289,7 @@ struct ConversationHistoryView: View {
             )
         }
     }
-    
+
     private func deleteConversations(offsets: IndexSet) {
         for index in offsets {
             persistenceService.deleteConversation(filteredConversations[index])
@@ -308,7 +308,7 @@ struct ConversationRow: View {
     let onDuplicate: () -> Void
     let onFavorite: () -> Void
     let onArchive: () -> Void
-    
+
     var body: some View {
         HStack {
             // Selection checkbox in select mode
@@ -317,7 +317,7 @@ struct ConversationRow: View {
                     .foregroundColor(isChecked ? .blue : .gray)
                     .font(.title3)
             }
-            
+
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     // Favorite indicator
@@ -326,58 +326,58 @@ struct ConversationRow: View {
                             .foregroundColor(.red)
                             .font(.caption)
                     }
-                    
+
                     // Archive indicator
                     if conversation.metadata.isArchived {
                         Image(systemName: "archivebox.fill")
                             .foregroundColor(.orange)
                             .font(.caption)
                     }
-                    
+
                     Text(conversation.title)
                         .font(.headline)
                         .lineLimit(1)
                         .opacity(conversation.metadata.isArchived ? 0.6 : 1.0)
-                    
+
                     if isSelected && !isSelectMode {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundColor(.blue)
                             .font(.caption)
                     }
-                    
+
                     Spacer()
-                    
+
                     Text(conversation.updatedAt, style: .relative)
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }
-                
+
                 HStack {
                     Text("\(conversation.metadata.messageCount) messages")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    
+
                     if conversation.metadata.hasToolUsage {
                         Image(systemName: "gear")
                             .font(.caption2)
                             .foregroundColor(.blue)
                     }
-                    
+
                     if conversation.metadata.hasRichContent {
                         Image(systemName: "doc.richtext")
                             .font(.caption2)
                             .foregroundColor(.green)
                     }
-                    
+
                     if let workingDir = conversation.workingDirectory {
                         Image(systemName: "folder")
                             .font(.caption2)
                             .foregroundColor(.orange)
                     }
-                    
+
                     Spacer()
                 }
-                
+
                 if let lastMessage = conversation.messages.last {
                     Text(lastMessage.content.prefix(100))
                         .font(.caption)
@@ -385,7 +385,7 @@ struct ConversationRow: View {
                         .lineLimit(2)
                 }
             }
-            
+
             Spacer()
         }
         .contentShape(Rectangle())
@@ -397,33 +397,33 @@ struct ConversationRow: View {
                 Button(action: onTap) {
                     Label("Open", systemImage: "arrow.right.circle")
                 }
-                
+
                 Divider()
-                
+
                 Button(action: onFavorite) {
                     Label(
                         conversation.metadata.isFavorite ? "Unfavorite" : "Favorite",
                         systemImage: conversation.metadata.isFavorite ? "heart.slash" : "heart"
                     )
                 }
-                
+
                 Button(action: onArchive) {
                     Label(
                         conversation.metadata.isArchived ? "Unarchive" : "Archive",
                         systemImage: conversation.metadata.isArchived ? "tray.and.arrow.up" : "archivebox"
                     )
                 }
-                
+
                 Button(action: onDuplicate) {
                     Label("Duplicate", systemImage: "doc.on.doc")
                 }
-                
+
                 Button(action: onExport) {
                     Label("Export", systemImage: "square.and.arrow.up")
                 }
-                
+
                 Divider()
-                
+
                 Button(action: onDelete, role: .destructive) {
                     Label("Delete", systemImage: "trash")
                 }
@@ -436,19 +436,19 @@ struct ConversationExportSheet: View {
     let conversation: Conversation
     let persistenceService: ConversationPersistenceService
     @Environment(\.dismiss) private var dismiss
-    
+
     var body: some View {
         NavigationView {
             VStack(spacing: 20) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Export Options")
                         .font(.headline)
-                    
+
                     Text("Choose how you'd like to export this conversation")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
-                
+
                 VStack(spacing: 12) {
                     ForEach(ExportFormat.allCases, id: \.self) { format in
                         Button(action: {
@@ -457,7 +457,7 @@ struct ConversationExportSheet: View {
                             HStack {
                                 Image(systemName: format.icon)
                                     .foregroundColor(.blue)
-                                
+
                                 VStack(alignment: .leading) {
                                     Text(format.rawValue)
                                         .font(.headline)
@@ -465,9 +465,9 @@ struct ConversationExportSheet: View {
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
-                                
+
                                 Spacer()
-                                
+
                                 Image(systemName: "chevron.right")
                                     .foregroundColor(.secondary)
                             }
@@ -478,7 +478,7 @@ struct ConversationExportSheet: View {
                         .buttonStyle(PlainButtonStyle())
                     }
                 }
-                
+
                 Spacer()
             }
             .padding()
@@ -493,14 +493,14 @@ struct ConversationExportSheet: View {
             }
         }
     }
-    
+
     private func exportAs(_ format: ExportFormat) {
         if let url = persistenceService.exportConversation(conversation, format: format) {
             shareFile(url: url)
         }
         dismiss()
     }
-    
+
     private func formatDescription(_ format: ExportFormat) -> String {
         switch format {
         case .json:
@@ -515,13 +515,13 @@ struct ConversationExportSheet: View {
             return "Spreadsheet format for data analysis"
         }
     }
-    
+
     private func shareFile(url: URL) {
         let activityController = UIActivityViewController(
             activityItems: [url],
             applicationActivities: nil
         )
-        
+
         if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
            let window = windowScene.windows.first {
             window.rootViewController?.present(activityController, animated: true)
@@ -533,21 +533,21 @@ struct BulkExportSheet: View {
     let conversationIds: [UUID]
     let persistenceService: ConversationPersistenceService
     let onComplete: () -> Void
-    
+
     @Environment(\.dismiss) private var dismiss
-    
+
     var body: some View {
         NavigationView {
             VStack(spacing: 20) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Bulk Export")
                         .font(.headline)
-                    
+
                     Text("Export \(conversationIds.count) selected conversations")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
-                
+
                 VStack(spacing: 12) {
                     ForEach(ExportFormat.allCases, id: \.self) { format in
                         Button(action: {
@@ -556,7 +556,7 @@ struct BulkExportSheet: View {
                             HStack {
                                 Image(systemName: format.icon)
                                     .foregroundColor(.blue)
-                                
+
                                 VStack(alignment: .leading) {
                                     Text("\(format.rawValue) Export")
                                         .font(.headline)
@@ -564,9 +564,9 @@ struct BulkExportSheet: View {
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
-                                
+
                                 Spacer()
-                                
+
                                 Image(systemName: "chevron.right")
                                     .foregroundColor(.secondary)
                             }
@@ -577,7 +577,7 @@ struct BulkExportSheet: View {
                         .buttonStyle(PlainButtonStyle())
                     }
                 }
-                
+
                 Spacer()
             }
             .padding()
@@ -592,7 +592,7 @@ struct BulkExportSheet: View {
             }
         }
     }
-    
+
     private func exportAs(_ format: ExportFormat) {
         if let url = persistenceService.bulkExportConversations(conversationIds, format: format) {
             shareFile(url: url)
@@ -600,7 +600,7 @@ struct BulkExportSheet: View {
         onComplete()
         dismiss()
     }
-    
+
     private func bulkFormatDescription(_ format: ExportFormat) -> String {
         switch format {
         case .json:
@@ -615,13 +615,13 @@ struct BulkExportSheet: View {
             return "Spreadsheet with all messages and metadata"
         }
     }
-    
+
     private func shareFile(url: URL) {
         let activityController = UIActivityViewController(
             activityItems: [url],
             applicationActivities: nil
         )
-        
+
         if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
            let window = windowScene.windows.first {
             window.rootViewController?.present(activityController, animated: true)
@@ -632,11 +632,11 @@ struct BulkExportSheet: View {
 struct ConversationStatisticsView: View {
     let persistenceService: ConversationPersistenceService
     @Environment(\.dismiss) private var dismiss
-    
+
     var statistics: ConversationStatistics {
         persistenceService.getStatistics()
     }
-    
+
     var body: some View {
         NavigationView {
             List {
@@ -646,34 +646,34 @@ struct ConversationStatisticsView: View {
                         value: "\(statistics.totalConversations)",
                         icon: "bubble.left.and.bubble.right"
                     )
-                    
+
                     StatisticRow(
                         title: "Total Messages",
                         value: "\(statistics.totalMessages)",
                         icon: "message"
                     )
-                    
+
                     StatisticRow(
                         title: "Average Messages",
                         value: String(format: "%.1f", statistics.averageMessagesPerConversation),
                         icon: "chart.bar"
                     )
                 }
-                
+
                 Section("Features") {
                     StatisticRow(
                         title: "With Tool Usage",
                         value: "\(statistics.conversationsWithTools)",
                         icon: "gear"
                     )
-                    
+
                     StatisticRow(
                         title: "With Rich Content",
                         value: "\(statistics.conversationsWithRichContent)",
                         icon: "doc.richtext"
                     )
                 }
-                
+
                 if let totalCost = statistics.totalCost {
                     Section("Usage") {
                         StatisticRow(
@@ -683,7 +683,7 @@ struct ConversationStatisticsView: View {
                         )
                     }
                 }
-                
+
                 Section("Storage") {
                     let storageInfo = getStorageInfo()
                     StatisticRow(
@@ -691,7 +691,7 @@ struct ConversationStatisticsView: View {
                         value: storageInfo.formattedSize,
                         icon: "internaldrive"
                     )
-                    
+
                     StatisticRow(
                         title: "Files",
                         value: "\(storageInfo.fileCount)",
@@ -710,22 +710,22 @@ struct ConversationStatisticsView: View {
             }
         }
     }
-    
+
     private func getStorageInfo() -> (fileCount: Int, totalSize: Int64, formattedSize: String) {
         let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         let conversationsDirectory = documentsDirectory.appendingPathComponent("Conversations")
-        
+
         do {
             let files = try FileManager.default.contentsOfDirectory(at: conversationsDirectory, includingPropertiesForKeys: [.fileSizeKey])
             let totalSize = files.reduce(0) { total, url in
                 let resourceValues = try? url.resourceValues(forKeys: [.fileSizeKey])
                 return total + Int64(resourceValues?.fileSize ?? 0)
             }
-            
+
             let formatter = ByteCountFormatter()
             formatter.allowedUnits = [.useKB, .useMB, .useGB]
             formatter.countStyle = .file
-            
+
             return (files.count, totalSize, formatter.string(fromByteCount: totalSize))
         } catch {
             return (0, 0, "0 KB")
@@ -737,17 +737,17 @@ struct StatisticRow: View {
     let title: String
     let value: String
     let icon: String
-    
+
     var body: some View {
         HStack {
             Image(systemName: icon)
                 .foregroundColor(.blue)
                 .frame(width: 24)
-            
+
             Text(title)
-            
+
             Spacer()
-            
+
             Text(value)
                 .fontWeight(.medium)
         }

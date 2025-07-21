@@ -6,7 +6,7 @@ enum Theme: String, CaseIterable, Codable {
     case system = "system"
     case light = "light"
     case dark = "dark"
-    
+
     var displayName: String {
         switch self {
         case .system: return "System"
@@ -20,7 +20,7 @@ enum FontSize: String, CaseIterable, Codable {
     case small = "small"
     case medium = "medium"
     case large = "large"
-    
+
     var displayName: String {
         switch self {
         case .small: return "Small"
@@ -28,7 +28,7 @@ enum FontSize: String, CaseIterable, Codable {
         case .large: return "Large"
         }
     }
-    
+
     var scaleFactor: CGFloat {
         switch self {
         case .small: return 0.9
@@ -46,7 +46,7 @@ struct AppSettings: Codable {
     var hapticFeedback: Bool = true
     var storeChatHistory: Bool = false
     var maxChatHistory: Int = 100
-    
+
     // Premium features
     var isPremium: Bool = false
     var allowRemoteConnections: Bool = false
@@ -65,7 +65,7 @@ enum PremiumFeature: String, CaseIterable {
     case cliMode = "cli_mode"
     case multipleConnections = "multiple_connections"
     case advancedCustomization = "advanced_customization"
-    
+
     var displayName: String {
         switch self {
         case .remoteConnections: return "Remote Access"
@@ -76,7 +76,7 @@ enum PremiumFeature: String, CaseIterable {
         case .advancedCustomization: return "Advanced Themes"
         }
     }
-    
+
     var description: String {
         switch self {
         case .remoteConnections:
@@ -93,7 +93,7 @@ enum PremiumFeature: String, CaseIterable {
             return "Custom themes, syntax highlighting, and UI customization"
         }
     }
-    
+
     var systemImageName: String {
         switch self {
         case .remoteConnections: return "globe"

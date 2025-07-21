@@ -38,12 +38,12 @@ enum ProjectType: String, CaseIterable {
     case php = "PHP"
     case ruby = "Ruby"
     case unknown = "Unknown"
-    
+
     var icon: String {
         switch self {
         case .swift, .ios: return "swift"
         case .javascript, .nodejs: return "js.square"
-        case .typescript: return "ts.square" 
+        case .typescript: return "ts.square"
         case .python: return "py.square"
         case .react, .reactNative: return "r.square"
         case .vue: return "v.square"
@@ -62,7 +62,7 @@ enum ProjectType: String, CaseIterable {
         case .unknown: return "questionmark.square"
         }
     }
-    
+
     var color: Color {
         switch self {
         case .swift, .ios: return .orange
@@ -96,7 +96,7 @@ struct ProjectSuggestion {
     let category: SuggestionCategory
     let priority: SuggestionPriority
     let icon: String
-    
+
     init(title: String, description: String, command: String? = nil, category: SuggestionCategory, priority: SuggestionPriority = .medium, icon: String) {
         self.title = title
         self.description = description
@@ -130,39 +130,39 @@ enum SuggestionPriority: Int, CaseIterable {
 class ProjectAwarenessService: ObservableObject {
     @Published var currentProject: ProjectContext?
     @Published var recentProjects: [ProjectContext] = []
-    
+
     private let maxRecentProjects = 10
-    
+
     func analyzeProject(at workingDirectory: String) -> ProjectContext? {
         // Simulate file system analysis (in real app, would use actual file detection)
         let projectContext = detectProjectType(in: workingDirectory)
-        
+
         DispatchQueue.main.async {
             self.currentProject = projectContext
             self.addToRecentProjects(projectContext)
         }
-        
+
         return projectContext
     }
-    
+
     private func detectProjectType(in directory: String) -> ProjectContext {
         var detectedFiles: [String] = []
         var configFiles: [String] = []
-        
+
         // Simulate file detection based on common project patterns
         let projectAnalysis = analyzeDirectoryPatterns(directory)
-        
+
         let projectType = determineProjectType(from: projectAnalysis)
         let language = determineLanguage(from: projectAnalysis)
         let framework = determineFramework(from: projectAnalysis)
         let buildSystem = determineBuildSystem(from: projectAnalysis)
         let packageManager = determinePackageManager(from: projectAnalysis)
-        
+
         detectedFiles = projectAnalysis.detectedFiles
         configFiles = projectAnalysis.configFiles
-        
+
         let suggestions = generateSuggestions(for: projectType, language: language, framework: framework)
-        
+
         return ProjectContext(
             type: projectType,
             language: language,
@@ -175,40 +175,40 @@ class ProjectAwarenessService: ObservableObject {
             detectedFiles: detectedFiles
         )
     }
-    
+
     private func analyzeDirectoryPatterns(_ directory: String) -> ProjectAnalysis {
         // Simulate project analysis based on directory path patterns
         let directoryName = (directory as NSString).lastPathComponent.lowercased()
         let pathComponents = directory.components(separatedBy: "/")
-        
+
         var detectedFiles: [String] = []
         var configFiles: [String] = []
-        
+
         // Simulate common file patterns
         if directoryName.contains("ios") || directory.contains(".xcodeproj") {
             detectedFiles.append("Package.swift")
             detectedFiles.append("Podfile")
             configFiles.append("Info.plist")
         }
-        
+
         if directoryName.contains("react") || directoryName.contains("next") {
             detectedFiles.append("package.json")
             detectedFiles.append("tsconfig.json")
             configFiles.append("next.config.js")
         }
-        
+
         if directoryName.contains("python") || directoryName.contains("django") {
             detectedFiles.append("requirements.txt")
             detectedFiles.append("setup.py")
             configFiles.append("pyproject.toml")
         }
-        
+
         if directoryName.contains("node") || directoryName.contains("npm") {
             detectedFiles.append("package.json")
             detectedFiles.append("yarn.lock")
             configFiles.append("webpack.config.js")
         }
-        
+
         return ProjectAnalysis(
             detectedFiles: detectedFiles,
             configFiles: configFiles,
@@ -216,36 +216,36 @@ class ProjectAwarenessService: ObservableObject {
             pathComponents: pathComponents
         )
     }
-    
+
     private func determineProjectType(from analysis: ProjectAnalysis) -> ProjectType {
         let files = analysis.detectedFiles
         let dirName = analysis.directoryName
-        
+
         // iOS/Swift detection
         if files.contains("Package.swift") || files.contains("Podfile") || dirName.contains("ios") {
             return .ios
         }
-        
+
         // React detection
         if files.contains("package.json") && (dirName.contains("react") || dirName.contains("next")) {
             return .react
         }
-        
+
         // Node.js detection
         if files.contains("package.json") && !dirName.contains("react") {
             return .nodejs
         }
-        
+
         // Python detection
         if files.contains("requirements.txt") || files.contains("setup.py") {
             return .python
         }
-        
+
         // TypeScript detection
         if files.contains("tsconfig.json") {
             return .typescript
         }
-        
+
         // Default based on directory name patterns
         if dirName.contains("swift") { return .swift }
         if dirName.contains("python") { return .python }
@@ -258,10 +258,10 @@ class ProjectAwarenessService: ObservableObject {
         if dirName.contains("rust") { return .rust }
         if dirName.contains("go") { return .go }
         if dirName.contains("java") { return .java }
-        
+
         return .unknown
     }
-    
+
     private func determineLanguage(from analysis: ProjectAnalysis) -> String? {
         switch determineProjectType(from: analysis) {
         case .swift, .ios: return "Swift"
@@ -279,10 +279,10 @@ class ProjectAwarenessService: ObservableObject {
         default: return nil
         }
     }
-    
+
     private func determineFramework(from analysis: ProjectAnalysis) -> String? {
         let dirName = analysis.directoryName
-        
+
         if dirName.contains("react") { return "React" }
         if dirName.contains("vue") { return "Vue.js" }
         if dirName.contains("angular") { return "Angular" }
@@ -294,13 +294,13 @@ class ProjectAwarenessService: ObservableObject {
         if dirName.contains("rails") { return "Ruby on Rails" }
         if dirName.contains("spring") { return "Spring" }
         if dirName.contains("flutter") { return "Flutter" }
-        
+
         return nil
     }
-    
+
     private func determineBuildSystem(from analysis: ProjectAnalysis) -> String? {
         let files = analysis.detectedFiles
-        
+
         if files.contains("Package.swift") { return "Swift Package Manager" }
         if files.contains("Podfile") { return "CocoaPods" }
         if files.contains("package.json") { return "npm/yarn" }
@@ -310,13 +310,13 @@ class ProjectAwarenessService: ObservableObject {
         if files.contains("build.gradle") { return "Gradle" }
         if files.contains("Makefile") { return "Make" }
         if files.contains("CMakeLists.txt") { return "CMake" }
-        
+
         return nil
     }
-    
+
     private func determinePackageManager(from analysis: ProjectAnalysis) -> String? {
         let files = analysis.detectedFiles
-        
+
         if files.contains("yarn.lock") { return "Yarn" }
         if files.contains("package-lock.json") { return "npm" }
         if files.contains("pnpm-lock.yaml") { return "pnpm" }
@@ -325,13 +325,13 @@ class ProjectAwarenessService: ObservableObject {
         if files.contains("requirements.txt") { return "pip" }
         if files.contains("Gemfile") { return "Bundler" }
         if files.contains("composer.json") { return "Composer" }
-        
+
         return nil
     }
-    
+
     private func generateSuggestions(for projectType: ProjectType, language: String?, framework: String?) -> [ProjectSuggestion] {
         var suggestions: [ProjectSuggestion] = []
-        
+
         // Common suggestions for all projects
         suggestions.append(contentsOf: [
             ProjectSuggestion(
@@ -349,7 +349,7 @@ class ProjectAwarenessService: ObservableObject {
                 icon: "folder.tree"
             )
         ])
-        
+
         // Project-specific suggestions
         switch projectType {
         case .swift, .ios:
@@ -378,7 +378,7 @@ class ProjectAwarenessService: ObservableObject {
                     icon: "link"
                 )
             ])
-            
+
         case .javascript, .nodejs, .react, .typescript:
             suggestions.append(contentsOf: [
                 ProjectSuggestion(
@@ -412,7 +412,7 @@ class ProjectAwarenessService: ObservableObject {
                     icon: "arrow.up.circle"
                 )
             ])
-            
+
         case .python:
             suggestions.append(contentsOf: [
                 ProjectSuggestion(
@@ -445,7 +445,7 @@ class ProjectAwarenessService: ObservableObject {
                     icon: "textformat"
                 )
             ])
-            
+
         case .rust:
             suggestions.append(contentsOf: [
                 ProjectSuggestion(
@@ -471,7 +471,7 @@ class ProjectAwarenessService: ObservableObject {
                     icon: "testtube.2"
                 )
             ])
-            
+
         case .go:
             suggestions.append(contentsOf: [
                 ProjectSuggestion(
@@ -497,31 +497,31 @@ class ProjectAwarenessService: ObservableObject {
                     icon: "testtube.2"
                 )
             ])
-            
+
         default:
             break
         }
-        
+
         return suggestions.sorted { $0.priority.rawValue > $1.priority.rawValue }
     }
-    
+
     private func addToRecentProjects(_ project: ProjectContext) {
         // Remove if already exists
         recentProjects.removeAll { $0.workingDirectory == project.workingDirectory }
-        
+
         // Add to front
         recentProjects.insert(project, at: 0)
-        
+
         // Keep only recent projects
         if recentProjects.count > maxRecentProjects {
             recentProjects = Array(recentProjects.prefix(maxRecentProjects))
         }
     }
-    
+
     func getSuggestionsForCategory(_ category: SuggestionCategory) -> [ProjectSuggestion] {
         return currentProject?.suggestions.filter { $0.category == category } ?? []
     }
-    
+
     func getHighPrioritySuggestions() -> [ProjectSuggestion] {
         return currentProject?.suggestions.filter { $0.priority == .high || $0.priority == .critical } ?? []
     }

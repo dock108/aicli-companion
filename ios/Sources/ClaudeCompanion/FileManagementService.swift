@@ -12,25 +12,25 @@ struct FileItem: Identifiable, Hashable {
     let modifiedDate: Date?
     let isHidden: Bool
     let permissions: FilePermissions?
-    
+
     var displayName: String {
         isHidden && !name.hasPrefix(".") ? ".\(name)" : name
     }
-    
+
     var fileExtension: String {
         (name as NSString).pathExtension.lowercased()
     }
-    
+
     var isTextFile: Bool {
         let textExtensions = ["txt", "md", "swift", "js", "ts", "py", "java", "kt", "go", "rs", "cpp", "c", "h", "css", "html", "xml", "json", "yaml", "yml", "toml", "ini", "conf", "log", "sh", "bat", "ps1"]
         return textExtensions.contains(fileExtension)
     }
-    
+
     var isCodeFile: Bool {
         let codeExtensions = ["swift", "js", "ts", "jsx", "tsx", "py", "java", "kt", "go", "rs", "cpp", "c", "h", "css", "scss", "sass", "less", "php", "rb", "lua", "dart", "scala", "clj", "hs", "ml", "fs"]
         return codeExtensions.contains(fileExtension)
     }
-    
+
     var icon: String {
         switch type {
         case .directory:
@@ -55,7 +55,7 @@ struct FileItem: Identifiable, Hashable {
             return "link"
         }
     }
-    
+
     var color: Color {
         switch type {
         case .directory:
@@ -112,55 +112,55 @@ class FileManagementService: ObservableObject {
     @Published var fileChanges: [FileChange] = []
     @Published var isLoading = false
     @Published var error: String?
-    
+
     private let maxRecentFiles = 20
     private let maxFileChanges = 100
-    
+
     init() {
         // Initialize with default directory
         let defaultDirectory = "/Users/\(NSUserName())/Desktop"
         currentDirectory = defaultDirectory
         loadDirectoryContents()
     }
-    
+
     // MARK: - Directory Navigation
-    
+
     func navigateToDirectory(_ path: String) {
         guard path != currentDirectory else { return }
-        
+
         currentDirectory = path
         loadDirectoryContents()
     }
-    
+
     func navigateUp() {
         let parentPath = (currentDirectory as NSString).deletingLastPathComponent
         if parentPath != currentDirectory && !parentPath.isEmpty {
             navigateToDirectory(parentPath)
         }
     }
-    
+
     func refreshCurrentDirectory() {
         loadDirectoryContents()
     }
-    
+
     private func loadDirectoryContents() {
         isLoading = true
         error = nil
-        
+
         // Simulate file system operations (in real app, would use actual file system APIs)
         DispatchQueue.global(qos: .userInitiated).async {
             let mockFiles = self.generateMockFiles(for: self.currentDirectory)
-            
+
             DispatchQueue.main.async {
                 self.files = mockFiles
                 self.isLoading = false
             }
         }
     }
-    
+
     private func generateMockFiles(for directory: String) -> [FileItem] {
         var mockFiles: [FileItem] = []
-        
+
         // Common directories
         if directory.hasSuffix("Desktop") || directory.contains("project") {
             mockFiles.append(contentsOf: [
@@ -170,7 +170,7 @@ class FileManagementService: ObservableObject {
                 FileItem(name: ".git", path: "\(directory)/.git", type: .directory, size: nil, modifiedDate: Date().addingTimeInterval(-1800), isHidden: true, permissions: nil)
             ])
         }
-        
+
         // Project-specific files based on directory name
         if directory.contains("swift") || directory.contains("ios") {
             mockFiles.append(contentsOf: [
@@ -195,13 +195,13 @@ class FileManagementService: ObservableObject {
                 FileItem(name: "__pycache__", path: "\(directory)/__pycache__", type: .directory, size: nil, modifiedDate: Date().addingTimeInterval(-1200), isHidden: true, permissions: nil)
             ])
         }
-        
+
         // Common files
         mockFiles.append(contentsOf: [
             FileItem(name: ".gitignore", path: "\(directory)/.gitignore", type: .file, size: 512, modifiedDate: Date().addingTimeInterval(-86400), isHidden: true, permissions: nil),
             FileItem(name: "LICENSE", path: "\(directory)/LICENSE", type: .file, size: 11264, modifiedDate: Date().addingTimeInterval(-604800), isHidden: false, permissions: nil)
         ])
-        
+
         return mockFiles.sorted { file1, file2 in
             if file1.type == .directory && file2.type != .directory {
                 return true
@@ -212,23 +212,23 @@ class FileManagementService: ObservableObject {
             }
         }
     }
-    
+
     // MARK: - File Operations
-    
+
     func openFile(_ file: FileItem) {
         addToRecentFiles(file)
-        
+
         if file.type == .directory {
             navigateToDirectory(file.path)
         }
     }
-    
+
     func readFileContent(_ file: FileItem, completion: @escaping (Result<String, Error>) -> Void) {
         guard file.type == .file else {
             completion(.failure(FileManagementError.notAFile))
             return
         }
-        
+
         // Simulate file reading
         DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.5) {
             let mockContent = self.generateMockFileContent(for: file)
@@ -236,13 +236,13 @@ class FileManagementService: ObservableObject {
                 completion(.success(mockContent))
             }
         }
-        
+
         addToRecentFiles(file)
     }
-    
+
     private func generateMockFileContent(for file: FileItem) -> String {
         let fileName = file.name.lowercased()
-        
+
         if fileName == "package.json" {
             return """
             {
@@ -269,7 +269,7 @@ class FileManagementService: ObservableObject {
             return """
             // swift-tools-version: 5.8
             import PackageDescription
-            
+
             let package = Package(
                 name: "MyProject",
                 platforms: [
@@ -302,16 +302,16 @@ class FileManagementService: ObservableObject {
         } else if fileName.hasSuffix(".swift") {
             return """
             import SwiftUI
-            
+
             struct ContentView: View {
                 @State private var text = "Hello, World!"
-                
+
                 var body: some View {
                     VStack {
                         Text(text)
                             .font(.largeTitle)
                             .padding()
-                        
+
                         Button("Tap me!") {
                             text = "Button tapped!"
                         }
@@ -320,7 +320,7 @@ class FileManagementService: ObservableObject {
                     .padding()
                 }
             }
-            
+
             #Preview {
                 ContentView()
             }
@@ -328,10 +328,10 @@ class FileManagementService: ObservableObject {
         } else if fileName.hasSuffix(".js") || fileName.hasSuffix(".jsx") {
             return """
             import React, { useState } from 'react';
-            
+
             function App() {
               const [count, setCount] = useState(0);
-            
+
               return (
                 <div className="App">
                   <header className="App-header">
@@ -347,22 +347,22 @@ class FileManagementService: ObservableObject {
                 </div>
               );
             }
-            
+
             export default App;
             """
         } else if fileName.hasSuffix(".py") {
             return """
             from flask import Flask, jsonify, request
-            
+
             app = Flask(__name__)
-            
+
             @app.route('/')
             def hello_world():
                 return jsonify({
                     'message': 'Hello, World!',
                     'status': 'success'
                 })
-            
+
             @app.route('/api/users', methods=['GET', 'POST'])
             def handle_users():
                 if request.method == 'GET':
@@ -370,67 +370,67 @@ class FileManagementService: ObservableObject {
                 elif request.method == 'POST':
                     user_data = request.get_json()
                     return jsonify({'created': user_data}), 201
-            
+
             if __name__ == '__main__':
                 app.run(debug=True, host='0.0.0.0', port=5000)
             """
         } else if fileName == "readme.md" {
             return """
             # My Project
-            
+
             This is a sample project demonstrating various features and capabilities.
-            
+
             ## Installation
-            
+
             ```bash
             git clone https://github.com/user/my-project.git
             cd my-project
             npm install  # or pip install -r requirements.txt
             ```
-            
+
             ## Usage
-            
+
             ```bash
             npm start  # or python main.py
             ```
-            
+
             ## Features
-            
+
             - Modern architecture
             - Comprehensive testing
             - CI/CD integration
             - Documentation
-            
+
             ## Contributing
-            
+
             1. Fork the repository
             2. Create a feature branch
             3. Make your changes
             4. Add tests
             5. Submit a pull request
-            
+
             ## License
-            
+
             MIT License - see LICENSE file for details.
             """
         } else {
             return "File content for \(file.name)\n\nThis is a sample file with some content.\nModified: \(file.modifiedDate?.formatted() ?? "Unknown")\nSize: \(file.size ?? 0) bytes"
         }
     }
-    
+
     func watchFile(_ file: FileItem) {
         watchedFiles.insert(file.path)
-        
+
         // Simulate file change detection
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
             self.simulateFileChange(file)
         }
     }
-    
+
     func unwatchFile(_ file: FileItem) {
         watchedFiles.remove(file.path)
     }
-    
+
     private func simulateFileChange(_ file: FileItem) {
         let change = FileChange(
             filePath: file.path,
@@ -439,66 +439,66 @@ class FileManagementService: ObservableObject {
             content: "Updated content",
             previousContent: "Previous content"
         )
-        
+
         addFileChange(change)
     }
-    
+
     // MARK: - File History & Changes
-    
+
     private func addToRecentFiles(_ file: FileItem) {
         DispatchQueue.main.async {
             // Remove if already exists
             self.recentFiles.removeAll { $0.path == file.path }
-            
+
             // Add to front
             self.recentFiles.insert(file, at: 0)
-            
+
             // Keep only recent files
             if self.recentFiles.count > self.maxRecentFiles {
                 self.recentFiles = Array(self.recentFiles.prefix(self.maxRecentFiles))
             }
         }
     }
-    
+
     private func addFileChange(_ change: FileChange) {
         DispatchQueue.main.async {
             self.fileChanges.insert(change, at: 0)
-            
+
             // Keep only recent changes
             if self.fileChanges.count > self.maxFileChanges {
                 self.fileChanges = Array(self.fileChanges.prefix(self.maxFileChanges))
             }
         }
     }
-    
+
     // MARK: - Search & Filtering
-    
+
     func searchFiles(query: String) -> [FileItem] {
         guard !query.isEmpty else { return files }
-        
+
         return files.filter { file in
             file.name.localizedCaseInsensitiveContains(query) ||
-            file.fileExtension.localizedCaseInsensitiveContains(query)
+                file.fileExtension.localizedCaseInsensitiveContains(query)
         }
     }
-    
+
     func getFilesByType(_ type: FileType) -> [FileItem] {
         return files.filter { $0.type == type }
     }
-    
+
     func getRecentCodeFiles() -> [FileItem] {
         return recentFiles.filter { $0.isCodeFile }
     }
-    
+
     func getRecentChanges(limit: Int = 10) -> [FileChange] {
         return Array(fileChanges.prefix(limit))
     }
-    
+
     // MARK: - Quick Actions
-    
+
     func generateFilePrompts(for file: FileItem) -> [String] {
         var prompts: [String] = []
-        
+
         if file.isCodeFile {
             prompts.append("Analyze the code in \(file.name)")
             prompts.append("Review \(file.name) for potential improvements")
@@ -506,17 +506,17 @@ class FileManagementService: ObservableObject {
             prompts.append("Add comments to \(file.name)")
             prompts.append("Refactor \(file.name)")
         }
-        
+
         if file.type == .file {
             prompts.append("Read and summarize \(file.name)")
             prompts.append("Show the contents of \(file.name)")
         }
-        
+
         if file.type == .directory {
             prompts.append("List files in \(file.name)")
             prompts.append("Analyze the structure of \(file.name)")
         }
-        
+
         return prompts
     }
 }
@@ -528,7 +528,7 @@ enum FileManagementError: LocalizedError {
     case fileNotFound
     case permissionDenied
     case ioError(String)
-    
+
     var errorDescription: String? {
         switch self {
         case .notAFile:

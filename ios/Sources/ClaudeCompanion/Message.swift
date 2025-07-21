@@ -10,7 +10,7 @@ struct Message: Identifiable, Codable {
     let streamingState: StreamingState?
     let requestId: String?
     let richContent: RichContent?
-    
+
     init(id: UUID = UUID(), content: String, sender: MessageSender, timestamp: Date = Date(), type: MessageType = .text, metadata: ClaudeMessageMetadata? = nil, streamingState: StreamingState? = nil, requestId: String? = nil, richContent: RichContent? = nil) {
         self.id = id
         self.content = content
@@ -123,7 +123,7 @@ struct ClaudeMessageMetadata: Codable {
     let duration: TimeInterval
     let cost: Double?
     let tools: [String]?
-    
+
     init(sessionId: String, duration: TimeInterval, cost: Double? = nil, tools: [String]? = nil) {
         self.sessionId = sessionId
         self.duration = duration
@@ -145,7 +145,7 @@ struct ClaudeCodeResponse: Codable {
     let sessionId: String
     let totalCost: Double?
     let usage: Usage?
-    
+
     enum CodingKeys: String, CodingKey {
         case type, subtype, result
         case isError = "is_error"
@@ -165,7 +165,7 @@ struct Usage: Codable {
     let outputTokens: Int
     let serverToolUse: ServerToolUse?
     let serviceTier: String?
-    
+
     enum CodingKeys: String, CodingKey {
         case inputTokens = "input_tokens"
         case cacheCreationInputTokens = "cache_creation_input_tokens"
@@ -178,7 +178,7 @@ struct Usage: Codable {
 
 struct ServerToolUse: Codable {
     let webSearchRequests: Int
-    
+
     enum CodingKeys: String, CodingKey {
         case webSearchRequests = "web_search_requests"
     }
@@ -191,19 +191,19 @@ struct ServerConnection: Codable {
     let port: Int
     let authToken: String?
     let isSecure: Bool
-    
+
     init(address: String, port: Int, authToken: String? = nil, isSecure: Bool = false) {
         self.address = address
         self.port = port
         self.authToken = authToken
         self.isSecure = isSecure
     }
-    
+
     var url: URL? {
         let scheme = isSecure ? "https" : "http"
         return URL(string: "\(scheme)://\(address):\(port)")
     }
-    
+
     var wsURL: URL? {
         let scheme = isSecure ? "wss" : "ws"
         return URL(string: "\(scheme)://\(address):\(port)/ws")
@@ -226,7 +226,7 @@ struct WebSocketMessage: Codable {
     let requestId: String?
     let timestamp: Date
     let data: Data
-    
+
     enum Data: Codable {
         case ask(AskRequest)
         case streamStart(StreamStartRequest)
@@ -246,7 +246,7 @@ struct WebSocketMessage: Codable {
         case error(ErrorResponse)
         case sessionStatus(SessionStatusResponse)
         case pong(PongResponse)
-        
+
         // New rich message types
         case systemInit(SystemInitResponse)
         case assistantMessage(AssistantMessageResponse)
@@ -267,7 +267,7 @@ enum WebSocketMessageType: String, Codable {
     case ping = "ping"
     case subscribe = "subscribe"
     case setWorkingDirectory = "setWorkingDirectory"
-    
+
     // Server → Client
     case welcome = "welcome"
     case askResponse = "askResponse"
@@ -279,7 +279,7 @@ enum WebSocketMessageType: String, Codable {
     case error = "error"
     case sessionStatus = "sessionStatus"
     case pong = "pong"
-    
+
     // New rich message types from enhanced server
     case systemInit = "systemInit"
     case assistantMessage = "assistantMessage"
@@ -443,7 +443,7 @@ struct MessageContentBlock: Codable {
     let toolName: String?
     let toolInput: [String: AnyCodable]?
     let toolId: String?
-    
+
     enum CodingKeys: String, CodingKey {
         case type, text
         case toolName = "name"
@@ -490,14 +490,14 @@ struct WorkingDirectorySetResponse: Codable {
 
 struct AnyCodable: Codable {
     let value: Any
-    
+
     init<T>(_ value: T) {
         self.value = value
     }
-    
+
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
-        
+
         if let string = try? container.decode(String.self) {
             value = string
         } else if let int = try? container.decode(Int.self) {
@@ -514,10 +514,10 @@ struct AnyCodable: Codable {
             value = NSNull()
         }
     }
-    
+
     func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
-        
+
         switch value {
         case let string as String:
             try container.encode(string)
@@ -549,7 +549,7 @@ enum ClaudeCompanionError: LocalizedError {
     case permissionDenied
     case rateLimited
     case timeout
-    
+
     var errorDescription: String? {
         switch self {
         case .connectionFailed(let message):

@@ -6,7 +6,7 @@ struct ConnectionView: View {
     @StateObject private var discoveryManager = ServiceDiscoveryManager()
     @StateObject private var webSocketService = WebSocketService()
     @Binding var isConnected: Bool
-    
+
     @State private var serverAddress = ""
     @State private var serverPort = "3001"
     @State private var authToken = ""
@@ -15,23 +15,23 @@ struct ConnectionView: View {
     @State private var errorMessage = ""
     @State private var showingManualSetup = false
     @State private var selectedServer: DiscoveredClaudeServer?
-    
+
     var body: some View {
         VStack(spacing: 20) {
             Image(systemName: "desktopcomputer")
                 .font(.system(size: 60))
                 .foregroundColor(.blue)
-            
+
             Text("Connect to Claude Code")
                 .font(.title)
                 .fontWeight(.bold)
-            
+
             Text("Connect to your Claude Code companion server to start coding on mobile")
                 .font(.body)
                 .multilineTextAlignment(.center)
                 .foregroundColor(.secondary)
                 .padding(.horizontal)
-            
+
             VStack(spacing: 16) {
                 // Discovered servers section
                 if !discoveryManager.discoveredServers.isEmpty {
@@ -46,7 +46,7 @@ struct ConnectionView: View {
                             .font(.caption)
                             .foregroundColor(.blue)
                         }
-                        
+
                         ForEach(discoveryManager.discoveredServers) { server in
                             DiscoveredServerRow(
                                 server: server,
@@ -57,7 +57,7 @@ struct ConnectionView: View {
                     }
                     .padding(.horizontal)
                 }
-                
+
                 // Auto-discovery section
                 Button(action: discoverServers) {
                     HStack {
@@ -76,7 +76,7 @@ struct ConnectionView: View {
                     .cornerRadius(10)
                 }
                 .disabled(isLoading || discoveryManager.isScanning)
-                
+
                 if let selectedServer = selectedServer {
                     Button(action: { connectToDiscoveredServer(selectedServer) }) {
                         HStack {
@@ -91,10 +91,10 @@ struct ConnectionView: View {
                     }
                     .disabled(isLoading)
                 }
-                
+
                 Text("or")
                     .foregroundColor(.secondary)
-                
+
                 // Manual connection button
                 Button(action: { showingManualSetup = true }) {
                     HStack {
@@ -109,19 +109,19 @@ struct ConnectionView: View {
                 }
             }
             .padding(.horizontal)
-            
+
             if !errorMessage.isEmpty {
                 Text(errorMessage)
                     .foregroundColor(.red)
                     .padding(.horizontal)
             }
-            
+
             Spacer()
-            
+
             VStack(spacing: 8) {
                 Text("Need Help?")
                     .font(.headline)
-                
+
                 Button("Setup Instructions") {
                     // TODO: Open setup instructions
                 }
@@ -146,16 +146,16 @@ struct ConnectionView: View {
             }
         }
     }
-    
+
     private func discoverServers() {
         errorMessage = ""
         discoveryManager.startDiscovery()
     }
-    
+
     private func connectToDiscoveredServer(_ server: DiscoveredClaudeServer) {
         isLoading = true
         errorMessage = ""
-        
+
         // First validate the server
         discoveryManager.validateServer(server) { result in
             switch result {
@@ -170,7 +170,7 @@ struct ConnectionView: View {
             }
         }
     }
-    
+
     private func connectManually() {
         let config = ManualServerConfiguration(
             address: serverAddress,
@@ -178,10 +178,10 @@ struct ConnectionView: View {
             isSecure: useSecureConnection,
             authToken: authToken.isEmpty ? nil : authToken
         )
-        
+
         isLoading = true
         errorMessage = ""
-        
+
         discoveryManager.validateManualConfiguration(config) { result in
             switch result {
             case .success(let connection):
@@ -194,7 +194,7 @@ struct ConnectionView: View {
             }
         }
     }
-    
+
     private func connectWithWebSocket(_ connection: ServerConnection, authToken: String?) {
         guard let wsURL = connection.wsURL else {
             DispatchQueue.main.async {
@@ -203,9 +203,9 @@ struct ConnectionView: View {
             }
             return
         }
-        
+
         webSocketService.connect(to: wsURL, authToken: authToken)
-        
+
         // Set up connection state observer
         webSocketService.$isConnected
             .receive(on: DispatchQueue.main)
@@ -224,7 +224,7 @@ struct ConnectionView: View {
                 }
             }
             .store(in: &webSocketService.cancellables)
-        
+
         webSocketService.$connectionState
             .receive(on: DispatchQueue.main)
             .sink { state in
@@ -252,7 +252,7 @@ struct DiscoveredServerRow: View {
     let server: DiscoveredClaudeServer
     let isSelected: Bool
     let onSelect: () -> Void
-    
+
     var body: some View {
         Button(action: onSelect) {
             VStack(alignment: .leading, spacing: 4) {
@@ -261,14 +261,14 @@ struct DiscoveredServerRow: View {
                         Text(server.displayName)
                             .font(.headline)
                             .foregroundColor(.primary)
-                        
+
                         Text("\(server.address):\(server.port)")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
-                    
+
                     Spacer()
-                    
+
                     if isSelected {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundColor(.blue)
@@ -277,7 +277,7 @@ struct DiscoveredServerRow: View {
                             .foregroundColor(.gray)
                     }
                 }
-                
+
                 if !server.connectionInfo.isEmpty {
                     Text(server.connectionInfo)
                         .font(.caption)
@@ -306,9 +306,9 @@ struct ManualConnectionView: View {
     @Binding var useSecureConnection: Bool
     @Binding var isConnected: Bool
     let onConnect: () -> Void
-    
+
     @Environment(\.dismiss) private var dismiss
-    
+
     var body: some View {
         NavigationView {
             Form {
@@ -320,17 +320,17 @@ struct ManualConnectionView: View {
                             Text("192.168.1.100 or myserver.local")
                                 .foregroundColor(.gray)
                         }
-                    
+
                     TextField("Port", text: $serverPort)
                         .keyboardType(.numberPad)
-                    
+
                     Toggle("Use Secure Connection (TLS)", isOn: $useSecureConnection)
                 }
-                
+
                 Section(header: Text("Authentication"), footer: Text("Optional: Enter auth token if your server requires authentication")) {
                     SecureField("Auth Token", text: $authToken)
                 }
-                
+
                 Section {
                     Button("Connect") {
                         onConnect()
@@ -357,7 +357,6 @@ extension View {
         when shouldShow: Bool,
         alignment: Alignment = .leading,
         @ViewBuilder placeholder: () -> Content) -> some View {
-        
         ZStack(alignment: alignment) {
             placeholder().opacity(shouldShow ? 1 : 0)
             self

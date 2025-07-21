@@ -3,9 +3,9 @@ import SwiftUI
 struct ProjectContextBanner: View {
     let project: ProjectContext
     @State private var isExpanded = false
-    
+
     let onSuggestionTap: (ProjectSuggestion) -> Void
-    
+
     var body: some View {
         VStack(spacing: 0) {
             // Compact banner
@@ -13,19 +13,19 @@ struct ProjectContextBanner: View {
                 Image(systemName: project.type.icon)
                     .foregroundColor(project.type.color)
                     .font(.title3)
-                
+
                 VStack(alignment: .leading, spacing: 2) {
                     Text(project.type.rawValue)
                         .font(.headline)
                         .fontWeight(.medium)
-                    
+
                     HStack(spacing: 4) {
                         if let language = project.language {
                             Text(language)
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
-                        
+
                         if let framework = project.framework {
                             Text("• \(framework)")
                                 .font(.caption)
@@ -33,9 +33,9 @@ struct ProjectContextBanner: View {
                         }
                     }
                 }
-                
+
                 Spacer()
-                
+
                 // Quick suggestions count
                 if !project.suggestions.isEmpty {
                     HStack(spacing: 4) {
@@ -43,7 +43,7 @@ struct ProjectContextBanner: View {
                             .font(.caption)
                             .fontWeight(.medium)
                             .foregroundColor(project.type.color)
-                        
+
                         Image(systemName: "lightbulb")
                             .font(.caption)
                             .foregroundColor(project.type.color)
@@ -53,7 +53,7 @@ struct ProjectContextBanner: View {
                     .background(project.type.color.opacity(0.1))
                     .cornerRadius(8)
                 }
-                
+
                 Button(action: {
                     withAnimation(.easeInOut(duration: 0.3)) {
                         isExpanded.toggle()
@@ -72,12 +72,12 @@ struct ProjectContextBanner: View {
                     isExpanded.toggle()
                 }
             }
-            
+
             // Expanded content
             if isExpanded {
                 VStack(spacing: 12) {
                     Divider()
-                    
+
                     // Project details
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
@@ -86,7 +86,7 @@ struct ProjectContextBanner: View {
                                 .fontWeight(.medium)
                             Spacer()
                         }
-                        
+
                         LazyVGrid(columns: [
                             GridItem(.flexible()),
                             GridItem(.flexible())
@@ -94,20 +94,20 @@ struct ProjectContextBanner: View {
                             if let buildSystem = project.buildSystem {
                                 ProjectDetailItem(label: "Build System", value: buildSystem, icon: "hammer")
                             }
-                            
+
                             if let packageManager = project.packageManager {
                                 ProjectDetailItem(label: "Package Manager", value: packageManager, icon: "shippingbox")
                             }
-                            
+
                             if !project.configFiles.isEmpty {
                                 ProjectDetailItem(label: "Config Files", value: "\(project.configFiles.count) found", icon: "gearshape")
                             }
-                            
+
                             ProjectDetailItem(label: "Directory", value: (project.workingDirectory as NSString).lastPathComponent, icon: "folder")
                         }
                     }
                     .padding(.horizontal, 16)
-                    
+
                     // High priority suggestions
                     let highPrioritySuggestions = project.suggestions.filter { $0.priority == .high || $0.priority == .critical }
                     if !highPrioritySuggestions.isEmpty {
@@ -119,7 +119,7 @@ struct ProjectContextBanner: View {
                                 Spacer()
                             }
                             .padding(.horizontal, 16)
-                            
+
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: 12) {
                                     ForEach(highPrioritySuggestions.prefix(4), id: \.id) { suggestion in
@@ -132,7 +132,7 @@ struct ProjectContextBanner: View {
                             }
                         }
                     }
-                    
+
                     // All suggestions by category
                     let groupedSuggestions = Dictionary(grouping: project.suggestions) { $0.category }
                     if !groupedSuggestions.isEmpty {
@@ -144,7 +144,7 @@ struct ProjectContextBanner: View {
                                 Spacer()
                             }
                             .padding(.horizontal, 16)
-                            
+
                             ForEach(SuggestionCategory.allCases, id: \.self) { category in
                                 if let suggestions = groupedSuggestions[category], !suggestions.isEmpty {
                                     SuggestionCategorySection(
@@ -174,25 +174,25 @@ struct ProjectDetailItem: View {
     let label: String
     let value: String
     let icon: String
-    
+
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: icon)
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .frame(width: 16)
-            
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
                     .font(.caption2)
                     .foregroundColor(.secondary)
-                
+
                 Text(value)
                     .font(.caption)
                     .fontWeight(.medium)
                     .lineLimit(1)
             }
-            
+
             Spacer()
         }
         .padding(8)
@@ -204,7 +204,7 @@ struct ProjectDetailItem: View {
 struct SuggestionCard: View {
     let suggestion: ProjectSuggestion
     let onTap: () -> Void
-    
+
     var body: some View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 6) {
@@ -212,18 +212,18 @@ struct SuggestionCard: View {
                     Image(systemName: suggestion.icon)
                         .font(.title3)
                         .foregroundColor(priorityColor)
-                    
+
                     Spacer()
-                    
+
                     priorityBadge
                 }
-                
+
                 Text(suggestion.title)
                     .font(.caption)
                     .fontWeight(.medium)
                     .multilineTextAlignment(.leading)
                     .lineLimit(2)
-                
+
                 Text(suggestion.description)
                     .font(.caption2)
                     .foregroundColor(.secondary)
@@ -241,7 +241,7 @@ struct SuggestionCard: View {
         }
         .buttonStyle(PlainButtonStyle())
     }
-    
+
     private var priorityColor: Color {
         switch suggestion.priority {
         case .critical: return .red
@@ -250,7 +250,7 @@ struct SuggestionCard: View {
         case .low: return .gray
         }
     }
-    
+
     private var priorityBadge: some View {
         Circle()
             .fill(priorityColor)
@@ -262,9 +262,9 @@ struct SuggestionCategorySection: View {
     let category: SuggestionCategory
     let suggestions: [ProjectSuggestion]
     let onSuggestionTap: (ProjectSuggestion) -> Void
-    
+
     @State private var isExpanded = false
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Button(action: {
@@ -277,13 +277,13 @@ struct SuggestionCategorySection: View {
                         .font(.caption)
                         .fontWeight(.medium)
                         .foregroundColor(.primary)
-                    
+
                     Text("(\(suggestions.count))")
                         .font(.caption2)
                         .foregroundColor(.secondary)
-                    
+
                     Spacer()
-                    
+
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                         .font(.caption2)
                         .foregroundColor(.secondary)
@@ -294,7 +294,7 @@ struct SuggestionCategorySection: View {
                 .cornerRadius(6)
             }
             .buttonStyle(PlainButtonStyle())
-            
+
             if isExpanded {
                 VStack(spacing: 4) {
                     ForEach(suggestions, id: \.id) { suggestion in
@@ -312,7 +312,7 @@ struct SuggestionCategorySection: View {
 struct SuggestionRow: View {
     let suggestion: ProjectSuggestion
     let onTap: () -> Void
-    
+
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 12) {
@@ -320,18 +320,18 @@ struct SuggestionRow: View {
                     .font(.body)
                     .foregroundColor(priorityColor)
                     .frame(width: 24)
-                
+
                 VStack(alignment: .leading, spacing: 2) {
                     Text(suggestion.title)
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .multilineTextAlignment(.leading)
-                    
+
                     Text(suggestion.description)
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.leading)
-                    
+
                     if let command = suggestion.command {
                         Text(command)
                             .font(.caption2)
@@ -340,9 +340,9 @@ struct SuggestionRow: View {
                             .padding(.top, 2)
                     }
                 }
-                
+
                 Spacer()
-                
+
                 Image(systemName: "chevron.right")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -353,7 +353,7 @@ struct SuggestionRow: View {
         }
         .buttonStyle(PlainButtonStyle())
     }
-    
+
     private var priorityColor: Color {
         switch suggestion.priority {
         case .critical: return .red
@@ -367,9 +367,9 @@ struct SuggestionRow: View {
 struct ProjectContextSheet: View {
     let project: ProjectContext
     @Environment(\.dismiss) private var dismiss
-    
+
     let onSuggestionTap: (ProjectSuggestion) -> Void
-    
+
     var body: some View {
         NavigationView {
             ScrollView {
@@ -379,17 +379,17 @@ struct ProjectContextSheet: View {
                         Image(systemName: project.type.icon)
                             .font(.largeTitle)
                             .foregroundColor(project.type.color)
-                        
+
                         Text(project.type.rawValue)
                             .font(.title)
                             .fontWeight(.bold)
-                        
+
                         if let language = project.language {
                             Text(language)
                                 .font(.headline)
                                 .foregroundColor(.secondary)
                         }
-                        
+
                         Text(project.workingDirectory)
                             .font(.caption)
                             .foregroundColor(.secondary)
@@ -398,13 +398,13 @@ struct ProjectContextSheet: View {
                     .padding()
                     .background(project.type.color.opacity(0.1))
                     .cornerRadius(12)
-                    
+
                     // Project details
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Project Information")
                             .font(.headline)
                             .padding(.horizontal)
-                        
+
                         LazyVGrid(columns: [
                             GridItem(.flexible()),
                             GridItem(.flexible())
@@ -412,20 +412,20 @@ struct ProjectContextSheet: View {
                             if let framework = project.framework {
                                 ProjectDetailItem(label: "Framework", value: framework, icon: "cpu")
                             }
-                            
+
                             if let buildSystem = project.buildSystem {
                                 ProjectDetailItem(label: "Build System", value: buildSystem, icon: "hammer")
                             }
-                            
+
                             if let packageManager = project.packageManager {
                                 ProjectDetailItem(label: "Package Manager", value: packageManager, icon: "shippingbox")
                             }
-                            
+
                             ProjectDetailItem(label: "Config Files", value: "\(project.configFiles.count)", icon: "gearshape")
                         }
                         .padding(.horizontal)
                     }
-                    
+
                     // Suggestions by category
                     let groupedSuggestions = Dictionary(grouping: project.suggestions) { $0.category }
                     ForEach(SuggestionCategory.allCases, id: \.self) { category in
@@ -434,7 +434,7 @@ struct ProjectContextSheet: View {
                                 Text(category.rawValue)
                                     .font(.headline)
                                     .padding(.horizontal)
-                                
+
                                 ForEach(suggestions, id: \.id) { suggestion in
                                     SuggestionRow(suggestion: suggestion) {
                                         onSuggestionTap(suggestion)
@@ -482,6 +482,6 @@ struct ProjectContextSheet: View {
         workingDirectory: "/Users/developer/MyProject",
         detectedFiles: ["Package.swift", "Sources/"]
     )
-    
+
     ProjectContextBanner(project: sampleProject) { _ in }
 }

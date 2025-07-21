@@ -4,7 +4,7 @@ struct ContentView: View {
     @EnvironmentObject var claudeService: ClaudeCodeService
     @EnvironmentObject var settings: SettingsManager
     @State private var isConnected = false
-    
+
     var body: some View {
         NavigationView {
             Group {
@@ -28,7 +28,7 @@ struct ContentView: View {
             checkConnection()
         }
     }
-    
+
     private func checkConnection() {
         // Check if we have saved connection settings
         isConnected = settings.hasValidConnection()

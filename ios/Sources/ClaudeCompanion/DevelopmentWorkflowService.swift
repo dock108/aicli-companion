@@ -30,7 +30,7 @@ enum GitFileStatus: String, CaseIterable {
     case copied = "C"
     case untracked = "??"
     case ignored = "!!"
-    
+
     var icon: String {
         switch self {
         case .modified: return "pencil"
@@ -42,7 +42,7 @@ enum GitFileStatus: String, CaseIterable {
         case .ignored: return "eye.slash"
         }
     }
-    
+
     var color: Color {
         switch self {
         case .modified: return .orange
@@ -80,7 +80,7 @@ enum GitOperation: String, CaseIterable {
     case cherryPick = "cherry-pick"
     case revert = "revert"
     case bisect = "bisect"
-    
+
     var displayName: String {
         switch self {
         case .merge: return "Merging"
@@ -111,7 +111,7 @@ enum BuildSystemType: String, CaseIterable {
     case cmake = "CMake"
     case make = "Make"
     case unknown = "Unknown"
-    
+
     var icon: String {
         switch self {
         case .xcode: return "hammer.fill"
@@ -123,7 +123,7 @@ enum BuildSystemType: String, CaseIterable {
         case .unknown: return "questionmark.square"
         }
     }
-    
+
     var primaryCommands: [String] {
         switch self {
         case .xcode: return ["xcodebuild", "xcodebuild test"]
@@ -182,7 +182,7 @@ enum ErrorSeverity: String, CaseIterable {
     case error = "error"
     case warning = "warning"
     case note = "note"
-    
+
     var color: Color {
         switch self {
         case .error: return .red
@@ -223,7 +223,7 @@ enum TestType: String, CaseIterable {
     case ui = "UI Tests"
     case performance = "Performance Tests"
     case snapshot = "Snapshot Tests"
-    
+
     var icon: String {
         switch self {
         case .unit: return "testtube.2"
@@ -275,30 +275,30 @@ class DevelopmentWorkflowService: ObservableObject {
     @Published var testSuites: [TestSuite] = []
     @Published var isAnalyzing = false
     @Published var workflowSuggestions: [WorkflowSuggestion] = []
-    
+
     private var workingDirectory: String = ""
-    
+
     init(workingDirectory: String = "") {
         self.workingDirectory = workingDirectory
         if !workingDirectory.isEmpty {
             analyzeWorkflow(in: workingDirectory)
         }
     }
-    
+
     func updateWorkingDirectory(_ directory: String) {
         workingDirectory = directory
         analyzeWorkflow(in: directory)
     }
-    
+
     func analyzeWorkflow(in directory: String) {
         isAnalyzing = true
-        
+
         DispatchQueue.global(qos: .userInitiated).async {
             let gitRepo = self.analyzeGitRepository(in: directory)
             let buildSys = self.analyzeBuildSystem(in: directory)
             let tests = self.analyzeTestSuites(in: directory)
             let suggestions = self.generateWorkflowSuggestions(git: gitRepo, build: buildSys, tests: tests)
-            
+
             DispatchQueue.main.async {
                 self.currentRepository = gitRepo
                 self.buildSystem = buildSys
@@ -308,26 +308,26 @@ class DevelopmentWorkflowService: ObservableObject {
             }
         }
     }
-    
+
     // MARK: - Git Analysis
-    
+
     private func analyzeGitRepository(in directory: String) -> GitRepository? {
         // Simulate Git repository analysis
         guard directory.contains("git") || directory.contains("project") else { return nil }
-        
+
         let mockChangedFiles = [
             GitFileChange(path: "src/main.swift", status: .modified),
             GitFileChange(path: "tests/MainTests.swift", status: .modified),
             GitFileChange(path: "README.md", status: .added),
             GitFileChange(path: "unused.swift", status: .deleted)
         ]
-        
+
         let mockCommits = [
             GitCommit(hash: "a1b2c3d4", shortHash: "a1b2c3d", message: "Add new feature implementation", author: "Developer", date: Date().addingTimeInterval(-3600), filesChanged: 3),
             GitCommit(hash: "e5f6g7h8", shortHash: "e5f6g7h", message: "Fix critical bug in authentication", author: "Developer", date: Date().addingTimeInterval(-7200), filesChanged: 2),
             GitCommit(hash: "i9j0k1l2", shortHash: "i9j0k1l", message: "Update dependencies and documentation", author: "Developer", date: Date().addingTimeInterval(-86400), filesChanged: 5)
         ]
-        
+
         let status = GitStatus(
             ahead: 2,
             behind: 0,
@@ -335,7 +335,7 @@ class DevelopmentWorkflowService: ObservableObject {
             isClean: false,
             currentOperation: nil
         )
-        
+
         return GitRepository(
             path: directory,
             currentBranch: "feature/mobile-companion",
@@ -347,15 +347,15 @@ class DevelopmentWorkflowService: ObservableObject {
             status: status
         )
     }
-    
+
     // MARK: - Build System Analysis
-    
+
     private func analyzeBuildSystem(in directory: String) -> BuildSystem? {
         let directoryName = (directory as NSString).lastPathComponent.lowercased()
-        
+
         var buildType: BuildSystemType = .unknown
         var configFiles: [String] = []
-        
+
         // Determine build system based on directory patterns
         if directoryName.contains("ios") || directoryName.contains("swift") {
             buildType = .swiftPM
@@ -370,15 +370,15 @@ class DevelopmentWorkflowService: ObservableObject {
             buildType = .cargo
             configFiles = ["Cargo.toml", "Cargo.lock"]
         }
-        
+
         let mockTargets = [
             BuildTarget(name: "App", type: .app, platform: "iOS", configuration: "Debug"),
             BuildTarget(name: "AppTests", type: .test, platform: "iOS", configuration: "Debug"),
             BuildTarget(name: "AppLibrary", type: .library, platform: "iOS", configuration: "Release")
         ]
-        
+
         let mockScripts = generateBuildScripts(for: buildType)
-        
+
         let lastBuildResult = BuildResult(
             success: true,
             duration: 45.2,
@@ -390,7 +390,7 @@ class DevelopmentWorkflowService: ObservableObject {
                 BuildWarning(file: "src/utils.swift", line: 15, message: "Function parameter can be simplified")
             ]
         )
-        
+
         return BuildSystem(
             type: buildType,
             configFiles: configFiles,
@@ -399,7 +399,7 @@ class DevelopmentWorkflowService: ObservableObject {
             buildScripts: mockScripts
         )
     }
-    
+
     private func generateBuildScripts(for buildType: BuildSystemType) -> [BuildScript] {
         switch buildType {
         case .swiftPM:
@@ -436,12 +436,12 @@ class DevelopmentWorkflowService: ObservableObject {
             return []
         }
     }
-    
+
     // MARK: - Test Analysis
-    
+
     private func analyzeTestSuites(in directory: String) -> [TestSuite] {
         var testSuites: [TestSuite] = []
-        
+
         // Mock test suites based on directory type
         if directory.contains("swift") || directory.contains("ios") {
             testSuites.append(TestSuite(
@@ -467,7 +467,7 @@ class DevelopmentWorkflowService: ObservableObject {
                     fileCoverage: []
                 )
             ))
-            
+
             testSuites.append(TestSuite(
                 name: "UI Tests",
                 type: .ui,
@@ -484,15 +484,15 @@ class DevelopmentWorkflowService: ObservableObject {
                 coverage: nil
             ))
         }
-        
+
         return testSuites
     }
-    
+
     // MARK: - Workflow Suggestions
-    
+
     private func generateWorkflowSuggestions(git: GitRepository?, build: BuildSystem?, tests: [TestSuite]) -> [WorkflowSuggestion] {
         var suggestions: [WorkflowSuggestion] = []
-        
+
         // Git-based suggestions
         if let git = git {
             if git.hasUncommittedChanges {
@@ -505,7 +505,7 @@ class DevelopmentWorkflowService: ObservableObject {
                     icon: "checkmark.circle"
                 ))
             }
-            
+
             if git.status.ahead > 0 {
                 suggestions.append(WorkflowSuggestion(
                     title: "Push Changes",
@@ -516,7 +516,7 @@ class DevelopmentWorkflowService: ObservableObject {
                     icon: "arrow.up.circle"
                 ))
             }
-            
+
             if git.status.behind > 0 {
                 suggestions.append(WorkflowSuggestion(
                     title: "Pull Changes",
@@ -528,7 +528,7 @@ class DevelopmentWorkflowService: ObservableObject {
                 ))
             }
         }
-        
+
         // Build system suggestions
         if let build = build {
             if let lastBuild = build.lastBuildResult, !lastBuild.success {
@@ -550,7 +550,7 @@ class DevelopmentWorkflowService: ObservableObject {
                     icon: "hammer"
                 ))
             }
-            
+
             if build.type.primaryCommands.count > 1 {
                 suggestions.append(WorkflowSuggestion(
                     title: "Run Tests",
@@ -562,7 +562,7 @@ class DevelopmentWorkflowService: ObservableObject {
                 ))
             }
         }
-        
+
         // Test-based suggestions
         for testSuite in tests {
             if let results = testSuite.lastResults, results.failedTests > 0 {
@@ -576,15 +576,15 @@ class DevelopmentWorkflowService: ObservableObject {
                 ))
             }
         }
-        
+
         return suggestions.sorted { $0.priority.rawValue > $1.priority.rawValue }
     }
-    
+
     // MARK: - Quick Actions
-    
+
     func getQuickGitActions() -> [WorkflowSuggestion] {
         guard let git = currentRepository else { return [] }
-        
+
         return [
             WorkflowSuggestion(title: "Git Status", description: "Check repository status", command: "git status", category: .git, icon: "info.circle"),
             WorkflowSuggestion(title: "Git Log", description: "View commit history", command: "git log --oneline -10", category: .git, icon: "clock"),
@@ -593,10 +593,10 @@ class DevelopmentWorkflowService: ObservableObject {
             WorkflowSuggestion(title: "Create Branch", description: "Create new feature branch", command: "git checkout -b feature/new-feature", category: .git, icon: "plus.circle")
         ]
     }
-    
+
     func getBuildActions() -> [WorkflowSuggestion] {
         guard let build = buildSystem else { return [] }
-        
+
         return build.buildScripts.map { script in
             WorkflowSuggestion(
                 title: script.name,
@@ -607,7 +607,7 @@ class DevelopmentWorkflowService: ObservableObject {
             )
         }
     }
-    
+
     func getTestActions() -> [WorkflowSuggestion] {
         return testSuites.map { suite in
             WorkflowSuggestion(
@@ -631,7 +631,7 @@ struct WorkflowSuggestion {
     let category: WorkflowCategory
     let priority: SuggestionPriority
     let icon: String
-    
+
     init(title: String, description: String, command: String, category: WorkflowCategory, priority: SuggestionPriority = .medium, icon: String) {
         self.title = title
         self.description = description
@@ -649,7 +649,7 @@ enum WorkflowCategory: String, CaseIterable {
     case deploy = "Deploy"
     case debug = "Debug"
     case maintenance = "Maintenance"
-    
+
     var color: Color {
         switch self {
         case .git: return .orange

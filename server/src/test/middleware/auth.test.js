@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, mock } from 'node:test';
 import assert from 'node:assert';
-import { authMiddleware } from './auth.js';
+import { authMiddleware } from '../../middleware/auth.js';
 
 describe('Authentication Middleware', () => {
   let mockReq, mockRes, mockNext;

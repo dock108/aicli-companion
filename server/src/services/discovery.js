@@ -26,18 +26,20 @@ export function setupBonjour(port, enableTLS = false) {
       console.error('Bonjour service error:', error);
     });
 
-    // Graceful cleanup
-    process.on('SIGINT', () => {
-      bonjour.unpublishAll(() => {
-        bonjour.destroy();
+    // Graceful cleanup (skip in test environment)
+    if (process.env.NODE_ENV !== 'test') {
+      process.on('SIGINT', () => {
+        bonjour.unpublishAll(() => {
+          bonjour.destroy();
+        });
       });
-    });
 
-    process.on('SIGTERM', () => {
-      bonjour.unpublishAll(() => {
-        bonjour.destroy();
+      process.on('SIGTERM', () => {
+        bonjour.unpublishAll(() => {
+          bonjour.destroy();
+        });
       });
-    });
+    }
 
     return service;
   } catch (error) {

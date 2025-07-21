@@ -7,8 +7,8 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "test": "node --test",
-    "test:coverage": "c8 --reporter=lcov --reporter=text node --test",
+    "test": "NODE_ENV=test node --test src/test/**/*.test.js",
+    "test:coverage": "NODE_ENV=test c8 --reporter=lcov --reporter=text node --test src/test/**/*.test.js",
     "test:watch": "node --test --watch",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",

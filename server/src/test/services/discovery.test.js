@@ -5,7 +5,7 @@ import { setupBonjour } from '../../services/discovery.js';
 describe('Discovery Service', () => {
   describe('setupBonjour', () => {
     it('should create Bonjour service with correct configuration', () => {
-      const port = 3001;
+      const port = 3002; // Use different port to avoid conflicts
       const enableTLS = false;
 
       const service = setupBonjour(port, enableTLS);
@@ -14,10 +14,15 @@ describe('Discovery Service', () => {
       assert.strictEqual(service.port, port);
       assert.strictEqual(service.name, 'Claude Companion Server');
       assert.strictEqual(service.type, '_claudecode._tcp');
+
+      // Clean up immediately to prevent conflicts
+      if (service && service.stop) {
+        service.stop();
+      }
     });
 
     it('should set TLS configuration correctly', () => {
-      const port = 3001;
+      const port = 3003; // Use different port to avoid conflicts
       const enableTLS = true;
 
       const service = setupBonjour(port, enableTLS);
@@ -25,10 +30,15 @@ describe('Discovery Service', () => {
       assert.ok(service);
       assert.strictEqual(service.txt.tls, 'enabled');
       assert.strictEqual(service.txt.protocol, 'wss');
+
+      // Clean up immediately to prevent conflicts
+      if (service && service.stop) {
+        service.stop();
+      }
     });
 
     it('should set non-TLS configuration correctly', () => {
-      const port = 3001;
+      const port = 3004; // Use different port to avoid conflicts
       const enableTLS = false;
 
       const service = setupBonjour(port, enableTLS);
@@ -36,6 +46,11 @@ describe('Discovery Service', () => {
       assert.ok(service);
       assert.strictEqual(service.txt.tls, 'disabled');
       assert.strictEqual(service.txt.protocol, 'ws');
+
+      // Clean up immediately to prevent conflicts
+      if (service && service.stop) {
+        service.stop();
+      }
     });
   });
 });

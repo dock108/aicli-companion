@@ -12,7 +12,7 @@ describe('ClaudeCodeService', () => {
   afterEach(() => {
     // Clean up any active sessions
     service.activeSessions.forEach((session, id) => {
-      service.endStreamingSession(id);
+      service.closeSession(id);
     });
   });
 
@@ -67,31 +67,8 @@ describe('ClaudeCodeService', () => {
       const message = { type: 'unknown', data: 'test' };
       const result = service.classifyClaudeMessage(message);
 
-      assert.deepStrictEqual(result, message);
-    });
-  });
-
-  describe('parseToolActivityFromMessage', () => {
-    it('should parse tool activity from tool use messages', () => {
-      const message = {
-        type: 'tool_use',
-        tool: 'Read',
-        args: { file_path: '/test.txt' },
-      };
-
-      const activity = service.parseToolActivityFromMessage(message);
-
-      assert.ok(activity);
-      assert.strictEqual(activity.toolName, 'Read');
-      assert.deepStrictEqual(activity.parameters, { file_path: '/test.txt' });
-      assert.strictEqual(activity.status, 'active');
-    });
-
-    it('should return null for non-tool messages', () => {
-      const message = { type: 'assistant', content: 'Hello' };
-      const activity = service.parseToolActivityFromMessage(message);
-
-      assert.strictEqual(activity, null);
+      assert.strictEqual(result.eventType, 'streamData');
+      assert.strictEqual(result.data.type, 'unknown');
     });
   });
 
@@ -109,10 +86,10 @@ describe('ClaudeCodeService', () => {
       assert.strictEqual(service.activeSessions.get(sessionId), session);
     });
 
-    it('should handle sending messages to non-existent sessions', () => {
-      assert.throws(() => {
-        service.sendStreamingMessage('non-existent', 'message');
-      }, /No active session found/);
+    it('should handle sending messages to non-existent sessions', async () => {
+      await assert.rejects(async () => {
+        await service.sendToExistingSession('non-existent', 'message');
+      }, /Session.*not found/);
     });
   });
 });

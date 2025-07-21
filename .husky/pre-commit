@@ -13,20 +13,20 @@ npx lint-staged
 if git diff --cached --name-only | grep -q "^server/"; then
   echo "🧪 Running server tests..."
   cd server
-  npm test || true
+  npm test
   cd ..
 fi
 
 if git diff --cached --name-only | grep -q "^ios/"; then
   echo "🧪 Running iOS tests..."
   cd ios
-  swift test || true
+  swift test
   cd ..
 fi
 
 # Run security audit
 echo "🔒 Running security audit..."
-cd server && npm audit --audit-level=high || true
+cd server && npm audit --audit-level=high
 cd ..
 
 echo "✅ Pre-commit checks completed!"

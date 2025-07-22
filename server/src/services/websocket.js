@@ -1,5 +1,4 @@
 import { v4 as uuidv4 } from 'uuid';
-// import jwt from 'jsonwebtoken';
 
 export function setupWebSocket(wss, claudeService, authToken) {
   const clients = new Map();
@@ -25,6 +24,7 @@ export function setupWebSocket(wss, claudeService, authToken) {
       ws,
       sessionIds: new Set(),
       isAlive: true,
+      subscribedEvents: new Set(),
     });
 
     // Set up ping/pong for connection health
@@ -33,27 +33,61 @@ export function setupWebSocket(wss, claudeService, authToken) {
       ws.isAlive = true;
     });
 
-    // Handle incoming messages
-    ws.on('message', async (data) => {
-      try {
-        const message = JSON.parse(data);
-        await handleWebSocketMessage(clientId, message, claudeService, clients);
-      } catch (error) {
-        console.error('WebSocket message error:', error);
-        sendToClient(
+    // Send welcome message
+    getClaudeCodeVersion()
+      .then((claudeCodeVersion) => {
+        sendMessage(
           clientId,
           {
-            type: 'error',
-            message: error.message,
+            type: 'welcome',
+            requestId: null,
+            timestamp: new Date().toISOString(),
+            data: {
+              clientId,
+              serverVersion: '1.0.0',
+              claudeCodeVersion,
+              capabilities: ['streaming', 'permissions', 'multiSession'],
+              maxSessions: 5,
+            },
           },
           clients
         );
+      })
+      .catch((error) => {
+        console.warn('Failed to get Claude Code version:', error);
+        sendMessage(
+          clientId,
+          {
+            type: 'welcome',
+            requestId: null,
+            timestamp: new Date().toISOString(),
+            data: {
+              clientId,
+              serverVersion: '1.0.0',
+              claudeCodeVersion: null,
+              capabilities: ['streaming', 'permissions', 'multiSession'],
+              maxSessions: 5,
+            },
+          },
+          clients
+        );
+      });
+
+    // Handle incoming messages
+    ws.on('message', async (data) => {
+      try {
+        const message = JSON.parse(data.toString());
+        console.log(`📨 Received message from ${clientId}: ${message.type}`);
+        await handleWebSocketMessage(clientId, message, claudeService, clients);
+      } catch (error) {
+        console.error('WebSocket message error:', error);
+        sendErrorMessage(clientId, null, 'INVALID_REQUEST', error.message, clients);
       }
     });
 
     // Handle client disconnect
-    ws.on('close', () => {
-      console.log(`WebSocket client disconnected: ${clientId}`);
+    ws.on('close', (code, reason) => {
+      console.log(`WebSocket client disconnected: ${clientId} (${code}: ${reason})`);
 
       // Clean up any active sessions for this client
       const client = clients.get(clientId);
@@ -69,26 +103,92 @@ export function setupWebSocket(wss, claudeService, authToken) {
     ws.on('error', (error) => {
       console.error(`WebSocket error for client ${clientId}:`, error);
     });
-
-    // Send welcome message
-    sendToClient(
-      clientId,
-      {
-        type: 'connected',
-        clientId,
-        message: 'Connected to Claude Companion Server',
-      },
-      clients
-    );
   });
 
-  // Set up Claude Code event listeners
+  // Set up Claude Code event listeners for rich message types
   claudeService.on('streamData', (data) => {
     broadcastToSessionClients(
       data.sessionId,
       {
         type: 'streamData',
-        sessionId: data.sessionId,
+        requestId: null,
+        timestamp: new Date().toISOString(),
+        data: {
+          sessionId: data.sessionId,
+          streamType: determineStreamType(data.data),
+          content: formatStreamContent(data.data),
+          isComplete: data.isComplete || false,
+          originalMessage: data.originalMessage,
+        },
+      },
+      clients
+    );
+  });
+
+  // Handle system initialization messages
+  claudeService.on('systemInit', (data) => {
+    broadcastToSessionClients(
+      data.sessionId,
+      {
+        type: 'systemInit',
+        requestId: null,
+        timestamp: new Date().toISOString(),
+        data: data.data,
+      },
+      clients
+    );
+  });
+
+  // Handle assistant responses with rich content
+  claudeService.on('assistantMessage', (data) => {
+    broadcastToSessionClients(
+      data.sessionId,
+      {
+        type: 'assistantMessage',
+        requestId: null,
+        timestamp: new Date().toISOString(),
+        data: data.data,
+      },
+      clients
+    );
+  });
+
+  // Handle tool usage notifications
+  claudeService.on('toolUse', (data) => {
+    broadcastToSessionClients(
+      data.sessionId,
+      {
+        type: 'toolUse',
+        requestId: null,
+        timestamp: new Date().toISOString(),
+        data: data.data,
+      },
+      clients
+    );
+  });
+
+  // Handle tool results
+  claudeService.on('toolResult', (data) => {
+    broadcastToSessionClients(
+      data.sessionId,
+      {
+        type: 'toolResult',
+        requestId: null,
+        timestamp: new Date().toISOString(),
+        data: data.data,
+      },
+      clients
+    );
+  });
+
+  // Handle conversation results
+  claudeService.on('conversationResult', (data) => {
+    broadcastToSessionClients(
+      data.sessionId,
+      {
+        type: 'conversationResult',
+        requestId: null,
+        timestamp: new Date().toISOString(),
         data: data.data,
       },
       clients
@@ -99,9 +199,14 @@ export function setupWebSocket(wss, claudeService, authToken) {
     broadcastToSessionClients(
       data.sessionId,
       {
-        type: 'streamError',
-        sessionId: data.sessionId,
-        error: data.error,
+        type: 'error',
+        requestId: null,
+        timestamp: new Date().toISOString(),
+        data: {
+          code: 'CLAUDE_ERROR',
+          message: data.error,
+          details: { sessionId: data.sessionId },
+        },
       },
       clients
     );
@@ -111,21 +216,35 @@ export function setupWebSocket(wss, claudeService, authToken) {
     broadcastToSessionClients(
       data.sessionId,
       {
-        type: 'sessionClosed',
-        sessionId: data.sessionId,
-        code: data.code,
+        type: 'streamComplete',
+        requestId: null,
+        timestamp: new Date().toISOString(),
+        data: {
+          sessionId: data.sessionId,
+          finalResult: 'Session ended',
+          duration: 0,
+          cost: null,
+          usage: null,
+        },
       },
       clients
     );
   });
 
-  claudeService.on('sessionError', (data) => {
+  claudeService.on('permissionRequired', (data) => {
     broadcastToSessionClients(
       data.sessionId,
       {
-        type: 'sessionError',
-        sessionId: data.sessionId,
-        error: data.error,
+        type: 'permissionRequest',
+        requestId: null,
+        timestamp: new Date().toISOString(),
+        data: {
+          sessionId: data.sessionId,
+          prompt: data.prompt,
+          options: data.options || ['y', 'n'],
+          defaultOption: data.default || 'n',
+          timeout: 30000,
+        },
       },
       clients
     );
@@ -151,144 +270,177 @@ export function setupWebSocket(wss, claudeService, authToken) {
 }
 
 async function handleWebSocketMessage(clientId, message, claudeService, clients) {
-  const { type, ...payload } = message;
+  const { type, requestId, data } = message;
 
-  switch (type) {
-    case 'ask':
-      await handleAskMessage(clientId, payload, claudeService, clients);
-      break;
+  try {
+    switch (type) {
+      case 'ask':
+        await handleAskMessage(clientId, requestId, data, claudeService, clients);
+        break;
 
-    case 'streamStart':
-      await handleStreamStartMessage(clientId, payload, claudeService, clients);
-      break;
+      case 'streamStart':
+        await handleStreamStartMessage(clientId, requestId, data, claudeService, clients);
+        break;
 
-    case 'streamSend':
-      await handleStreamSendMessage(clientId, payload, claudeService, clients);
-      break;
+      case 'streamSend':
+        await handleStreamSendMessage(clientId, requestId, data, claudeService, clients);
+        break;
 
-    case 'streamClose':
-      await handleStreamCloseMessage(clientId, payload, claudeService, clients);
-      break;
+      case 'streamClose':
+        await handleStreamCloseMessage(clientId, requestId, data, claudeService, clients);
+        break;
 
-    case 'permission':
-      await handlePermissionMessage(clientId, payload, claudeService, clients);
-      break;
+      case 'permission':
+        await handlePermissionMessage(clientId, requestId, data, claudeService, clients);
+        break;
 
-    case 'ping':
-      sendToClient(clientId, { type: 'pong' }, clients);
-      break;
+      case 'ping':
+        handlePingMessage(clientId, requestId, data, clients);
+        break;
 
-    default:
-      sendToClient(
-        clientId,
-        {
-          type: 'error',
-          message: `Unknown message type: ${type}`,
-        },
-        clients
-      );
+      case 'subscribe':
+        handleSubscribeMessage(clientId, requestId, data, clients);
+        break;
+
+      case 'setWorkingDirectory':
+        await handleSetWorkingDirectoryMessage(clientId, requestId, data, claudeService, clients);
+        break;
+
+      default:
+        sendErrorMessage(
+          clientId,
+          requestId,
+          'INVALID_REQUEST',
+          `Unknown message type: ${type}`,
+          clients
+        );
+    }
+  } catch (error) {
+    console.error(`Error handling message type ${type}:`, error);
+    sendErrorMessage(clientId, requestId, 'INTERNAL_ERROR', error.message, clients);
   }
 }
 
-async function handleAskMessage(clientId, payload, claudeService, clients) {
-  const { prompt, workingDirectory, requestId } = payload;
+async function handleAskMessage(clientId, requestId, data, claudeService, clients) {
+  const { prompt, workingDirectory, options } = data;
+
+  console.log(`🤖 Processing ask message for client ${clientId}`);
+  console.log(`   Prompt: "${prompt}"`);
+  console.log(`   Working dir: ${workingDirectory || process.cwd()}`);
 
   try {
     const response = await claudeService.sendPrompt(prompt, {
-      format: 'json',
-      workingDirectory,
+      format: options?.format || 'json',
+      workingDirectory: workingDirectory || process.cwd(),
+      timeout: options?.timeout || 60000,
     });
 
-    sendToClient(
+    console.log(`✅ Ask completed for client ${clientId}`);
+
+    sendMessage(
       clientId,
       {
         type: 'askResponse',
         requestId,
-        data: response,
+        timestamp: new Date().toISOString(),
+        data: {
+          success: true,
+          response,
+          error: null,
+        },
       },
       clients
     );
   } catch (error) {
-    sendToClient(
+    console.log(`❌ Ask failed for client ${clientId}: ${error.message}`);
+
+    sendMessage(
       clientId,
       {
-        type: 'askError',
+        type: 'askResponse',
         requestId,
-        error: error.message,
+        timestamp: new Date().toISOString(),
+        data: {
+          success: false,
+          response: null,
+          error: error.message,
+        },
       },
       clients
     );
   }
 }
 
-async function handleStreamStartMessage(clientId, payload, claudeService, clients) {
-  const { prompt, workingDirectory, requestId } = payload;
+async function handleStreamStartMessage(clientId, requestId, data, claudeService, clients) {
+  const { prompt, workingDirectory, options } = data;
 
   try {
-    const response = await claudeService.sendStreamingPrompt(prompt, {
-      sessionId: uuidv4(),
-      workingDirectory,
+    const sessionId = uuidv4();
+    const finalWorkingDirectory =
+      workingDirectory || claudeService.defaultWorkingDirectory || process.cwd();
+
+    console.log(`🚀 Starting Claude conversation session ${sessionId}`);
+    console.log(`   Working directory: ${finalWorkingDirectory}`);
+    console.log(
+      `   Initial prompt: "${prompt?.substring(0, 100)}${prompt?.length > 100 ? '...' : ''}"`
+    );
+
+    const _response = await claudeService.sendStreamingPrompt(prompt, {
+      sessionId,
+      workingDirectory: finalWorkingDirectory,
     });
 
     // Associate this session with the client
     const client = clients.get(clientId);
     if (client) {
-      client.sessionIds.add(response.sessionId);
+      client.sessionIds.add(sessionId);
     }
 
-    sendToClient(
+    sendMessage(
       clientId,
       {
         type: 'streamStarted',
         requestId,
-        sessionId: response.sessionId,
+        timestamp: new Date().toISOString(),
+        data: {
+          sessionId,
+          sessionName: options?.sessionName || null,
+          workingDirectory: workingDirectory || process.cwd(),
+        },
       },
       clients
     );
   } catch (error) {
-    sendToClient(
-      clientId,
-      {
-        type: 'streamError',
-        requestId,
-        error: error.message,
-      },
-      clients
-    );
+    sendErrorMessage(clientId, requestId, 'CLAUDE_ERROR', error.message, clients);
   }
 }
 
-async function handleStreamSendMessage(clientId, payload, claudeService, clients) {
-  const { sessionId, prompt, requestId } = payload;
+async function handleStreamSendMessage(clientId, requestId, data, claudeService, clients) {
+  const { sessionId, prompt } = data;
 
   try {
-    const _response = await claudeService.sendToExistingSession(sessionId, prompt);
+    await claudeService.sendToExistingSession(sessionId, prompt);
 
-    sendToClient(
+    sendMessage(
       clientId,
       {
         type: 'streamSent',
         requestId,
-        sessionId,
+        timestamp: new Date().toISOString(),
+        data: {
+          sessionId,
+          success: true,
+        },
       },
       clients
     );
   } catch (error) {
-    sendToClient(
-      clientId,
-      {
-        type: 'streamError',
-        requestId,
-        sessionId,
-        error: error.message,
-      },
-      clients
-    );
+    sendErrorMessage(clientId, requestId, 'SESSION_ERROR', error.message, clients, { sessionId });
   }
 }
 
-async function handleStreamCloseMessage(clientId, payload, claudeService, clients) {
-  const { sessionId, requestId } = payload;
+async function handleStreamCloseMessage(clientId, requestId, data, claudeService, clients) {
+  const { sessionId, reason } = data;
 
   try {
     await claudeService.closeSession(sessionId);
@@ -299,59 +451,231 @@ async function handleStreamCloseMessage(clientId, payload, claudeService, client
       client.sessionIds.delete(sessionId);
     }
 
-    sendToClient(
+    sendMessage(
       clientId,
       {
         type: 'streamClosed',
         requestId,
-        sessionId,
+        timestamp: new Date().toISOString(),
+        data: {
+          sessionId,
+          reason: reason || 'user_requested',
+        },
       },
       clients
     );
   } catch (error) {
-    sendToClient(
-      clientId,
-      {
-        type: 'streamError',
-        requestId,
-        sessionId,
-        error: error.message,
-      },
-      clients
-    );
+    sendErrorMessage(clientId, requestId, 'SESSION_ERROR', error.message, clients, { sessionId });
   }
 }
 
-async function handlePermissionMessage(clientId, payload, claudeService, clients) {
-  const { sessionId, response, requestId } = payload;
+async function handlePermissionMessage(clientId, requestId, data, claudeService, clients) {
+  const { sessionId, response, _remember } = data;
 
   try {
     await claudeService.handlePermissionPrompt(sessionId, response);
 
-    sendToClient(
+    sendMessage(
       clientId,
       {
         type: 'permissionHandled',
         requestId,
-        sessionId,
+        timestamp: new Date().toISOString(),
+        data: {
+          sessionId,
+          response,
+          success: true,
+        },
       },
       clients
     );
   } catch (error) {
-    sendToClient(
+    sendErrorMessage(clientId, requestId, 'PERMISSION_ERROR', error.message, clients, {
+      sessionId,
+    });
+  }
+}
+
+function handlePingMessage(clientId, requestId, data, clients) {
+  sendMessage(
+    clientId,
+    {
+      type: 'pong',
+      requestId,
+      timestamp: new Date().toISOString(),
+      data: {
+        serverTime: new Date().toISOString(),
+      },
+    },
+    clients
+  );
+}
+
+function handleSubscribeMessage(clientId, requestId, data, clients) {
+  const { events, sessionIds } = data;
+  const client = clients.get(clientId);
+
+  if (client) {
+    events.forEach((event) => client.subscribedEvents.add(event));
+
+    sendMessage(
       clientId,
       {
-        type: 'permissionError',
+        type: 'subscribed',
         requestId,
-        sessionId,
-        error: error.message,
+        timestamp: new Date().toISOString(),
+        data: {
+          events,
+          sessionIds: sessionIds || [],
+          success: true,
+        },
       },
       clients
     );
   }
 }
 
-function sendToClient(clientId, message, clients) {
+async function handleSetWorkingDirectoryMessage(clientId, requestId, data, claudeService, clients) {
+  const { workingDirectory } = data;
+
+  try {
+    // Validate input
+    if (!workingDirectory || typeof workingDirectory !== 'string') {
+      sendErrorMessage(
+        clientId,
+        requestId,
+        'INVALID_INPUT',
+        'Working directory must be a valid string',
+        clients
+      );
+      return;
+    }
+
+    // Validate the directory exists and is safe
+    const fs = await import('fs');
+    const path = await import('path');
+
+    const resolvedPath = path.resolve(workingDirectory);
+
+    // Security checks for path traversal
+    const normalizedPath = path.normalize(resolvedPath);
+
+    // Prevent access to sensitive system directories
+    const forbiddenPaths = [
+      '/etc/',
+      '/proc/',
+      '/sys/',
+      '/dev/',
+      '/root/',
+      '/usr/bin/',
+      '/sbin/',
+      '/bin/',
+      '/boot/',
+      'C:\\Windows\\',
+      'C:\\Program Files\\',
+      'C:\\Program Files (x86)\\',
+      'C:\\System32\\',
+    ];
+
+    for (const forbidden of forbiddenPaths) {
+      if (normalizedPath.toLowerCase().includes(forbidden.toLowerCase())) {
+        sendErrorMessage(
+          clientId,
+          requestId,
+          'FORBIDDEN_PATH',
+          'Access to system directories is not allowed',
+          clients
+        );
+        return;
+      }
+    }
+
+    // Prevent path traversal attacks
+    if (normalizedPath.includes('..') || normalizedPath.includes('~')) {
+      sendErrorMessage(
+        clientId,
+        requestId,
+        'INVALID_PATH',
+        'Path traversal is not allowed',
+        clients
+      );
+      return;
+    }
+
+    // Ensure the path is absolute and within allowed bounds
+    if (!path.isAbsolute(normalizedPath)) {
+      sendErrorMessage(clientId, requestId, 'INVALID_PATH', 'Path must be absolute', clients);
+      return;
+    }
+
+    // Check if directory exists
+    if (!fs.existsSync(normalizedPath)) {
+      sendErrorMessage(
+        clientId,
+        requestId,
+        'DIRECTORY_NOT_FOUND',
+        `Directory does not exist: ${normalizedPath}`,
+        clients
+      );
+      return;
+    }
+
+    // Check if it's actually a directory
+    const stats = fs.statSync(normalizedPath);
+    if (!stats.isDirectory()) {
+      sendErrorMessage(
+        clientId,
+        requestId,
+        'NOT_A_DIRECTORY',
+        `Path is not a directory: ${normalizedPath}`,
+        clients
+      );
+      return;
+    }
+
+    // Check directory permissions
+    try {
+      fs.accessSync(normalizedPath, fs.constants.R_OK | fs.constants.W_OK);
+    } catch (error) {
+      sendErrorMessage(
+        clientId,
+        requestId,
+        'PERMISSION_DENIED',
+        'Insufficient permissions for directory access',
+        clients
+      );
+      return;
+    }
+
+    // Update the default working directory for future sessions
+    claudeService.defaultWorkingDirectory = normalizedPath;
+
+    sendMessage(
+      clientId,
+      {
+        type: 'workingDirectorySet',
+        requestId,
+        timestamp: new Date().toISOString(),
+        data: {
+          workingDirectory: normalizedPath,
+          success: true,
+        },
+      },
+      clients
+    );
+  } catch (error) {
+    console.error('Working directory validation error:', error);
+    sendErrorMessage(
+      clientId,
+      requestId,
+      'WORKING_DIRECTORY_ERROR',
+      'Failed to validate working directory',
+      clients
+    );
+  }
+}
+
+function sendMessage(clientId, message, clients) {
   const client = clients.get(clientId);
   if (client && client.ws.readyState === 1) {
     // WebSocket.OPEN
@@ -359,10 +683,93 @@ function sendToClient(clientId, message, clients) {
   }
 }
 
+function sendErrorMessage(clientId, requestId, code, message, clients, details = {}) {
+  sendMessage(
+    clientId,
+    {
+      type: 'error',
+      requestId,
+      timestamp: new Date().toISOString(),
+      data: {
+        code,
+        message,
+        details,
+      },
+    },
+    clients
+  );
+}
+
 function broadcastToSessionClients(sessionId, message, clients) {
   clients.forEach((client, clientId) => {
     if (client.sessionIds.has(sessionId)) {
-      sendToClient(clientId, message, clients);
+      sendMessage(clientId, message, clients);
     }
   });
+}
+
+function determineStreamType(data) {
+  if (data.type === 'assistant') {
+    return 'assistant_message';
+  } else if (data.type === 'user') {
+    return 'user_message';
+  } else if (data.type === 'system') {
+    return 'system_message';
+  } else {
+    return 'unknown';
+  }
+}
+
+function formatStreamContent(data) {
+  if (data.message && data.message.content) {
+    const content = data.message.content;
+
+    if (Array.isArray(content)) {
+      // Handle multiple content blocks
+      for (const block of content) {
+        if (block.type === 'text') {
+          return {
+            type: 'text',
+            text: block.text,
+            data: null,
+          };
+        } else if (block.type === 'tool_use') {
+          return {
+            type: 'tool_use',
+            text: null,
+            data: {
+              tool_name: block.name,
+              tool_input: block.input,
+            },
+          };
+        }
+      }
+    } else if (typeof content === 'string') {
+      return {
+        type: 'text',
+        text: content,
+        data: null,
+      };
+    }
+  }
+
+  // Fallback
+  return {
+    type: 'text',
+    text: data.result || JSON.stringify(data),
+    data: null,
+  };
+}
+
+async function getClaudeCodeVersion() {
+  try {
+    const { exec } = await import('child_process');
+    const { promisify } = await import('util');
+    const execAsync = promisify(exec);
+
+    const { stdout } = await execAsync('claude --version');
+    return stdout.trim();
+  } catch (error) {
+    return null;
+  }
 }

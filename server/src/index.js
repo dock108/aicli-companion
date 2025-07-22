@@ -4,23 +4,17 @@ import express from 'express';
 import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
 import { createServer as createHttpsServer } from 'https';
-import cors from 'cors';
-import helmet from 'helmet';
-import morgan from 'morgan';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import dotenv from 'dotenv';
 
 import { setupRoutes } from './routes/index.js';
-import { setupWebSocket } from './services/websocket-v2.js';
-import { setupBonjour } from './services/discovery.js';
-import { authMiddleware } from './middleware/auth.js';
+import { setupWebSocket } from './services/websocket.js';
 import { errorHandler } from './middleware/error.js';
 import { ClaudeCodeService } from './services/claude-code.js';
-import { TLSManager, TokenManager, generateCertificateWithOpenSSL } from './utils/tls.js';
-
-// Load environment variables
-dotenv.config();
+import { ServerConfig } from './config/server-config.js';
+import { MiddlewareConfig } from './config/middleware-config.js';
+import { TLSConfig } from './config/tls-config.js';
+import { ServerStartup } from './config/server-startup.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -28,52 +22,23 @@ const __dirname = dirname(__filename);
 class ClaudeCompanionServer {
   constructor() {
     this.app = express();
+    this.config = new ServerConfig();
     this.claudeService = new ClaudeCodeService();
-    this.tlsManager = new TLSManager();
-
-    this.port = process.env.PORT || 3001;
-    this.host = process.env.HOST || '0.0.0.0';
-    this.authToken = process.env.AUTH_TOKEN || null;
-    this.enableBonjour = process.env.ENABLE_BONJOUR !== 'false';
-    this.enableTLS = process.env.ENABLE_TLS === 'true';
+    this.tlsConfig = new TLSConfig();
 
     // Will be set up during start()
     this.server = null;
     this.wss = null;
+    this.authToken = this.config.authToken;
 
-    this.setupMiddleware();
+    this.setupBasicMiddleware();
     this.setupRoutes();
     this.setupErrorHandling();
   }
 
-  setupMiddleware() {
-    // Security middleware
-    this.app.use(
-      helmet({
-        contentSecurityPolicy: false, // Disable for API server
-        crossOriginEmbedderPolicy: false,
-      })
-    );
-
-    // CORS configuration
-    this.app.use(
-      cors({
-        origin: process.env.ALLOWED_ORIGINS?.split(',') || ['*'],
-        credentials: true,
-      })
-    );
-
-    // Logging
-    this.app.use(morgan('combined'));
-
-    // Body parsing
-    this.app.use(express.json({ limit: '10mb' }));
-    this.app.use(express.urlencoded({ extended: true }));
-
-    // Authentication middleware (optional)
-    if (this.authToken) {
-      this.app.use('/api', authMiddleware(this.authToken));
-    }
+  setupBasicMiddleware() {
+    // Set up basic middleware (no auth yet)
+    MiddlewareConfig.configure(this.app, this.config);
   }
 
   setupRoutes() {
@@ -81,7 +46,7 @@ class ClaudeCompanionServer {
     this.app.get('/health', (req, res) => {
       res.json({
         status: 'healthy',
-        version: '1.0.0',
+        version: this.config.version,
         claudeCodeAvailable: this.claudeService.isAvailable(),
         timestamp: new Date().toISOString(),
       });
@@ -97,7 +62,7 @@ class ClaudeCompanionServer {
     this.app.get('/', (req, res) => {
       res.json({
         name: 'Claude Companion Server',
-        version: '1.0.0',
+        version: this.config.version,
         status: 'running',
         endpoints: {
           health: '/health',
@@ -134,26 +99,25 @@ class ClaudeCompanionServer {
   async start() {
     try {
       // Generate auth token if not provided
-      if (!this.authToken) {
-        this.authToken = TokenManager.generateSecureToken();
-        console.log(`🔑 Generated auth token: ${this.authToken}`);
-        console.log('   Save this token to connect mobile clients');
-      }
+      this.authToken = ServerStartup.generateAuthToken(this.authToken);
+
+      // Configure auth middleware now that we have the token
+      MiddlewareConfig.configureAuth(this.app, this.authToken);
 
       // Set up TLS if enabled
       let tlsOptions = null;
-      if (this.enableTLS) {
+      if (this.config.enableTLS) {
         try {
-          tlsOptions = await this.setupTLS();
+          tlsOptions = await this.tlsConfig.setupTLS();
         } catch (error) {
           console.warn(`⚠️  TLS setup failed: ${error.message}`);
           console.warn('   Falling back to HTTP');
-          this.enableTLS = false;
+          this.config.enableTLS = false;
         }
       }
 
       // Create HTTP or HTTPS server
-      if (this.enableTLS && tlsOptions) {
+      if (this.config.enableTLS && tlsOptions) {
         this.server = createHttpsServer(tlsOptions, this.app);
       } else {
         this.server = createServer(this.app);
@@ -163,66 +127,26 @@ class ClaudeCompanionServer {
       this.setupWebSocket();
 
       // Verify Claude Code is available
-      const isAvailable = await this.claudeService.checkAvailability();
-      if (!isAvailable) {
-        console.warn(
-          '⚠️  Claude Code CLI not found. Server will start but functionality will be limited.'
-        );
-        console.warn('   Please ensure Claude Code is installed and available in PATH.');
-      }
+      const isAvailable = await ServerStartup.checkClaudeAvailability(this.claudeService);
 
       // Start server
-      this.server.listen(this.port, this.host, () => {
-        const protocol = this.enableTLS ? 'https' : 'http';
-        const wsProtocol = this.enableTLS ? 'wss' : 'ws';
-        const hostname = this.host === '0.0.0.0' ? 'localhost' : this.host;
+      this.server.listen(this.config.port, this.config.host, () => {
+        const fingerprint = this.config.enableTLS
+          ? this.tlsConfig.getCertificateFingerprint()
+          : null;
 
-        console.log(`🚀 Claude Companion Server started`);
-        console.log(`   ${protocol.toUpperCase()} Server: ${protocol}://${hostname}:${this.port}`);
-        console.log(`   WebSocket: ${wsProtocol}://${hostname}:${this.port}/ws`);
-
-        if (this.authToken) {
-          console.log(`   🔐 Authentication enabled`);
-          console.log(
-            `   📱 Mobile app connection: ${wsProtocol}://${hostname}:${this.port}/ws?token=${this.authToken}`
-          );
-        }
-
-        if (this.enableTLS) {
-          console.log(`   🔒 TLS encryption enabled`);
-          const fingerprint = this.tlsManager.getCertificateFingerprint();
-          if (fingerprint) {
-            console.log(`   🔒 Certificate fingerprint: ${fingerprint}`);
-          }
-        }
-
-        if (isAvailable) {
-          console.log(`   ✅ Claude Code CLI detected`);
-        }
+        ServerStartup.displayStartupInfo(this.config, this.authToken, isAvailable, fingerprint);
       });
 
       // Setup service discovery
-      if (this.enableBonjour) {
-        try {
-          setupBonjour(this.port, this.enableTLS);
-          console.log(`   📡 Bonjour service advertising on port ${this.port}`);
-        } catch (error) {
-          console.warn(`   ⚠️  Bonjour setup failed: ${error.message}`);
-        }
-      }
+      ServerStartup.setupServiceDiscovery(
+        this.config.port,
+        this.config.enableTLS,
+        this.config.enableBonjour
+      );
     } catch (error) {
       console.error('Failed to start server:', error);
       process.exit(1);
-    }
-  }
-
-  async setupTLS() {
-    try {
-      // Try OpenSSL first for better certificate generation
-      return generateCertificateWithOpenSSL();
-    } catch (error) {
-      // Fallback to Node.js crypto
-      return this.tlsManager.ensureCertificateExists();
     }
   }
 

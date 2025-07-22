@@ -1,7 +1,7 @@
 import { generateKeyPairSync, createHash, randomBytes } from 'crypto';
 import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
-// import { promisify } from 'util';
+// import forge from 'node-forge'; // Unused, keeping for future use
 
 const CERT_DIR = './certs';
 const CERT_VALIDITY_DAYS = 365;

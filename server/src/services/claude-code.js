@@ -2,8 +2,136 @@ import { spawn } from 'child_process';
 import { promisify } from 'util';
 import { exec } from 'child_process';
 import { EventEmitter } from 'events';
+import { resolve } from 'path';
+import { access, constants } from 'fs/promises';
 
 const execAsync = promisify(exec);
+
+// Input validation and sanitization utilities
+class InputValidator {
+  static sanitizePrompt(prompt) {
+    if (typeof prompt !== 'string') {
+      throw new Error('Prompt must be a string');
+    }
+
+    // Remove null bytes and limit length
+    const sanitized = prompt.replace(/\0/g, '').substring(0, 50000);
+
+    if (sanitized.length === 0) {
+      throw new Error('Prompt cannot be empty');
+    }
+
+    return sanitized;
+  }
+
+  static validateFormat(format) {
+    const allowedFormats = ['json', 'text', 'markdown'];
+
+    if (!format || typeof format !== 'string') {
+      return 'json'; // default
+    }
+
+    const cleanFormat = format.toLowerCase().trim();
+
+    if (!allowedFormats.includes(cleanFormat)) {
+      throw new Error(`Invalid format. Must be one of: ${allowedFormats.join(', ')}`);
+    }
+
+    return cleanFormat;
+  }
+
+  static async validateWorkingDirectory(workingDir) {
+    if (!workingDir || typeof workingDir !== 'string') {
+      return process.cwd();
+    }
+
+    // Resolve to absolute path
+    const resolvedPath = resolve(workingDir);
+
+    // Check if it contains any suspicious patterns
+    const suspiciousPatterns = [
+      '../',
+      '..\\',
+      '/etc/',
+      '/proc/',
+      '/sys/',
+      '/dev/',
+      'C:\\Windows\\',
+      'C:\\Program Files\\',
+      '/usr/bin/',
+      '/sbin/',
+    ];
+
+    for (const pattern of suspiciousPatterns) {
+      if (resolvedPath.includes(pattern)) {
+        throw new Error('Working directory contains suspicious path components');
+      }
+    }
+
+    try {
+      // Check if directory exists and is accessible
+      await access(resolvedPath, constants.F_OK | constants.R_OK);
+      return resolvedPath;
+    } catch (error) {
+      throw new Error(`Working directory is not accessible: ${resolvedPath}`);
+    }
+  }
+
+  static sanitizeSessionId(sessionId) {
+    if (!sessionId || typeof sessionId !== 'string') {
+      return null;
+    }
+
+    // Only allow alphanumeric characters, hyphens, and underscores
+    const sanitized = sessionId.replace(/[^a-zA-Z0-9_-]/g, '').substring(0, 64);
+
+    if (sanitized.length === 0) {
+      return null;
+    }
+
+    return sanitized;
+  }
+
+  static validateClaudeArgs(args) {
+    if (!Array.isArray(args)) {
+      throw new Error('Arguments must be an array');
+    }
+
+    const allowedArgs = ['--print', '--output-format', '--verbose', '--help', '--version'];
+
+    const allowedFormats = ['json', 'text', 'markdown', 'stream-json'];
+
+    for (let i = 0; i < args.length; i++) {
+      const arg = args[i];
+
+      if (typeof arg !== 'string') {
+        throw new Error('All arguments must be strings');
+      }
+
+      // Check for suspicious characters
+      if (/[;&|`$(){}[\]<>]/.test(arg)) {
+        throw new Error(`Argument contains suspicious characters: ${arg}`);
+      }
+
+      // Validate known flags
+      if (arg.startsWith('--')) {
+        if (!allowedArgs.includes(arg)) {
+          throw new Error(`Disallowed argument: ${arg}`);
+        }
+
+        // Validate format values
+        if (arg === '--output-format' && i + 1 < args.length) {
+          const format = args[i + 1];
+          if (!allowedFormats.includes(format)) {
+            throw new Error(`Invalid format: ${format}`);
+          }
+        }
+      }
+    }
+
+    return args;
+  }
+}
 
 export class ClaudeCodeService extends EventEmitter {
   constructor() {
@@ -11,6 +139,8 @@ export class ClaudeCodeService extends EventEmitter {
     this.activeSessions = new Map();
     this.claudeCommand = 'claude';
     this.defaultWorkingDirectory = process.cwd();
+    this.maxSessions = 10;
+    this.sessionTimeout = 30 * 60 * 1000; // 30 minutes
   }
 
   async checkAvailability() {
@@ -39,10 +169,22 @@ export class ClaudeCodeService extends EventEmitter {
     } = options;
 
     try {
+      // Validate and sanitize inputs
+      const sanitizedPrompt = InputValidator.sanitizePrompt(prompt);
+      const validatedFormat = InputValidator.validateFormat(format);
+      const validatedWorkingDir = await InputValidator.validateWorkingDirectory(workingDirectory);
+      const sanitizedSessionId = InputValidator.sanitizeSessionId(sessionId);
+
       if (streaming) {
-        return await this.sendStreamingPrompt(prompt, { sessionId, workingDirectory });
+        return await this.sendStreamingPrompt(sanitizedPrompt, {
+          sessionId: sanitizedSessionId,
+          workingDirectory: validatedWorkingDir,
+        });
       } else {
-        return await this.sendOneTimePrompt(prompt, { format, workingDirectory });
+        return await this.sendOneTimePrompt(sanitizedPrompt, {
+          format: validatedFormat,
+          workingDirectory: validatedWorkingDir,
+        });
       }
     } catch (error) {
       console.error('Error sending prompt to Claude Code:', error);
@@ -51,12 +193,19 @@ export class ClaudeCodeService extends EventEmitter {
   }
 
   async sendOneTimePrompt(prompt, { format = 'json', workingDirectory = process.cwd() }) {
-    const args = ['--print', '--output-format', format, prompt];
+    // Input validation already done in sendPrompt, but double-check critical params
+    const sanitizedPrompt = InputValidator.sanitizePrompt(prompt);
+    const validatedFormat = InputValidator.validateFormat(format);
 
-    console.log(`🚀 Starting Claude CLI with args:`, args);
+    const args = ['--print', '--output-format', validatedFormat, sanitizedPrompt];
+
+    // Validate arguments before spawning
+    InputValidator.validateClaudeArgs(args);
+
+    console.log(`🚀 Starting Claude CLI with validated args:`, args.slice(0, 3)); // Don't log full prompt
     console.log(`   Working directory: ${workingDirectory}`);
 
-    return new Promise((resolve, reject) => {
+    return new Promise((resolvePromise, reject) => {
       const claudeProcess = spawn(this.claudeCommand, args, {
         cwd: workingDirectory,
         stdio: ['pipe', 'pipe', 'pipe'],
@@ -96,10 +245,10 @@ export class ClaudeCodeService extends EventEmitter {
           if (format === 'json') {
             const response = JSON.parse(stdout);
             console.log(`   ✅ Parsed JSON response successfully`);
-            resolve(response);
+            resolvePromise(response);
           } else {
             console.log(`   ✅ Returning raw text response`);
-            resolve({ result: stdout });
+            resolvePromise({ result: stdout });
           }
         } catch (error) {
           console.log(`   ❌ JSON parse error: ${error.message}`);
@@ -126,47 +275,77 @@ export class ClaudeCodeService extends EventEmitter {
   }
 
   async sendStreamingPrompt(prompt, { sessionId, workingDirectory = process.cwd() }) {
+    // Validate inputs
+    const sanitizedPrompt = InputValidator.sanitizePrompt(prompt);
+    const validatedWorkingDir = await InputValidator.validateWorkingDirectory(workingDirectory);
     const sessionKey = sessionId || `session_${Date.now()}`;
+
+    // Check session limits
+    if (this.activeSessions.size >= this.maxSessions) {
+      throw new Error(`Maximum number of sessions (${this.maxSessions}) reached`);
+    }
 
     // Check if session already exists
     if (this.activeSessions.has(sessionKey)) {
-      return this.sendToExistingSession(sessionKey, prompt);
+      return this.sendToExistingSession(sessionKey, sanitizedPrompt);
     }
 
     // Create new interactive session
-    return this.createInteractiveSession(sessionKey, prompt, workingDirectory);
+    return this.createInteractiveSession(sessionKey, sanitizedPrompt, validatedWorkingDir);
   }
 
   async createInteractiveSession(sessionId, initialPrompt, workingDirectory) {
+    // Validate and sanitize inputs
+    const sanitizedSessionId = InputValidator.sanitizeSessionId(sessionId);
+    const sanitizedPrompt = InputValidator.sanitizePrompt(initialPrompt);
+    const validatedWorkingDir = await InputValidator.validateWorkingDirectory(workingDirectory);
+
     // Use streaming format with verbose for full tool output
     const args = ['--output-format', 'stream-json', '--verbose'];
 
+    // Validate arguments
+    InputValidator.validateClaudeArgs(args);
+
     console.log(`🚀 Starting Claude Code interactive session with args:`, args);
-    console.log(`   Session ID: ${sessionId}`);
-    console.log(`   Working directory: ${workingDirectory}`);
-    console.log(
-      `   Initial prompt: "${initialPrompt?.substring(0, 100)}${initialPrompt?.length > 100 ? '...' : ''}"`
-    );
+    console.log(`   Session ID: ${sanitizedSessionId}`);
+    console.log(`   Working directory: ${validatedWorkingDir}`);
+    console.log(`   Initial prompt length: ${sanitizedPrompt?.length} chars`);
 
     const claudeProcess = spawn(this.claudeCommand, args, {
-      cwd: workingDirectory,
+      cwd: validatedWorkingDir,
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env },
+      timeout: this.sessionTimeout,
     });
 
     const session = {
       process: claudeProcess,
-      sessionId,
-      workingDirectory,
+      sessionId: sanitizedSessionId,
+      workingDirectory: validatedWorkingDir,
       isActive: true,
+      createdAt: Date.now(),
+      lastActivity: Date.now(),
     };
 
-    this.activeSessions.set(sessionId, session);
+    this.activeSessions.set(sanitizedSessionId, session);
+
+    // Set up session timeout
+    setTimeout(() => {
+      if (this.activeSessions.has(sanitizedSessionId)) {
+        console.log(`Session ${sanitizedSessionId} timed out, cleaning up`);
+        this.closeSession(sanitizedSessionId);
+      }
+    }, this.sessionTimeout);
 
     // Set up event handlers for Claude Code output
     claudeProcess.stdout.on('data', (data) => {
+      // Update last activity
+      if (session) {
+        session.lastActivity = Date.now();
+      }
+
       const dataStr = data.toString();
-      console.log(`📊 Claude ${sessionId} STDOUT:`, dataStr.length, 'chars');
+      console.log(`📊 Claude ${sanitizedSessionId} STDOUT:`, dataStr.length, 'chars');
 
       const lines = dataStr.split('\n').filter((line) => line.trim());
 
@@ -186,7 +365,7 @@ export class ClaudeCodeService extends EventEmitter {
           if (this.isPermissionPrompt(message)) {
             console.log(`   🔐 Permission prompt detected`);
             this.emit('permissionRequired', {
-              sessionId,
+              sessionId: sanitizedSessionId,
               prompt: this.extractPermissionPrompt(message),
               options: ['y', 'n'],
               default: 'n',
@@ -194,7 +373,7 @@ export class ClaudeCodeService extends EventEmitter {
           } else {
             console.log(`   📡 Emitting ${classifiedMessage.eventType}`);
             this.emit(classifiedMessage.eventType, {
-              sessionId,
+              sessionId: sanitizedSessionId,
               data: classifiedMessage.data,
               originalMessage: message,
               isComplete: message.type === 'result',
@@ -204,7 +383,7 @@ export class ClaudeCodeService extends EventEmitter {
           // Not JSON, treat as raw text output
           console.log(`   📝 Raw text line`);
           this.emit('streamData', {
-            sessionId,
+            sessionId: sanitizedSessionId,
             data: {
               type: 'text',
               content: line,
@@ -217,46 +396,57 @@ export class ClaudeCodeService extends EventEmitter {
     });
 
     claudeProcess.stderr.on('data', (data) => {
-      this.emit('streamError', { sessionId, error: data.toString() });
+      this.emit('streamError', { sessionId: sanitizedSessionId, error: data.toString() });
     });
 
     claudeProcess.on('close', (code) => {
-      this.activeSessions.delete(sessionId);
-      this.emit('sessionClosed', { sessionId, code });
+      this.activeSessions.delete(sanitizedSessionId);
+      this.emit('sessionClosed', { sessionId: sanitizedSessionId, code });
     });
 
     claudeProcess.on('error', (error) => {
-      this.activeSessions.delete(sessionId);
-      this.emit('sessionError', { sessionId, error: error.message });
+      this.activeSessions.delete(sanitizedSessionId);
+      this.emit('sessionError', { sessionId: sanitizedSessionId, error: error.message });
     });
 
     // Send initial prompt
-    claudeProcess.stdin.write(`${initialPrompt}\n`);
+    claudeProcess.stdin.write(`${sanitizedPrompt}\n`);
 
     return {
-      sessionId,
+      sessionId: sanitizedSessionId,
       success: true,
       message: 'Interactive session started',
     };
   }
 
   async sendToExistingSession(sessionId, prompt) {
-    const session = this.activeSessions.get(sessionId);
+    // Validate inputs
+    const sanitizedSessionId = InputValidator.sanitizeSessionId(sessionId);
+    const sanitizedPrompt = InputValidator.sanitizePrompt(prompt);
+
+    if (!sanitizedSessionId) {
+      throw new Error('Invalid session ID');
+    }
+
+    const session = this.activeSessions.get(sanitizedSessionId);
 
     if (!session || !session.isActive) {
-      throw new Error(`Session ${sessionId} not found or inactive`);
+      throw new Error(`Session ${sanitizedSessionId} not found or inactive`);
     }
 
     try {
-      session.process.stdin.write(`${prompt}\n`);
+      // Update last activity
+      session.lastActivity = Date.now();
+
+      session.process.stdin.write(`${sanitizedPrompt}\n`);
 
       return {
-        sessionId,
+        sessionId: sanitizedSessionId,
         success: true,
         message: 'Prompt sent to existing session',
       };
     } catch (error) {
-      this.activeSessions.delete(sessionId);
+      this.activeSessions.delete(sanitizedSessionId);
       throw new Error(`Failed to send to session: ${error.message}`);
     }
   }

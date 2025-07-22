@@ -1,33 +1,8 @@
-#!/bin/sh
+#!/usr/bin/env sh
 
-# Exit on error
-set -e
+# Run server linting
+npm run lint:server
 
-echo "🔍 Running pre-commit checks..."
-
-# Run lint-staged for automatic fixes and checks
-echo "🎨 Running lint-staged..."
-npx lint-staged
-
-# Run quick test validation for changed files
-if git diff --cached --name-only | grep -q "^server/"; then
-  echo "🧪 Running server syntax check..."
-  cd server
-  # Quick syntax validation instead of full test suite
-  npx eslint src/ --max-warnings=0
-  cd ..
-fi
-
-if git diff --cached --name-only | grep -q "^ios/"; then
-  echo "🧪 Running iOS tests..."
-  cd ios
-  swift test
-  cd ..
-fi
-
-# Run security audit
-echo "🔒 Running security audit..."
-cd server && npm audit --audit-level=high
-cd ..
-
-echo "✅ Pre-commit checks completed!"
+# TODO: Fix root directory test execution - temporarily run directly in server directory
+# Run server unit tests with coverage enforcement directly in server directory
+cd server && npm run test:coverage

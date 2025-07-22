@@ -98,5 +98,100 @@ describe('Authentication Middleware', () => {
 
       assert.strictEqual(mockNext.mock.calls.length, 1);
     });
+
+    it('should throw error when no expected token provided', () => {
+      assert.throws(() => authMiddleware(), /Expected token must be a non-empty string/);
+      assert.throws(() => authMiddleware(''), /Expected token must be a non-empty string/);
+      assert.throws(() => authMiddleware(null), /Expected token must be a non-empty string/);
+      assert.throws(() => authMiddleware(123), /Expected token must be a non-empty string/);
+    });
+
+    it('should reject tokens with invalid characters', () => {
+      const middleware = authMiddleware(TEST_TOKEN);
+      mockReq.query.token = 'invalid-token-with-@-symbols!';
+
+      middleware(mockReq, mockRes, mockNext);
+
+      assert.strictEqual(mockNext.mock.calls.length, 0);
+      assert.strictEqual(mockRes.status.mock.calls.length, 1);
+      assert.strictEqual(mockRes.status.mock.calls[0].arguments[0], 401);
+    });
+
+    it('should reject non-string tokens', () => {
+      const middleware = authMiddleware(TEST_TOKEN);
+      mockReq.query.token = 12345;
+
+      middleware(mockReq, mockRes, mockNext);
+
+      assert.strictEqual(mockNext.mock.calls.length, 0);
+      assert.strictEqual(mockRes.status.mock.calls.length, 1);
+      assert.strictEqual(mockRes.status.mock.calls[0].arguments[0], 401);
+    });
+
+    it('should handle control characters in token', () => {
+      const middleware = authMiddleware(TEST_TOKEN);
+      mockReq.query.token = 'token\x00with\x1Fcontrol\x7Fchars';
+
+      middleware(mockReq, mockRes, mockNext);
+
+      assert.strictEqual(mockNext.mock.calls.length, 0);
+      assert.strictEqual(mockRes.status.mock.calls.length, 1);
+      assert.strictEqual(mockRes.status.mock.calls[0].arguments[0], 401);
+    });
+
+    it('should handle very long tokens', () => {
+      const middleware = authMiddleware(TEST_TOKEN);
+      const longToken = 'a'.repeat(2000); // Over 1024 character limit
+      mockReq.query.token = longToken;
+
+      middleware(mockReq, mockRes, mockNext);
+
+      assert.strictEqual(mockNext.mock.calls.length, 0);
+      assert.strictEqual(mockRes.status.mock.calls.length, 1);
+    });
+
+    it('should accept tokens with allowed special characters', () => {
+      const specialToken = 'test-token_123=value+some/path';
+      const middleware = authMiddleware(specialToken);
+      mockReq.query.token = specialToken;
+
+      middleware(mockReq, mockRes, mockNext);
+
+      assert.strictEqual(mockNext.mock.calls.length, 1);
+      assert.strictEqual(mockRes.status.mock.calls.length, 0);
+    });
+
+    it('should prefer Authorization header over query parameter', () => {
+      const middleware = authMiddleware(TEST_TOKEN);
+      mockReq.headers.authorization = `Bearer ${TEST_TOKEN}`;
+      mockReq.query.token = 'different-token';
+
+      middleware(mockReq, mockRes, mockNext);
+
+      assert.strictEqual(mockNext.mock.calls.length, 1);
+      assert.strictEqual(mockRes.status.mock.calls.length, 0);
+    });
+
+    it('should handle empty Authorization header', () => {
+      const middleware = authMiddleware(TEST_TOKEN);
+      mockReq.headers.authorization = '';
+
+      middleware(mockReq, mockRes, mockNext);
+
+      assert.strictEqual(mockNext.mock.calls.length, 0);
+      assert.strictEqual(mockRes.status.mock.calls.length, 1);
+      assert.strictEqual(mockRes.status.mock.calls[0].arguments[0], 401);
+    });
+
+    it('should handle undefined Authorization header', () => {
+      const middleware = authMiddleware(TEST_TOKEN);
+      mockReq.headers.authorization = undefined;
+
+      middleware(mockReq, mockRes, mockNext);
+
+      assert.strictEqual(mockNext.mock.calls.length, 0);
+      assert.strictEqual(mockRes.status.mock.calls.length, 1);
+      assert.strictEqual(mockRes.status.mock.calls[0].arguments[0], 401);
+    });
   });
 });

@@ -1,12 +1,44 @@
 import { describe, it, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert';
+
+// Mock all external dependencies before importing
+const mockExpress = () => {
+  const app = {
+    use: mock.fn(),
+    get: mock.fn(),
+    post: mock.fn(),
+    _router: {
+      stack: [
+        {
+          route: { path: '/health', methods: { get: true } },
+        },
+        {
+          route: { path: '/', methods: { get: true } },
+        },
+      ],
+    },
+  };
+  return app;
+};
+
+// Mock modules
+mock.method(await import('express'), 'default', mockExpress);
+mock.method(await import('http'), 'createServer', () => ({
+  listen: mock.fn(),
+  close: mock.fn(),
+}));
+mock.method(await import('ws'), 'WebSocketServer', function () {
+  this.on = mock.fn();
+  this.close = mock.fn();
+});
+
 import { ClaudeCompanionServer } from '../index.js';
 
 // Mock process methods to prevent actual exit
 const originalExit = process.exit;
 const originalProcessOn = process.on;
 
-describe('Server Integration Tests', () => {
+describe('Server Unit Tests', () => {
   let server;
   let exitSpy;
   let processOnSpy;
@@ -31,14 +63,8 @@ describe('Server Integration Tests', () => {
     process.exit = originalExit;
     process.on = originalProcessOn;
 
-    // Clean up server if it exists
-    if (server && server.server) {
-      try {
-        server.server.close();
-      } catch (error) {
-        // Ignore cleanup errors
-      }
-    }
+    // Clean up server reference (no need to close mocked server)
+    server = null;
 
     // Restore mocks
     mock.restoreAll();

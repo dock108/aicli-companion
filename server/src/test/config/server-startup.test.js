@@ -50,34 +50,23 @@ describe('ServerStartup', () => {
   });
 
   describe('setupServiceDiscovery', () => {
-    it('should call setupBonjour when enabled', () => {
-      const port = 3001;
-      const enableTLS = false;
-      const enableBonjour = true;
-
-      // Should not throw (setupBonjour is mocked implicitly)
-      assert.doesNotThrow(() => {
-        ServerStartup.setupServiceDiscovery(port, enableTLS, enableBonjour);
-      });
-    });
-
     it('should not call setupBonjour when disabled', () => {
       const port = 3001;
       const enableTLS = false;
       const enableBonjour = false;
 
-      // Should not throw and should not log Bonjour messages
+      // This should not throw and should complete without error
       assert.doesNotThrow(() => {
         ServerStartup.setupServiceDiscovery(port, enableTLS, enableBonjour);
       });
     });
 
-    it('should handle setupBonjour errors gracefully', () => {
+    it('should handle setupBonjour call when enabled', () => {
       const port = 3001;
       const enableTLS = false;
       const enableBonjour = true;
 
-      // Should not throw even if setupBonjour fails
+      // Should handle the setupBonjour call (may succeed or fail gracefully)
       assert.doesNotThrow(() => {
         ServerStartup.setupServiceDiscovery(port, enableTLS, enableBonjour);
       });

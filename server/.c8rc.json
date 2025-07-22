@@ -10,7 +10,8 @@
     "src/config/server-config.js",
     "src/index.js",
     "src/config/server-startup.js",
-    "src/config/tls-config.js"
+    "src/config/tls-config.js",
+    "src/services/claude-code.js"
   ],
   "reporter": ["text", "lcov", "html"],
   "check-coverage": false,

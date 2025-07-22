@@ -1,0 +1,83 @@
+# SwiftLint configuration for Claude Companion iOS app
+
+# Paths to include
+included:
+  - ClaudeCompanion
+
+# Paths to exclude
+excluded:
+  - .build
+  - .swiftpm
+  - Package.swift
+
+# Rules configuration
+disabled_rules:
+  - line_length
+  - file_length
+  - type_body_length
+  - function_body_length
+
+opt_in_rules:
+  - empty_count
+  - empty_string
+  - closure_spacing
+  - collection_alignment
+  - contains_over_filter_count
+  - contains_over_filter_is_empty
+  - contains_over_first_not_nil
+  - contains_over_range_nil_comparison
+  - empty_collection_literal
+  - fallthrough
+  - first_where
+  - flatmap_over_map_reduce
+  - last_where
+  - literal_expression_end_indentation
+  - modifier_order
+  - prefer_self_type_over_type_of_self
+  - sorted_first_last
+  - toggle_bool
+  - unavailable_function
+  - vertical_whitespace_closing_braces
+  - vertical_whitespace_opening_braces
+  - yoda_condition
+
+# Rule configuration
+identifier_name:
+  min_length:
+    warning: 2
+    error: 1
+  max_length:
+    warning: 60
+    error: 80
+
+type_name:
+  min_length:
+    warning: 3
+    error: 2
+  max_length:
+    warning: 50
+    error: 60
+
+force_cast: error
+force_try: error
+force_unwrapping: warning
+
+trailing_whitespace:
+  ignores_empty_lines: true
+
+vertical_whitespace:
+  max_empty_lines: 2
+
+custom_rules:
+  no_hardcoded_strings:
+    regex: '([""])(?:(?=(\\?))\2.)*?\1'
+    match_kinds:
+      - string
+    message: "Avoid hardcoded strings. Use localized strings instead."
+    severity: warning
+    excluded:
+      - "ClaudeCompanion/Models/*.swift"
+      - "ClaudeCompanion/Utils/KeychainManager.swift"
+
+# Reporter type
+reporter: "xcode"

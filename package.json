@@ -1,0 +1,34 @@
+{
+  "name": "claude-companion",
+  "version": "1.0.0",
+  "description": "Claude Code Mobile Companion - iOS app and server",
+  "private": true,
+  "scripts": {
+    "prepare": "husky",
+    "test": "npm run test:server && npm run test:ios",
+    "test:server": "cd server && npm test",
+    "_TODO_FIX_COVERAGE": "test:coverage:server script has path resolution issues - temporarily bypassed in pre-commit",
+    "test:coverage:server": "npm run test:coverage --prefix server",
+    "test:ios": "cd ios && swift test",
+    "lint": "npm run lint:server",
+    "lint:server": "cd server && npm run lint",
+    "format": "npm run format:server",
+    "format:server": "cd server && npm run format"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^16.1.2"
+  },
+  "workspaces": [
+    "server"
+  ],
+  "lint-staged": {
+    "server/src/**/*.js": [
+      "cd server && npm run lint",
+      "cd server && npm run format"
+    ],
+    "ios/**/*.swift": [
+      "cd ios && swiftlint lint --fix"
+    ]
+  }
+}

@@ -41,31 +41,18 @@ class InputValidator {
   }
 
   static async validateWorkingDirectory(workingDir) {
+    const SAFE_ROOT = '/safe/root/dir'; // Define the safe root directory
+
     if (!workingDir || typeof workingDir !== 'string') {
-      return process.cwd();
+      return SAFE_ROOT; // Default to the safe root directory
     }
 
     // Resolve to absolute path
     const resolvedPath = resolve(workingDir);
 
-    // Check if it contains any suspicious patterns
-    const suspiciousPatterns = [
-      '../',
-      '..\\',
-      '/etc/',
-      '/proc/',
-      '/sys/',
-      '/dev/',
-      'C:\\Windows\\',
-      'C:\\Program Files\\',
-      '/usr/bin/',
-      '/sbin/',
-    ];
-
-    for (const pattern of suspiciousPatterns) {
-      if (resolvedPath.includes(pattern)) {
-        throw new Error('Working directory contains suspicious path components');
-      }
+    // Ensure the resolved path is within the safe root directory
+    if (!resolvedPath.startsWith(SAFE_ROOT)) {
+      throw new Error('Working directory must be within the safe root directory');
     }
 
     try {
@@ -345,7 +332,7 @@ export class ClaudeCodeService extends EventEmitter {
       }
 
       const dataStr = data.toString();
-      console.log(`📊 Claude ${sanitizedSessionId} STDOUT:`, dataStr.length, 'chars');
+      console.log('📊 Claude %s STDOUT:', sanitizedSessionId, dataStr.length, 'chars');
 
       const lines = dataStr.split('\n').filter((line) => line.trim());
 

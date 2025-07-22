@@ -332,7 +332,7 @@ export class ClaudeCodeService extends EventEmitter {
       }
 
       const dataStr = data.toString();
-      console.log(`📊 Claude ${sanitizedSessionId} STDOUT:`, dataStr.length, 'chars');
+      console.log('📊 Claude %s STDOUT:', sanitizedSessionId, dataStr.length, 'chars');
 
       const lines = dataStr.split('\n').filter((line) => line.trim());
 

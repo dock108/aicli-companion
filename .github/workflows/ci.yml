@@ -122,7 +122,7 @@ jobs:
     - name: Run integration tests
       run: |
         cd server
-        node test-websocket.js
+        node manual-tests/test-websocket.js
       continue-on-error: true
 
   # Code Quality Report

@@ -10,7 +10,7 @@ describe('MiddlewareConfig', () => {
   beforeEach(() => {
     // Mock Express app
     mockApp = {
-      use: mock.fn()
+      use: mock.fn(),
     };
 
     // Mock server config
@@ -18,7 +18,7 @@ describe('MiddlewareConfig', () => {
       getHelmetConfig: mock.fn(() => ({ contentSecurityPolicy: false })),
       getCorsConfig: mock.fn(() => ({ origin: ['*'], credentials: true })),
       isTest: mock.fn(() => false),
-      authToken: 'test-token'
+      authToken: 'test-token',
     };
   });
 
@@ -46,8 +46,8 @@ describe('MiddlewareConfig', () => {
 
       assert.strictEqual(mockConfig.isTest.mock.calls.length, 1);
       // In test mode, morgan should not be added
-      const morganCalls = mockApp.use.mock.calls.filter(call => 
-        call.arguments[0] && call.arguments[0].name === 'logger'
+      const morganCalls = mockApp.use.mock.calls.filter(
+        (call) => call.arguments[0] && call.arguments[0].name === 'logger'
       );
       assert.strictEqual(morganCalls.length, 0, 'Morgan should not be used in test mode');
     });
@@ -71,7 +71,7 @@ describe('MiddlewareConfig', () => {
 
       // Should call app.use for auth middleware
       assert.strictEqual(mockApp.use.mock.calls.length, 1);
-      
+
       const call = mockApp.use.mock.calls[0];
       assert.strictEqual(call.arguments[0], '/api', 'Should mount auth on /api path');
       assert.ok(typeof call.arguments[1] === 'function', 'Should provide middleware function');
@@ -80,20 +80,28 @@ describe('MiddlewareConfig', () => {
     it('should not configure auth middleware when no token', () => {
       MiddlewareConfig.configureAuth(mockApp, null);
 
-      assert.strictEqual(mockApp.use.mock.calls.length, 0, 'Should not add middleware without token');
+      assert.strictEqual(
+        mockApp.use.mock.calls.length,
+        0,
+        'Should not add middleware without token'
+      );
     });
 
     it('should not configure auth middleware when empty token', () => {
       MiddlewareConfig.configureAuth(mockApp, '');
 
-      assert.strictEqual(mockApp.use.mock.calls.length, 0, 'Should not add middleware with empty token');
+      assert.strictEqual(
+        mockApp.use.mock.calls.length,
+        0,
+        'Should not add middleware with empty token'
+      );
     });
   });
 
   describe('integration with real ServerConfig', () => {
     it('should work with actual ServerConfig instance', () => {
       const realConfig = new ServerConfig();
-      
+
       // Should not throw
       assert.doesNotThrow(() => {
         MiddlewareConfig.configure(mockApp, realConfig);

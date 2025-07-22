@@ -9,7 +9,6 @@ const originalProcessOn = process.on;
 describe('Server Integration Tests', () => {
   let server;
   let exitSpy;
-  let listenSpy;
   let processOnSpy;
 
   beforeEach(() => {
@@ -62,7 +61,7 @@ describe('Server Integration Tests', () => {
 
       // Verify that process.on was called for error handling
       const calls = processOnSpy.mock.calls;
-      const eventTypes = calls.map(call => call.arguments[0]);
+      const eventTypes = calls.map((call) => call.arguments[0]);
 
       assert.ok(eventTypes.includes('uncaughtException'), 'Should listen for uncaughtException');
       assert.ok(eventTypes.includes('unhandledRejection'), 'Should listen for unhandledRejection');
@@ -79,9 +78,7 @@ describe('Server Integration Tests', () => {
     it('should have health check endpoint', () => {
       // Access the Express app's router stack
       const routes = server.app._router.stack;
-      const healthRoute = routes.find(layer => 
-        layer.route && layer.route.path === '/health'
-      );
+      const healthRoute = routes.find((layer) => layer.route && layer.route.path === '/health');
 
       assert.ok(healthRoute, 'Health check route should exist');
       assert.strictEqual(healthRoute.route.methods.get, true, 'Health check should accept GET');
@@ -89,9 +86,7 @@ describe('Server Integration Tests', () => {
 
     it('should have root endpoint', () => {
       const routes = server.app._router.stack;
-      const rootRoute = routes.find(layer => 
-        layer.route && layer.route.path === '/'
-      );
+      const rootRoute = routes.find((layer) => layer.route && layer.route.path === '/');
 
       assert.ok(rootRoute, 'Root route should exist');
       assert.strictEqual(rootRoute.route.methods.get, true, 'Root should accept GET');
@@ -105,14 +100,12 @@ describe('Server Integration Tests', () => {
       // Mock request and response
       const req = {};
       const res = {
-        json: mock.fn()
+        json: mock.fn(),
       };
 
       // Find and call the health route handler
       const routes = server.app._router.stack;
-      const healthRoute = routes.find(layer => 
-        layer.route && layer.route.path === '/health'
-      );
+      const healthRoute = routes.find((layer) => layer.route && layer.route.path === '/health');
 
       const handler = healthRoute.route.stack[0].handle;
       handler(req, res);
@@ -130,14 +123,12 @@ describe('Server Integration Tests', () => {
 
       const req = {};
       const res = {
-        json: mock.fn()
+        json: mock.fn(),
       };
 
       // Find and call the root route handler
       const routes = server.app._router.stack;
-      const rootRoute = routes.find(layer => 
-        layer.route && layer.route.path === '/'
-      );
+      const rootRoute = routes.find((layer) => layer.route && layer.route.path === '/');
 
       const handler = rootRoute.route.stack[0].handle;
       handler(req, res);
@@ -162,7 +153,7 @@ describe('Server Integration Tests', () => {
 
       // Find the uncaughtException handler
       const calls = processOnSpy.mock.calls;
-      const uncaughtCall = calls.find(call => call.arguments[0] === 'uncaughtException');
+      const uncaughtCall = calls.find((call) => call.arguments[0] === 'uncaughtException');
       assert.ok(uncaughtCall, 'Should have uncaughtException handler');
 
       const handler = uncaughtCall.arguments[1];
@@ -178,11 +169,11 @@ describe('Server Integration Tests', () => {
     it('should handle unhandled rejections', () => {
       // Find the unhandledRejection handler
       const calls = processOnSpy.mock.calls;
-      const rejectionCall = calls.find(call => call.arguments[0] === 'unhandledRejection');
+      const rejectionCall = calls.find((call) => call.arguments[0] === 'unhandledRejection');
       assert.ok(rejectionCall, 'Should have unhandledRejection handler');
 
       const handler = rejectionCall.arguments[1];
-      
+
       // Call the handler (should not throw)
       assert.doesNotThrow(() => {
         handler('Test rejection', Promise.resolve());
@@ -193,7 +184,7 @@ describe('Server Integration Tests', () => {
       server.shutdown = mock.fn();
 
       const calls = processOnSpy.mock.calls;
-      const sigtermCall = calls.find(call => call.arguments[0] === 'SIGTERM');
+      const sigtermCall = calls.find((call) => call.arguments[0] === 'SIGTERM');
       assert.ok(sigtermCall, 'Should have SIGTERM handler');
 
       const handler = sigtermCall.arguments[1];
@@ -206,7 +197,7 @@ describe('Server Integration Tests', () => {
       server.shutdown = mock.fn();
 
       const calls = processOnSpy.mock.calls;
-      const sigintCall = calls.find(call => call.arguments[0] === 'SIGINT');
+      const sigintCall = calls.find((call) => call.arguments[0] === 'SIGINT');
       assert.ok(sigintCall, 'Should have SIGINT handler');
 
       const handler = sigintCall.arguments[1];
@@ -224,7 +215,7 @@ describe('Server Integration Tests', () => {
     it('should shutdown gracefully when server exists', () => {
       // Mock server
       const mockServer = {
-        close: mock.fn((callback) => callback())
+        close: mock.fn((callback) => callback()),
       };
       server.server = mockServer;
 
@@ -236,7 +227,7 @@ describe('Server Integration Tests', () => {
 
       // Verify server.close was called
       assert.strictEqual(mockServer.close.mock.calls.length, 1);
-      
+
       // Verify process.exit was called
       assert.strictEqual(exitSpy.mock.calls.length, 1);
       assert.strictEqual(exitSpy.mock.calls[0].arguments[0], 0);
@@ -247,7 +238,7 @@ describe('Server Integration Tests', () => {
 
     it('should set force shutdown timeout', () => {
       const mockServer = {
-        close: mock.fn(() => {}) // Don't call callback to test timeout
+        close: mock.fn(() => {}), // Don't call callback to test timeout
       };
       server.server = mockServer;
 
@@ -274,7 +265,7 @@ describe('Server Integration Tests', () => {
       // Mock HTTP server
       const mockServer = {
         listen: mock.fn(),
-        close: mock.fn()
+        close: mock.fn(),
       };
       server.server = mockServer;
 

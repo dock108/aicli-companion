@@ -19,5 +19,14 @@
   },
   "workspaces": [
     "server"
-  ]
+  ],
+  "lint-staged": {
+    "server/src/**/*.js": [
+      "cd server && npm run lint",
+      "cd server && npm run format"
+    ],
+    "ios/**/*.swift": [
+      "cd ios && swiftlint lint --fix"
+    ]
+  }
 }

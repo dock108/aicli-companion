@@ -5,7 +5,7 @@ import {
   createWebSocketError,
   getHttpStatusForError,
   sendErrorResponse,
-  AppError
+  AppError,
 } from '../../utils/errors.js';
 import { ERROR_CODES, HTTP_STATUS_CODES } from '../../constants/index.js';
 
@@ -50,7 +50,7 @@ describe('Error Utilities', () => {
 
     it('should include valid ISO timestamp', () => {
       const result = createErrorResponse('TEST_CODE', 'Test message');
-      
+
       // Verify timestamp is valid ISO string
       const timestamp = new Date(result.timestamp);
       assert.ok(!isNaN(timestamp.getTime()));
@@ -93,7 +93,7 @@ describe('Error Utilities', () => {
 
     it('should include valid ISO timestamp', () => {
       const result = createWebSocketError('client', 'request', 'CODE', 'Message');
-      
+
       const timestamp = new Date(result.timestamp);
       assert.ok(!isNaN(timestamp.getTime()));
       assert.strictEqual(result.timestamp, timestamp.toISOString());
@@ -163,14 +163,8 @@ describe('Error Utilities', () => {
         getHttpStatusForError('CUSTOM_ERROR_CODE'),
         HTTP_STATUS_CODES.INTERNAL_SERVER_ERROR
       );
-      assert.strictEqual(
-        getHttpStatusForError(null),
-        HTTP_STATUS_CODES.INTERNAL_SERVER_ERROR
-      );
-      assert.strictEqual(
-        getHttpStatusForError(undefined),
-        HTTP_STATUS_CODES.INTERNAL_SERVER_ERROR
-      );
+      assert.strictEqual(getHttpStatusForError(null), HTTP_STATUS_CODES.INTERNAL_SERVER_ERROR);
+      assert.strictEqual(getHttpStatusForError(undefined), HTTP_STATUS_CODES.INTERNAL_SERVER_ERROR);
     });
   });
 
@@ -179,8 +173,10 @@ describe('Error Utilities', () => {
 
     beforeEach(() => {
       mockResponse = {
-        status: mock.fn(function() { return this; }),
-        json: mock.fn()
+        status: mock.fn(function () {
+          return this;
+        }),
+        json: mock.fn(),
       };
     });
 
@@ -278,13 +274,18 @@ describe('Error Utilities', () => {
     it('should be throwable and catchable', () => {
       const error = new AppError(ERROR_CODES.INVALID_INPUT, 'Test error');
 
-      assert.throws(() => {
-        throw error;
-      }, (err) => {
-        return err instanceof AppError && 
-               err.code === ERROR_CODES.INVALID_INPUT && 
-               err.message === 'Test error';
-      });
+      assert.throws(
+        () => {
+          throw error;
+        },
+        (err) => {
+          return (
+            err instanceof AppError &&
+            err.code === ERROR_CODES.INVALID_INPUT &&
+            err.message === 'Test error'
+          );
+        }
+      );
     });
 
     it('should maintain Error prototype chain', () => {

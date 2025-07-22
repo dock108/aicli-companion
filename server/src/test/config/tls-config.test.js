@@ -13,11 +13,11 @@ describe('TLSConfig', () => {
     mock.method(console, 'error');
 
     tlsConfig = new TLSConfig();
-    
+
     // Mock the internal TLSManager
     mockTLSManager = {
       ensureCertificateExists: mock.fn(),
-      getCertificateFingerprint: mock.fn()
+      getCertificateFingerprint: mock.fn(),
     };
     tlsConfig.tlsManager = mockTLSManager;
   });
@@ -29,7 +29,7 @@ describe('TLSConfig', () => {
   describe('constructor', () => {
     it('should create TLSConfig instance', () => {
       const config = new TLSConfig();
-      
+
       assert.ok(config.tlsManager, 'Should have TLS manager');
     });
   });
@@ -37,10 +37,10 @@ describe('TLSConfig', () => {
   describe('setupTLS', () => {
     it('should try OpenSSL first and return result on success', async () => {
       const expectedResult = { cert: 'test-cert', key: 'test-key' };
-      
+
       // Mock generateCertificateWithOpenSSL to succeed
       const originalGenerateCert = await import('../../utils/tls.js');
-      mock.method(originalGenerateCert, 'generateCertificateWithOpenSSL', () => 
+      mock.method(originalGenerateCert, 'generateCertificateWithOpenSSL', () =>
         Promise.resolve(expectedResult)
       );
 
@@ -51,15 +51,15 @@ describe('TLSConfig', () => {
 
     it('should fallback to TLSManager on OpenSSL failure', async () => {
       const expectedFallback = { cert: 'fallback-cert', key: 'fallback-key' };
-      
+
       // Mock generateCertificateWithOpenSSL to fail
       const originalGenerateCert = await import('../../utils/tls.js');
-      mock.method(originalGenerateCert, 'generateCertificateWithOpenSSL', () => 
+      mock.method(originalGenerateCert, 'generateCertificateWithOpenSSL', () =>
         Promise.reject(new Error('OpenSSL not available'))
       );
 
       // Mock TLSManager fallback to succeed
-      mockTLSManager.ensureCertificateExists.mock.mockImplementation(() => 
+      mockTLSManager.ensureCertificateExists.mock.mockImplementation(() =>
         Promise.resolve(expectedFallback)
       );
 
@@ -71,22 +71,19 @@ describe('TLSConfig', () => {
 
     it('should propagate TLSManager errors', async () => {
       const expectedError = new Error('TLS Manager failed');
-      
+
       // Mock generateCertificateWithOpenSSL to fail
       const originalGenerateCert = await import('../../utils/tls.js');
-      mock.method(originalGenerateCert, 'generateCertificateWithOpenSSL', () => 
+      mock.method(originalGenerateCert, 'generateCertificateWithOpenSSL', () =>
         Promise.reject(new Error('OpenSSL not available'))
       );
 
       // Mock TLSManager fallback to fail
-      mockTLSManager.ensureCertificateExists.mock.mockImplementation(() => 
+      mockTLSManager.ensureCertificateExists.mock.mockImplementation(() =>
         Promise.reject(expectedError)
       );
 
-      await assert.rejects(
-        async () => await tlsConfig.setupTLS(),
-        expectedError
-      );
+      await assert.rejects(() => tlsConfig.setupTLS(), expectedError);
     });
   });
 

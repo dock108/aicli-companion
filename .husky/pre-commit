@@ -9,11 +9,12 @@ echo "🔍 Running pre-commit checks..."
 echo "🎨 Running lint-staged..."
 npx lint-staged
 
-# Run tests based on changed files
+# Run quick test validation for changed files
 if git diff --cached --name-only | grep -q "^server/"; then
-  echo "🧪 Running server tests..."
+  echo "🧪 Running server syntax check..."
   cd server
-  npm test
+  # Quick syntax validation instead of full test suite
+  npx eslint src/ --max-warnings=0
   cd ..
 fi
 

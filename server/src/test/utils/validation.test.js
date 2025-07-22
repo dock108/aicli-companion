@@ -18,21 +18,21 @@ describe('ValidationUtils', () => {
     it('should accept valid string prompts', () => {
       const prompt = 'This is a valid prompt';
       const result = ValidationUtils.sanitizePrompt(prompt);
-      
+
       assert.strictEqual(result, prompt);
     });
 
     it('should remove null bytes from prompts', () => {
       const prompt = 'This\0has\0null\0bytes';
       const result = ValidationUtils.sanitizePrompt(prompt);
-      
+
       assert.strictEqual(result, 'Thishasnullbytes');
     });
 
     it('should limit prompt length to 50000 characters', () => {
       const longPrompt = 'a'.repeat(60000);
       const result = ValidationUtils.sanitizePrompt(longPrompt);
-      
+
       assert.strictEqual(result.length, 50000);
       assert.strictEqual(result, 'a'.repeat(50000));
     });
@@ -116,41 +116,41 @@ describe('ValidationUtils', () => {
 
     it('should reject forbidden paths', async () => {
       await assert.rejects(
-        async () => await ValidationUtils.validateWorkingDirectory('/etc/passwd'),
+        () => ValidationUtils.validateWorkingDirectory('/etc/passwd'),
         /Access to system directories is not allowed|Working directory is not accessible/
       );
 
       await assert.rejects(
-        async () => await ValidationUtils.validateWorkingDirectory('/usr/bin/python'),
+        () => ValidationUtils.validateWorkingDirectory('/usr/bin/python'),
         /Access to system directories is not allowed|Working directory is not accessible/
       );
 
       await assert.rejects(
-        async () => await ValidationUtils.validateWorkingDirectory('/root/secret'),
+        () => ValidationUtils.validateWorkingDirectory('/root/secret'),
         /Access to system directories is not allowed|Working directory is not accessible/
       );
     });
 
     it('should reject path traversal attempts', async () => {
       await assert.rejects(
-        async () => await ValidationUtils.validateWorkingDirectory('../../../etc/passwd'),
+        () => ValidationUtils.validateWorkingDirectory('../../../etc/passwd'),
         /Access to system directories is not allowed|Path traversal is not allowed|Working directory is not accessible/
       );
 
       await assert.rejects(
-        async () => await ValidationUtils.validateWorkingDirectory('~/../../etc/shadow'),
+        () => ValidationUtils.validateWorkingDirectory('~/../../etc/shadow'),
         /Access to system directories is not allowed|Path traversal is not allowed|Working directory is not accessible/
       );
 
       await assert.rejects(
-        async () => await ValidationUtils.validateWorkingDirectory('/home/user/../../root'),
+        () => ValidationUtils.validateWorkingDirectory('/home/user/../../root'),
         /Access to system directories is not allowed|Path traversal is not allowed|Working directory is not accessible/
       );
     });
 
     it('should reject non-existent directories', async () => {
       await assert.rejects(
-        async () => await ValidationUtils.validateWorkingDirectory('/non/existent/directory'),
+        () => ValidationUtils.validateWorkingDirectory('/non/existent/directory'),
         /Working directory is not accessible/
       );
     });

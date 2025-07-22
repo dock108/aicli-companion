@@ -18,24 +18,24 @@ describe('ServerStartup', () => {
     it('should return existing token when provided', () => {
       const existingToken = 'existing-test-token';
       const result = ServerStartup.generateAuthToken(existingToken);
-      
+
       assert.strictEqual(result, existingToken);
     });
 
     it('should generate new token when not provided', () => {
       const result = ServerStartup.generateAuthToken(null);
-      
+
       assert.ok(result, 'Should generate a token');
       assert.ok(typeof result === 'string', 'Token should be a string');
       assert.ok(result.length > 0, 'Token should not be empty');
-      
+
       // Verify console.log was called to announce the token
       assert.ok(console.log.mock.calls.length > 0);
     });
 
     it('should generate new token when empty string provided', () => {
       const result = ServerStartup.generateAuthToken('');
-      
+
       assert.ok(result, 'Should generate a token');
       assert.ok(typeof result === 'string', 'Token should be a string');
       assert.ok(result.length > 0, 'Token should not be empty');
@@ -44,7 +44,7 @@ describe('ServerStartup', () => {
     it('should generate different tokens on multiple calls', () => {
       const token1 = ServerStartup.generateAuthToken(null);
       const token2 = ServerStartup.generateAuthToken(null);
-      
+
       assert.notStrictEqual(token1, token2, 'Should generate unique tokens');
     });
   });
@@ -93,7 +93,7 @@ describe('ServerStartup', () => {
         getWSProtocol: mock.fn(() => 'ws'),
         getDisplayHostname: mock.fn(() => 'localhost'),
         port: 3001,
-        enableTLS: false
+        enableTLS: false,
       };
     });
 
@@ -121,8 +121,10 @@ describe('ServerStartup', () => {
       ServerStartup.displayStartupInfo(mockConfig, authToken, claudeAvailable, fingerprint);
 
       // Should log auth-related messages
-      const logCalls = console.log.mock.calls.map(call => call.arguments[0]);
-      const authMessages = logCalls.filter(msg => msg.includes('Authentication') || msg.includes('Mobile app'));
+      const logCalls = console.log.mock.calls.map((call) => call.arguments[0]);
+      const authMessages = logCalls.filter(
+        (msg) => msg.includes('Authentication') || msg.includes('Mobile app')
+      );
       assert.ok(authMessages.length > 0, 'Should display auth information');
     });
 
@@ -134,8 +136,10 @@ describe('ServerStartup', () => {
       ServerStartup.displayStartupInfo(mockConfig, authToken, claudeAvailable, fingerprint);
 
       // Should not log auth-related messages
-      const logCalls = console.log.mock.calls.map(call => call.arguments[0]);
-      const authMessages = logCalls.filter(msg => msg.includes('Authentication') || msg.includes('Mobile app'));
+      const logCalls = console.log.mock.calls.map((call) => call.arguments[0]);
+      const authMessages = logCalls.filter(
+        (msg) => msg.includes('Authentication') || msg.includes('Mobile app')
+      );
       assert.strictEqual(authMessages.length, 0, 'Should not display auth information');
     });
 
@@ -148,8 +152,10 @@ describe('ServerStartup', () => {
       ServerStartup.displayStartupInfo(mockConfig, authToken, claudeAvailable, fingerprint);
 
       // Should log TLS-related messages
-      const logCalls = console.log.mock.calls.map(call => call.arguments[0]);
-      const tlsMessages = logCalls.filter(msg => msg.includes('TLS') || msg.includes('Certificate'));
+      const logCalls = console.log.mock.calls.map((call) => call.arguments[0]);
+      const tlsMessages = logCalls.filter(
+        (msg) => msg.includes('TLS') || msg.includes('Certificate')
+      );
       assert.ok(tlsMessages.length > 0, 'Should display TLS information');
     });
 
@@ -161,8 +167,8 @@ describe('ServerStartup', () => {
       ServerStartup.displayStartupInfo(mockConfig, authToken, claudeAvailable, fingerprint);
 
       // Should log Claude status
-      const logCalls = console.log.mock.calls.map(call => call.arguments[0]);
-      const claudeMessages = logCalls.filter(msg => msg.includes('Claude Code'));
+      const logCalls = console.log.mock.calls.map((call) => call.arguments[0]);
+      const claudeMessages = logCalls.filter((msg) => msg.includes('Claude Code'));
       assert.ok(claudeMessages.length > 0, 'Should display Claude status');
     });
   });
@@ -172,7 +178,7 @@ describe('ServerStartup', () => {
 
     beforeEach(() => {
       mockClaudeService = {
-        checkAvailability: mock.fn()
+        checkAvailability: mock.fn(),
       };
     });
 
@@ -192,22 +198,22 @@ describe('ServerStartup', () => {
 
       assert.strictEqual(result, false);
       assert.strictEqual(mockClaudeService.checkAvailability.mock.calls.length, 1);
-      
+
       // Should log warning messages
       assert.ok(console.warn.mock.calls.length >= 2);
     });
 
     it('should handle checkAvailability errors', async () => {
-      mockClaudeService.checkAvailability.mock.mockImplementation(() => 
+      mockClaudeService.checkAvailability.mock.mockImplementation(() =>
         Promise.reject(new Error('Test error'))
       );
 
       // This should throw because the actual implementation doesn't catch errors
       await assert.rejects(
-        async () => await ServerStartup.checkClaudeAvailability(mockClaudeService),
+        () => ServerStartup.checkClaudeAvailability(mockClaudeService),
         /Test error/
       );
-      
+
       assert.strictEqual(mockClaudeService.checkAvailability.mock.calls.length, 1);
     });
   });

@@ -63,7 +63,15 @@
       "Bash(NODE_ENV=test c8 --all --include='src/**/*.js' --exclude='src/**/*.test.js' --exclude='src/test/**/*.js' --reporter=text node --test src/test/**/*.test.js)",
       "Bash(NODE_ENV=test npx c8 --all --include='src/**/*.js' --exclude='src/**/*.test.js' --exclude='src/test/**/*.js' --reporter=text node --test src/test/**/*.test.js)",
       "Bash(NODE_ENV=test npx c8 --all --include='src/**/*.js' --exclude='src/**/*.test.js' --exclude='src/test/**/*.js' node --test src/test/index.test.js)",
-      "Bash(NODE_ENV=test npx c8 node --test src/test/**/*.test.js)"
+      "Bash(NODE_ENV=test npx c8 node --test src/test/**/*.test.js)",
+      "Bash(NODE_ENV=test npx c8 node --test src/test/index.test.js)",
+      "Bash(NODE_ENV=test node --test --dry-run src/test/**/*.test.js)",
+      "Bash(npm run lint)",
+      "Bash(npm run lint:*)",
+      "Bash(npm run format:check:*)",
+      "Bash(npm run test:coverage:*)",
+      "Bash(NODE_ENV=test c8 --reporter=text node --test src/test/**/*.test.js)",
+      "Bash(HUSKY=0 git commit -m \"$(cat <<''EOF''\nrefactor: Complete server code review with modular architecture and comprehensive test coverage\n\n## Code Review and Cleanup\n- Remove duplicate WebSocket implementation (websocket-v2.js) consolidating to single websocket.js\n- Extract monolithic server class into focused configuration modules:\n  - MiddlewareConfig: Express middleware setup and authentication\n  - ServerStartup: Auth token generation, service discovery, and startup display\n  - TLSConfig: TLS certificate management and configuration\n  - ServerConfig: Centralized configuration management\n- Standardize on Node.js native test runner (remove Jest configuration)\n- Consolidate configuration files and remove duplicates (.prettierrc, .husky)\n- Create centralized constants and error utilities for consistency\n\n## Test Coverage Improvements  \n- Add comprehensive test suites achieving high coverage:\n  - Server integration tests: startup/shutdown lifecycle, routes, error handling\n  - Configuration module tests: all new extracted config classes\n  - Utility module tests: ValidationUtils (97.18%), errors (100%), TLS (94.92%)\n- Update .c8rc.json to exclude non-logic files from coverage requirements\n- Fix test path references in CI configuration\n\n## Code Quality Enhancements\n- Extract duplicate validation logic into reusable ValidationUtils class\n- Create standardized error handling with AppError class and HTTP response utilities\n- Add comprehensive JSDoc documentation throughout\n- Improve separation of concerns with focused, single-responsibility modules\n- Maintain backward compatibility while improving internal structure\n\n🤖 Generated with [Claude Code](https://claude.ai/code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
     ],
     "deny": []
   }

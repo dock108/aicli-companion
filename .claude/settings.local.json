@@ -47,7 +47,23 @@
       "Bash(NODE_ENV=test npx c8 --reporter=text node --test src/test/index-execution.test.js)",
       "Bash(NODE_ENV=test node --test src/test/index.test.js src/test/index-execution.test.js)",
       "Bash(NODE_ENV=test npx c8 --reporter=text node --test src/test/index.test.js)",
-      "Bash(NODE_ENV=test npx c8 --reporter=text node --test src/test/**/*.test.js)"
+      "Bash(NODE_ENV=test npx c8 --reporter=text node --test src/test/**/*.test.js)",
+      "Bash(NODE_ENV=test c8 --reporter=lcov --reporter=text node --test src/test/**/*.test.js)",
+      "Bash(NODE_ENV=test npx c8 --reporter=lcov --reporter=text node --test src/test/**/*.test.js)",
+      "Bash(NODE_ENV=test npx c8 --reporter=text node --test 'src/test/**/*.test.js')",
+      "Bash(NODE_ENV=test npx c8 --reporter=text --include='src/index.js' node --test src/test/index.test.js)",
+      "Bash(NODE_ENV=test node --test src/test/**/*.test.js)",
+      "Bash(NODE_ENV=test node --test src/test/index-execution.test.js)",
+      "Bash(NODE_ENV=test timeout 5 node --test src/test/index-execution.test.js)",
+      "Bash(NODE_ENV=test npx c8 --include='src/index.js' node --test src/test/index-execution.test.js)",
+      "Bash(NODE_ENV=test npx c8 --reporter=text node --test 'src/test/index-execution.test.js' 'src/test/index.test.js')",
+      "Bash(NODE_ENV=test node --test src/test/index.test.js)",
+      "Bash(cat:*)",
+      "Bash(NODE_ENV=test npx c8 --all --include='src/**/*.js' --exclude='src/**/*.test.js' --reporter=text node --test src/test/**/*.test.js)",
+      "Bash(NODE_ENV=test c8 --all --include='src/**/*.js' --exclude='src/**/*.test.js' --exclude='src/test/**/*.js' --reporter=text node --test src/test/**/*.test.js)",
+      "Bash(NODE_ENV=test npx c8 --all --include='src/**/*.js' --exclude='src/**/*.test.js' --exclude='src/test/**/*.js' --reporter=text node --test src/test/**/*.test.js)",
+      "Bash(NODE_ENV=test npx c8 --all --include='src/**/*.js' --exclude='src/**/*.test.js' --exclude='src/test/**/*.js' node --test src/test/index.test.js)",
+      "Bash(NODE_ENV=test npx c8 node --test src/test/**/*.test.js)"
     ],
     "deny": []
   }

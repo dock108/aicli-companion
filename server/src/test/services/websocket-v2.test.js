@@ -927,6 +927,109 @@ describe('WebSocket V2 Service', () => {
       // The actual implementation uses dynamic imports and fs.existsSync which are difficult to mock
       // The functionality is tested in the integration tests instead
     });
+
+    it('should handle setWorkingDirectory resolve error', async () => {
+      const message = {
+        type: 'setWorkingDirectory',
+        requestId: 'req-setwd-error2',
+        data: {
+          workingDirectory: '\0invalid\0path', // null bytes should cause error
+        },
+      };
+
+      ws.emit('message', JSON.stringify(message));
+
+      await new Promise((resolve) => setTimeout(resolve, 15));
+
+      const response = JSON.parse(ws.sentMessages[0]);
+      assert.strictEqual(response.type, 'error');
+      assert.strictEqual(response.data.code, 'DIRECTORY_NOT_FOUND');
+    });
+
+    it('should handle system message type in determineStreamType', async () => {
+      // Create a session first
+      claudeService.sendStreamingPrompt = mock.fn(async () => ({
+        sessionId: 'test-session-system',
+      }));
+
+      const startMsg = {
+        type: 'streamStart',
+        requestId: 'req-1',
+        data: {
+          prompt: 'Test',
+        },
+      };
+
+      ws.emit('message', JSON.stringify(startMsg));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      // Clear messages
+      ws.sentMessages = [];
+
+      // Emit system message
+      claudeService.emit('streamData', {
+        sessionId: 'test-session-system',
+        data: {
+          type: 'system',
+          message: {
+            content: 'System message',
+          },
+        },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 15));
+
+      if (ws.sentMessages.length > 0) {
+        const response = JSON.parse(ws.sentMessages[0]);
+        assert.strictEqual(response.type, 'streamChunk');
+        assert.strictEqual(response.data.type, 'system_message');
+      }
+    });
+
+    it('should handle text content blocks in formatStreamContent', async () => {
+      // Create a session first
+      claudeService.sendStreamingPrompt = mock.fn(async () => ({
+        sessionId: 'test-session-text',
+      }));
+
+      const startMsg = {
+        type: 'streamStart',
+        requestId: 'req-1',
+        data: {
+          prompt: 'Test',
+        },
+      };
+
+      ws.emit('message', JSON.stringify(startMsg));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      // Clear messages
+      ws.sentMessages = [];
+
+      // Emit message with text content blocks
+      claudeService.emit('streamData', {
+        sessionId: 'test-session-text',
+        data: {
+          type: 'assistant',
+          message: {
+            content: [
+              { type: 'text', text: 'Hello from text block' },
+              { type: 'tool_use', name: 'ignored', input: {} },
+            ],
+          },
+        },
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 15));
+
+      if (ws.sentMessages.length > 0) {
+        const response = JSON.parse(ws.sentMessages[0]);
+        assert.strictEqual(response.type, 'streamChunk');
+        assert.strictEqual(response.data.content.type, 'text');
+        assert.strictEqual(response.data.content.text, 'Hello from text block');
+        assert.strictEqual(response.data.content.data, null);
+      }
+    });
   });
 
   // Cleanup

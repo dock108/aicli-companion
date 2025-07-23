@@ -63,6 +63,7 @@ enum ToolActivityStatus: String, CaseIterable {
 
 // MARK: - Tool Activity Manager
 
+@available(iOS 13.0, macOS 10.15, *)
 class ToolActivityManager: ObservableObject {
     @Published var activeTools: [ToolActivity] = []
     @Published var recentTools: [ToolActivity] = []
@@ -136,6 +137,7 @@ class ToolActivityManager: ObservableObject {
 
 // MARK: - Tool Activity Views
 
+@available(iOS 13.0, macOS 10.15, *)
 struct ToolActivityIndicator: View {
     let activity: ToolActivity
     @State private var isAnimating = false
@@ -186,6 +188,7 @@ struct ToolActivityIndicator: View {
     }
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 struct ToolActivityList: View {
     @ObservedObject var activityManager: ToolActivityManager
     let sessionId: String?
@@ -208,6 +211,7 @@ struct ToolActivityList: View {
     }
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 struct ToolActivityOverlay: View {
     @ObservedObject var activityManager: ToolActivityManager
     let sessionId: String?
@@ -262,6 +266,7 @@ struct ToolActivityOverlay: View {
 
 // MARK: - Tool Activity Sheet
 
+@available(iOS 15.0, macOS 12.0, *)
 struct ToolActivitySheet: View {
     @ObservedObject var activityManager: ToolActivityManager
     @Environment(\.dismiss) private var dismiss
@@ -294,7 +299,11 @@ struct ToolActivitySheet: View {
                 }
             }
             .navigationTitle("Tool Activity")
+            #if os(iOS)
+
             .navigationBarTitleDisplayMode(.inline)
+
+            #endif
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Done") {
@@ -302,7 +311,7 @@ struct ToolActivitySheet: View {
                     }
                 }
 
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .automatic) {
                     Button("Clear") {
                         activityManager.clearRecentTools()
                     }
@@ -313,6 +322,7 @@ struct ToolActivitySheet: View {
     }
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 struct ToolActivityDetailRow: View {
     let activity: ToolActivity
     @State private var isExpanded = false

@@ -1,5 +1,6 @@
 import SwiftUI
 
+@available(iOS 14.0, macOS 11.0, *)
 struct ChatView: View {
     @EnvironmentObject var claudeService: ClaudeCodeService
     @StateObject private var webSocketService = WebSocketService()
@@ -130,7 +131,11 @@ struct ChatView: View {
                 .padding()
             }
         }
+        #if os(iOS)
+
         .navigationBarTitleDisplayMode(.inline)
+
+        #endif
         .navigationTitle(persistenceService.currentConversation?.title ?? "Claude Code")
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
@@ -141,7 +146,7 @@ struct ChatView: View {
                 }
             }
             
-            ToolbarItem(placement: .navigationBarTrailing) {
+            ToolbarItem(placement: .automatic) {
                 HStack(spacing: 16) {
                     Button(action: {
                         showingToolActivity = true
@@ -870,6 +875,7 @@ struct ChatView: View {
     }
 }
 
+@available(iOS 15.0, macOS 12.0, *)
 struct MessageBubble: View {
     let message: Message
     @State private var showActions = false
@@ -964,6 +970,7 @@ struct MessageBubble: View {
     }
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 struct TypingIndicator: View {
     @State private var animating = false
 
@@ -997,6 +1004,7 @@ struct TypingIndicator: View {
     }
 }
 
+@available(iOS 15.0, macOS 12.0, *)
 struct WorkingDirectorySheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var directoryPath: String
@@ -1034,7 +1042,11 @@ struct WorkingDirectorySheet: View {
             }
             .padding()
             .navigationTitle("Working Directory")
+            #if os(iOS)
+
             .navigationBarTitleDisplayMode(.inline)
+
+            #endif
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {
@@ -1042,7 +1054,7 @@ struct WorkingDirectorySheet: View {
                     }
                 }
 
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .automatic) {
                     Button("Set") {
                         onSetDirectory(directoryPath)
                         dismiss()
@@ -1054,6 +1066,7 @@ struct WorkingDirectorySheet: View {
     }
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 struct RecentFilesContextBar: View {
     let recentFiles: [FileItem]
     let onFileSelected: (FileItem) -> Void
@@ -1106,6 +1119,7 @@ struct RecentFilesContextBar: View {
     }
 }
 
+@available(iOS 14.0, macOS 11.0, *)
 struct WorkflowSuggestionsBar: View {
     let suggestions: [WorkflowSuggestion]
     let onCommandSelected: (String) -> Void
@@ -1167,6 +1181,7 @@ struct WorkflowSuggestionsBar: View {
     }
 }
 
+@available(iOS 17.0, macOS 14.0, *)
 #Preview {
     NavigationView {
         ChatView()

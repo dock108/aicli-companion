@@ -1,5 +1,6 @@
 import SwiftUI
 
+@available(iOS 16.0, macOS 13.0, *)
 struct SettingsView: View {
     @EnvironmentObject var settings: SettingsManager
     @Environment(\.dismiss) private var dismiss
@@ -73,9 +74,11 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .automatic) {
                     Button("Done") {
                         dismiss()
                     }
@@ -85,6 +88,7 @@ struct SettingsView: View {
     }
 }
 
+@available(iOS 17.0, macOS 14.0, *)
 #Preview {
     SettingsView()
         .environmentObject(SettingsManager())

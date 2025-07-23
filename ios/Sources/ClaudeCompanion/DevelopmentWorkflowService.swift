@@ -269,6 +269,7 @@ struct FileCoverage {
 
 // MARK: - Development Workflow Service
 
+@available(iOS 13.0, macOS 10.15, *)
 class DevelopmentWorkflowService: ObservableObject {
     @Published var currentRepository: GitRepository?
     @Published var buildSystem: BuildSystem?

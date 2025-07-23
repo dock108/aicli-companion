@@ -2,6 +2,7 @@ import Foundation
 import Network
 import Combine
 
+@available(iOS 13.0, macOS 10.15, *)
 class ServiceDiscoveryManager: NSObject, ObservableObject {
     @Published var discoveredServers: [DiscoveredClaudeServer] = []
     @Published var isScanning = false

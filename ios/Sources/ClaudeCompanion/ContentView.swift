@@ -1,5 +1,6 @@
 import SwiftUI
 
+@available(iOS 16.0, macOS 13.0, *)
 public struct ContentView: View {
     public init() {}
     @EnvironmentObject var claudeService: ClaudeCodeService
@@ -16,9 +17,11 @@ public struct ContentView: View {
                 }
             }
             .navigationTitle("Claude Companion")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.large)
+            #endif
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .automatic) {
                     NavigationLink(destination: SettingsView()) {
                         Image(systemName: "gear")
                     }
@@ -36,6 +39,7 @@ public struct ContentView: View {
     }
 }
 
+@available(iOS 17.0, macOS 14.0, *)
 #Preview {
     ContentView()
         .environmentObject(ClaudeCodeService())

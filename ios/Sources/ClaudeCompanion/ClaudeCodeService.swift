@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import Network
 
+@available(iOS 13.0, macOS 10.15, *)
 public class ClaudeCodeService: ObservableObject {
     @Published var isConnected = false
     @Published var connectionStatus: ConnectionStatus = .disconnected

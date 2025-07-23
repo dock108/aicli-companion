@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 
+@available(iOS 16.0, macOS 13.0, *)
 struct ConnectionView: View {
     @EnvironmentObject var claudeService: ClaudeCodeService
     @EnvironmentObject var settings: SettingsManager
@@ -313,6 +314,7 @@ struct ConnectionView: View {
     }
 }
 
+@available(iOS 15.0, macOS 12.0, *)
 struct DiscoveredServerRow: View {
     let server: DiscoveredClaudeServer
     let isSelected: Bool
@@ -365,6 +367,7 @@ struct DiscoveredServerRow: View {
     }
 }
 
+@available(iOS 15.0, macOS 12.0, *)
 struct ManualConnectionView: View {
     @Binding var serverAddress: String
     @Binding var serverPort: String
@@ -459,7 +462,11 @@ struct ManualConnectionView: View {
                 }
             }
             .navigationTitle("Manual Setup")
+            #if os(iOS)
+
             .navigationBarTitleDisplayMode(.inline)
+
+            #endif
             .onChange(of: isConnected) { newValue in
                 if newValue {
                     // Dismiss sheet when connected
@@ -481,6 +488,7 @@ struct ManualConnectionView: View {
     }
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 extension View {
     func placeholder<Content: View>(
         when shouldShow: Bool,
@@ -493,6 +501,7 @@ extension View {
     }
 }
 
+@available(iOS 17.0, macOS 14.0, *)
 #Preview {
     ConnectionView(isConnected: .constant(false))
         .environmentObject(ClaudeCodeService())

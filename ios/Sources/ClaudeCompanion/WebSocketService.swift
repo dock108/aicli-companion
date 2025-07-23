@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import Starscream
 
+@available(iOS 13.0, macOS 10.15, *)
 class WebSocketService: ObservableObject, WebSocketDelegate {
     @Published var isConnected = false
     @Published var connectionState: WebSocketConnectionState = .disconnected

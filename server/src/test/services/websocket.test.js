@@ -1,7 +1,21 @@
-import { describe, it, beforeEach, afterEach, mock } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import { setupWebSocket } from '../../services/websocket.js';
 import EventEmitter from 'events';
+
+// Helper to create trackable mock functions
+function createMockFn(implementation) {
+  const calls = [];
+  const fn = (...args) => {
+    const call = { arguments: args };
+    calls.push(call);
+    if (implementation) {
+      return implementation(...args);
+    }
+  };
+  fn.mock = { calls };
+  return fn;
+}
 
 // Mock WebSocket
 class MockWebSocket extends EventEmitter {
@@ -38,16 +52,16 @@ class MockWebSocketServer extends EventEmitter {
 class MockClaudeService extends EventEmitter {
   constructor() {
     super();
-    this.askClaude = mock.fn();
-    this.sendPrompt = mock.fn(async () => ({ response: 'Mock response' }));
-    this.sendStreamingPrompt = mock.fn(async () => ({ sessionId: 'test-session' }));
-    this.sendToExistingSession = mock.fn(async () => ({ success: true }));
-    this.resumeSession = mock.fn();
-    this.closeSession = mock.fn(async () => ({ success: true }));
-    this.getSessionInfo = mock.fn();
-    this.handlePermissionPrompt = mock.fn(async () => ({ accepted: true }));
-    this.getActiveSessions = mock.fn(() => []);
-    this.healthCheck = mock.fn(async () => ({
+    this.askClaude = createMockFn();
+    this.sendPrompt = createMockFn(async () => ({ response: 'Mock response' }));
+    this.sendStreamingPrompt = createMockFn(async () => ({ sessionId: 'test-session' }));
+    this.sendToExistingSession = createMockFn(async () => ({ success: true }));
+    this.resumeSession = createMockFn();
+    this.closeSession = createMockFn(async () => ({ success: true }));
+    this.getSessionInfo = createMockFn();
+    this.handlePermissionPrompt = createMockFn(async () => ({ accepted: true }));
+    this.getActiveSessions = createMockFn(() => []);
+    this.healthCheck = createMockFn(async () => ({
       status: 'healthy',
       claudeCodeAvailable: true,
       activeSessions: 0,
@@ -57,25 +71,11 @@ class MockClaudeService extends EventEmitter {
   }
 }
 
-// Mock child process
-const mockExec = mock.fn((cmd, callback) => {
-  if (cmd.includes('claude --version')) {
-    callback(null, { stdout: 'Claude CLI version 1.0.0', stderr: '' });
-  } else {
-    callback(null, { stdout: '', stderr: '' });
-  }
-});
-
-// Replace exec in the module
-import { exec } from 'child_process';
-exec.mockImplementation = mockExec;
-
 describe('WebSocket V2 Service', () => {
   let wss;
   let claudeService;
   let authToken;
   let clearIntervalSpy;
-  let originalExec;
 
   beforeEach(() => {
     wss = new MockWebSocketServer();
@@ -85,20 +85,15 @@ describe('WebSocket V2 Service', () => {
     // Mock setInterval to prevent hanging tests
     const originalSetInterval = global.setInterval;
     const originalClearInterval = global.clearInterval;
-    clearIntervalSpy = mock.fn();
+    clearIntervalSpy = createMockFn();
 
-    global.setInterval = mock.fn(() => 12345); // Return mock timer ID
+    global.setInterval = createMockFn(() => 12345); // Return mock timer ID
     global.clearInterval = clearIntervalSpy;
-
-    // Mock child_process.exec
-    originalExec = exec;
-    global.exec = mockExec;
 
     // Restore after test
     wss.on('test-cleanup', () => {
       global.setInterval = originalSetInterval;
       global.clearInterval = originalClearInterval;
-      global.exec = originalExec;
     });
   });
 
@@ -166,7 +161,7 @@ describe('WebSocket V2 Service', () => {
     });
 
     it('should handle ask message', async () => {
-      claudeService.sendPrompt = mock.fn(async () => ({
+      claudeService.sendPrompt = createMockFn(async () => ({
         response: 'Mock response from Claude',
       }));
 
@@ -195,7 +190,7 @@ describe('WebSocket V2 Service', () => {
     });
 
     it('should handle streamSend message', async () => {
-      claudeService.sendToExistingSession = mock.fn(async () => ({
+      claudeService.sendToExistingSession = createMockFn(async () => ({
         success: true,
       }));
 
@@ -439,7 +434,7 @@ describe('WebSocket V2 Service', () => {
     });
 
     it('should handle streamStart error', async () => {
-      claudeService.sendStreamingPrompt = mock.fn(async () => {
+      claudeService.sendStreamingPrompt = createMockFn(async () => {
         throw new Error('Failed to start session');
       });
 
@@ -523,7 +518,7 @@ describe('WebSocket V2 Service', () => {
     });
 
     it('should handle streamClose error', async () => {
-      claudeService.closeSession = mock.fn(async () => {
+      claudeService.closeSession = createMockFn(async () => {
         throw new Error('Failed to close session');
       });
 
@@ -607,7 +602,7 @@ describe('WebSocket V2 Service', () => {
     });
 
     it('should handle permission error', async () => {
-      claudeService.handlePermissionPrompt = mock.fn(async () => {
+      claudeService.handlePermissionPrompt = createMockFn(async () => {
         throw new Error('Permission handling failed');
       });
 
@@ -763,7 +758,7 @@ describe('WebSocket V2 Service', () => {
     });
 
     it('should handle streamSend error', async () => {
-      claudeService.sendToExistingSession = mock.fn(async () => {
+      claudeService.sendToExistingSession = createMockFn(async () => {
         throw new Error('Session send failed');
       });
 
@@ -909,7 +904,7 @@ describe('WebSocket V2 Service', () => {
 
       // Mock the closeSession method
       const originalCloseSession = claudeService.closeSession;
-      claudeService.closeSession = mock.fn(async () => ({ success: true }));
+      claudeService.closeSession = createMockFn(async () => ({ success: true }));
 
       // Trigger disconnect
       ws.emit('close', 1000, 'Normal closure');
@@ -948,7 +943,7 @@ describe('WebSocket V2 Service', () => {
 
     it('should handle system message type in determineStreamType', async () => {
       // Create a session first
-      claudeService.sendStreamingPrompt = mock.fn(async () => ({
+      claudeService.sendStreamingPrompt = createMockFn(async () => ({
         sessionId: 'test-session-system',
       }));
 
@@ -988,7 +983,7 @@ describe('WebSocket V2 Service', () => {
 
     it('should handle text content blocks in formatStreamContent', async () => {
       // Create a session first
-      claudeService.sendStreamingPrompt = mock.fn(async () => ({
+      claudeService.sendStreamingPrompt = createMockFn(async () => ({
         sessionId: 'test-session-text',
       }));
 

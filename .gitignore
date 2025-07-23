@@ -326,3 +326,4 @@ $RECYCLE.BIN/
 .fuse_hidden*
 .directory
 .Trash-*
+.claude/settings.local.json

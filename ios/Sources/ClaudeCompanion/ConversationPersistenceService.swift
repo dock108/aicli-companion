@@ -205,17 +205,19 @@ class ConversationPersistenceService: ObservableObject {
     }
 
     func duplicateConversation(_ conversation: Conversation) -> Conversation {
-        var newConversation = conversation
-        newConversation.id = UUID()
-        newConversation.title = "\(conversation.title) (Copy)"
-        newConversation.createdAt = Date()
-        newConversation.updatedAt = Date()
-        newConversation.sessionId = nil // Reset session ID for copy
+        let newConversation = Conversation(
+            title: "\(conversation.title) (Copy)",
+            sessionId: nil,
+            workingDirectory: conversation.workingDirectory
+        )
+        var updatedConversation = newConversation
+        updatedConversation.messages = conversation.messages
+        updatedConversation.metadata = conversation.metadata
 
-        conversations.insert(newConversation, at: 0)
-        saveConversation(newConversation)
+        conversations.insert(updatedConversation, at: 0)
+        saveConversation(updatedConversation)
 
-        return newConversation
+        return updatedConversation
     }
 
     // MARK: - Search and Filtering
@@ -514,11 +516,13 @@ class ConversationPersistenceService: ObservableObject {
                 case .commandOutput(let commandData):
                     content += "**Command:** `\(commandData.command)`\n\n"
                     if commandData.exitCode == 0 {
-                        content += "✅ **Success** (Exit Code: \(commandData.exitCode))\n\n"
+                        content += "✅ **Success** (Exit Code: \(commandData.exitCode ?? 0))\n\n"
                     } else {
-                        content += "❌ **Failed** (Exit Code: \(commandData.exitCode))\n\n"
+                        content += "❌ **Failed** (Exit Code: \(commandData.exitCode ?? -1))\n\n"
                     }
                     content += "```\n\(commandData.output)\n```\n\n"
+                case .markdown(let markdownData):
+                    content += "\(markdownData.markdown)\n\n"
                 }
             }
 
@@ -635,8 +639,10 @@ class ConversationPersistenceService: ObservableObject {
                 case .commandOutput(let commandData):
                     let statusIcon = commandData.exitCode == 0 ? "✅" : "❌"
                     html += "<h4>\(statusIcon) Command: \(commandData.command)</h4>"
-                    html += "<p><strong>Exit Code:</strong> \(commandData.exitCode)</p>"
+                    html += "<p><strong>Exit Code:</strong> \(commandData.exitCode ?? -1)</p>"
                     html += "<pre><code>\(commandData.output)</code></pre>"
+                case .markdown(let markdownData):
+                    html += "<div class=\"markdown\">\(markdownData.markdown)</div>"
                 }
 
                 html += "</div>"
@@ -672,7 +678,7 @@ class ConversationPersistenceService: ObservableObject {
         var csv = "Timestamp,Sender,Type,Content,HasRichContent,ToolName,Success\n"
 
         for message in conversation.messages {
-            let timestamp = DateFormatter.iso8601.string(from: message.timestamp)
+            let timestamp = ISO8601DateFormatter().string(from: message.timestamp)
             let sender = message.sender.rawValue
             let type = message.type.rawValue
             let content = "\"" + message.content.replacingOccurrences(of: "\"", with: "\"\"") + "\""
@@ -836,7 +842,7 @@ class ConversationPersistenceService: ObservableObject {
 
         for conversation in conversations {
             for message in conversation.messages {
-                let timestamp = DateFormatter.iso8601.string(from: message.timestamp)
+                let timestamp = ISO8601DateFormatter().string(from: message.timestamp)
                 let content = "\"" + message.content.replacingOccurrences(of: "\"", with: "\"\"") + "\""
                 csv += "\(conversation.id),\"\(conversation.title)\",\(timestamp),\(message.sender.rawValue),\(message.type.rawValue),\(content)\n"
             }

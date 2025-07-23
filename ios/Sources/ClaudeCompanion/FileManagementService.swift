@@ -78,7 +78,7 @@ enum FileType: String, CaseIterable {
     case symlink = "symlink"
 }
 
-struct FilePermissions {
+struct FilePermissions: Hashable, Equatable {
     let readable: Bool
     let writable: Bool
     let executable: Bool

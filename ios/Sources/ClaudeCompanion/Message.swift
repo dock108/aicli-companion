@@ -2,12 +2,12 @@ import Foundation
 
 struct Message: Identifiable, Codable {
     let id: UUID
-    let content: String
+    var content: String
     let sender: MessageSender
     let timestamp: Date
     let type: MessageType
-    let metadata: ClaudeMessageMetadata?
-    let streamingState: StreamingState?
+    var metadata: ClaudeMessageMetadata?
+    var streamingState: StreamingState?
     let requestId: String?
     let richContent: RichContent?
 

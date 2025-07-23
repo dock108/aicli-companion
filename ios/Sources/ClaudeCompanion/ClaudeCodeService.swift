@@ -2,7 +2,7 @@ import Foundation
 import Combine
 import Network
 
-class ClaudeCodeService: ObservableObject {
+public class ClaudeCodeService: ObservableObject {
     @Published var isConnected = false
     @Published var connectionStatus: ConnectionStatus = .disconnected
     @Published var currentSession: String?
@@ -15,7 +15,7 @@ class ClaudeCodeService: ObservableObject {
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
-    init() {
+    public init() {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
         config.timeoutIntervalForResource = 60

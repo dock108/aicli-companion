@@ -480,13 +480,17 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
             if currentURL != nil {
                 attemptReconnect()
             }
+            
+        case .peerClosed:
+            print("WebSocket peer closed connection")
+            updateConnectionState(.disconnected)
         }
     }
 }
 
 // MARK: - Supporting Types
 
-enum WebSocketConnectionState {
+enum WebSocketConnectionState: Equatable {
     case disconnected
     case connecting
     case connected

@@ -369,8 +369,7 @@ struct ToolActivityDetailRow: View {
                                 .fontWeight(.medium)
 
                             Text(output)
-                                .font(.caption)
-                                .fontFamily(.monospaced)
+                                .font(.system(.caption, design: .monospaced))
                                 .padding(8)
                                 .background(Color.gray.opacity(0.1))
                                 .cornerRadius(4)
@@ -385,9 +384,8 @@ struct ToolActivityDetailRow: View {
                                 .foregroundColor(.red)
 
                             Text(error)
-                                .font(.caption)
-                                .fontFamily(.monospaced)
-                                .foregroundColor(.red)
+                                .font(.system(.caption, design: .monospaced))
+                                .foregroundColor(Color.red)
                                 .padding(8)
                                 .background(Color.red.opacity(0.1))
                                 .cornerRadius(4)

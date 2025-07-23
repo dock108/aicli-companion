@@ -446,7 +446,7 @@ struct RecentBuildCard: View {
                 if !buildResult.output.isEmpty {
                     Text(buildResult.output.prefix(100))
                         .font(.caption)
-                        .fontFamily(.monospaced)
+                        .fontDesign(.monospaced)
                         .foregroundColor(.secondary)
                         .lineLimit(3)
                 }
@@ -600,7 +600,7 @@ struct GitChangesCard: View {
 
                         Text(change.path)
                             .font(.caption)
-                            .fontFamily(.monospaced)
+                            .fontDesign(.monospaced)
 
                         Spacer()
 
@@ -641,7 +641,7 @@ struct GitCommitsCard: View {
                         HStack {
                             Text(commit.shortHash)
                                 .font(.caption)
-                                .fontFamily(.monospaced)
+                                .fontDesign(.monospaced)
                                 .foregroundColor(.secondary)
 
                             Spacer()
@@ -873,7 +873,7 @@ struct BuildScriptsCard: View {
 
                                 Text(script.command)
                                     .font(.caption2)
-                                    .fontFamily(.monospaced)
+                                    .fontDesign(.monospaced)
                                     .foregroundColor(.blue)
                             }
 
@@ -950,7 +950,7 @@ struct BuildResultsCard: View {
 
                     Text(result.output)
                         .font(.caption2)
-                        .fontFamily(.monospaced)
+                        .fontDesign(.monospaced)
                         .foregroundColor(.secondary)
                         .padding(8)
                         .background(Color.gray.opacity(0.1))

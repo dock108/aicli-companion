@@ -470,7 +470,7 @@ struct FileDetailsView: View {
                 }
 
                 if file.type == .file && file.isTextFile {
-                    Section("Preview") {
+                    Section(header: Text("Preview")) {
                         if isLoadingContent {
                             HStack {
                                 ProgressView()
@@ -485,9 +485,8 @@ struct FileDetailsView: View {
                                 .foregroundColor(.red)
                         } else if let content = fileContent {
                             Text(content.prefix(500))
-                                .font(.caption)
-                                .fontFamily(.monospaced)
-                                .foregroundColor(.secondary)
+                                .font(.system(.caption, design: .monospaced))
+                                .foregroundColor(Color.secondary)
                                 .lineLimit(20)
                         } else {
                             Button("Load Preview") {

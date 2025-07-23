@@ -369,7 +369,7 @@ struct ConversationRow: View {
                             .foregroundColor(.green)
                     }
 
-                    if let workingDir = conversation.workingDirectory {
+                    if conversation.workingDirectory != nil {
                         Image(systemName: "folder")
                             .font(.caption2)
                             .foregroundColor(.orange)
@@ -424,7 +424,7 @@ struct ConversationRow: View {
 
                 Divider()
 
-                Button(action: onDelete, role: .destructive) {
+                Button(role: .destructive, action: onDelete) {
                     Label("Delete", systemImage: "trash")
                 }
             }
@@ -717,7 +717,7 @@ struct ConversationStatisticsView: View {
 
         do {
             let files = try FileManager.default.contentsOfDirectory(at: conversationsDirectory, includingPropertiesForKeys: [.fileSizeKey])
-            let totalSize = files.reduce(0) { total, url in
+            let totalSize = files.reduce(Int64(0)) { total, url in
                 let resourceValues = try? url.resourceValues(forKeys: [.fileSizeKey])
                 return total + Int64(resourceValues?.fileSize ?? 0)
             }

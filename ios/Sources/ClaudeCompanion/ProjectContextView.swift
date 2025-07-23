@@ -334,8 +334,7 @@ struct SuggestionRow: View {
 
                     if let command = suggestion.command {
                         Text(command)
-                            .font(.caption2)
-                            .fontFamily(.monospaced)
+                            .font(.system(.caption2, design: .monospaced))
                             .foregroundColor(.secondary)
                             .padding(.top, 2)
                     }

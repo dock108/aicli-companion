@@ -279,9 +279,9 @@ extension Font {
 struct ReducedMotionModifier: ViewModifier {
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     let animation: Animation
-    let fallback: Animation
+    let fallback: Animation?
 
-    init(animation: Animation, fallback: Animation = .none) {
+    init(animation: Animation, fallback: Animation? = nil) {
         self.animation = animation
         self.fallback = fallback
     }
@@ -293,7 +293,7 @@ struct ReducedMotionModifier: ViewModifier {
 }
 
 extension View {
-    func respectReducedMotion(animation: Animation, fallback: Animation = .none) -> some View {
+    func respectReducedMotion(animation: Animation, fallback: Animation? = nil) -> some View {
         self.modifier(ReducedMotionModifier(animation: animation, fallback: fallback))
     }
 }

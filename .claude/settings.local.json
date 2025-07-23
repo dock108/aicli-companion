@@ -80,7 +80,18 @@
       "Bash(NODE_ENV=test node --test src/test/utils/validation.test.js)",
       "Bash(NODE_ENV=test c8 --reporter=text node --test src/test/utils/*.test.js src/test/config/middleware-config.test.js src/test/services/claude-code.test.js src/test/services/discovery.test.js src/test/services/websocket.test.js src/test/middleware/*.test.js src/test/routes/routes-coverage.test.js)",
       "Bash(NODE_ENV=test npx c8 --reporter=text node --test src/test/services/claude-code.test.js)",
-      "Bash(NODE_ENV=test node --test claude-code.test.js)"
+      "Bash(NODE_ENV=test node --test claude-code.test.js)",
+      "Bash(swift package:*)",
+      "Bash(xcodegen generate:*)",
+      "Bash(open:*)",
+      "Bash(swift build:*)",
+      "Bash(xcodebuild:*)",
+      "Bash(echo $?)",
+      "Bash(xcrun simctl install:*)",
+      "Bash(xcrun simctl launch:*)",
+      "Bash(xcrun simctl boot:*)",
+      "Bash(xcrun simctl spawn:*)",
+      "Bash(plutil:*)"
     ],
     "deny": []
   }

@@ -2,7 +2,7 @@
 
 # Paths to include
 included:
-  - ClaudeCompanion
+  - Sources/ClaudeCompanion
 
 # Paths to exclude
 excluded:
@@ -76,8 +76,8 @@ custom_rules:
     message: "Avoid hardcoded strings. Use localized strings instead."
     severity: warning
     excluded:
-      - "ClaudeCompanion/Models/*.swift"
-      - "ClaudeCompanion/Utils/KeychainManager.swift"
+      - "Sources/ClaudeCompanion/Models/*.swift"
+      - "Sources/ClaudeCompanion/KeychainManager.swift"
 
 # Reporter type
 reporter: "xcode"

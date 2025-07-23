@@ -276,7 +276,7 @@ class DevelopmentWorkflowService: ObservableObject {
     @Published var isAnalyzing = false
     @Published var workflowSuggestions: [WorkflowSuggestion] = []
 
-    private var workingDirectory: String = ""
+    var workingDirectory: String = ""
 
     init(workingDirectory: String = "") {
         self.workingDirectory = workingDirectory
@@ -316,10 +316,10 @@ class DevelopmentWorkflowService: ObservableObject {
         guard directory.contains("git") || directory.contains("project") else { return nil }
 
         let mockChangedFiles = [
-            GitFileChange(path: "src/main.swift", status: .modified),
-            GitFileChange(path: "tests/MainTests.swift", status: .modified),
-            GitFileChange(path: "README.md", status: .added),
-            GitFileChange(path: "unused.swift", status: .deleted)
+            GitFileChange(path: "src/main.swift", status: .modified, additions: 15, deletions: 3),
+            GitFileChange(path: "tests/MainTests.swift", status: .modified, additions: 20, deletions: 5),
+            GitFileChange(path: "README.md", status: .added, additions: 50, deletions: 0),
+            GitFileChange(path: "unused.swift", status: .deleted, additions: 0, deletions: 100)
         ]
 
         let mockCommits = [
@@ -583,7 +583,7 @@ class DevelopmentWorkflowService: ObservableObject {
     // MARK: - Quick Actions
 
     func getQuickGitActions() -> [WorkflowSuggestion] {
-        guard let git = currentRepository else { return [] }
+        guard currentRepository != nil else { return [] }
 
         return [
             WorkflowSuggestion(title: "Git Status", description: "Check repository status", command: "git status", category: .git, icon: "info.circle"),

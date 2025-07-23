@@ -140,9 +140,9 @@ struct ChatView: View {
                     Image(systemName: "clock")
                 }
             }
-
+            
             ToolbarItem(placement: .navigationBarTrailing) {
-                HStack {
+                HStack(spacing: 16) {
                     Button(action: {
                         showingToolActivity = true
                     }) {
@@ -314,68 +314,68 @@ struct ChatView: View {
 
     private func setupWebSocketHandlers() {
         // Handle streaming data
-        webSocketService.setMessageHandler(for: .streamData) { [weak self] message in
+        webSocketService.setMessageHandler(for: .streamData) { message in
             DispatchQueue.main.async {
-                self?.handleStreamData(message)
+                self.handleStreamData(message)
             }
         }
 
         // Handle stream completion
-        webSocketService.setMessageHandler(for: .streamComplete) { [weak self] message in
+        webSocketService.setMessageHandler(for: .streamComplete) { message in
             DispatchQueue.main.async {
-                self?.handleStreamComplete(message)
+                self.handleStreamComplete(message)
             }
         }
 
         // Handle permission requests
-        webSocketService.setMessageHandler(for: .permissionRequest) { [weak self] message in
+        webSocketService.setMessageHandler(for: .permissionRequest) { message in
             DispatchQueue.main.async {
-                self?.handlePermissionRequest(message)
+                self.handlePermissionRequest(message)
             }
         }
 
         // Handle tool usage
-        webSocketService.setMessageHandler(for: .streamToolUse) { [weak self] message in
+        webSocketService.setMessageHandler(for: .streamToolUse) { message in
             DispatchQueue.main.async {
-                self?.handleToolUse(message)
+                self.handleToolUse(message)
             }
         }
 
         // Handle errors
-        webSocketService.setMessageHandler(for: .error) { [weak self] message in
+        webSocketService.setMessageHandler(for: .error) { message in
             DispatchQueue.main.async {
-                self?.handleError(message)
+                self.handleError(message)
             }
         }
 
         // Handle new rich message types
-        webSocketService.setMessageHandler(for: .systemInit) { [weak self] message in
+        webSocketService.setMessageHandler(for: .systemInit) { message in
             DispatchQueue.main.async {
-                self?.handleSystemInit(message)
+                self.handleSystemInit(message)
             }
         }
 
-        webSocketService.setMessageHandler(for: .assistantMessage) { [weak self] message in
+        webSocketService.setMessageHandler(for: .assistantMessage) { message in
             DispatchQueue.main.async {
-                self?.handleAssistantMessage(message)
+                self.handleAssistantMessage(message)
             }
         }
 
-        webSocketService.setMessageHandler(for: .toolUse) { [weak self] message in
+        webSocketService.setMessageHandler(for: .toolUse) { message in
             DispatchQueue.main.async {
-                self?.handleToolUse(message)
+                self.handleToolUse(message)
             }
         }
 
-        webSocketService.setMessageHandler(for: .toolResult) { [weak self] message in
+        webSocketService.setMessageHandler(for: .toolResult) { message in
             DispatchQueue.main.async {
-                self?.handleToolResult(message)
+                self.handleToolResult(message)
             }
         }
 
-        webSocketService.setMessageHandler(for: .conversationResult) { [weak self] message in
+        webSocketService.setMessageHandler(for: .conversationResult) { message in
             DispatchQueue.main.async {
-                self?.handleConversationResult(message)
+                self.handleConversationResult(message)
             }
         }
     }
@@ -397,8 +397,9 @@ struct ChatView: View {
 
         // Append content to current streaming message
         if let text = streamData.content.text {
-            if currentStreamingMessage != nil {
-                currentStreamingMessage!.content += text
+            if var streamingMessage = currentStreamingMessage {
+                streamingMessage.content += text
+                currentStreamingMessage = streamingMessage
             }
         }
 
@@ -601,29 +602,6 @@ struct ChatView: View {
         }
     }
 
-    private func handleToolUse(_ message: WebSocketMessage) {
-        guard case .toolUse(let toolUse) = message.data else { return }
-
-        // Start tracking tool activity
-        toolActivityManager.startTool(
-            id: toolUse.toolId,
-            name: toolUse.toolName,
-            sessionId: activeSessionId ?? "",
-            input: toolUse.toolInput.mapValues { $0.value }
-        )
-
-        let toolMessage = Message(
-            id: UUID(),
-            content: "🔧 Using \(toolUse.toolName)...",
-            sender: .system,
-            timestamp: Date(),
-            type: .toolUse
-        )
-
-        messages.append(toolMessage)
-        persistenceService.addMessageToCurrentConversation(toolMessage)
-    }
-
     private func handleToolResult(_ message: WebSocketMessage) {
         guard case .toolResult(let toolResult) = message.data else { return }
 
@@ -758,7 +736,7 @@ struct ChatView: View {
 
             // Process matches in reverse order to maintain indices
             for match in matches.reversed() {
-                let fullMatch = String(text[Range(match.range, in: text)!])
+                let _ = String(text[Range(match.range, in: text)!])
 
                 // Extract language if present
                 var language: String?
@@ -810,7 +788,7 @@ struct ChatView: View {
     }
 
     private func startNewConversation() {
-        let newConversation = persistenceService.createNewConversation(
+        _ = persistenceService.createNewConversation(
             sessionId: activeSessionId,
             workingDirectory: workingDirectoryText.isEmpty ? nil : workingDirectoryText
         )
@@ -950,31 +928,6 @@ struct MessageBubble: View {
             timestamp: message.timestamp,
             hasRichContent: message.richContent != nil
         )
-        .contextMenu {
-            if message.sender == .claude {
-                Button(action: {
-                    HapticManager.shared.lightImpact()
-                    UIPasteboard.general.string = message.content
-                }) {
-                    Label("Copy", systemImage: "doc.on.doc")
-                }
-
-                Button(action: {
-                    HapticManager.shared.lightImpact()
-                    shareMessage()
-                }) {
-                    Label("Share", systemImage: "square.and.arrow.up")
-                }
-            }
-        } preview: {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(message.content)
-                    .padding()
-                    .background(Color.gray.opacity(0.1))
-                    .cornerRadius(8)
-            }
-            .padding()
-        }
     }
 
     private func shareMessage() {

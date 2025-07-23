@@ -5,7 +5,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section(header: Text("Connection")) {
                     if let connection = settings.currentConnection {

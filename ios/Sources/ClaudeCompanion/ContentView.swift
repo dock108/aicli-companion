@@ -1,12 +1,13 @@
 import SwiftUI
 
-struct ContentView: View {
+public struct ContentView: View {
+    public init() {}
     @EnvironmentObject var claudeService: ClaudeCodeService
     @EnvironmentObject var settings: SettingsManager
     @State private var isConnected = false
 
-    var body: some View {
-        NavigationView {
+    public var body: some View {
+        NavigationStack {
             Group {
                 if isConnected {
                     ChatView()
@@ -15,7 +16,7 @@ struct ContentView: View {
                 }
             }
             .navigationTitle("Claude Companion")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     NavigationLink(destination: SettingsView()) {

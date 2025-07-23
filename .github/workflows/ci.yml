@@ -8,7 +8,7 @@ on:
 
 env:
   NODE_VERSION: '20'
-  XCODE_VERSION: '15.2'
+  XCODE_VERSION: '16.0'
 
 jobs:
   # Node.js Server Tests and Linting
@@ -80,12 +80,12 @@ jobs:
     - name: Build iOS App
       run: |
         cd ios
-        xcodebuild -scheme ClaudeCompanionApp -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.2' build CODE_SIGNING_ALLOWED=NO
+        xcodebuild -scheme ClaudeCompanionApp -destination 'platform=iOS Simulator,name=iPhone 16 Pro' build CODE_SIGNING_ALLOWED=NO
     
     - name: Run iOS Tests
       run: |
         cd ios
-        xcodebuild -scheme ClaudeCompanionApp -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.2' test CODE_SIGNING_ALLOWED=NO
+        xcodebuild -scheme ClaudeCompanionApp -destination 'platform=iOS Simulator,name=iPhone 16 Pro' test CODE_SIGNING_ALLOWED=NO
       continue-on-error: true
     
     - name: Build for Release

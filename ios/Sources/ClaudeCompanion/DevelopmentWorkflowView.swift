@@ -1,5 +1,6 @@
 import SwiftUI
 
+@available(iOS 13.0, macOS 10.15, *)
 struct DevelopmentWorkflowView: View {
     @ObservedObject var workflowService: DevelopmentWorkflowService
     @Environment(\.dismiss) private var dismiss
@@ -61,7 +62,11 @@ struct DevelopmentWorkflowView: View {
                 }
             }
             .navigationTitle("Development Workflow")
+            #if os(iOS)
+
             .navigationBarTitleDisplayMode(.inline)
+
+            #endif
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Done") {
@@ -69,7 +74,7 @@ struct DevelopmentWorkflowView: View {
                     }
                 }
 
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .automatic) {
                     Menu {
                         Button("Refresh Analysis") {
                             if !workflowService.workingDirectory.isEmpty {
@@ -100,6 +105,7 @@ struct DevelopmentWorkflowView: View {
 
 // MARK: - Overview Tab
 
+@available(iOS 13.0, macOS 10.15, *)
 struct OverviewTabView: View {
     @ObservedObject var workflowService: DevelopmentWorkflowService
     let onCommandSelected: (String) -> Void
@@ -130,6 +136,7 @@ struct OverviewTabView: View {
     }
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 struct ProjectStatusCard: View {
     @ObservedObject var workflowService: DevelopmentWorkflowService
 
@@ -185,6 +192,7 @@ struct ProjectStatusCard: View {
     }
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 struct StatusRow: View {
     let label: String
     let value: String
@@ -210,6 +218,7 @@ struct StatusRow: View {
     }
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 struct WorkflowSuggestionsCard: View {
     let suggestions: [WorkflowSuggestion]
     let onCommandSelected: (String) -> Void
@@ -242,6 +251,7 @@ struct WorkflowSuggestionsCard: View {
     }
 }
 
+@available(iOS 14.0, macOS 11.0, *)
 struct WorkflowSuggestionRow: View {
     let suggestion: WorkflowSuggestion
     let onTap: () -> Void
@@ -284,6 +294,7 @@ struct WorkflowSuggestionRow: View {
     }
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 struct QuickActionsCard: View {
     @ObservedObject var workflowService: DevelopmentWorkflowService
     let onCommandSelected: (String) -> Void
@@ -370,6 +381,7 @@ struct QuickActionsCard: View {
     }
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 struct QuickActionButton: View {
     let title: String
     let icon: String
@@ -397,6 +409,7 @@ struct QuickActionButton: View {
     }
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 struct RecentBuildCard: View {
     let buildResult: BuildResult
 
@@ -446,7 +459,7 @@ struct RecentBuildCard: View {
                 if !buildResult.output.isEmpty {
                     Text(buildResult.output.prefix(100))
                         .font(.caption)
-                        .fontFamily(.monospaced)
+                        .fontDesign(.monospaced)
                         .foregroundColor(.secondary)
                         .lineLimit(3)
                 }
@@ -460,6 +473,7 @@ struct RecentBuildCard: View {
 
 // MARK: - Git Tab
 
+@available(iOS 13.0, macOS 10.15, *)
 struct GitTabView: View {
     let repository: GitRepository?
     let onCommandSelected: (String) -> Void
@@ -501,6 +515,7 @@ struct GitTabView: View {
     }
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 struct GitRepositoryCard: View {
     let repository: GitRepository
 
@@ -567,6 +582,7 @@ struct GitRepositoryCard: View {
     }
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 struct GitChangesCard: View {
     let changes: [GitFileChange]
     let onCommandSelected: (String) -> Void
@@ -600,7 +616,7 @@ struct GitChangesCard: View {
 
                         Text(change.path)
                             .font(.caption)
-                            .fontFamily(.monospaced)
+                            .fontDesign(.monospaced)
 
                         Spacer()
 
@@ -618,6 +634,7 @@ struct GitChangesCard: View {
     }
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 struct GitCommitsCard: View {
     let commits: [GitCommit]
 
@@ -641,7 +658,7 @@ struct GitCommitsCard: View {
                         HStack {
                             Text(commit.shortHash)
                                 .font(.caption)
-                                .fontFamily(.monospaced)
+                                .fontDesign(.monospaced)
                                 .foregroundColor(.secondary)
 
                             Spacer()
@@ -681,6 +698,7 @@ struct GitCommitsCard: View {
     }
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 struct GitActionsCard: View {
     let repository: GitRepository
     let onCommandSelected: (String) -> Void
@@ -744,6 +762,7 @@ struct GitActionsCard: View {
 
 // MARK: - Build Tab
 
+@available(iOS 13.0, macOS 10.15, *)
 struct BuildTabView: View {
     let buildSystem: BuildSystem?
     let onCommandSelected: (String) -> Void
@@ -782,6 +801,7 @@ struct BuildTabView: View {
     }
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 struct BuildSystemCard: View {
     let buildSystem: BuildSystem
 
@@ -837,6 +857,7 @@ struct BuildSystemCard: View {
     }
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 struct BuildScriptsCard: View {
     let scripts: [BuildScript]
     let onCommandSelected: (String) -> Void
@@ -873,7 +894,7 @@ struct BuildScriptsCard: View {
 
                                 Text(script.command)
                                     .font(.caption2)
-                                    .fontFamily(.monospaced)
+                                    .fontDesign(.monospaced)
                                     .foregroundColor(.blue)
                             }
 
@@ -896,6 +917,7 @@ struct BuildScriptsCard: View {
     }
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 struct BuildResultsCard: View {
     let result: BuildResult
 
@@ -950,7 +972,7 @@ struct BuildResultsCard: View {
 
                     Text(result.output)
                         .font(.caption2)
-                        .fontFamily(.monospaced)
+                        .fontDesign(.monospaced)
                         .foregroundColor(.secondary)
                         .padding(8)
                         .background(Color.gray.opacity(0.1))
@@ -979,6 +1001,7 @@ struct BuildResultsCard: View {
 
 // MARK: - Tests Tab
 
+@available(iOS 13.0, macOS 10.15, *)
 struct TestsTabView: View {
     let testSuites: [TestSuite]
     let onCommandSelected: (String) -> Void
@@ -1010,6 +1033,7 @@ struct TestsTabView: View {
     }
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 struct TestSuiteCard: View {
     let testSuite: TestSuite
     let onCommandSelected: (String) -> Void
@@ -1048,6 +1072,7 @@ struct TestSuiteCard: View {
     }
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 struct TestResultsView: View {
     let results: TestResults
 
@@ -1094,6 +1119,7 @@ struct TestResultsView: View {
     }
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 struct TestMetric: View {
     let label: String
     let value: Int
@@ -1114,6 +1140,7 @@ struct TestMetric: View {
     }
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 struct TestCoverageView: View {
     let coverage: TestCoverage
 
@@ -1157,6 +1184,7 @@ struct TestCoverageView: View {
     }
 }
 
+@available(iOS 17.0, macOS 14.0, *)
 #Preview {
     DevelopmentWorkflowView(
         workflowService: DevelopmentWorkflowService(workingDirectory: "/Users/test/project"),

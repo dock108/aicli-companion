@@ -2,6 +2,7 @@ import Foundation
 import Network
 import Combine
 
+@available(iOS 13.0, macOS 10.15, *)
 class ServiceDiscoveryManager: NSObject, ObservableObject {
     @Published var discoveredServers: [DiscoveredClaudeServer] = []
     @Published var isScanning = false
@@ -235,7 +236,7 @@ struct DiscoveredClaudeServer: Identifiable, Equatable {
     let requiresAuth: Bool
     let version: String
     let features: [String]
-    let protocol: String
+    let `protocol`: String
     let netService: NetService
 
     var displayName: String {
@@ -349,7 +350,7 @@ extension ServiceDiscoveryManager {
 
     func validateManualConfiguration(_ config: ManualServerConfiguration, completion: @escaping (Result<ServerConnection, ClaudeCompanionError>) -> Void) {
         guard let url = config.url else {
-            completion(.failure(.invalidResponse))
+            completion(.failure(.connectionFailed("Invalid server address format")))
             return
         }
 
@@ -363,7 +364,16 @@ extension ServiceDiscoveryManager {
 
         URLSession.shared.dataTask(with: request) { data, response, error in
             if let error = error {
-                completion(.failure(.networkError(error)))
+                // Provide more specific error messages
+                if (error as NSError).code == NSURLErrorCannotConnectToHost {
+                    completion(.failure(.connectionFailed("Cannot connect to server at \(config.address):\(config.port). Make sure the server is running.")))
+                } else if (error as NSError).code == NSURLErrorTimedOut {
+                    completion(.failure(.connectionFailed("Connection timed out. Please check your network.")))
+                } else if (error as NSError).code == NSURLErrorAppTransportSecurityRequiresSecureConnection {
+                    completion(.failure(.connectionFailed("App Transport Security error. Try disabling secure connection.")))
+                } else {
+                    completion(.failure(.networkError(error)))
+                }
                 return
             }
 
@@ -377,8 +387,10 @@ extension ServiceDiscoveryManager {
                 completion(.success(config.toServerConnection()))
             case 401:
                 completion(.failure(.authenticationFailed))
+            case 404:
+                completion(.failure(.connectionFailed("Server found but Claude Companion endpoint not available. Is this a Claude Companion server?")))
             default:
-                completion(.failure(.connectionFailed("HTTP \(httpResponse.statusCode)")))
+                completion(.failure(.connectionFailed("Server returned HTTP \(httpResponse.statusCode)")))
             }
         }.resume()
     }

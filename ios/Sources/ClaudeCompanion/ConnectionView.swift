@@ -1,5 +1,7 @@
 import SwiftUI
+import Combine
 
+@available(iOS 16.0, macOS 13.0, *)
 struct ConnectionView: View {
     @EnvironmentObject var claudeService: ClaudeCodeService
     @EnvironmentObject var settings: SettingsManager
@@ -15,24 +17,53 @@ struct ConnectionView: View {
     @State private var errorMessage = ""
     @State private var showingManualSetup = false
     @State private var selectedServer: DiscoveredClaudeServer?
+    @State private var cancellables = Set<AnyCancellable>()
 
     var body: some View {
-        VStack(spacing: 20) {
+        ScrollView {
+            VStack(spacing: 30) {
+                Spacer()
+                    .frame(height: 60)
+            
             Image(systemName: "desktopcomputer")
-                .font(.system(size: 60))
+                .font(.system(size: 80))
                 .foregroundColor(.blue)
+                .padding(.bottom, 10)
 
-            Text("Connect to Claude Code")
-                .font(.title)
-                .fontWeight(.bold)
+            VStack(spacing: 12) {
+                Text("Connect to Claude Companion")
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
 
-            Text("Connect to your Claude Code companion server to start coding on mobile")
-                .font(.body)
-                .multilineTextAlignment(.center)
-                .foregroundColor(.secondary)
-                .padding(.horizontal)
+                Text("Connect to your Claude Code companion server to start coding on mobile")
+                    .font(.body)
+                    .multilineTextAlignment(.center)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 20)
+            }
+            
+            Spacer()
+                .frame(height: 20)
 
             VStack(spacing: 16) {
+                // Debug button to test tap handling
+                Button(action: {
+                    print("DEBUG: Test button tapped!")
+                    errorMessage = "Test button was tapped successfully"
+                }) {
+                    Text("Test Button (Tap Me)")
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.green)
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
+                }
+                .buttonStyle(.plain)
+                .contentShape(Rectangle())
+                
                 // Discovered servers section
                 if !discoveryManager.discoveredServers.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
@@ -59,11 +90,15 @@ struct ConnectionView: View {
                 }
 
                 // Auto-discovery section
-                Button(action: discoverServers) {
+                Button(action: {
+                    print("Scan button tapped")
+                    discoverServers()
+                }) {
                     HStack {
                         if discoveryManager.isScanning {
                             ProgressView()
                                 .scaleEffect(0.8)
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
                         } else {
                             Image(systemName: "wifi")
                         }
@@ -75,6 +110,8 @@ struct ConnectionView: View {
                     .foregroundColor(.white)
                     .cornerRadius(10)
                 }
+                .buttonStyle(.plain)
+                .contentShape(Rectangle())
                 .disabled(isLoading || discoveryManager.isScanning)
 
                 if let selectedServer = selectedServer {
@@ -89,6 +126,8 @@ struct ConnectionView: View {
                         .foregroundColor(.white)
                         .cornerRadius(10)
                     }
+                    .buttonStyle(.plain)
+                    .contentShape(Rectangle())
                     .disabled(isLoading)
                 }
 
@@ -96,7 +135,10 @@ struct ConnectionView: View {
                     .foregroundColor(.secondary)
 
                 // Manual connection button
-                Button(action: { showingManualSetup = true }) {
+                Button(action: { 
+                    print("Manual setup button tapped")
+                    showingManualSetup = true 
+                }) {
                     HStack {
                         Image(systemName: "gear")
                         Text("Manual Setup")
@@ -107,13 +149,18 @@ struct ConnectionView: View {
                     .foregroundColor(.primary)
                     .cornerRadius(10)
                 }
+                .buttonStyle(.plain)
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal)
+            .padding(.horizontal, 20)
 
             if !errorMessage.isEmpty {
                 Text(errorMessage)
                     .foregroundColor(.red)
-                    .padding(.horizontal)
+                    .font(.caption)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 20)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Spacer()
@@ -127,8 +174,12 @@ struct ConnectionView: View {
                 }
                 .foregroundColor(.blue)
             }
+            .padding(.bottom, 30)
         }
-        .padding()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(UIColor.systemBackground))
+        .ignoresSafeArea(edges: .bottom)
         .sheet(isPresented: $showingManualSetup) {
             ManualConnectionView(
                 serverAddress: $serverAddress,
@@ -136,6 +187,7 @@ struct ConnectionView: View {
                 authToken: $authToken,
                 useSecureConnection: $useSecureConnection,
                 isConnected: $isConnected,
+                errorMessage: $errorMessage,
                 onConnect: connectManually
             )
         }
@@ -148,6 +200,7 @@ struct ConnectionView: View {
     }
 
     private func discoverServers() {
+        print("Starting server discovery...")
         errorMessage = ""
         discoveryManager.startDiscovery()
     }
@@ -172,8 +225,18 @@ struct ConnectionView: View {
     }
 
     private func connectManually() {
+        // Clean up the address - remove any protocol prefix if present
+        var cleanAddress = serverAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleanAddress.hasPrefix("http://") {
+            cleanAddress = String(cleanAddress.dropFirst(7))
+        } else if cleanAddress.hasPrefix("https://") {
+            cleanAddress = String(cleanAddress.dropFirst(8))
+        }
+        
+        print("Attempting manual connection to: \(cleanAddress):\(serverPort)")
+        
         let config = ManualServerConfiguration(
-            address: serverAddress,
+            address: cleanAddress,
             port: Int(serverPort) ?? 3001,
             isSecure: useSecureConnection,
             authToken: authToken.isEmpty ? nil : authToken
@@ -183,10 +246,13 @@ struct ConnectionView: View {
         errorMessage = ""
 
         discoveryManager.validateManualConfiguration(config) { result in
+            print("Validation result received")
             switch result {
             case .success(let connection):
+                print("Validation successful, connecting to WebSocket...")
                 self.connectWithWebSocket(connection, authToken: config.authToken)
             case .failure(let error):
+                print("Validation failed: \(error)")
                 DispatchQueue.main.async {
                     self.isLoading = false
                     self.errorMessage = "Connection failed: \(error.localizedDescription)"
@@ -223,7 +289,7 @@ struct ConnectionView: View {
                     self.isConnected = false
                 }
             }
-            .store(in: &webSocketService.cancellables)
+            .store(in: &cancellables)
 
         webSocketService.$connectionState
             .receive(on: DispatchQueue.main)
@@ -244,10 +310,11 @@ struct ConnectionView: View {
                     }
                 }
             }
-            .store(in: &webSocketService.cancellables)
+            .store(in: &cancellables)
     }
 }
 
+@available(iOS 15.0, macOS 12.0, *)
 struct DiscoveredServerRow: View {
     let server: DiscoveredClaudeServer
     let isSelected: Bool
@@ -286,7 +353,8 @@ struct DiscoveredServerRow: View {
             }
             .padding(.vertical, 4)
         }
-        .buttonStyle(PlainButtonStyle())
+        .buttonStyle(.plain)
+        .contentShape(Rectangle())
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 8)
@@ -299,48 +367,116 @@ struct DiscoveredServerRow: View {
     }
 }
 
+@available(iOS 15.0, macOS 12.0, *)
 struct ManualConnectionView: View {
     @Binding var serverAddress: String
     @Binding var serverPort: String
     @Binding var authToken: String
     @Binding var useSecureConnection: Bool
     @Binding var isConnected: Bool
+    @Binding var errorMessage: String
     let onConnect: () -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @State private var isConnecting = false
 
     var body: some View {
-        NavigationView {
-            Form {
-                Section(header: Text("Server Details")) {
-                    TextField("Server Address", text: $serverAddress)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .placeholder(when: serverAddress.isEmpty) {
-                            Text("192.168.1.100 or myserver.local")
-                                .foregroundColor(.gray)
+        NavigationStack {
+            VStack(spacing: 0) {
+                Form {
+                    Section {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("SERVER DETAILS")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            
+                            TextField("Server Address", text: $serverAddress)
+                                .textFieldStyle(.roundedBorder)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .placeholder(when: serverAddress.isEmpty) {
+                                    Text("192.168.1.100 or myserver.local")
+                                        .foregroundColor(.gray)
+                                }
+                            
+                            TextField("Port", text: $serverPort)
+                                .textFieldStyle(.roundedBorder)
+                                .keyboardType(.numberPad)
+                            
+                            Toggle("Use Secure Connection (TLS)", isOn: $useSecureConnection)
                         }
-
-                    TextField("Port", text: $serverPort)
-                        .keyboardType(.numberPad)
-
-                    Toggle("Use Secure Connection (TLS)", isOn: $useSecureConnection)
-                }
-
-                Section(header: Text("Authentication"), footer: Text("Optional: Enter auth token if your server requires authentication")) {
-                    SecureField("Auth Token", text: $authToken)
-                }
-
-                Section {
-                    Button("Connect") {
-                        onConnect()
-                        dismiss()
+                        .padding(.vertical, 8)
                     }
-                    .disabled(serverAddress.isEmpty)
+                    
+                    Section {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("AUTHENTICATION")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            
+                            SecureField("Auth Token", text: $authToken)
+                                .textFieldStyle(.roundedBorder)
+                            
+                            Text("Optional: Enter auth token if your server requires authentication")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.vertical, 8)
+                    }
+                    
+                    Section {
+                        Button(action: {
+                            print("Connect button tapped - Address: \(serverAddress), Port: \(serverPort)")
+                            isConnecting = true
+                            onConnect()
+                            // Don't dismiss immediately - let the connection complete first
+                        }) {
+                            HStack {
+                                if isConnecting {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                        .scaleEffect(0.8)
+                                } else {
+                                    Text("Connect")
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(serverAddress.isEmpty || isConnecting ? Color.gray : Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                        }
+                        .buttonStyle(.plain)
+                        .contentShape(Rectangle())
+                        .listRowBackground(Color.clear)
+                        .disabled(serverAddress.isEmpty || isConnecting)
+                    }
+                    
+                    if !errorMessage.isEmpty {
+                        Section {
+                            Text(errorMessage)
+                                .foregroundColor(.red)
+                                .font(.caption)
+                        }
+                    }
                 }
             }
             .navigationTitle("Manual Setup")
+            #if os(iOS)
+
             .navigationBarTitleDisplayMode(.inline)
+
+            #endif
+            .onChange(of: isConnected) { newValue in
+                if newValue {
+                    // Dismiss sheet when connected
+                    dismiss()
+                }
+            }
+            .onChange(of: errorMessage) { _ in
+                // Stop loading when error occurs
+                isConnecting = false
+            }
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {
@@ -352,6 +488,7 @@ struct ManualConnectionView: View {
     }
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 extension View {
     func placeholder<Content: View>(
         when shouldShow: Bool,
@@ -364,6 +501,7 @@ extension View {
     }
 }
 
+@available(iOS 17.0, macOS 14.0, *)
 #Preview {
     ConnectionView(isConnected: .constant(false))
         .environmentObject(ClaudeCodeService())

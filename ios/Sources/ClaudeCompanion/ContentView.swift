@@ -1,12 +1,14 @@
 import SwiftUI
 
-struct ContentView: View {
+@available(iOS 16.0, macOS 13.0, *)
+public struct ContentView: View {
+    public init() {}
     @EnvironmentObject var claudeService: ClaudeCodeService
     @EnvironmentObject var settings: SettingsManager
     @State private var isConnected = false
 
-    var body: some View {
-        NavigationView {
+    public var body: some View {
+        NavigationStack {
             Group {
                 if isConnected {
                     ChatView()
@@ -15,9 +17,11 @@ struct ContentView: View {
                 }
             }
             .navigationTitle("Claude Companion")
-            .navigationBarTitleDisplayMode(.inline)
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.large)
+            #endif
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .automatic) {
                     NavigationLink(destination: SettingsView()) {
                         Image(systemName: "gear")
                     }
@@ -35,6 +39,7 @@ struct ContentView: View {
     }
 }
 
+@available(iOS 17.0, macOS 14.0, *)
 #Preview {
     ContentView()
         .environmentObject(ClaudeCodeService())

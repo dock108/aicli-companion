@@ -127,6 +127,7 @@ enum SuggestionPriority: Int, CaseIterable {
 
 // MARK: - Project Awareness Service
 
+@available(iOS 13.0, macOS 10.15, *)
 class ProjectAwarenessService: ObservableObject {
     @Published var currentProject: ProjectContext?
     @Published var recentProjects: [ProjectContext] = []

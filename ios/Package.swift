@@ -4,8 +4,7 @@ import PackageDescription
 let package = Package(
     name: "ClaudeCompanion",
     platforms: [
-        .iOS(.v15),
-        .macOS(.v12)
+        .iOS(.v17)
     ],
     products: [
         .library(
@@ -26,32 +25,9 @@ let package = Package(
                 .product(name: "Markdown", package: "swift-markdown"),
                 "KeychainAccess",
                 .product(name: "Crypto", package: "swift-crypto")
-            ],
-            exclude: [
-                "ClaudeCompanionApp.swift",
-                "AccessibilityHelpers.swift",
-                "AnimationConstants.swift",
-                "ChatView.swift",
-                "ConnectionView.swift",
-                "ContentView.swift",
-                "ConversationHistoryView.swift",
-                "DevelopmentWorkflowView.swift",
-                "FileBrowserView.swift",
-                "ProjectContextView.swift",
-                "SettingsView.swift",
-                "RichContentRenderer.swift",
-                "ToolActivity.swift",
-                "WebSocketService.swift",
-                "ServiceDiscoveryManager.swift",
-                "FileManagementService.swift",
-                "ConversationPersistenceService.swift",
-                "DevelopmentWorkflowService.swift",
-                "ProjectAwarenessService.swift"
-            ]
-        ),
+            ]),
         .testTarget(
             name: "ClaudeCompanionTests",
-            dependencies: ["ClaudeCompanion"]
-        )
+            dependencies: ["ClaudeCompanion"])
     ]
 )

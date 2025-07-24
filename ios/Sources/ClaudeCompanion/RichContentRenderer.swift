@@ -1,8 +1,14 @@
 import SwiftUI
 import Foundation
+#if os(iOS)
+import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 
 // MARK: - Rich Content Rendering
 
+@available(iOS 13.0, macOS 10.15, *)
 struct RichContentView: View {
     let content: RichContent
     @State private var isExpanded = false
@@ -27,6 +33,7 @@ struct RichContentView: View {
 
 // MARK: - Code Block View
 
+@available(iOS 13.0, macOS 10.15, *)
 struct CodeBlockView: View {
     let codeData: CodeBlockData
     @State private var showActions = false
@@ -53,7 +60,13 @@ struct CodeBlockView: View {
                     // Interactive buttons
                     HStack(spacing: 8) {
                         Button(action: {
+                            #if os(iOS)
                             UIPasteboard.general.string = codeData.code
+                            #elseif os(macOS)
+                            let pasteboard = NSPasteboard.general
+                            pasteboard.clearContents()
+                            pasteboard.setString(codeData.code, forType: .string)
+                            #endif
                             showCopyConfirmation = true
                             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                                 showCopyConfirmation = false
@@ -107,7 +120,7 @@ struct CodeBlockView: View {
             showActions.toggle()
         }
         .onLongPressGesture {
-            UIPasteboard.general.string = codeData.code
+            copyToClipboard(codeData.code)
             showCopyConfirmation = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                 showCopyConfirmation = false
@@ -119,15 +132,7 @@ struct CodeBlockView: View {
     }
 
     private func shareCode() {
-        let activityController = UIActivityViewController(
-            activityItems: [codeData.code],
-            applicationActivities: nil
-        )
-
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let window = windowScene.windows.first {
-            window.rootViewController?.present(activityController, animated: true)
-        }
+        shareContent([codeData.code])
     }
 
     private func saveToFiles(filename: String) {
@@ -136,13 +141,7 @@ struct CodeBlockView: View {
 
         do {
             try codeData.code.write(to: tempURL, atomically: true, encoding: .utf8)
-
-            let documentPicker = UIDocumentPickerViewController(forExporting: [tempURL])
-
-            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-               let window = windowScene.windows.first {
-                window.rootViewController?.present(documentPicker, animated: true)
-            }
+            exportFile(url: tempURL)
         } catch {
             print("Failed to save file: \(error)")
         }
@@ -151,6 +150,7 @@ struct CodeBlockView: View {
 
 // MARK: - File Content View
 
+@available(iOS 13.0, macOS 10.15, *)
 struct FileContentView: View {
     let fileData: FileContentData
     @Binding var isExpanded: Bool
@@ -183,7 +183,7 @@ struct FileContentView: View {
                 // Quick actions
                 HStack(spacing: 8) {
                     Button(action: {
-                        UIPasteboard.general.string = fileData.content
+                        copyToClipboard(fileData.content)
                     }) {
                         Image(systemName: "doc.on.doc")
                             .font(.caption2)
@@ -279,15 +279,7 @@ struct FileContentView: View {
     }
 
     private func shareFile() {
-        let activityController = UIActivityViewController(
-            activityItems: [fileData.content],
-            applicationActivities: nil
-        )
-
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let window = windowScene.windows.first {
-            window.rootViewController?.present(activityController, animated: true)
-        }
+        shareContent([fileData.content])
     }
 
     private func saveFileToFiles() {
@@ -296,13 +288,7 @@ struct FileContentView: View {
 
         do {
             try fileData.content.write(to: tempURL, atomically: true, encoding: .utf8)
-
-            let documentPicker = UIDocumentPickerViewController(forExporting: [tempURL])
-
-            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-               let window = windowScene.windows.first {
-                window.rootViewController?.present(documentPicker, animated: true)
-            }
+            exportFile(url: tempURL)
         } catch {
             print("Failed to save file: \(error)")
         }
@@ -311,6 +297,7 @@ struct FileContentView: View {
 
 // MARK: - Command Output View
 
+@available(iOS 13.0, macOS 10.15, *)
 struct CommandOutputView: View {
     let commandData: CommandOutputData
     @Binding var isExpanded: Bool
@@ -347,7 +334,7 @@ struct CommandOutputView: View {
                 // Quick actions
                 HStack(spacing: 8) {
                     Button(action: {
-                        UIPasteboard.general.string = commandData.output
+                        copyToClipboard(commandData.output)
                     }) {
                         Image(systemName: "doc.on.doc")
                             .font(.caption2)
@@ -359,7 +346,7 @@ struct CommandOutputView: View {
                             shareCommandOutput()
                         }
                         Button("Copy Command") {
-                            UIPasteboard.general.string = commandData.command
+                            copyToClipboard(commandData.command)
                         }
                     } label: {
                         Image(systemName: "square.and.arrow.up")
@@ -419,20 +406,13 @@ struct CommandOutputView: View {
 
     private func shareCommandOutput() {
         let content = "Command: \(commandData.command)\n\nOutput:\n\(commandData.output)"
-        let activityController = UIActivityViewController(
-            activityItems: [content],
-            applicationActivities: nil
-        )
-
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let window = windowScene.windows.first {
-            window.rootViewController?.present(activityController, animated: true)
-        }
+        shareContent([content])
     }
 }
 
 // MARK: - Tool Result View
 
+@available(iOS 13.0, macOS 10.15, *)
 struct ToolResultView: View {
     let toolData: ToolResultData
     @Binding var isExpanded: Bool
@@ -468,7 +448,7 @@ struct ToolResultView: View {
                 // Quick actions
                 HStack(spacing: 8) {
                     Button(action: {
-                        UIPasteboard.general.string = toolData.output
+                        copyToClipboard(toolData.output)
                     }) {
                         Image(systemName: "doc.on.doc")
                             .font(.caption2)
@@ -542,20 +522,13 @@ struct ToolResultView: View {
 
     private func shareToolResult() {
         let content = "Tool: \(toolData.toolName)\nStatus: \(toolData.success ? "Success" : "Failed")\n\nOutput:\n\(toolData.output)"
-        let activityController = UIActivityViewController(
-            activityItems: [content],
-            applicationActivities: nil
-        )
-
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let window = windowScene.windows.first {
-            window.rootViewController?.present(activityController, animated: true)
-        }
+        shareContent([content])
     }
 }
 
 // MARK: - Markdown View
 
+@available(iOS 13.0, macOS 10.15, *)
 struct MarkdownView: View {
     let markdownData: MarkdownData
     @State private var showActions = false
@@ -573,7 +546,7 @@ struct MarkdownView: View {
 
                 HStack(spacing: 8) {
                     Button(action: {
-                        UIPasteboard.general.string = markdownData.markdown
+                        copyToClipboard(markdownData.markdown)
                     }) {
                         Image(systemName: "doc.on.doc")
                             .font(.caption2)
@@ -585,7 +558,7 @@ struct MarkdownView: View {
                             shareMarkdown()
                         }
                         Button("Copy as Text") {
-                            UIPasteboard.general.string = markdownData.markdown
+                            copyToClipboard(markdownData.markdown)
                         }
                     } label: {
                         Image(systemName: "square.and.arrow.up")
@@ -615,15 +588,7 @@ struct MarkdownView: View {
     }
 
     private func shareMarkdown() {
-        let activityController = UIActivityViewController(
-            activityItems: [markdownData.markdown],
-            applicationActivities: nil
-        )
-
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let window = windowScene.windows.first {
-            window.rootViewController?.present(activityController, animated: true)
-        }
+        shareContent([markdownData.markdown])
     }
 }
 
@@ -658,4 +623,57 @@ extension String {
         default: return nil
         }
     }
+}
+
+// MARK: - Helper Functions
+
+private func copyToClipboard(_ text: String) {
+    #if os(iOS)
+    UIPasteboard.general.string = text
+    #elseif os(macOS)
+    let pasteboard = NSPasteboard.general
+    pasteboard.clearContents()
+    pasteboard.setString(text, forType: .string)
+    #endif
+}
+
+private func shareContent(_ items: [Any]) {
+    #if os(iOS)
+    let activityController = UIActivityViewController(
+        activityItems: items,
+        applicationActivities: nil
+    )
+    
+    if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+       let window = windowScene.windows.first {
+        window.rootViewController?.present(activityController, animated: true)
+    }
+    #elseif os(macOS)
+    // On macOS, we'll use NSSharingServicePicker
+    if let view = NSApp.keyWindow?.contentView {
+        let picker = NSSharingServicePicker(items: items)
+        picker.show(relativeTo: .zero, of: view, preferredEdge: .minY)
+    }
+    #endif
+}
+
+private func exportFile(url: URL) {
+    #if os(iOS)
+    let documentPicker = UIDocumentPickerViewController(forExporting: [url])
+    
+    if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+       let window = windowScene.windows.first {
+        window.rootViewController?.present(documentPicker, animated: true)
+    }
+    #elseif os(macOS)
+    // On macOS, show save panel
+    let savePanel = NSSavePanel()
+    savePanel.allowedContentTypes = [.plainText]
+    savePanel.nameFieldStringValue = url.lastPathComponent
+    savePanel.begin { result in
+        if result == .OK, let destination = savePanel.url {
+            try? FileManager.default.copyItem(at: url, to: destination)
+        }
+    }
+    #endif
 }

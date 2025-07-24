@@ -1,4 +1,9 @@
 import SwiftUI
+#if os(iOS)
+import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 
 enum ConversationFilter: String, CaseIterable {
     case all = "All"
@@ -18,6 +23,7 @@ enum ConversationFilter: String, CaseIterable {
     }
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 struct ConversationHistoryView: View {
     @ObservedObject var persistenceService: ConversationPersistenceService
     @Environment(\.dismiss) private var dismiss
@@ -198,7 +204,7 @@ struct ConversationHistoryView: View {
                     }
                 }
 
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .automatic) {
                     if isSelectMode {
                         Menu {
                             Button("Export Selected") {
@@ -297,6 +303,7 @@ struct ConversationHistoryView: View {
     }
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 struct ConversationRow: View {
     let conversation: Conversation
     let isSelected: Bool
@@ -369,7 +376,7 @@ struct ConversationRow: View {
                             .foregroundColor(.green)
                     }
 
-                    if let workingDir = conversation.workingDirectory {
+                    if conversation.workingDirectory != nil {
                         Image(systemName: "folder")
                             .font(.caption2)
                             .foregroundColor(.orange)
@@ -424,7 +431,7 @@ struct ConversationRow: View {
 
                 Divider()
 
-                Button(action: onDelete, role: .destructive) {
+                Button(role: .destructive, action: onDelete) {
                     Label("Delete", systemImage: "trash")
                 }
             }
@@ -432,6 +439,7 @@ struct ConversationRow: View {
     }
 }
 
+@available(iOS 15.0, macOS 12.0, *)
 struct ConversationExportSheet: View {
     let conversation: Conversation
     let persistenceService: ConversationPersistenceService
@@ -485,7 +493,7 @@ struct ConversationExportSheet: View {
             .navigationTitle("Export Conversation")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .automatic) {
                     Button("Cancel") {
                         dismiss()
                     }
@@ -517,6 +525,7 @@ struct ConversationExportSheet: View {
     }
 
     private func shareFile(url: URL) {
+        #if os(iOS)
         let activityController = UIActivityViewController(
             activityItems: [url],
             applicationActivities: nil
@@ -526,9 +535,14 @@ struct ConversationExportSheet: View {
            let window = windowScene.windows.first {
             window.rootViewController?.present(activityController, animated: true)
         }
+        #else
+        // On macOS, just open the file location
+        NSWorkspace.shared.selectFile(url.path, inFileViewerRootedAtPath: url.deletingLastPathComponent().path)
+        #endif
     }
 }
 
+@available(iOS 15.0, macOS 12.0, *)
 struct BulkExportSheet: View {
     let conversationIds: [UUID]
     let persistenceService: ConversationPersistenceService
@@ -584,7 +598,7 @@ struct BulkExportSheet: View {
             .navigationTitle("Export Conversations")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .automatic) {
                     Button("Cancel") {
                         dismiss()
                     }
@@ -617,6 +631,7 @@ struct BulkExportSheet: View {
     }
 
     private func shareFile(url: URL) {
+        #if os(iOS)
         let activityController = UIActivityViewController(
             activityItems: [url],
             applicationActivities: nil
@@ -626,9 +641,14 @@ struct BulkExportSheet: View {
            let window = windowScene.windows.first {
             window.rootViewController?.present(activityController, animated: true)
         }
+        #else
+        // On macOS, just open the file location
+        NSWorkspace.shared.selectFile(url.path, inFileViewerRootedAtPath: url.deletingLastPathComponent().path)
+        #endif
     }
 }
 
+@available(iOS 14.0, macOS 11.0, *)
 struct ConversationStatisticsView: View {
     let persistenceService: ConversationPersistenceService
     @Environment(\.dismiss) private var dismiss
@@ -702,7 +722,7 @@ struct ConversationStatisticsView: View {
             .navigationTitle("Statistics")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .automatic) {
                     Button("Done") {
                         dismiss()
                     }
@@ -717,7 +737,7 @@ struct ConversationStatisticsView: View {
 
         do {
             let files = try FileManager.default.contentsOfDirectory(at: conversationsDirectory, includingPropertiesForKeys: [.fileSizeKey])
-            let totalSize = files.reduce(0) { total, url in
+            let totalSize = files.reduce(Int64(0)) { total, url in
                 let resourceValues = try? url.resourceValues(forKeys: [.fileSizeKey])
                 return total + Int64(resourceValues?.fileSize ?? 0)
             }
@@ -733,6 +753,7 @@ struct ConversationStatisticsView: View {
     }
 }
 
+@available(iOS 14.0, macOS 11.0, *)
 struct StatisticRow: View {
     let title: String
     let value: String
@@ -754,6 +775,7 @@ struct StatisticRow: View {
     }
 }
 
+@available(iOS 17.0, macOS 14.0, *)
 #Preview {
     ConversationHistoryView(
         persistenceService: ConversationPersistenceService(),

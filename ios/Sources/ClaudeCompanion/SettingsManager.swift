@@ -1,7 +1,8 @@
 import Foundation
 import Combine
 
-class SettingsManager: ObservableObject {
+@available(iOS 13.0, macOS 10.15, *)
+public class SettingsManager: ObservableObject {
     @Published var theme: Theme = .system
     @Published var fontSize: FontSize = .medium
     @Published var autoScroll: Bool = true
@@ -46,7 +47,7 @@ class SettingsManager: ObservableObject {
         }
     }
 
-    init() {
+    public init() {
         loadSettings()
     }
 

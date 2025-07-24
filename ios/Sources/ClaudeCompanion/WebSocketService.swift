@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import Starscream
 
+@available(iOS 13.0, macOS 10.15, *)
 class WebSocketService: ObservableObject, WebSocketDelegate {
     @Published var isConnected = false
     @Published var connectionState: WebSocketConnectionState = .disconnected
@@ -480,13 +481,17 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
             if currentURL != nil {
                 attemptReconnect()
             }
+            
+        case .peerClosed:
+            print("WebSocket peer closed connection")
+            updateConnectionState(.disconnected)
         }
     }
 }
 
 // MARK: - Supporting Types
 
-enum WebSocketConnectionState {
+enum WebSocketConnectionState: Equatable {
     case disconnected
     case connecting
     case connected

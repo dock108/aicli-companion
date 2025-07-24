@@ -1,5 +1,6 @@
 import SwiftUI
 
+@available(iOS 13.0, macOS 10.15, *)
 struct FileBrowserView: View {
     @ObservedObject var fileManagementService: FileManagementService
     @Environment(\.dismiss) private var dismiss
@@ -155,7 +156,11 @@ struct FileBrowserView: View {
                 }
             }
             .navigationTitle("File Browser")
+            #if os(iOS)
+
             .navigationBarTitleDisplayMode(.inline)
+
+            #endif
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {
@@ -163,7 +168,7 @@ struct FileBrowserView: View {
                     }
                 }
 
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .automatic) {
                     Menu {
                         Button("Change Directory") {
                             // TODO: Show directory picker
@@ -265,6 +270,7 @@ struct FileBrowserView: View {
     }
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 struct FileRow: View {
     let file: FileItem
     let onTap: () -> Void
@@ -366,6 +372,7 @@ struct FileRow: View {
     }
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 struct RecentFilesView: View {
     @ObservedObject var fileManagementService: FileManagementService
     @Environment(\.dismiss) private var dismiss
@@ -409,9 +416,13 @@ struct RecentFilesView: View {
                 }
             }
             .navigationTitle("Recent Files")
+            #if os(iOS)
+
             .navigationBarTitleDisplayMode(.inline)
+
+            #endif
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .automatic) {
                     Button("Done") {
                         dismiss()
                     }
@@ -421,6 +432,7 @@ struct RecentFilesView: View {
     }
 }
 
+@available(iOS 15.0, macOS 12.0, *)
 struct FileDetailsView: View {
     let file: FileItem
     @ObservedObject var fileManagementService: FileManagementService
@@ -470,7 +482,7 @@ struct FileDetailsView: View {
                 }
 
                 if file.type == .file && file.isTextFile {
-                    Section("Preview") {
+                    Section(header: Text("Preview")) {
                         if isLoadingContent {
                             HStack {
                                 ProgressView()
@@ -485,9 +497,8 @@ struct FileDetailsView: View {
                                 .foregroundColor(.red)
                         } else if let content = fileContent {
                             Text(content.prefix(500))
-                                .font(.caption)
-                                .fontFamily(.monospaced)
-                                .foregroundColor(.secondary)
+                                .font(.system(.caption, design: .monospaced))
+                                .foregroundColor(Color.secondary)
                                 .lineLimit(20)
                         } else {
                             Button("Load Preview") {
@@ -499,9 +510,13 @@ struct FileDetailsView: View {
                 }
             }
             .navigationTitle("File Details")
+            #if os(iOS)
+
             .navigationBarTitleDisplayMode(.inline)
+
+            #endif
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .automatic) {
                     Button("Done") {
                         dismiss()
                     }
@@ -534,6 +549,7 @@ struct FileDetailsView: View {
     }
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 struct DetailRow: View {
     let label: String
     let value: String
@@ -565,6 +581,7 @@ enum FileAction {
     case details
 }
 
+@available(iOS 17.0, macOS 14.0, *)
 #Preview {
     FileBrowserView(
         fileManagementService: FileManagementService(),

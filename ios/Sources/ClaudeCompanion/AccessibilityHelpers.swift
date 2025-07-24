@@ -132,6 +132,7 @@ struct AccessibilityHints {
 
 // MARK: - Accessibility View Modifiers
 
+@available(iOS 13.0, macOS 10.15, *)
 struct AccessibleMessage: ViewModifier {
     let sender: String
     let content: String
@@ -148,6 +149,7 @@ struct AccessibleMessage: ViewModifier {
     }
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 struct AccessibleButton: ViewModifier {
     let label: String
     let hint: String
@@ -162,6 +164,7 @@ struct AccessibleButton: ViewModifier {
     }
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 struct AccessibleFileItem: ViewModifier {
     let file: FileItem
 
@@ -179,6 +182,7 @@ struct AccessibleFileItem: ViewModifier {
     }
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 struct AccessibleConversation: ViewModifier {
     let conversation: Conversation
     let isSelectMode: Bool
@@ -199,6 +203,7 @@ struct AccessibleConversation: ViewModifier {
 
 // MARK: - View Extensions
 
+@available(iOS 13.0, macOS 10.15, *)
 extension View {
     func accessibleMessage(sender: String, content: String, timestamp: Date, hasRichContent: Bool = false) -> some View {
         self.modifier(AccessibleMessage(sender: sender, content: content, timestamp: timestamp, hasRichContent: hasRichContent))
@@ -221,49 +226,62 @@ extension View {
 
 struct VoiceOverHelpers {
     static func announceMessageReceived() {
+        #if os(iOS)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             UIAccessibility.post(notification: .announcement, argument: "New message received from Claude")
         }
+        #endif
     }
 
     static func announceToolStarted(_ toolName: String) {
+        #if os(iOS)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             UIAccessibility.post(notification: .announcement, argument: "Starting tool: \(toolName)")
         }
+        #endif
     }
 
     static func announceToolCompleted(_ toolName: String, success: Bool) {
+        #if os(iOS)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             let status = success ? "completed successfully" : "failed"
             UIAccessibility.post(notification: .announcement, argument: "Tool \(toolName) \(status)")
         }
+        #endif
     }
 
     static func announceConversationSwitched(_ title: String) {
+        #if os(iOS)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             UIAccessibility.post(notification: .announcement, argument: "Switched to conversation: \(title)")
         }
+        #endif
     }
 
     static func announceWorkingDirectoryChanged(_ directory: String) {
+        #if os(iOS)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             let shortPath = (directory as NSString).lastPathComponent
             UIAccessibility.post(notification: .announcement, argument: "Working directory changed to \(shortPath)")
         }
+        #endif
     }
 
     static func announceExportCompleted(_ format: String, conversationCount: Int) {
+        #if os(iOS)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             let message = conversationCount == 1 ?
                 "Conversation exported as \(format)" :
                 "\(conversationCount) conversations exported as \(format)"
             UIAccessibility.post(notification: .announcement, argument: message)
         }
+        #endif
     }
 }
 
 // MARK: - Dynamic Type Support
 
+@available(iOS 13.0, macOS 10.15, *)
 extension Font {
     static func scaledSystem(_ style: Font.TextStyle, design: Font.Design = .default) -> Font {
         return .system(style, design: design)
@@ -276,12 +294,13 @@ extension Font {
 
 // MARK: - Reduced Motion Support
 
+@available(iOS 13.0, macOS 10.15, *)
 struct ReducedMotionModifier: ViewModifier {
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     let animation: Animation
-    let fallback: Animation
+    let fallback: Animation?
 
-    init(animation: Animation, fallback: Animation = .none) {
+    init(animation: Animation, fallback: Animation? = nil) {
         self.animation = animation
         self.fallback = fallback
     }
@@ -292,8 +311,9 @@ struct ReducedMotionModifier: ViewModifier {
     }
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 extension View {
-    func respectReducedMotion(animation: Animation, fallback: Animation = .none) -> some View {
+    func respectReducedMotion(animation: Animation, fallback: Animation? = nil) -> some View {
         self.modifier(ReducedMotionModifier(animation: animation, fallback: fallback))
     }
 }

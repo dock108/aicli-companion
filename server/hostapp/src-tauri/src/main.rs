@@ -1,12 +1,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use tauri::State;
+
 use claude_companion_hostapp::{
-    AppState, ServerStatus, NetworkInfo,
-    get_local_ip as get_local_ip_impl,
-    start_server_impl, stop_server_impl,
-    check_server_health_impl, get_server_status_impl,
-    detect_running_server_impl
+    check_server_health_impl, detect_running_server_impl, get_local_ip as get_local_ip_impl,
+    get_server_status_impl, start_server_impl, stop_server_impl, AppState, NetworkInfo,
+    ServerStatus,
 };
 
 #[tauri::command]
@@ -14,14 +13,16 @@ fn get_local_ip() -> Result<String, String> {
     get_local_ip_impl()
 }
 
-
 #[tauri::command]
 async fn start_server(state: State<'_, AppState>, port: u16) -> Result<ServerStatus, String> {
     start_server_impl(&state, port).await
 }
 
 #[tauri::command]
-async fn stop_server(state: State<'_, AppState>, force_external: Option<bool>) -> Result<(), String> {
+async fn stop_server(
+    state: State<'_, AppState>,
+    force_external: Option<bool>,
+) -> Result<(), String> {
     stop_server_impl(&state, force_external).await
 }
 
@@ -36,7 +37,10 @@ fn get_server_status(state: State<'_, AppState>) -> ServerStatus {
 }
 
 #[tauri::command]
-async fn detect_running_server(state: State<'_, AppState>, port: u16) -> Result<ServerStatus, String> {
+async fn detect_running_server(
+    state: State<'_, AppState>,
+    port: u16,
+) -> Result<ServerStatus, String> {
     detect_running_server_impl(&state, port).await
 }
 

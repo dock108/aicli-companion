@@ -1,10 +1,33 @@
-// Import Tauri API
-const { invoke } = window.__TAURI__.core;
-const { open } = window.__TAURI__.dialog || {}; // Dialog might be through plugin
-const { appDataDir } = window.__TAURI__.path;
+console.log('🚀 App.js starting to load...');
 
-// Import QR code library
-import QRCode from 'qrcode';
+// Import Tauri API
+let invoke, openDialog, appDataDir, QRCode;
+
+async function loadModules() {
+    try {
+        console.log('📦 Importing Tauri APIs...');
+        const coreModule = await import('@tauri-apps/api/core');
+        invoke = coreModule.invoke;
+        console.log('✅ Core API imported:', !!invoke);
+        
+        const dialogModule = await import('@tauri-apps/plugin-dialog');
+        openDialog = dialogModule.open;
+        console.log('✅ Dialog API imported:', !!openDialog);
+        
+        const pathModule = await import('@tauri-apps/api/path');
+        appDataDir = pathModule.appDataDir;
+        console.log('✅ Path API imported:', !!appDataDir);
+        
+        // Import QR code library
+        console.log('📦 Importing QRCode...');
+        const qrModule = await import('qrcode');
+        QRCode = qrModule.default;
+        console.log('✅ QRCode imported:', !!QRCode);
+        
+    } catch (error) {
+        console.error('❌ Failed to import modules:', error);
+    }
+}
 
 // State
 let serverStatus = {
@@ -19,6 +42,7 @@ let localIp = '';
 let configPath = '';
 
 // DOM Elements
+console.log('🔍 Finding DOM elements...');
 const configPathInput = document.getElementById('config-path');
 const browseBtn = document.getElementById('browse-btn');
 const portInput = document.getElementById('port');
@@ -34,8 +58,20 @@ const qrCanvas = document.getElementById('qr-code');
 const connectionString = document.getElementById('connection-string');
 const externalNotice = document.getElementById('external-notice');
 
+console.log('📋 DOM elements found:');
+console.log('  configPathInput:', !!configPathInput);
+console.log('  browseBtn:', !!browseBtn);
+console.log('  startBtn:', !!startBtn);
+console.log('  stopBtn:', !!stopBtn);
+
 // Initialize
 async function init() {
+    console.log('🚀 Starting init()...');
+    
+    // Load modules first
+    await loadModules();
+    console.log('📦 Modules loaded, continuing with init...');
+    
     // Load saved config
     await loadConfig();
     
@@ -64,10 +100,33 @@ async function init() {
     }
     
     // Set up event listeners
-    browseBtn.addEventListener('click', selectConfigPath);
-    startBtn.addEventListener('click', startServer);
-    stopBtn.addEventListener('click', stopServer);
-    portInput.addEventListener('change', saveConfig);
+    console.log('🎯 Setting up event listeners...');
+    
+    if (browseBtn) {
+        console.log('📁 Adding browse button event listener...');
+        browseBtn.addEventListener('click', function(event) {
+            console.log('🖱️ Browse button CLICKED!', event);
+            selectConfigPath();
+        });
+        console.log('✅ Browse button event listener added');
+    } else {
+        console.error('❌ Browse button not found!');
+    }
+    
+    if (startBtn) {
+        startBtn.addEventListener('click', startServer);
+        console.log('✅ Start button event listener added');
+    }
+    
+    if (stopBtn) {
+        stopBtn.addEventListener('click', stopServer);
+        console.log('✅ Stop button event listener added');
+    }
+    
+    if (portInput) {
+        portInput.addEventListener('change', saveConfig);
+        console.log('✅ Port input event listener added');
+    }
     
     // Start health check polling
     setInterval(checkServerHealth, 2000);
@@ -110,21 +169,59 @@ async function getDefaultPath() {
 }
 
 async function selectConfigPath() {
+    console.log('🔥 === selectConfigPath() CALLED ===');
+    console.log('📁 Browse button clicked, attempting to open dialog...');
+    console.log('📍 Current configPath:', configPath);
+    console.log('🔧 openDialog function available:', !!openDialog);
+    console.log('🔧 openDialog type:', typeof openDialog);
+    
+    if (!openDialog) {
+        console.error('❌ openDialog function is not available!');
+        console.error('🚫 Dialog API not available. Check console for import errors.');
+        return;
+    }
+    
     try {
-        const selected = await open({
+        // Try with minimal options first, then fall back to defaultPath
+        let dialogOptions = {
             directory: true,
             multiple: false,
-            defaultPath: configPath,
-        });
+        };
+        
+        // Only add defaultPath if it's a valid path
+        if (configPath && configPath !== '~/claude-companion-data') {
+            dialogOptions.defaultPath = configPath;
+            console.log('📂 Using defaultPath:', configPath);
+        } else {
+            console.log('📂 No defaultPath set, using home directory');
+        }
+        
+        console.log('📋 Calling openDialog() with options:', dialogOptions);
+        console.log('⏳ Awaiting dialog result...');
+        
+        const selected = await openDialog(dialogOptions);
+        
+        console.log('📬 Dialog returned:', selected);
+        console.log('📬 Dialog result type:', typeof selected);
         
         if (selected) {
+            console.log('✅ User selected path:', selected);
             configPath = selected;
             configPathInput.value = configPath;
             await saveConfig();
+            console.log('💾 Config path updated to:', configPath);
+        } else {
+            console.log('❌ User cancelled dialog or no selection made');
         }
     } catch (error) {
-        console.error('Failed to select path:', error);
+        console.error('💥 Failed to select path:', error);
+        console.error('💥 Error type:', typeof error);
+        console.error('💥 Error message:', error.message);
+        console.error('💥 Error stack:', error.stack);
+        console.error('🚫 Failed to open file dialog:', error);
     }
+    
+    console.log('🏁 === selectConfigPath() FINISHED ===');
 }
 
 // Server Management
@@ -159,13 +256,38 @@ async function stopServer() {
     stopBtn.disabled = true;
     
     try {
-        await invoke('stop_server');
+        // First try to stop normally
+        await invoke('stop_server', { force_external: false });
         serverStatus.running = false;
         serverStatus.pid = null;
+        serverStatus.external = false;
         await updateUI();
     } catch (error) {
         console.error('Failed to stop server:', error);
-        alert('Failed to stop server: ' + error);
+        
+        // If it's an external server, ask for confirmation
+        if (error.toString().includes('not started by this app')) {
+            const confirmed = confirm(
+                'This server was not started by the desktop app.\n\n' +
+                'Do you want to force stop it anyway?\n\n' +
+                'Warning: This will kill any process listening on port ' + serverStatus.port
+            );
+            
+            if (confirmed) {
+                try {
+                    await invoke('stop_server', { force_external: true });
+                    serverStatus.running = false;
+                    serverStatus.pid = null;
+                    serverStatus.external = false;
+                    await updateUI();
+                } catch (forceError) {
+                    console.error('Failed to force stop server:', forceError);
+                    alert('Failed to stop server: ' + forceError);
+                }
+            }
+        } else {
+            alert('Failed to stop server: ' + error);
+        }
     } finally {
         stopBtn.disabled = false;
     }
@@ -217,8 +339,8 @@ async function updateUI() {
         if (serverStatus.external) {
             statusText.textContent = 'Running (External)';
             serverPid.textContent = 'External Process';
-            stopBtn.disabled = true;
-            stopBtn.title = 'Cannot stop externally managed server';
+            stopBtn.disabled = false; // Allow stopping external servers
+            stopBtn.title = 'Stop external server (requires confirmation)';
             externalNotice.style.display = 'block';
         } else {
             statusText.textContent = 'Running';
@@ -282,4 +404,8 @@ async function generateQRCode() {
 }
 
 // Initialize when DOM is ready
-document.addEventListener('DOMContentLoaded', init);
+console.log('🎯 Setting up DOMContentLoaded listener...');
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('✅ DOM Content Loaded - starting init()');
+    init();
+});

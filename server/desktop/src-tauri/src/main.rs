@@ -5,6 +5,7 @@ use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use tauri::State;
 use serde::{Deserialize, Serialize};
+use std::io::Read;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ServerStatus {
@@ -34,6 +35,61 @@ fn get_local_ip() -> Result<String, String> {
     }
 }
 
+// Helper function to find process ID by port
+fn find_process_by_port(port: u16) -> Option<u32> {
+    #[cfg(target_os = "macos")]
+    {
+        let output = Command::new("lsof")
+            .args(&["-ti", &format!(":{}", port)])
+            .output()
+            .ok()?;
+        
+        if output.status.success() {
+            let pid_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            pid_str.parse::<u32>().ok()
+        } else {
+            None
+        }
+    }
+    
+    #[cfg(target_os = "linux")]
+    {
+        let output = Command::new("lsof")
+            .args(&["-ti", &format!(":{}", port)])
+            .output()
+            .ok()?;
+        
+        if output.status.success() {
+            let pid_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            pid_str.parse::<u32>().ok()
+        } else {
+            None
+        }
+    }
+    
+    #[cfg(target_os = "windows")]
+    {
+        // On Windows, use netstat to find the process
+        let output = Command::new("netstat")
+            .args(&["-ano", "-p", "TCP"])
+            .output()
+            .ok()?;
+        
+        if output.status.success() {
+            let output_str = String::from_utf8_lossy(&output.stdout);
+            for line in output_str.lines() {
+                if line.contains(&format!(":{}", port)) && line.contains("LISTENING") {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    if let Some(pid_str) = parts.last() {
+                        return pid_str.parse::<u32>().ok();
+                    }
+                }
+            }
+        }
+        None
+    }
+}
+
 #[tauri::command]
 async fn start_server(state: State<'_, AppState>, port: u16) -> Result<ServerStatus, String> {
     // First check if server is already running on this port
@@ -59,28 +115,40 @@ async fn start_server(state: State<'_, AppState>, port: u16) -> Result<ServerSta
         return Err("Server process is already managed".to_string());
     }
     
-    // Get current executable directory and navigate to server
-    let current_exe = env::current_exe()
-        .map_err(|e| format!("Failed to get current exe: {}", e))?;
-    
-    let exe_dir = current_exe.parent()
-        .ok_or("Failed to get exe directory")?;
-    
-    // In dev mode, we need to go up more directories
-    // In production, the structure will be different
+    // Get server directory - different approach for dev vs prod
     let server_dir = if cfg!(debug_assertions) {
-        // Development: exe is in target/debug, so go up to find server
-        exe_dir
-            .parent() // target
-            .and_then(|p| p.parent()) // desktop
-            .and_then(|p| p.parent()) // server
-            .ok_or("Failed to find server directory in dev")?
+        // Development: Find the server directory relative to the desktop project
+        let current_dir = env::current_dir()
+            .map_err(|e| format!("Failed to get current directory: {}", e))?;
+        
+        // Try to find the server directory by going up from current working directory
+        let mut search_dir = current_dir.as_path();
+        loop {
+            let potential_server = search_dir.join("server");
+            if potential_server.join("src").join("index.js").exists() {
+                break potential_server;
+            }
+            
+            let parent_server = search_dir.join("../server");
+            if parent_server.join("src").join("index.js").exists() {
+                break parent_server.canonicalize()
+                    .map_err(|e| format!("Failed to canonicalize path: {}", e))?;
+            }
+            
+            match search_dir.parent() {
+                Some(parent) => search_dir = parent,
+                None => return Err("Could not find server directory with src/index.js".to_string()),
+            }
+        }
     } else {
-        // Production: adjust path as needed
-        exe_dir
-            .parent()
-            .and_then(|p| p.parent())
-            .ok_or("Failed to find server directory in prod")?
+        // Production: server should be in the same directory as the executable
+        let current_exe = env::current_exe()
+            .map_err(|e| format!("Failed to get current exe: {}", e))?;
+        
+        let exe_dir = current_exe.parent()
+            .ok_or("Failed to get exe directory")?;
+            
+        exe_dir.join("server")
     };
     
     // Start the server
@@ -113,17 +181,20 @@ async fn start_server(state: State<'_, AppState>, port: u16) -> Result<ServerSta
 }
 
 #[tauri::command]
-async fn stop_server(state: State<'_, AppState>) -> Result<(), String> {
+async fn stop_server(state: State<'_, AppState>, force_external: Option<bool>) -> Result<(), String> {
     let status_guard = state.server_status.lock().unwrap();
-    
-    if status_guard.external {
-        drop(status_guard); // Release the lock
-        return Err("Cannot stop externally managed server".to_string());
-    }
+    let is_external = status_guard.external;
+    let port = status_guard.port;
     drop(status_guard); // Release the lock
+    
+    // If it's an external server and force_external is not true, return error
+    if is_external && !force_external.unwrap_or(false) {
+        return Err("Server was not started by this app. Use force_external=true to stop it anyway.".to_string());
+    }
     
     let mut process_guard = state.server_process.lock().unwrap();
     
+    // If we have a managed process, kill it
     if let Some(mut child) = process_guard.take() {
         match child.kill() {
             Ok(_) => {
@@ -131,13 +202,57 @@ async fn stop_server(state: State<'_, AppState>) -> Result<(), String> {
                 status_guard.running = false;
                 status_guard.pid = None;
                 status_guard.external = false;
-                Ok(())
+                return Ok(());
             }
-            Err(e) => Err(format!("Failed to stop server: {}", e)),
+            Err(e) => return Err(format!("Failed to stop managed server: {}", e)),
         }
-    } else {
-        Err("Server is not running".to_string())
     }
+    
+    // If it's an external server and force_external is true, find and kill the process
+    if is_external && force_external.unwrap_or(false) {
+        if let Some(pid) = find_process_by_port(port) {
+            #[cfg(unix)]
+            {
+                let output = Command::new("kill")
+                    .arg("-9")
+                    .arg(pid.to_string())
+                    .output()
+                    .map_err(|e| format!("Failed to execute kill command: {}", e))?;
+                
+                if output.status.success() {
+                    let mut status_guard = state.server_status.lock().unwrap();
+                    status_guard.running = false;
+                    status_guard.pid = None;
+                    status_guard.external = false;
+                    return Ok(());
+                } else {
+                    return Err(format!("Failed to kill process {}: {}", pid, String::from_utf8_lossy(&output.stderr)));
+                }
+            }
+            
+            #[cfg(windows)]
+            {
+                let output = Command::new("taskkill")
+                    .args(&["/F", "/PID", &pid.to_string()])
+                    .output()
+                    .map_err(|e| format!("Failed to execute taskkill command: {}", e))?;
+                
+                if output.status.success() {
+                    let mut status_guard = state.server_status.lock().unwrap();
+                    status_guard.running = false;
+                    status_guard.pid = None;
+                    status_guard.external = false;
+                    return Ok(());
+                } else {
+                    return Err(format!("Failed to kill process {}: {}", pid, String::from_utf8_lossy(&output.stderr)));
+                }
+            }
+        } else {
+            return Err(format!("Could not find process listening on port {}", port));
+        }
+    }
+    
+    Err("Server is not running".to_string())
 }
 
 #[tauri::command]

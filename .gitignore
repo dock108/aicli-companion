@@ -270,6 +270,20 @@ docs/generated/
 *.rar
 
 # =================================
+# Tauri Desktop App
+# =================================
+
+# Tauri build artifacts
+server/desktop/src-tauri/target/
+server/desktop/dist/
+
+# Tauri generated files
+server/desktop/src-tauri/gen/
+
+# Development logs
+server/desktop/*.log
+
+# =================================
 # Database & Storage
 # =================================
 

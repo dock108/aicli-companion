@@ -25,6 +25,9 @@ let package = Package(
                 .product(name: "Markdown", package: "swift-markdown"),
                 "KeychainAccess",
                 .product(name: "Crypto", package: "swift-crypto")
+            ],
+            resources: [
+                .process("Resources")
             ]),
         .testTarget(
             name: "ClaudeCompanionTests",

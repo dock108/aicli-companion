@@ -201,12 +201,32 @@ struct ServerConnection: Codable {
 
     var url: URL? {
         let scheme = isSecure ? "https" : "http"
-        return URL(string: "\(scheme)://\(address):\(port)")
+        
+        // Handle IPv6 addresses by wrapping them in brackets
+        let formattedAddress: String
+        if address.contains(":") && !address.hasPrefix("[") {
+            // This is likely an IPv6 address that needs brackets
+            formattedAddress = "[\(address)]"
+        } else {
+            formattedAddress = address
+        }
+        
+        return URL(string: "\(scheme)://\(formattedAddress):\(port)")
     }
 
     var wsURL: URL? {
         let scheme = isSecure ? "wss" : "ws"
-        return URL(string: "\(scheme)://\(address):\(port)/ws")
+        
+        // Handle IPv6 addresses by wrapping them in brackets
+        let formattedAddress: String
+        if address.contains(":") && !address.hasPrefix("[") {
+            // This is likely an IPv6 address that needs brackets
+            formattedAddress = "[\(address)]"
+        } else {
+            formattedAddress = address
+        }
+        
+        return URL(string: "\(scheme)://\(formattedAddress):\(port)/ws")
     }
 }
 
@@ -254,6 +274,59 @@ struct WebSocketMessage: Codable {
         case toolResult(ToolResultResponse)
         case conversationResult(ConversationResultResponse)
         case workingDirectorySet(WorkingDirectorySetResponse)
+    }
+    
+    // Custom decoding to handle server message format
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.type = try container.decode(WebSocketMessageType.self, forKey: .type)
+        self.requestId = try container.decodeIfPresent(String.self, forKey: .requestId)
+        self.timestamp = try container.decode(Date.self, forKey: .timestamp)
+        
+        // Create a decoder for the data field
+        let dataDecoder = try container.superDecoder(forKey: .data)
+        
+        // Decode data based on message type
+        switch type {
+        case .welcome:
+            self.data = .welcome(try WelcomeResponse(from: dataDecoder))
+        case .askResponse:
+            self.data = .askResponse(try AskResponseData(from: dataDecoder))
+        case .streamStarted:
+            self.data = .streamStarted(try StreamStartedResponse(from: dataDecoder))
+        case .streamData:
+            self.data = .streamData(try StreamDataResponse(from: dataDecoder))
+        case .streamToolUse:
+            self.data = .streamToolUse(try StreamToolUseResponse(from: dataDecoder))
+        case .permissionRequest:
+            self.data = .permissionRequest(try PermissionRequestData(from: dataDecoder))
+        case .streamComplete:
+            self.data = .streamComplete(try StreamCompleteResponse(from: dataDecoder))
+        case .error:
+            self.data = .error(try ErrorResponse(from: dataDecoder))
+        case .sessionStatus:
+            self.data = .sessionStatus(try SessionStatusResponse(from: dataDecoder))
+        case .pong:
+            self.data = .pong(try PongResponse(from: dataDecoder))
+        case .systemInit:
+            self.data = .systemInit(try SystemInitResponse(from: dataDecoder))
+        case .assistantMessage:
+            self.data = .assistantMessage(try AssistantMessageResponse(from: dataDecoder))
+        case .toolUse:
+            self.data = .toolUse(try ToolUseResponse(from: dataDecoder))
+        case .toolResult:
+            self.data = .toolResult(try ToolResultResponse(from: dataDecoder))
+        case .conversationResult:
+            self.data = .conversationResult(try ConversationResultResponse(from: dataDecoder))
+        case .workingDirectorySet:
+            self.data = .workingDirectorySet(try WorkingDirectorySetResponse(from: dataDecoder))
+        default:
+            throw DecodingError.dataCorruptedError(forKey: .data, in: container, debugDescription: "Unsupported message type for decoding: \(type)")
+        }
+    }
+    
+    enum CodingKeys: String, CodingKey {
+        case type, requestId, timestamp, data
     }
 }
 

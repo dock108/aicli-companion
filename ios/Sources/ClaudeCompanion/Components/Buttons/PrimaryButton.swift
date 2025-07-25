@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Primary button component with gradient background based on Figma design
+/// Primary button style with Dark-Slate Terminal design
+@available(iOS 14.0, macOS 11.0, *)
 public struct PrimaryButton: View {
     let title: String
     let action: () -> Void
@@ -8,6 +9,7 @@ public struct PrimaryButton: View {
     let isEnabled: Bool
     
     @State private var isPressed = false
+    @Environment(\.colorScheme) var colorScheme
     
     public init(
         _ title: String,
@@ -16,27 +18,31 @@ public struct PrimaryButton: View {
         action: @escaping () -> Void
     ) {
         self.title = title
+        self.action = action
         self.isLoading = isLoading
         self.isEnabled = isEnabled
-        self.action = action
     }
     
     public var body: some View {
         Button(action: {
-            if isEnabled && !isLoading {
-                action()
-            }
+            guard isEnabled && !isLoading else { return }
+            
+            // Haptic feedback
+            HapticManager.shared.mediumImpact()
+            
+            // Execute action
+            action()
         }) {
             ZStack {
-                // Background
-                RoundedRectangle(cornerRadius: CornerRadius.button)
-                    .fill(Gradients.primaryButton)
-                    .opacity(isEnabled ? 1.0 : 0.4)
-                    .overlay(
-                        // Hover/Press state overlay
-                        RoundedRectangle(cornerRadius: CornerRadius.button)
-                            .fill(Colors.surface10)
-                            .opacity(isPressed ? 1 : 0)
+                // Gradient background
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Gradients.primaryButton(for: colorScheme))
+                    .opacity(isEnabled && !isLoading ? 1.0 : 0.6)
+                    .shadow(
+                        color: Colors.shadowDark,
+                        radius: 12,
+                        x: 0,
+                        y: 4
                     )
                 
                 // Content
@@ -47,47 +53,150 @@ public struct PrimaryButton: View {
                             .scaleEffect(0.8)
                     } else {
                         Text(title)
-                            .buttonText()
+                            .font(Typography.font(.body))
+                            .fontWeight(.semibold)
                     }
                 }
-                .padding(.vertical, Spacing.Component.buttonPaddingVertical)
-                .padding(.horizontal, Spacing.Component.buttonPaddingHorizontal)
+                .foregroundColor(.white)
+                .opacity(isEnabled || isLoading ? 1.0 : 0.6)
             }
+            .frame(height: 52)
             .frame(maxWidth: .infinity)
-            .frame(height: 56)
+            .scaleEffect(isPressed ? 0.96 : 1.0)
+            .offset(y: isPressed ? 3 : 0)
         }
-        .buttonStyle(PlainButtonStyle())
+        .buttonStyle(PressableButtonStyle(
+            onPress: { isPressed = true },
+            onRelease: { isPressed = false }
+        ))
         .disabled(!isEnabled || isLoading)
-        .scaleEffect(isPressed ? 0.98 : 1.0)
-        .onLongPressGesture(
-            minimumDuration: 0,
-            maximumDistance: .infinity,
-            pressing: { pressing in
-                withAnimation(.easeInOut(duration: 0.1)) {
-                    isPressed = pressing
+        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
+        .animation(.easeInOut(duration: 0.2), value: isLoading)
+    }
+}
+
+/// Button press handler style
+@available(iOS 14.0, macOS 11.0, *)
+struct PressableButtonStyle: ButtonStyle {
+    let onPress: () -> Void
+    let onRelease: () -> Void
+    
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .onChange(of: configuration.isPressed) { isPressed in
+                if isPressed {
+                    onPress()
+                } else {
+                    onRelease()
                 }
-            },
-            perform: {}
-        )
+            }
+    }
+}
+
+// MARK: - Loading Button Variant
+@available(iOS 14.0, macOS 11.0, *)
+public struct LoadingPrimaryButton: View {
+    let title: String
+    let loadingTitle: String
+    @Binding var isLoading: Bool
+    let action: () async -> Void
+    
+    @Environment(\.colorScheme) var colorScheme
+    @State private var isPressed = false
+    @State private var showMorphAnimation = false
+    
+    public init(
+        _ title: String,
+        loadingTitle: String = "Loading...",
+        isLoading: Binding<Bool>,
+        action: @escaping () async -> Void
+    ) {
+        self.title = title
+        self.loadingTitle = loadingTitle
+        self._isLoading = isLoading
+        self.action = action
+    }
+    
+    public var body: some View {
+        Button(action: {
+            guard !isLoading else { return }
+            
+            Task {
+                HapticManager.shared.mediumImpact()
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                    isLoading = true
+                    showMorphAnimation = true
+                }
+                
+                await action()
+                
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                    isLoading = false
+                    showMorphAnimation = false
+                }
+            }
+        }) {
+            ZStack {
+                // Background
+                RoundedRectangle(cornerRadius: showMorphAnimation ? 26 : 12)
+                    .fill(Gradients.primaryButton(for: colorScheme))
+                    .shadow(
+                        color: Colors.shadowDark,
+                        radius: 12,
+                        x: 0,
+                        y: 4
+                    )
+                
+                // Content
+                if isLoading {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .scaleEffect(0.8)
+                } else {
+                    Text(title)
+                        .font(Typography.font(.body))
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white)
+                }
+            }
+            .frame(width: showMorphAnimation ? 52 : nil, height: 52)
+            .frame(maxWidth: showMorphAnimation ? 52 : .infinity)
+            .scaleEffect(isPressed ? 0.96 : 1.0)
+            .offset(y: isPressed ? 3 : 0)
+        }
+        .buttonStyle(PressableButtonStyle(
+            onPress: { isPressed = true },
+            onRelease: { isPressed = false }
+        ))
+        .disabled(isLoading)
+        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
     }
 }
 
 // MARK: - Preview
-struct PrimaryButton_Previews: PreviewProvider {
-    static var previews: some View {
-        VStack(spacing: 20) {
-            PrimaryButton("Scan QR Code") {
-                print("Scan tapped")
-            }
-            
-            PrimaryButton("Loading...", isLoading: true) {
-                print("Loading")
-            }
-            
-            PrimaryButton("Disabled", isEnabled: false) {
-                print("Disabled")
-            }
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("Primary Buttons") {
+    VStack(spacing: Spacing.lg) {
+        PrimaryButton("Scan QR Code") {
+            print("Scan tapped")
         }
-        .padding()
+        
+        PrimaryButton("Disabled Button", isEnabled: false) {
+            print("Won't be called")
+        }
+        
+        PrimaryButton("Loading", isLoading: true) {
+            print("Won't be called")
+        }
+        
+        LoadingPrimaryButton(
+            "Connect",
+            isLoading: .constant(false)
+        ) {
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+        }
     }
+    .padding()
+    .background(Colors.bgBase(for: .dark))
+    .preferredColorScheme(.dark)
 }

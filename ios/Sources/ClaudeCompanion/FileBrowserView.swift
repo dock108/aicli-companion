@@ -158,7 +158,9 @@ struct FileBrowserView: View {
             .navigationTitle("File Browser")
             #if os(iOS)
 
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
 
             #endif
             .toolbar {
@@ -418,7 +420,9 @@ struct RecentFilesView: View {
             .navigationTitle("Recent Files")
             #if os(iOS)
 
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
 
             #endif
             .toolbar {
@@ -512,7 +516,9 @@ struct FileDetailsView: View {
             .navigationTitle("File Details")
             #if os(iOS)
 
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
 
             #endif
             .toolbar {

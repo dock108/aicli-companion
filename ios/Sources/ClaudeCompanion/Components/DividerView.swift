@@ -1,6 +1,7 @@
 import SwiftUI
 
 /// Divider with "or" text in the middle
+@available(iOS 14.0, macOS 11.0, *)
 public struct DividerView: View {
     let text: String
     
@@ -17,7 +18,7 @@ public struct DividerView: View {
             
             // Text
             Text(text)
-                .font(Typography.font(.small))
+                .font(Typography.font(.caption))
                 .foregroundColor(Colors.ink700.opacity(0.6))
             
             // Right line
@@ -30,6 +31,7 @@ public struct DividerView: View {
 }
 
 // MARK: - Preview
+@available(iOS 14.0, macOS 11.0, *)
 struct DividerView_Previews: PreviewProvider {
     static var previews: some View {
         VStack(spacing: 40) {

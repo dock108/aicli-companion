@@ -1,5 +1,4 @@
 {
-  "_TODO_COVERAGE": "claude-code.js excluded from unit test coverage due to process spawning complexity. Integration tests cover this functionality.",
   "name": "claude-companion-server",
   "version": "1.0.0",
   "description": "Companion server for Claude Code mobile app",
@@ -54,6 +53,6 @@
     "node": ">=18.0.0"
   },
   "bin": {
-    "claude-companion-server": "./src/index.js"
+    "claude-companion-server": "src/index.js"
   }
 }

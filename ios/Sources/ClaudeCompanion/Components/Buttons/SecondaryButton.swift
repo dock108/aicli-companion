@@ -1,12 +1,14 @@
 import SwiftUI
 
-/// Secondary button component with outline style based on Figma design
+/// Secondary outlined button style with Dark-Slate Terminal design
+@available(iOS 14.0, macOS 11.0, *)
 public struct SecondaryButton: View {
     let title: String
     let action: () -> Void
     let isEnabled: Bool
     
     @State private var isPressed = false
+    @Environment(\.colorScheme) var colorScheme
     
     public init(
         _ title: String,
@@ -14,63 +16,166 @@ public struct SecondaryButton: View {
         action: @escaping () -> Void
     ) {
         self.title = title
+        self.action = action
         self.isEnabled = isEnabled
+    }
+    
+    public var body: some View {
+        Button(action: {
+            guard isEnabled else { return }
+            
+            // Haptic feedback
+            HapticManager.shared.lightImpact()
+            
+            // Execute action
+            action()
+        }) {
+            ZStack {
+                // Outlined background
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(
+                        LinearGradient(
+                            colors: Colors.accentPrimary(for: colorScheme),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 2
+                    )
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.clear)
+                    )
+                
+                // Text content
+                Text(title)
+                    .font(Typography.font(.body))
+                    .fontWeight(.medium)
+                    .foregroundColor(
+                        isEnabled 
+                            ? Colors.accentPrimaryEnd 
+                            : Colors.textSecondary(for: colorScheme)
+                    )
+            }
+            .frame(height: 52)
+            .frame(maxWidth: .infinity)
+            .opacity(isEnabled ? 1.0 : 0.5)
+            .scaleEffect(isPressed ? 0.96 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
+        }
+        .buttonStyle(PressableButtonStyle(
+            onPress: { isPressed = true },
+            onRelease: { isPressed = false }
+        ))
+        .disabled(!isEnabled)
+    }
+}
+
+/// Text link button style
+@available(iOS 14.0, macOS 11.0, *)
+public struct TextLinkButton: View {
+    let title: String
+    let action: () -> Void
+    
+    @State private var isHovered = false
+    @Environment(\.colorScheme) var colorScheme
+    
+    public init(
+        _ title: String,
+        action: @escaping () -> Void
+    ) {
+        self.title = title
         self.action = action
     }
     
     public var body: some View {
         Button(action: {
-            if isEnabled {
-                action()
-            }
+            HapticManager.shared.selectionChanged()
+            action()
         }) {
-            ZStack {
-                // Background with border
-                RoundedRectangle(cornerRadius: CornerRadius.button)
-                    .stroke(Colors.brandBlue500.opacity(0.2), lineWidth: 1)
-                    .background(
-                        RoundedRectangle(cornerRadius: CornerRadius.button)
-                            .fill(isPressed ? Colors.surface10 : Color.clear)
-                    )
-                
-                // Content
-                Text(title)
-                    .font(Typography.font(.button))
-                    .foregroundColor(isEnabled ? Colors.brandBlue500 : Colors.brandBlue500.opacity(0.4))
-                    .padding(.vertical, Spacing.Component.buttonPaddingVertical)
-                    .padding(.horizontal, Spacing.Component.buttonPaddingHorizontal)
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 56)
+            Text(title)
+                .font(Typography.font(.bodySmall))
+                .foregroundColor(Colors.accentPrimaryEnd)
+                .underline(isHovered)
         }
         .buttonStyle(PlainButtonStyle())
-        .disabled(!isEnabled)
-        .scaleEffect(isPressed ? 0.98 : 1.0)
-        .onLongPressGesture(
-            minimumDuration: 0,
-            maximumDistance: .infinity,
-            pressing: { pressing in
-                withAnimation(.easeInOut(duration: 0.1)) {
-                    isPressed = pressing
-                }
-            },
-            perform: {}
-        )
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isHovered = hovering
+            }
+        }
+    }
+}
+
+/// Icon button style
+@available(iOS 14.0, macOS 11.0, *)
+public struct IconButton: View {
+    let systemName: String
+    let action: () -> Void
+    let size: CGFloat
+    
+    @State private var isPressed = false
+    @Environment(\.colorScheme) var colorScheme
+    
+    public init(
+        systemName: String,
+        size: CGFloat = 24,
+        action: @escaping () -> Void
+    ) {
+        self.systemName = systemName
+        self.size = size
+        self.action = action
+    }
+    
+    public var body: some View {
+        Button(action: {
+            HapticManager.shared.lightImpact()
+            action()
+        }) {
+            Image(systemName: systemName)
+                .font(.system(size: size))
+                .foregroundColor(Colors.textSecondary(for: colorScheme))
+                .frame(width: 44, height: 44)
+                .background(
+                    Circle()
+                        .fill(Colors.bgCard(for: colorScheme))
+                        .opacity(isPressed ? 0.8 : 0)
+                )
+                .scaleEffect(isPressed ? 0.9 : 1.0)
+        }
+        .buttonStyle(PressableButtonStyle(
+            onPress: { isPressed = true },
+            onRelease: { isPressed = false }
+        ))
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isPressed)
     }
 }
 
 // MARK: - Preview
-struct SecondaryButton_Previews: PreviewProvider {
-    static var previews: some View {
-        VStack(spacing: 20) {
-            SecondaryButton("Manual Setup") {
-                print("Manual setup tapped")
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("Secondary Buttons") {
+    VStack(spacing: Spacing.lg) {
+        SecondaryButton("Manual Setup") {
+            print("Manual setup tapped")
+        }
+        
+        SecondaryButton("Disabled Secondary", isEnabled: false) {
+            print("Won't be called")
+        }
+        
+        HStack {
+            TextLinkButton("Need help?") {
+                print("Help tapped")
             }
             
-            SecondaryButton("Disabled", isEnabled: false) {
-                print("Disabled")
+            Spacer()
+            
+            IconButton(systemName: "questionmark.circle") {
+                print("Question tapped")
             }
         }
-        .padding()
+        .padding(.horizontal)
     }
+    .padding()
+    .background(Colors.bgBase(for: .dark))
+    .preferredColorScheme(.dark)
 }

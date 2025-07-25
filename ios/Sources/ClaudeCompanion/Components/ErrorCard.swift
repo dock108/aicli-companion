@@ -1,6 +1,7 @@
 import SwiftUI
 
 /// Error card that slides in from the top
+@available(iOS 14.0, macOS 11.0, *)
 struct ErrorCard: View {
     let message: String
     let onDismiss: () -> Void

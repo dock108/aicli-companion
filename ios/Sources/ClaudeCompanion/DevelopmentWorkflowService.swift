@@ -3,6 +3,7 @@ import SwiftUI
 
 // MARK: - Workflow Models
 
+@available(iOS 14.0, macOS 11.0, *)
 struct GitRepository {
     let path: String
     let currentBranch: String
@@ -14,6 +15,7 @@ struct GitRepository {
     let status: GitStatus
 }
 
+@available(iOS 14.0, macOS 11.0, *)
 struct GitFileChange {
     let id = UUID()
     let path: String
@@ -22,6 +24,7 @@ struct GitFileChange {
     let deletions: Int?
 }
 
+@available(iOS 14.0, macOS 11.0, *)
 enum GitFileStatus: String, CaseIterable {
     case modified = "M"
     case added = "A"
@@ -56,6 +59,7 @@ enum GitFileStatus: String, CaseIterable {
     }
 }
 
+@available(iOS 14.0, macOS 11.0, *)
 struct GitCommit {
     let id = UUID()
     let hash: String
@@ -66,6 +70,7 @@ struct GitCommit {
     let filesChanged: Int
 }
 
+@available(iOS 14.0, macOS 11.0, *)
 struct GitStatus {
     let ahead: Int
     let behind: Int
@@ -74,6 +79,7 @@ struct GitStatus {
     let currentOperation: GitOperation?
 }
 
+@available(iOS 14.0, macOS 11.0, *)
 enum GitOperation: String, CaseIterable {
     case merge = "merge"
     case rebase = "rebase"
@@ -92,6 +98,7 @@ enum GitOperation: String, CaseIterable {
     }
 }
 
+@available(iOS 14.0, macOS 11.0, *)
 struct BuildSystem {
     let type: BuildSystemType
     let configFiles: [String]
@@ -100,6 +107,7 @@ struct BuildSystem {
     let buildScripts: [BuildScript]
 }
 
+@available(iOS 14.0, macOS 11.0, *)
 enum BuildSystemType: String, CaseIterable {
     case xcode = "Xcode"
     case swiftPM = "Swift Package Manager"
@@ -140,6 +148,7 @@ enum BuildSystemType: String, CaseIterable {
     }
 }
 
+@available(iOS 14.0, macOS 11.0, *)
 struct BuildTarget {
     let name: String
     let type: BuildTargetType
@@ -147,6 +156,7 @@ struct BuildTarget {
     let configuration: String
 }
 
+@available(iOS 14.0, macOS 11.0, *)
 enum BuildTargetType: String, CaseIterable {
     case executable = "executable"
     case library = "library"
@@ -155,6 +165,7 @@ enum BuildTargetType: String, CaseIterable {
     case app = "app"
 }
 
+@available(iOS 14.0, macOS 11.0, *)
 struct BuildResult {
     let success: Bool
     let duration: TimeInterval
@@ -164,6 +175,7 @@ struct BuildResult {
     let warnings: [BuildWarning]
 }
 
+@available(iOS 14.0, macOS 11.0, *)
 struct BuildError {
     let file: String?
     let line: Int?
@@ -172,12 +184,14 @@ struct BuildError {
     let severity: ErrorSeverity
 }
 
+@available(iOS 14.0, macOS 11.0, *)
 struct BuildWarning {
     let file: String?
     let line: Int?
     let message: String
 }
 
+@available(iOS 14.0, macOS 11.0, *)
 enum ErrorSeverity: String, CaseIterable {
     case error = "error"
     case warning = "warning"
@@ -192,6 +206,7 @@ enum ErrorSeverity: String, CaseIterable {
     }
 }
 
+@available(iOS 14.0, macOS 11.0, *)
 struct BuildScript {
     let name: String
     let command: String
@@ -199,6 +214,7 @@ struct BuildScript {
     let category: BuildScriptCategory
 }
 
+@available(iOS 14.0, macOS 11.0, *)
 enum BuildScriptCategory: String, CaseIterable {
     case build = "Build"
     case test = "Test"
@@ -209,6 +225,7 @@ enum BuildScriptCategory: String, CaseIterable {
     case documentation = "Documentation"
 }
 
+@available(iOS 14.0, macOS 11.0, *)
 struct TestSuite {
     let name: String
     let type: TestType
@@ -217,6 +234,7 @@ struct TestSuite {
     let coverage: TestCoverage?
 }
 
+@available(iOS 14.0, macOS 11.0, *)
 enum TestType: String, CaseIterable {
     case unit = "Unit Tests"
     case integration = "Integration Tests"
@@ -235,6 +253,7 @@ enum TestType: String, CaseIterable {
     }
 }
 
+@available(iOS 14.0, macOS 11.0, *)
 struct TestResults {
     let totalTests: Int
     let passedTests: Int
@@ -245,6 +264,7 @@ struct TestResults {
     let failedTestCases: [FailedTest]
 }
 
+@available(iOS 14.0, macOS 11.0, *)
 struct FailedTest {
     let name: String
     let file: String?
@@ -253,6 +273,7 @@ struct FailedTest {
     let duration: TimeInterval
 }
 
+@available(iOS 14.0, macOS 11.0, *)
 struct TestCoverage {
     let linesCovered: Int
     let totalLines: Int
@@ -260,6 +281,7 @@ struct TestCoverage {
     let fileCoverage: [FileCoverage]
 }
 
+@available(iOS 14.0, macOS 11.0, *)
 struct FileCoverage {
     let file: String
     let linesCovered: Int
@@ -269,7 +291,7 @@ struct FileCoverage {
 
 // MARK: - Development Workflow Service
 
-@available(iOS 13.0, macOS 10.15, *)
+@available(iOS 14.0, macOS 11.0, *)
 class DevelopmentWorkflowService: ObservableObject {
     @Published var currentRepository: GitRepository?
     @Published var buildSystem: BuildSystem?
@@ -624,6 +646,7 @@ class DevelopmentWorkflowService: ObservableObject {
 
 // MARK: - Workflow Suggestion
 
+@available(iOS 14.0, macOS 11.0, *)
 struct WorkflowSuggestion {
     let id = UUID()
     let title: String
@@ -643,6 +666,7 @@ struct WorkflowSuggestion {
     }
 }
 
+@available(iOS 14.0, macOS 11.0, *)
 enum WorkflowCategory: String, CaseIterable {
     case git = "Git"
     case build = "Build"

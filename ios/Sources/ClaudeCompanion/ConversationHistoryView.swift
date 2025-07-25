@@ -23,10 +23,10 @@ enum ConversationFilter: String, CaseIterable {
     }
 }
 
-@available(iOS 13.0, macOS 10.15, *)
+@available(iOS 14.0, macOS 11.0, *)
 struct ConversationHistoryView: View {
     @ObservedObject var persistenceService: ConversationPersistenceService
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.presentationMode) var presentationMode
 
     @State private var searchText = ""
     @State private var showingExportOptions = false
@@ -154,7 +154,7 @@ struct ConversationHistoryView: View {
                                         }
                                     } else {
                                         onConversationSelected(conversation)
-                                        dismiss()
+                                        presentationMode.wrappedValue.dismiss()
                                     }
                                 },
                                 onDelete: {
@@ -189,7 +189,9 @@ struct ConversationHistoryView: View {
                 }
             }
             .navigationTitle(isSelectMode ? "\(selectedConversations.count) Selected" : "Conversations")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     if isSelectMode {
@@ -199,7 +201,7 @@ struct ConversationHistoryView: View {
                         }
                     } else {
                         Button("Done") {
-                            dismiss()
+                            presentationMode.wrappedValue.dismiss()
                         }
                     }
                 }
@@ -243,7 +245,7 @@ struct ConversationHistoryView: View {
                             Button("New Conversation") {
                                 let newConversation = persistenceService.createNewConversation()
                                 onConversationSelected(newConversation)
-                                dismiss()
+                                presentationMode.wrappedValue.dismiss()
                             }
 
                             if !persistenceService.conversations.isEmpty {
@@ -303,7 +305,7 @@ struct ConversationHistoryView: View {
     }
 }
 
-@available(iOS 13.0, macOS 10.15, *)
+@available(iOS 14.0, macOS 11.0, *)
 struct ConversationRow: View {
     let conversation: Conversation
     let isSelected: Bool
@@ -355,7 +357,7 @@ struct ConversationRow: View {
                     Spacer()
 
                     Text(conversation.updatedAt, style: .relative)
-                        .font(.caption2)
+                        .font(.caption)
                         .foregroundColor(.secondary)
                 }
 
@@ -365,21 +367,36 @@ struct ConversationRow: View {
                         .foregroundColor(.secondary)
 
                     if conversation.metadata.hasToolUsage {
-                        Image(systemName: "gear")
-                            .font(.caption2)
-                            .foregroundColor(.blue)
+                        if #available(macOS 11.0, *) {
+                            Image(systemName: "gear")
+                                .font(.caption)
+                                .foregroundColor(.blue)
+                        } else {
+                            Text("⚙️")
+                                .font(.caption)
+                        }
                     }
 
                     if conversation.metadata.hasRichContent {
-                        Image(systemName: "doc.richtext")
-                            .font(.caption2)
-                            .foregroundColor(.green)
+                        if #available(macOS 11.0, *) {
+                            Image(systemName: "doc.richtext")
+                                .font(.caption)
+                                .foregroundColor(.green)
+                        } else {
+                            Text("📄")
+                                .font(.caption)
+                        }
                     }
 
                     if conversation.workingDirectory != nil {
-                        Image(systemName: "folder")
-                            .font(.caption2)
-                            .foregroundColor(.orange)
+                        if #available(macOS 11.0, *) {
+                            Image(systemName: "folder")
+                                .font(.caption)
+                                .foregroundColor(.orange)
+                        } else {
+                            Text("📁")
+                                .font(.caption)
+                        }
                     }
 
                     Spacer()
@@ -402,37 +419,87 @@ struct ConversationRow: View {
         .contextMenu {
             if !isSelectMode {
                 Button(action: onTap) {
-                    Label("Open", systemImage: "arrow.right.circle")
+                    if #available(macOS 11.0, *) {
+                        Label("Open", systemImage: "arrow.right.circle")
+                    } else {
+                        HStack {
+                            Image(systemName: "arrow.right.circle")
+                            Text("Open")
+                        }
+                    }
                 }
 
                 Divider()
 
                 Button(action: onFavorite) {
-                    Label(
-                        conversation.metadata.isFavorite ? "Unfavorite" : "Favorite",
-                        systemImage: conversation.metadata.isFavorite ? "heart.slash" : "heart"
-                    )
+                    if #available(macOS 11.0, *) {
+                        Label(
+                            conversation.metadata.isFavorite ? "Unfavorite" : "Favorite",
+                            systemImage: conversation.metadata.isFavorite ? "heart.slash" : "heart"
+                        )
+                    } else {
+                        HStack {
+                            Image(systemName: conversation.metadata.isFavorite ? "heart.slash" : "heart")
+                            Text(conversation.metadata.isFavorite ? "Unfavorite" : "Favorite")
+                        }
+                    }
                 }
 
                 Button(action: onArchive) {
-                    Label(
-                        conversation.metadata.isArchived ? "Unarchive" : "Archive",
-                        systemImage: conversation.metadata.isArchived ? "tray.and.arrow.up" : "archivebox"
-                    )
+                    if #available(macOS 11.0, *) {
+                        Label(
+                            conversation.metadata.isArchived ? "Unarchive" : "Archive",
+                            systemImage: conversation.metadata.isArchived ? "tray.and.arrow.up" : "archivebox"
+                        )
+                    } else {
+                        HStack {
+                            Image(systemName: conversation.metadata.isArchived ? "tray.and.arrow.up" : "archivebox")
+                            Text(conversation.metadata.isArchived ? "Unarchive" : "Archive")
+                        }
+                    }
                 }
 
                 Button(action: onDuplicate) {
-                    Label("Duplicate", systemImage: "doc.on.doc")
+                    if #available(macOS 11.0, *) {
+                        Label("Duplicate", systemImage: "doc.on.doc")
+                    } else {
+                        HStack {
+                            Image(systemName: "doc.on.doc")
+                            Text("Duplicate")
+                        }
+                    }
                 }
 
                 Button(action: onExport) {
-                    Label("Export", systemImage: "square.and.arrow.up")
+                    if #available(macOS 11.0, *) {
+                        Label("Export", systemImage: "square.and.arrow.up")
+                    } else {
+                        HStack {
+                            Image(systemName: "square.and.arrow.up")
+                            Text("Export")
+                        }
+                    }
                 }
 
                 Divider()
 
-                Button(role: .destructive, action: onDelete) {
-                    Label("Delete", systemImage: "trash")
+                if #available(macOS 12.0, *) {
+                    Button(role: .destructive, action: onDelete) {
+                        Label("Delete", systemImage: "trash")
+                    }
+                } else {
+                    Button(action: onDelete) {
+                        if #available(macOS 11.0, *) {
+                            Label("Delete", systemImage: "trash")
+                                .foregroundColor(.red)
+                        } else {
+                            HStack {
+                                Image(systemName: "trash")
+                                Text("Delete")
+                            }
+                            .foregroundColor(.red)
+                        }
+                    }
                 }
             }
         }
@@ -443,7 +510,7 @@ struct ConversationRow: View {
 struct ConversationExportSheet: View {
     let conversation: Conversation
     let persistenceService: ConversationPersistenceService
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.presentationMode) var presentationMode
 
     var body: some View {
         NavigationView {
@@ -491,11 +558,13 @@ struct ConversationExportSheet: View {
             }
             .padding()
             .navigationTitle("Export Conversation")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .automatic) {
                     Button("Cancel") {
-                        dismiss()
+                        presentationMode.wrappedValue.dismiss()
                     }
                 }
             }
@@ -506,7 +575,7 @@ struct ConversationExportSheet: View {
         if let url = persistenceService.exportConversation(conversation, format: format) {
             shareFile(url: url)
         }
-        dismiss()
+        presentationMode.wrappedValue.dismiss()
     }
 
     private func formatDescription(_ format: ExportFormat) -> String {
@@ -548,7 +617,7 @@ struct BulkExportSheet: View {
     let persistenceService: ConversationPersistenceService
     let onComplete: () -> Void
 
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.presentationMode) var presentationMode
 
     var body: some View {
         NavigationView {
@@ -596,11 +665,13 @@ struct BulkExportSheet: View {
             }
             .padding()
             .navigationTitle("Export Conversations")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .automatic) {
                     Button("Cancel") {
-                        dismiss()
+                        presentationMode.wrappedValue.dismiss()
                     }
                 }
             }
@@ -612,7 +683,7 @@ struct BulkExportSheet: View {
             shareFile(url: url)
         }
         onComplete()
-        dismiss()
+        presentationMode.wrappedValue.dismiss()
     }
 
     private func bulkFormatDescription(_ format: ExportFormat) -> String {
@@ -651,7 +722,7 @@ struct BulkExportSheet: View {
 @available(iOS 14.0, macOS 11.0, *)
 struct ConversationStatisticsView: View {
     let persistenceService: ConversationPersistenceService
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.presentationMode) var presentationMode
 
     var statistics: ConversationStatistics {
         persistenceService.getStatistics()
@@ -720,11 +791,13 @@ struct ConversationStatisticsView: View {
                 }
             }
             .navigationTitle("Statistics")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .automatic) {
                     Button("Done") {
-                        dismiss()
+                        presentationMode.wrappedValue.dismiss()
                     }
                 }
             }

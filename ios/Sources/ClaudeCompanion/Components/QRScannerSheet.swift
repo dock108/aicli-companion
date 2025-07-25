@@ -1,5 +1,7 @@
 import SwiftUI
+#if os(iOS)
 import AVFoundation
+import UIKit
 
 /// QR Scanner bottom sheet based on Figma design
 @available(iOS 16.0, *)
@@ -26,14 +28,14 @@ struct QRScannerSheet: View {
             HStack {
                 Text("Scan QR Code")
                     .font(Typography.font(.navTitle))
-                    .foregroundColor(Colors.adaptivePrimaryText(colorScheme: colorScheme))
+                    .foregroundColor(Colors.textPrimary(for: colorScheme))
                 
                 Spacer()
                 
                 Button(action: { dismiss() }) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 24))
-                        .foregroundColor(Colors.adaptiveSecondaryText(colorScheme: colorScheme))
+                        .foregroundColor(Colors.textSecondary(for: colorScheme))
                 }
             }
             .padding(.horizontal, Spacing.Layout.screenPaddingHorizontal)
@@ -56,14 +58,15 @@ struct QRScannerSheet: View {
                 VStack(spacing: Spacing.lg) {
                     Image(systemName: "camera.fill")
                         .font(.system(size: 60))
-                        .foregroundColor(Colors.brandBlue500)
+                        .foregroundColor(Colors.accentPrimaryEnd)
                     
                     Text("Camera Permission Required")
-                        .font(Typography.font(.h1))
-                        .foregroundColor(Colors.adaptivePrimaryText(colorScheme: colorScheme))
+                        .font(Typography.font(.heading1))
+                        .foregroundColor(Colors.textPrimary(for: colorScheme))
                     
                     Text("Allow camera access to scan QR codes from your desktop server.")
-                        .secondaryText()
+                        .font(Typography.font(.body))
+                        .foregroundColor(Colors.textSecondary(for: colorScheme))
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: 280)
                     
@@ -77,8 +80,8 @@ struct QRScannerSheet: View {
             
             // Instructions
             Text("Point your camera at the QR code displayed on your desktop")
-                .font(Typography.font(.small))
-                .foregroundColor(Colors.adaptiveSecondaryText(colorScheme: colorScheme))
+                .font(Typography.font(.caption))
+                .foregroundColor(Colors.textSecondary(for: colorScheme))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, Spacing.Layout.screenPaddingHorizontal)
                 .padding(.vertical, Spacing.lg)
@@ -86,7 +89,7 @@ struct QRScannerSheet: View {
             Spacer()
         }
         .frame(maxHeight: UIScreen.main.bounds.height * 0.55)
-        .background(Colors.adaptiveBackground(colorScheme: colorScheme))
+        .background(Colors.bgBase(for: colorScheme))
         .clipShape(
             RoundedRectangle(cornerRadius: CornerRadius.sheet)
                 .path(in: CGRect(x: 0, y: 20, width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.height))
@@ -227,3 +230,4 @@ class QRScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsD
         return .portrait
     }
 }
+#endif

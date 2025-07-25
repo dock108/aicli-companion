@@ -6,69 +6,49 @@ public struct ContentView: View {
     @EnvironmentObject var claudeService: ClaudeCodeService
     @EnvironmentObject var settings: SettingsManager
     @State private var isConnected = false
+    @State private var backgroundOpacity: Double = 0
     @Environment(\.colorScheme) var colorScheme
 
     public var body: some View {
         NavigationStack {
             ZStack {
-                // Background gradient
-                LinearGradient(
-                    colors: colorScheme == .dark 
-                        ? [Color.black, Color(white: 0.1)]
-                        : [Color(red: 0.95, green: 0.95, blue: 0.98), Color.white],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
+                // Pure background color with fade animation
+                Colors.bgBase(for: colorScheme)
+                    .ignoresSafeArea()
+                    .opacity(backgroundOpacity)
                 
                 VStack(spacing: 0) {
-                    // NavBar with design system styling
-                    HStack(spacing: Spacing.sm) {
-                        // Terminal bubble icon
-                        Image(systemName: "terminal.fill")
-                            .font(.system(size: 24))
-                            .foregroundColor(Colors.brandBlue500)
-                            .frame(width: 24, height: 24)
-                        
-                        Text("Code Companion")
-                            .font(Typography.font(.navTitle))
-                            .foregroundColor(Colors.adaptivePrimaryText(colorScheme: colorScheme))
-                        
-                        Spacer()
-                        
-                        NavigationLink(destination: SettingsView()) {
-                            Image(systemName: "gearshape")
-                                .font(.system(size: 24))
-                                .foregroundColor(Colors.adaptiveSecondaryText(colorScheme: colorScheme))
-                                .frame(width: 44, height: 44)
-                                .background(Colors.surface10)
-                                .clipShape(Circle())
+                    // New TopBar component
+                    NavigationTopBar(title: "Code Companion") {
+                        SettingsView()
+                    }
+                    
+                    // Main content with transitions
+                    ZStack {
+                        if isConnected {
+                            ChatView()
+                                .transition(.asymmetric(
+                                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                                    removal: .move(edge: .leading).combined(with: .opacity)
+                                ))
+                        } else {
+                            ConnectionView(isConnected: $isConnected)
+                                .transition(.asymmetric(
+                                    insertion: .move(edge: .leading).combined(with: .opacity),
+                                    removal: .move(edge: .trailing).combined(with: .opacity)
+                                ))
                         }
                     }
-                    .padding(.horizontal, Spacing.Component.navBarPadding)
-                    .padding(.vertical, Spacing.Component.navBarVerticalPadding)
-                    .background(.ultraThinMaterial)
-                    
-                    // Main content
-                    if isConnected {
-                        ChatView()
-                            .transition(.asymmetric(
-                                insertion: .move(edge: .trailing).combined(with: .opacity),
-                                removal: .move(edge: .leading).combined(with: .opacity)
-                            ))
-                    } else {
-                        ConnectionView(isConnected: $isConnected)
-                            .transition(.asymmetric(
-                                insertion: .move(edge: .leading).combined(with: .opacity),
-                                removal: .move(edge: .trailing).combined(with: .opacity)
-                            ))
-                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
+            #if os(iOS)
             .navigationBarHidden(true)
+            #endif
         }
         .onAppear {
             checkConnection()
+            animateBackground()
         }
     }
 
@@ -76,11 +56,27 @@ public struct ContentView: View {
         // Check if we have saved connection settings
         isConnected = settings.hasValidConnection()
     }
+    
+    private func animateBackground() {
+        // Fade in background from black
+        withAnimation(.easeInOut(duration: 0.24)) {
+            backgroundOpacity = 1.0
+        }
+    }
 }
 
 @available(iOS 17.0, macOS 14.0, *)
-#Preview {
+#Preview("Light Mode") {
     ContentView()
         .environmentObject(ClaudeCodeService())
         .environmentObject(SettingsManager())
+        .preferredColorScheme(.light)
+}
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("Dark Mode") {
+    ContentView()
+        .environmentObject(ClaudeCodeService())
+        .environmentObject(SettingsManager())
+        .preferredColorScheme(.dark)
 }

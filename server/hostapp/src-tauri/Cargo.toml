@@ -1,5 +1,5 @@
 [package]
-name = "claude-companion-desktop"
+name = "claude-companion-hostapp"
 version = "0.1.0"
 description = "Desktop UI for Claude Companion Server"
 authors = ["Claude Companion Team"]

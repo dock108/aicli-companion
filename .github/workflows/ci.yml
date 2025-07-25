@@ -9,6 +9,7 @@ on:
 env:
   NODE_VERSION: '20'
   XCODE_VERSION: '16.0'
+  RUST_VERSION: 'stable'
 
 jobs:
   # Node.js Server Tests and Linting
@@ -50,6 +51,73 @@ jobs:
     
     - name: Security audit
       run: npm audit --audit-level=high
+      continue-on-error: true
+
+  # Host App Tests and Linting
+  hostapp:
+    name: Host App Tests & Lint
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: ./server/hostapp
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: server/hostapp/package-lock.json
+    
+    - name: Setup Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ env.RUST_VERSION }}
+        profile: minimal
+        override: true
+        components: rustfmt, clippy
+    
+    - name: Install JavaScript dependencies
+      run: npm ci
+    
+    - name: Run ESLint
+      run: npm run lint
+    
+    - name: Run JavaScript tests with coverage
+      run: npm run test:coverage
+    
+    - name: Upload JavaScript coverage reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: hostapp-js-coverage
+        path: server/hostapp/coverage/
+    
+    - name: Run Rust formatting check
+      run: |
+        cd src-tauri
+        cargo fmt --check
+    
+    - name: Run Rust linting
+      run: |
+        cd src-tauri
+        cargo clippy -- -D warnings
+    
+    - name: Run Rust tests
+      run: |
+        cd src-tauri
+        cargo test --verbose
+    
+    - name: Security audit for Node.js
+      run: npm audit --audit-level=high
+      continue-on-error: true
+    
+    - name: Security audit for Rust
+      run: |
+        cd src-tauri
+        cargo audit
       continue-on-error: true
 
   # iOS App Build and Tests
@@ -98,7 +166,7 @@ jobs:
   integration:
     name: Integration Tests
     runs-on: ubuntu-latest
-    needs: [server, ios]
+    needs: [server, hostapp, ios]
     
     steps:
     - uses: actions/checkout@v4
@@ -133,7 +201,7 @@ jobs:
   quality:
     name: Code Quality Report
     runs-on: ubuntu-latest
-    needs: [server, ios]
+    needs: [server, hostapp, ios]
     
     steps:
     - uses: actions/checkout@v4

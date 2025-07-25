@@ -72,6 +72,20 @@ jobs:
         cache: 'npm'
         cache-dependency-path: server/hostapp/package-lock.json
     
+    - name: Install system dependencies for Tauri
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libwebkit2gtk-4.0-dev \
+          build-essential \
+          curl \
+          wget \
+          file \
+          libssl-dev \
+          libgtk-3-dev \
+          libayatana-appindicator3-dev \
+          librsvg2-dev
+    
     - name: Setup Rust
       uses: actions-rs/toolchain@v1
       with:

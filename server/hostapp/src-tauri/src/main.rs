@@ -4,8 +4,7 @@ use tauri::State;
 
 use claude_companion_hostapp::{
     check_server_health_impl, detect_running_server_impl, get_local_ip as get_local_ip_impl,
-    get_server_status_impl, start_server_impl, stop_server_impl, AppState, NetworkInfo,
-    ServerStatus,
+    get_server_status_impl, start_server_impl, stop_server_impl, AppState, ServerStatus,
 };
 
 #[tauri::command]

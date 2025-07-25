@@ -1,8 +1,7 @@
 #!/usr/bin/env sh
 
-# Run linting for all components
-npm run lint:server
-npm run lint:hostapp
+# Run lint-staged to handle file-specific linting and formatting
+npx lint-staged
 
 # Run server unit tests with coverage enforcement
 cd server && npm run test:coverage
@@ -10,9 +9,5 @@ cd server && npm run test:coverage
 # Run hostapp JavaScript tests with coverage enforcement
 cd ../server/hostapp && npm run test:coverage
 
-# Run hostapp Rust tests (if cargo is available)
-# Note: Rust tests require cargo to be installed
-# cd src-tauri && cargo test
-
 # Return to root directory
-cd ../../../
+cd ../..

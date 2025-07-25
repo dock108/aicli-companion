@@ -27,5 +27,6 @@ wiremock = "0.5"
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
 
-[patch.crates-io]
-glib = "0.20.0"
+# [patch.crates-io]
+# glib = { version = "=0.20.12" }
+# Note: Uncomment the patch above if you need to force glib to 0.20.12 for security reasons

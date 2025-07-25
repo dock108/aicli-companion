@@ -2,7 +2,6 @@
 
 use serde::{Deserialize, Serialize};
 use std::env;
-use std::io::Read;
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
 
@@ -130,8 +129,8 @@ pub async fn start_server_impl(state: &AppState, port: u16) -> Result<ServerStat
     // Get server directory - different approach for dev vs prod
     let server_dir = if cfg!(debug_assertions) {
         // Development: Find the server directory relative to the desktop project
-        let current_dir = env::current_dir()
-            .map_err(|e| format!("Failed to get current directory: {}", e))?;
+        let current_dir =
+            env::current_dir().map_err(|e| format!("Failed to get current directory: {}", e))?;
 
         // Try to find the server directory by going up from current working directory
         let mut search_dir = current_dir.as_path();
@@ -143,7 +142,8 @@ pub async fn start_server_impl(state: &AppState, port: u16) -> Result<ServerStat
 
             let parent_server = search_dir.join("../server");
             if parent_server.join("src").join("index.js").exists() {
-                break parent_server.canonicalize()
+                break parent_server
+                    .canonicalize()
                     .map_err(|e| format!("Failed to canonicalize path: {}", e))?;
             }
 
@@ -154,11 +154,10 @@ pub async fn start_server_impl(state: &AppState, port: u16) -> Result<ServerStat
         }
     } else {
         // Production: server should be in the same directory as the executable
-        let current_exe = env::current_exe()
-            .map_err(|e| format!("Failed to get current exe: {}", e))?;
+        let current_exe =
+            env::current_exe().map_err(|e| format!("Failed to get current exe: {}", e))?;
 
-        let exe_dir = current_exe.parent()
-            .ok_or("Failed to get exe directory")?;
+        let exe_dir = current_exe.parent().ok_or("Failed to get exe directory")?;
 
         exe_dir.join("server")
     };
@@ -192,7 +191,10 @@ pub async fn start_server_impl(state: &AppState, port: u16) -> Result<ServerStat
     }
 }
 
-pub async fn stop_server_impl(state: &AppState, force_external: Option<bool>) -> Result<(), String> {
+pub async fn stop_server_impl(
+    state: &AppState,
+    force_external: Option<bool>,
+) -> Result<(), String> {
     let status_guard = state.server_status.lock().unwrap();
     let is_external = status_guard.external;
     let port = status_guard.port;
@@ -200,7 +202,10 @@ pub async fn stop_server_impl(state: &AppState, force_external: Option<bool>) ->
 
     // If it's an external server and force_external is not true, return error
     if is_external && !force_external.unwrap_or(false) {
-        return Err("Server was not started by this app. Use force_external=true to stop it anyway.".to_string());
+        return Err(
+            "Server was not started by this app. Use force_external=true to stop it anyway."
+                .to_string(),
+        );
     }
 
     let mut process_guard = state.server_process.lock().unwrap();
@@ -237,7 +242,11 @@ pub async fn stop_server_impl(state: &AppState, force_external: Option<bool>) ->
                     status_guard.external = false;
                     return Ok(());
                 } else {
-                    return Err(format!("Failed to kill process {}: {}", pid, String::from_utf8_lossy(&output.stderr)));
+                    return Err(format!(
+                        "Failed to kill process {}: {}",
+                        pid,
+                        String::from_utf8_lossy(&output.stderr)
+                    ));
                 }
             }
 
@@ -255,7 +264,11 @@ pub async fn stop_server_impl(state: &AppState, force_external: Option<bool>) ->
                     status_guard.external = false;
                     return Ok(());
                 } else {
-                    return Err(format!("Failed to kill process {}: {}", pid, String::from_utf8_lossy(&output.stderr)));
+                    return Err(format!(
+                        "Failed to kill process {}: {}",
+                        pid,
+                        String::from_utf8_lossy(&output.stderr)
+                    ));
                 }
             }
         } else {
@@ -279,7 +292,10 @@ pub fn get_server_status_impl(state: &AppState) -> ServerStatus {
     state.server_status.lock().unwrap().clone()
 }
 
-pub async fn detect_running_server_impl(state: &AppState, port: u16) -> Result<ServerStatus, String> {
+pub async fn detect_running_server_impl(
+    state: &AppState,
+    port: u16,
+) -> Result<ServerStatus, String> {
     let is_running = check_server_health_impl(port).await?;
 
     let mut status_guard = state.server_status.lock().unwrap();

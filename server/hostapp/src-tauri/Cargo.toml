@@ -26,3 +26,6 @@ wiremock = "0.5"
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+
+[patch.crates-io]
+glib = "0.20.0"

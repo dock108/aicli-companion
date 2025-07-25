@@ -1,5 +1,4 @@
 {
-  "_TODO_COVERAGE": "claude-code.js excluded from unit test coverage due to process spawning complexity. Integration tests cover this functionality.",
   "name": "claude-companion-server",
   "version": "1.0.0",
   "description": "Companion server for Claude Code mobile app",
@@ -17,7 +16,11 @@
     "format": "prettier --write \"src/**/*.js\"",
     "format:check": "prettier --check \"src/**/*.js\"",
     "install-global": "npm install -g .",
-    "prepare": "husky"
+    "prepare": "husky",
+    "desktop": "cd desktop && npm run tauri dev",
+    "desktop:dev": "cd desktop && npm run dev",
+    "desktop:build": "cd desktop && npm run tauri build",
+    "desktop:install": "cd desktop && npm install"
   },
   "keywords": [
     "claude-code",
@@ -54,6 +57,6 @@
     "node": ">=18.0.0"
   },
   "bin": {
-    "claude-companion-server": "./src/index.js"
+    "claude-companion-server": "src/index.js"
   }
 }

@@ -98,11 +98,14 @@ class ClaudeCompanionServer {
 
   async start() {
     try {
-      // Generate auth token if not provided
-      this.authToken = ServerStartup.generateAuthToken(this.authToken);
-
-      // Configure auth middleware now that we have the token
-      MiddlewareConfig.configureAuth(this.app, this.authToken);
+      // Generate auth token only if authentication is required
+      if (this.config.authRequired) {
+        this.authToken = ServerStartup.generateAuthToken(this.authToken, this.config.authRequired);
+        // Configure auth middleware now that we have the token
+        MiddlewareConfig.configureAuth(this.app, this.authToken);
+      } else {
+        this.authToken = null;
+      }
 
       // Set up TLS if enabled
       let tlsOptions = null;

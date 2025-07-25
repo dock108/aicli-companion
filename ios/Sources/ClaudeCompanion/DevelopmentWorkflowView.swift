@@ -64,7 +64,9 @@ struct DevelopmentWorkflowView: View {
             .navigationTitle("Development Workflow")
             #if os(iOS)
 
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
 
             #endif
             .toolbar {

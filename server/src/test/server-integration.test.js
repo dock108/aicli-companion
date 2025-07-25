@@ -249,17 +249,19 @@ describe('Server Unit Tests', () => {
       const originalSetTimeout = global.setTimeout;
       global.setTimeout = mock.fn();
 
-      server.shutdown();
+      try {
+        server.shutdown();
 
-      // Verify server.close was called
-      assert.strictEqual(mockServer.close.mock.calls.length, 1);
+        // Verify server.close was called
+        assert.strictEqual(mockServer.close.mock.calls.length, 1);
 
-      // Verify process.exit was called
-      assert.strictEqual(exitSpy.mock.calls.length, 1);
-      assert.strictEqual(exitSpy.mock.calls[0].arguments[0], 0);
-
-      // Restore setTimeout
-      global.setTimeout = originalSetTimeout;
+        // Verify process.exit was called
+        assert.strictEqual(exitSpy.mock.calls.length, 1);
+        assert.strictEqual(exitSpy.mock.calls[0].arguments[0], 0);
+      } finally {
+        // Always restore setTimeout
+        global.setTimeout = originalSetTimeout;
+      }
     });
 
     it('should set force shutdown timeout', () => {
@@ -272,13 +274,16 @@ describe('Server Unit Tests', () => {
       const timeoutSpy = mock.fn();
       global.setTimeout = timeoutSpy;
 
-      server.shutdown();
+      try {
+        server.shutdown();
 
-      // Verify timeout was set
-      assert.strictEqual(timeoutSpy.mock.calls.length, 1);
-      assert.strictEqual(timeoutSpy.mock.calls[0].arguments[1], 10000); // 10 seconds
-
-      global.setTimeout = originalSetTimeout;
+        // Verify timeout was set
+        assert.strictEqual(timeoutSpy.mock.calls.length, 1);
+        assert.strictEqual(timeoutSpy.mock.calls[0].arguments[1], 10000); // 10 seconds
+      } finally {
+        // Always restore setTimeout
+        global.setTimeout = originalSetTimeout;
+      }
     });
   });
 

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claude Companion Server Manager</title>
+    <link rel="stylesheet" href="/src/styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Top Bar -->
+        <header class="top-bar">
+            <div class="terminal-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" stroke-width="2"/>
+                    <path d="M8 10L11 13L8 16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <line x1="14" y1="16" x2="18" y2="16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+            </div>
+            <h1>Claude Companion Server</h1>
+        </header>
+
+        <!-- Main Content -->
+        <main class="content">
+            <!-- Configuration Section -->
+            <section class="card">
+                <h2>Configuration</h2>
+                <div class="form-group">
+                    <label for="config-path">Config Path</label>
+                    <div class="input-group">
+                        <input type="text" id="config-path" value="/Users/name/claude-data" readonly>
+                        <button class="secondary-button" id="browse-btn">Browse</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="port">Port</label>
+                    <input type="number" id="port" value="3001" min="1024" max="65535">
+                </div>
+            </section>
+
+            <!-- Server Status Section -->
+            <section class="card">
+                <h2>Server Status</h2>
+                <div class="status-container">
+                    <div class="status-indicator">
+                        <span class="status-dot" id="status-dot"></span>
+                        <span class="status-text" id="status-text">Not Running</span>
+                    </div>
+                    <div class="external-notice" id="external-notice" style="display: none;">
+                        <p class="notice-text">This server was started outside of the desktop app. You can still stop it with confirmation.</p>
+                    </div>
+                    <div class="server-info" id="server-info" style="display: none;">
+                        <div class="info-row">
+                            <span class="info-label">URL:</span>
+                            <span class="info-value" id="server-url">-</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">PID:</span>
+                            <span class="info-value" id="server-pid">-</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="button-group">
+                    <button class="primary-button" id="start-btn">
+                        <span class="button-text">Start Server</span>
+                    </button>
+                    <button class="secondary-button" id="stop-btn" disabled>Stop Server</button>
+                </div>
+            </section>
+
+            <!-- QR Code Section -->
+            <section class="card" id="qr-section" style="display: none;">
+                <h2>Mobile Connection</h2>
+                <div class="qr-container">
+                    <canvas id="qr-code"></canvas>
+                    <p class="qr-instructions">Scan with Claude Companion mobile app</p>
+                    <div class="connection-info">
+                        <code id="connection-string">-</code>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/src/app.js" type="module"></script>
+</body>
+</html>

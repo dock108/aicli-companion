@@ -2,56 +2,124 @@
 > claude-companion-server@1.0.0 start
 > node src/index.js
 
-🔑 Generated auth token: 6294ab41c976607a2e2dbf3f681b3afb47fe260f26d6b654d8a958ff0e12241c
-   Save this token to connect mobile clients
 Claude Code version: 1.0.60 (Claude Code)
    📡 Bonjour service advertising on port 3001
 🚀 Claude Companion Server started
    HTTP Server: http://localhost:3001
    WebSocket: ws://localhost:3001/ws
-   🔐 Authentication enabled
-   📱 Mobile app connection: ws://localhost:3001/ws?token=6294ab41c976607a2e2dbf3f681b3afb47fe260f26d6b654d8a958ff0e12241c
+   🔓 Authentication disabled (AUTH_REQUIRED=false)
+   📱 Mobile app connection: ws://localhost:3001/ws
    ✅ Claude Code CLI detected
 🔍 Bonjour service published: Claude Companion Server._claudecode._tcp.local
-192.168.68.113 - - [24/Jul/2025:23:57:03 +0000] "GET /health HTTP/1.1" 200 104 "-" "Claude%20Companion/1 CFNetwork/3826.400.120 Darwin/24.5.0"
-WebSocket client connected: 356937ef-3859-4575-aff9-73a623da9db7 from 192.168.68.113 (IPv4)
-WebSocket client connected: 51c17e20-2b87-428d-9263-574e8f387b55 from 192.168.68.113 (IPv4)
-WebSocket client connected: 4cbc5835-bec5-4784-a2e5-2227edb7967d from 192.168.68.113 (IPv4)
-WebSocket client connected: 258039a3-002f-4584-bbfe-dbb484a9c0f8 from 192.168.68.113 (IPv4)
-WebSocket client connected: c9370d3c-e863-4c52-b968-ba5cc8090290 from 192.168.68.113 (IPv4)
-WebSocket client connected: 63c69451-e2eb-4514-a836-e039672261f2 from 192.168.68.113 (IPv4)
-WebSocket client connected: 852b34be-f3b1-473c-bd24-c388f8f63d6f from 192.168.68.113 (IPv4)
-WebSocket client connected: 3b898c01-6cb6-44b0-ab1a-1d8e349c7d8c from 192.168.68.113 (IPv4)
-WebSocket client connected: 3a3aaec0-54fb-45a1-a416-06da1ef01785 from 192.168.68.113 (IPv4)
-192.168.68.113 - - [24/Jul/2025:23:57:19 +0000] "GET /health HTTP/1.1" 200 104 "-" "Claude%20Companion/1 CFNetwork/3826.400.120 Darwin/24.5.0"
-WebSocket client connected: 10630dc7-38cf-4f8c-8f30-2b717027827a from 192.168.68.113 (IPv4)
-WebSocket client disconnected: 10630dc7-38cf-4f8c-8f30-2b717027827a (1006: )
-192.168.68.113 - - [24/Jul/2025:23:58:24 +0000] "GET /health HTTP/1.1" 200 104 "-" "Claude%20Companion/1 CFNetwork/3826.400.120 Darwin/24.5.0"
-WebSocket client connected: 77e74a0b-894a-432d-bd40-b411a4d42295 from 192.168.68.113 (IPv4)
-WebSocket client disconnected: 77e74a0b-894a-432d-bd40-b411a4d42295 (1006: )
-192.168.68.113 - - [24/Jul/2025:23:58:58 +0000] "GET /health HTTP/1.1" 200 104 "-" "Claude%20Companion/1 CFNetwork/3826.400.120 Darwin/24.5.0"
-WebSocket client connected: 3b4b6679-371f-47e4-a381-cb8d2d3d4381 from 192.168.68.113 (IPv4)
-WebSocket client disconnected: 3b4b6679-371f-47e4-a381-cb8d2d3d4381 (1006: )
-192.168.68.113 - - [25/Jul/2025:00:00:49 +0000] "GET /health HTTP/1.1" 200 104 "-" "Claude%20Companion/1 CFNetwork/3826.400.120 Darwin/24.5.0"
-WebSocket client connected: b0bf56ff-1731-4b5f-af34-68a1e781d1a5 from 192.168.68.113 (IPv4)
-WebSocket client disconnected: b0bf56ff-1731-4b5f-af34-68a1e781d1a5 (1006: )
-WebSocket client connected: c84064f4-fbc1-4f70-8ab5-f95b62af0f96 from 192.168.68.113 (IPv4)
-WebSocket client disconnected: c84064f4-fbc1-4f70-8ab5-f95b62af0f96 (1006: )
-WebSocket client connected: 98d87fb1-8c5f-477b-be89-da8ae86c80f4 from 192.168.68.113 (IPv4)
-WebSocket client disconnected: 98d87fb1-8c5f-477b-be89-da8ae86c80f4 (1006: )
-WebSocket client connected: b1583d56-5a96-406b-bc36-2585b0d2cb3e from 192.168.68.113 (IPv4)
-WebSocket client disconnected: b1583d56-5a96-406b-bc36-2585b0d2cb3e (1006: )
-192.168.68.113 - - [25/Jul/2025:00:07:34 +0000] "GET /health HTTP/1.1" 200 104 "-" "Claude%20Companion/1 CFNetwork/3826.400.120 Darwin/24.5.0"
-WebSocket client connected: 812a1149-1127-4d88-b284-ece38957c33e from 192.168.68.113 (IPv4)
-🔍 Raw message from 812a1149-1127-4d88-b284-ece38957c33e: {"timestamp":"2025-07-25T00:08:05Z","type":"ping","requestId":"9E17081D-C476-48C3-8F9B-4DBD39F41424","data":{}}
-📨 Parsed message from 812a1149-1127-4d88-b284-ece38957c33e: {
-  "timestamp": "2025-07-25T00:08:05Z",
+127.0.0.1 - - [25/Jul/2025:16:32:13 +0000] "GET /health HTTP/1.1" 200 104 "-" "curl/8.5.0"
+127.0.0.1 - - [25/Jul/2025:16:32:17 +0000] "GET /api/claude/availability HTTP/1.1" 404 162 "-" "curl/8.5.0"
+127.0.0.1 - - [25/Jul/2025:16:32:22 +0000] "GET / HTTP/1.1" 200 135 "-" "curl/8.5.0"
+WebSocket client connected: 5cbda084-4647-4bee-a708-80d9fb5eb08d from 127.0.0.1 (IPv4)
+🔍 Raw message from 5cbda084-4647-4bee-a708-80d9fb5eb08d: {"type":"ping","requestId":"test-123","data":{}}
+📨 Parsed message from 5cbda084-4647-4bee-a708-80d9fb5eb08d: {
   "type": "ping",
-  "requestId": "9E17081D-C476-48C3-8F9B-4DBD39F41424",
+  "requestId": "test-123",
   "data": {}
 }
-WebSocket client disconnected: 812a1149-1127-4d88-b284-ece38957c33e (1006: )
-WebSocket client connected: 6ce57e59-6879-4800-8f72-bfa186a28da3 from 192.168.68.113 (IPv4)
-WebSocket client disconnected: 6ce57e59-6879-4800-8f72-bfa186a28da3 (1006: )
-WebSocket client connected: 25268010-f664-4d05-bdbf-90c25fb70f06 from 192.168.68.113 (IPv4)
-WebSocket client disconnected: 25268010-f664-4d05-bdbf-90c25fb70f06 (1006: )
+WebSocket client disconnected: 5cbda084-4647-4bee-a708-80d9fb5eb08d (1005: )
+192.168.68.113 - - [25/Jul/2025:16:38:03 +0000] "GET /health HTTP/1.1" 200 104 "-" "Claude%20Companion/1 CFNetwork/3826.400.120 Darwin/24.5.0"
+WebSocket client connected: 89983abc-ec57-4835-9bfa-fe823dd36173 from 192.168.68.113 (IPv4)
+WebSocket client connected: ceee0377-1c51-4788-aa76-d7d35aca3a4e from 192.168.68.113 (IPv4)
+🔍 Raw message from ceee0377-1c51-4788-aa76-d7d35aca3a4e: {"requestId":"B0F4AD2C-0D3D-406D-B288-535EDABAFF75","timestamp":"2025-07-25T16:38:13Z","data":{},"type":"ping"}
+📨 Parsed message from ceee0377-1c51-4788-aa76-d7d35aca3a4e: {
+  "requestId": "B0F4AD2C-0D3D-406D-B288-535EDABAFF75",
+  "timestamp": "2025-07-25T16:38:13Z",
+  "data": {},
+  "type": "ping"
+}
+🔍 Raw message from ceee0377-1c51-4788-aa76-d7d35aca3a4e: {"data":{},"requestId":"D18FC196-5EDC-479E-8814-93A5634BB39F","type":"ping","timestamp":"2025-07-25T16:38:22Z"}
+📨 Parsed message from ceee0377-1c51-4788-aa76-d7d35aca3a4e: {
+  "data": {},
+  "requestId": "D18FC196-5EDC-479E-8814-93A5634BB39F",
+  "type": "ping",
+  "timestamp": "2025-07-25T16:38:22Z"
+}
+WebSocket client disconnected: ceee0377-1c51-4788-aa76-d7d35aca3a4e (1006: )
+WebSocket client connected: bd887865-5bd9-4a89-be00-bce236a79d22 from 192.168.68.113 (IPv4)
+🔍 Raw message from 89983abc-ec57-4835-9bfa-fe823dd36173: {"data":{},"requestId":"367ABDC9-FFD5-4C45-86B6-4DD5034390CB","timestamp":"2025-07-25T16:38:34Z","type":"ping"}
+📨 Parsed message from 89983abc-ec57-4835-9bfa-fe823dd36173: {
+  "data": {},
+  "requestId": "367ABDC9-FFD5-4C45-86B6-4DD5034390CB",
+  "timestamp": "2025-07-25T16:38:34Z",
+  "type": "ping"
+}
+WebSocket client disconnected: bd887865-5bd9-4a89-be00-bce236a79d22 (1006: )
+WebSocket client disconnected: 89983abc-ec57-4835-9bfa-fe823dd36173 (1006: )
+192.168.68.113 - - [25/Jul/2025:16:48:33 +0000] "GET /health HTTP/1.1" 200 104 "-" "Claude%20Companion/1 CFNetwork/3826.400.120 Darwin/24.5.0"
+WebSocket client connected: 33af758a-f3ea-497e-b3f0-2cd8a902d3e1 from 192.168.68.113 (IPv4)
+WebSocket client connected: d31b824d-a677-4d5f-9b85-680f242c8ce0 from 192.168.68.113 (IPv4)
+🔍 Raw message from d31b824d-a677-4d5f-9b85-680f242c8ce0: {"data":{},"type":"ping","requestId":"06590ACA-6D70-49AC-942A-8AE7DC4E1C82","timestamp":"2025-07-25T16:48:38Z"}
+📨 Parsed message from d31b824d-a677-4d5f-9b85-680f242c8ce0: {
+  "data": {},
+  "type": "ping",
+  "requestId": "06590ACA-6D70-49AC-942A-8AE7DC4E1C82",
+  "timestamp": "2025-07-25T16:48:38Z"
+}
+🔍 Raw message from d31b824d-a677-4d5f-9b85-680f242c8ce0: {"requestId":"36732C27-AA37-422D-B851-D366ECEDA784","timestamp":"2025-07-25T16:48:46Z","type":"ping","data":{}}
+📨 Parsed message from d31b824d-a677-4d5f-9b85-680f242c8ce0: {
+  "requestId": "36732C27-AA37-422D-B851-D366ECEDA784",
+  "timestamp": "2025-07-25T16:48:46Z",
+  "type": "ping",
+  "data": {}
+}
+🔍 Raw message from 33af758a-f3ea-497e-b3f0-2cd8a902d3e1: {"type":"ping","timestamp":"2025-07-25T16:49:04Z","data":{},"requestId":"AD5DB832-ECBB-4091-A934-F87D19C111B0"}
+📨 Parsed message from 33af758a-f3ea-497e-b3f0-2cd8a902d3e1: {
+  "type": "ping",
+  "timestamp": "2025-07-25T16:49:04Z",
+  "data": {},
+  "requestId": "AD5DB832-ECBB-4091-A934-F87D19C111B0"
+}
+🔍 Raw message from d31b824d-a677-4d5f-9b85-680f242c8ce0: {"type":"ping","timestamp":"2025-07-25T16:49:04Z","data":{},"requestId":"A371203D-2BA7-4EB8-9E63-12E961F2ECDC"}
+📨 Parsed message from d31b824d-a677-4d5f-9b85-680f242c8ce0: {
+  "type": "ping",
+  "timestamp": "2025-07-25T16:49:04Z",
+  "data": {},
+  "requestId": "A371203D-2BA7-4EB8-9E63-12E961F2ECDC"
+}
+WebSocket client disconnected: d31b824d-a677-4d5f-9b85-680f242c8ce0 (1006: )
+WebSocket client connected: a495e1f0-75c0-48af-99a4-29350ee03046 from 192.168.68.113 (IPv4)
+WebSocket client disconnected: a495e1f0-75c0-48af-99a4-29350ee03046 (1006: )
+WebSocket client disconnected: 33af758a-f3ea-497e-b3f0-2cd8a902d3e1 (1006: )
+WebSocket client connected: dc470abc-3c23-4fa3-944c-13946e0953cb from 192.168.68.113 (IPv4)
+🔍 Raw message from dc470abc-3c23-4fa3-944c-13946e0953cb: {"timestamp":"2025-07-25T17:54:02Z","type":"ping","requestId":"B75943CE-6F87-4072-81D8-81F8E107B4D6","data":{}}
+📨 Parsed message from dc470abc-3c23-4fa3-944c-13946e0953cb: {
+  "timestamp": "2025-07-25T17:54:02Z",
+  "type": "ping",
+  "requestId": "B75943CE-6F87-4072-81D8-81F8E107B4D6",
+  "data": {}
+}
+WebSocket client disconnected: dc470abc-3c23-4fa3-944c-13946e0953cb (1006: )
+WebSocket client connected: 045821fb-7f93-4022-bbc1-259dd89234e9 from 192.168.68.113 (IPv4)
+WebSocket client disconnected: 045821fb-7f93-4022-bbc1-259dd89234e9 (1006: )
+WebSocket client connected: 0224b905-c401-41f7-bd1e-b3d439fef9c3 from 192.168.68.113 (IPv4)
+🔍 Raw message from 0224b905-c401-41f7-bd1e-b3d439fef9c3: {"data":{},"type":"ping","timestamp":"2025-07-25T17:54:46Z","requestId":"FC6F5446-181C-4268-927B-7438B889A9E7"}
+📨 Parsed message from 0224b905-c401-41f7-bd1e-b3d439fef9c3: {
+  "data": {},
+  "type": "ping",
+  "timestamp": "2025-07-25T17:54:46Z",
+  "requestId": "FC6F5446-181C-4268-927B-7438B889A9E7"
+}
+WebSocket client disconnected: 0224b905-c401-41f7-bd1e-b3d439fef9c3 (1006: )
+WebSocket client connected: 442037d2-96f1-4c40-b05f-1b89bf590a72 from 192.168.68.113 (IPv4)
+🔍 Raw message from 442037d2-96f1-4c40-b05f-1b89bf590a72: {"type":"ping","timestamp":"2025-07-25T17:56:29Z","data":{},"requestId":"7A9D34F6-203F-4423-ACCF-54AA7924C8E1"}
+📨 Parsed message from 442037d2-96f1-4c40-b05f-1b89bf590a72: {
+  "type": "ping",
+  "timestamp": "2025-07-25T17:56:29Z",
+  "data": {},
+  "requestId": "7A9D34F6-203F-4423-ACCF-54AA7924C8E1"
+}
+WebSocket client disconnected: 442037d2-96f1-4c40-b05f-1b89bf590a72 (1006: )
+WebSocket client connected: 4141856c-ee30-4008-b0a8-4faf147e8113 from 192.168.68.113 (IPv4)
+🔍 Raw message from 4141856c-ee30-4008-b0a8-4faf147e8113: {"requestId":"55BD5BB6-1D24-4AA3-B89E-7DD2AFE3E06F","type":"ping","data":{},"timestamp":"2025-07-25T17:58:29Z"}
+📨 Parsed message from 4141856c-ee30-4008-b0a8-4faf147e8113: {
+  "requestId": "55BD5BB6-1D24-4AA3-B89E-7DD2AFE3E06F",
+  "type": "ping",
+  "data": {},
+  "timestamp": "2025-07-25T17:58:29Z"
+}
+WebSocket client disconnected: 4141856c-ee30-4008-b0a8-4faf147e8113 (1006: )

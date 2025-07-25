@@ -281,7 +281,7 @@ struct VoiceOverHelpers {
 
 // MARK: - Dynamic Type Support
 
-@available(iOS 13.0, macOS 10.15, *)
+@available(iOS 14.0, macOS 11.0, *)
 extension Font {
     static func scaledSystem(_ style: Font.TextStyle, design: Font.Design = .default) -> Font {
         return .system(style, design: design)

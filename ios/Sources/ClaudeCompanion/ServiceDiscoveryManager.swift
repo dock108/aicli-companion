@@ -149,6 +149,7 @@ class ServiceDiscoveryManager: NSObject, ObservableObject {
 
 // MARK: - NetServiceBrowserDelegate
 
+@available(iOS 14.0, macOS 11.0, *)
 extension ServiceDiscoveryManager: NetServiceBrowserDelegate {
     func netServiceBrowser(_ browser: NetServiceBrowser, didFind service: NetService, moreComing: Bool) {
         print("🔍 Found service: \(service.name) at \(service.domain)")
@@ -196,6 +197,7 @@ extension ServiceDiscoveryManager: NetServiceBrowserDelegate {
 
 // MARK: - NetServiceDelegate
 
+@available(iOS 14.0, macOS 11.0, *)
 extension ServiceDiscoveryManager: NetServiceDelegate {
     func netServiceDidResolveAddress(_ sender: NetService) {
         print("🔍 Resolved service: \(sender.name) -> \(sender.hostName ?? "unknown"):\(sender.port)")
@@ -312,6 +314,7 @@ struct ManualServerConfiguration {
 
 // MARK: - Network Validation
 
+@available(iOS 14.0, macOS 11.0, *)
 extension ServiceDiscoveryManager {
     func validateServer(_ server: DiscoveredClaudeServer, completion: @escaping (Result<ServerConnection, ClaudeCompanionError>) -> Void) {
         guard let url = server.url else {

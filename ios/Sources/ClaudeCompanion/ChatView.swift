@@ -1,4 +1,9 @@
 import SwiftUI
+#if os(iOS)
+import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 
 @available(iOS 14.0, macOS 11.0, *)
 struct ChatView: View {
@@ -9,84 +14,117 @@ struct ChatView: View {
     @State private var isLoading = false
     @State private var showingPermissionAlert = false
     @State private var permissionRequest: PermissionRequestData?
+    @State private var keyboardHeight: CGFloat = 0
+    @State private var inputBarOffset: CGFloat = 0
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Messages list
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 16) {
-                        ForEach(messages) { message in
-                            MessageBubble(message: message)
-                                .id(message.id)
-                                .transition(.asymmetric(
-                                    insertion: .scale.combined(with: .opacity),
-                                    removal: .opacity
-                                ))
-                        }
-                        
-                        if isLoading {
-                            HStack {
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                                Text("Thinking...")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+        ZStack {
+            // Pure charcoal background
+            Colors.bgBase(for: colorScheme)
+                .ignoresSafeArea()
+            
+            VStack(spacing: 0) {
+                // Messages list
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 8) {
+                            ForEach(messages) { message in
+                                MessageBubble(message: message)
+                                    .id(message.id)
+                                    .transition(.asymmetric(
+                                        insertion: .opacity.combined(with: .offset(y: 8)),
+                                        removal: .opacity
+                                    ))
+                                    .animation(.easeOut(duration: 0.12), value: messages.count)
                             }
-                            .padding()
-                            .background(Color.secondary.opacity(0.1))
-                            .cornerRadius(12)
+                            
+                            if isLoading {
+                                HStack {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: Colors.accentPrimaryEnd))
+                                        .scaleEffect(0.8)
+                                    Text("Thinking...")
+                                        .font(Typography.font(.caption))
+                                        .foregroundColor(Colors.textSecondary(for: colorScheme))
+                                }
+                                .padding()
+                                .background(Colors.bgCard(for: colorScheme))
+                                .cornerRadius(12)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Colors.strokeLight, lineWidth: 1)
+                                )
+                            }
                         }
+                        .padding()
+                    }
+                    .onChange(of: messages.count) { oldValue, newValue in
+                        if let lastMessage = messages.last {
+                            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                                proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                            }
+                        }
+                    }
+                }
+
+                // Input area with translucent blur
+                VStack(spacing: 0) {
+                    Rectangle()
+                        .fill(colorScheme == .dark ? Colors.divider : Colors.dividerLight)
+                        .frame(height: 0.5)
+                    
+                    HStack(spacing: 12) {
+                        // Message input field with terminal styling
+                        HStack(spacing: 0) {
+                            TextField("Type a message...", text: $messageText, axis: .vertical)
+                                .font(Typography.font(.body))
+                                .foregroundColor(Colors.textPrimary(for: colorScheme))
+                                .textFieldStyle(.plain)
+                                .lineLimit(1...4)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .onSubmit {
+                                    sendMessage()
+                                }
+                        }
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(.ultraThinMaterial)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Colors.strokeLight, lineWidth: 1)
+                                )
+                        )
+                        
+                        // Send button
+                        Button(action: {
+                            sendMessage()
+                        }) {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.system(size: 32))
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: messageText.isEmpty 
+                                            ? [Colors.textSecondary(for: colorScheme)]
+                                            : Colors.accentPrimary(for: colorScheme),
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                        }
+                        .disabled(messageText.isEmpty || isLoading)
+                        .animation(.easeInOut(duration: 0.2), value: messageText.isEmpty)
                     }
                     .padding()
+                    .background(.ultraThinMaterial)
                 }
-                .background(Color.clear)
-                .onChange(of: messages.count) { oldValue, newValue in
-                    if let lastMessage = messages.last {
-                        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                            proxy.scrollTo(lastMessage.id, anchor: .bottom)
-                        }
-                    }
-                }
-            }
-
-            // Input area
-            VStack(spacing: 0) {
-                Divider()
-                
-                HStack(spacing: 12) {
-                    // Message input field
-                    HStack {
-                        TextField("Type a message...", text: $messageText, axis: .vertical)
-                            .textFieldStyle(.plain)
-                            .lineLimit(1...4)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .onSubmit {
-                                sendMessage()
-                            }
-                    }
-                    .background(Color.secondary.opacity(0.1))
-                    .cornerRadius(20)
-                    
-                    // Send button
-                    Button(action: {
-                        sendMessage()
-                    }) {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.title2)
-                            .foregroundColor(messageText.isEmpty ? Color.secondary : Color.blue)
-                    }
-                    .disabled(messageText.isEmpty || isLoading)
-                    .animation(.easeInOut(duration: 0.2), value: messageText.isEmpty)
-                }
-                .padding()
-                .background(.ultraThinMaterial)
+                .offset(y: inputBarOffset)
             }
         }
         .onAppear {
             connectWebSocket()
+            setupKeyboardObservers()
         }
         .onDisappear {
             webSocketService.disconnect()
@@ -136,12 +174,54 @@ struct ChatView: View {
             }
         }
     }
+    
+    private func setupKeyboardObservers() {
+        #if os(iOS)
+        // Keyboard appearance with overshoot animation
+        NotificationCenter.default.addObserver(
+            forName: UIResponder.keyboardWillShowNotification,
+            object: nil,
+            queue: .main
+        ) { notification in
+            if let keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    self.keyboardHeight = keyboardFrame.height
+                    self.inputBarOffset = -8 // 8pt overshoot
+                }
+                
+                // Spring back to normal position
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8).delay(0.1)) {
+                    self.inputBarOffset = 0
+                }
+            }
+        }
+        
+        NotificationCenter.default.addObserver(
+            forName: UIResponder.keyboardWillHideNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                self.keyboardHeight = 0
+                self.inputBarOffset = 0
+            }
+        }
+        #endif
+    }
 }
 
 // MARK: - Preview
 
 @available(iOS 17.0, macOS 14.0, *)
-#Preview {
+#Preview("Chat View - Light") {
     ChatView()
         .environmentObject(ClaudeCodeService())
+        .preferredColorScheme(.light)
+}
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("Chat View - Dark") {
+    ChatView()
+        .environmentObject(ClaudeCodeService())
+        .preferredColorScheme(.dark)
 }

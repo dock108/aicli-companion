@@ -6,70 +6,49 @@ public struct ContentView: View {
     @EnvironmentObject var claudeService: ClaudeCodeService
     @EnvironmentObject var settings: SettingsManager
     @State private var isConnected = false
+    @State private var backgroundOpacity: Double = 0
     @Environment(\.colorScheme) var colorScheme
 
     public var body: some View {
         NavigationStack {
             ZStack {
-                // Background gradient
-                LinearGradient(
-                    colors: colorScheme == .dark 
-                        ? [Color.black, Color(white: 0.1)]
-                        : [Color(red: 0.95, green: 0.95, blue: 0.98), Color.white],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
+                // Pure background color with fade animation
+                Colors.bgBase(for: colorScheme)
+                    .ignoresSafeArea()
+                    .opacity(backgroundOpacity)
                 
                 VStack(spacing: 0) {
-                    // Custom header with logo
-                    HStack {
-                        Image(colorScheme == .dark ? "AppLogoDark" : "AppLogo")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 32, height: 32)
-                            .cornerRadius(8)
-                        
-                        Text("Claude Companion")
-                            .font(.title2)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.primary)
-                        
-                        Spacer()
-                        
-                        NavigationLink(destination: SettingsView()) {
-                            Image(systemName: "gear")
-                                .font(.title2)
-                                .foregroundColor(.secondary)
-                                .frame(width: 44, height: 44)
-                                .background(Color.secondary.opacity(0.1))
-                                .clipShape(Circle())
+                    // New TopBar component
+                    NavigationTopBar(title: "Code Companion") {
+                        SettingsView()
+                    }
+                    
+                    // Main content with transitions
+                    ZStack {
+                        if isConnected {
+                            ChatView()
+                                .transition(.asymmetric(
+                                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                                    removal: .move(edge: .leading).combined(with: .opacity)
+                                ))
+                        } else {
+                            ConnectionView(isConnected: $isConnected)
+                                .transition(.asymmetric(
+                                    insertion: .move(edge: .leading).combined(with: .opacity),
+                                    removal: .move(edge: .trailing).combined(with: .opacity)
+                                ))
                         }
                     }
-                    .padding(.horizontal)
-                    .padding(.vertical, 8)
-                    .background(.ultraThinMaterial)
-                    
-                    // Main content
-                    if isConnected {
-                        ChatView()
-                            .transition(.asymmetric(
-                                insertion: .move(edge: .trailing).combined(with: .opacity),
-                                removal: .move(edge: .leading).combined(with: .opacity)
-                            ))
-                    } else {
-                        ConnectionView(isConnected: $isConnected)
-                            .transition(.asymmetric(
-                                insertion: .move(edge: .leading).combined(with: .opacity),
-                                removal: .move(edge: .trailing).combined(with: .opacity)
-                            ))
-                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
+            #if os(iOS)
             .navigationBarHidden(true)
+            #endif
         }
         .onAppear {
             checkConnection()
+            animateBackground()
         }
     }
 
@@ -77,11 +56,27 @@ public struct ContentView: View {
         // Check if we have saved connection settings
         isConnected = settings.hasValidConnection()
     }
+    
+    private func animateBackground() {
+        // Fade in background from black
+        withAnimation(.easeInOut(duration: 0.24)) {
+            backgroundOpacity = 1.0
+        }
+    }
 }
 
 @available(iOS 17.0, macOS 14.0, *)
-#Preview {
+#Preview("Light Mode") {
     ContentView()
         .environmentObject(ClaudeCodeService())
         .environmentObject(SettingsManager())
+        .preferredColorScheme(.light)
+}
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("Dark Mode") {
+    ContentView()
+        .environmentObject(ClaudeCodeService())
+        .environmentObject(SettingsManager())
+        .preferredColorScheme(.dark)
 }

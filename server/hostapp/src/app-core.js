@@ -109,13 +109,20 @@ export async function selectConfigPath() {
 
 // Server Management
 export async function startServer() {
+  console.log('🚀 startServer() called');
+  console.log('Current state:', state);
+  console.log('Port input value:', state.elements.portInput?.value);
+  
   state.elements.startBtn.disabled = true;
   state.elements.startBtn.classList.add('loading');
 
   const port = parseInt(state.elements.portInput.value);
+  console.log('Starting server on port:', port);
 
   try {
+    console.log('Invoking start_server...');
     const status = await invoke('start_server', { port });
+    console.log('Server started, status:', status);
     setServerStatus(status);
     await updateUI();
 
@@ -279,8 +286,11 @@ export async function generateQRCode() {
 // Initialize
 export async function init() {
   console.log('🚀 Starting init()...');
+  console.log('Document ready state:', document.readyState);
+  console.log('Window location:', window.location.href);
 
   // Get DOM elements
+  console.log('Getting DOM elements...');
   setElements({
     configPathInput: document.getElementById('config-path'),
     browseBtn: document.getElementById('browse-btn'),
@@ -296,6 +306,14 @@ export async function init() {
     qrCanvas: document.getElementById('qr-code'),
     connectionString: document.getElementById('connection-string'),
     externalNotice: document.getElementById('external-notice'),
+  });
+
+  console.log('DOM elements found:', {
+    configPathInput: !!state.elements.configPathInput,
+    browseBtn: !!state.elements.browseBtn,
+    portInput: !!state.elements.portInput,
+    startBtn: !!state.elements.startBtn,
+    stopBtn: !!state.elements.stopBtn,
   });
 
   // Load saved config
@@ -326,16 +344,36 @@ export async function init() {
   }
 
   // Set up event listeners
+  console.log('Setting up event listeners...');
+  
   if (state.elements.browseBtn) {
-    state.elements.browseBtn.addEventListener('click', selectConfigPath);
+    console.log('✅ Adding click listener to browseBtn');
+    state.elements.browseBtn.addEventListener('click', () => {
+      console.log('Browse button clicked!');
+      selectConfigPath();
+    });
+  } else {
+    console.log('❌ browseBtn not found');
   }
 
   if (state.elements.startBtn) {
-    state.elements.startBtn.addEventListener('click', startServer);
+    console.log('✅ Adding click listener to startBtn');
+    state.elements.startBtn.addEventListener('click', () => {
+      console.log('Start button clicked!');
+      startServer();
+    });
+  } else {
+    console.log('❌ startBtn not found');
   }
 
   if (state.elements.stopBtn) {
-    state.elements.stopBtn.addEventListener('click', stopServer);
+    console.log('✅ Adding click listener to stopBtn');
+    state.elements.stopBtn.addEventListener('click', () => {
+      console.log('Stop button clicked!');
+      stopServer();
+    });
+  } else {
+    console.log('❌ stopBtn not found');
   }
 
   if (state.elements.portInput) {

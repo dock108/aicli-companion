@@ -6,11 +6,18 @@ import('./app-core.js')
     console.log('📦 Importing Tauri APIs...');
 
     // Initialize when DOM is ready
-    console.log('🎯 Setting up DOMContentLoaded listener...');
-    document.addEventListener('DOMContentLoaded', () => {
-      console.log('✅ DOM Content Loaded - starting init()');
+    console.log('🎯 Current document readyState:', document.readyState);
+    
+    if (document.readyState === 'loading') {
+      console.log('⏳ Document still loading, setting up DOMContentLoaded listener...');
+      document.addEventListener('DOMContentLoaded', () => {
+        console.log('✅ DOM Content Loaded - starting init()');
+        appCore.init();
+      });
+    } else {
+      console.log('✅ Document already loaded, starting init() immediately');
       appCore.init();
-    });
+    }
   })
   .catch((error) => {
     console.error('❌ Failed to import app-core:', error);

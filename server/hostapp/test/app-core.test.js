@@ -312,9 +312,9 @@ describe('Claude Companion Host App Core', () => {
       expect(invoke).toHaveBeenCalledWith('get_local_ip');
       expect(invoke).toHaveBeenCalledWith('get_server_status');
       expect(invoke).toHaveBeenCalledWith('detect_running_server', { port: 3001 });
-      expect(appCore.getElements().browseBtn.addEventListener).toHaveBeenCalledWith('click', appCore.selectConfigPath);
-      expect(appCore.getElements().startBtn.addEventListener).toHaveBeenCalledWith('click', appCore.startServer);
-      expect(appCore.getElements().stopBtn.addEventListener).toHaveBeenCalledWith('click', appCore.stopServer);
+      expect(appCore.getElements().browseBtn.addEventListener).toHaveBeenCalledWith('click', expect.any(Function));
+      expect(appCore.getElements().startBtn.addEventListener).toHaveBeenCalledWith('click', expect.any(Function));
+      expect(appCore.getElements().stopBtn.addEventListener).toHaveBeenCalledWith('click', expect.any(Function));
       expect(appCore.getElements().portInput.addEventListener).toHaveBeenCalledWith('change', appCore.saveConfig);
       expect(global.setInterval).toHaveBeenCalledWith(appCore.checkServerHealth, 2000);
     });

@@ -1,0 +1,57 @@
+
+> claude-companion-server@1.0.0 start
+> node src/index.js
+
+🔑 Generated auth token: 6294ab41c976607a2e2dbf3f681b3afb47fe260f26d6b654d8a958ff0e12241c
+   Save this token to connect mobile clients
+Claude Code version: 1.0.60 (Claude Code)
+   📡 Bonjour service advertising on port 3001
+🚀 Claude Companion Server started
+   HTTP Server: http://localhost:3001
+   WebSocket: ws://localhost:3001/ws
+   🔐 Authentication enabled
+   📱 Mobile app connection: ws://localhost:3001/ws?token=6294ab41c976607a2e2dbf3f681b3afb47fe260f26d6b654d8a958ff0e12241c
+   ✅ Claude Code CLI detected
+🔍 Bonjour service published: Claude Companion Server._claudecode._tcp.local
+192.168.68.113 - - [24/Jul/2025:23:57:03 +0000] "GET /health HTTP/1.1" 200 104 "-" "Claude%20Companion/1 CFNetwork/3826.400.120 Darwin/24.5.0"
+WebSocket client connected: 356937ef-3859-4575-aff9-73a623da9db7 from 192.168.68.113 (IPv4)
+WebSocket client connected: 51c17e20-2b87-428d-9263-574e8f387b55 from 192.168.68.113 (IPv4)
+WebSocket client connected: 4cbc5835-bec5-4784-a2e5-2227edb7967d from 192.168.68.113 (IPv4)
+WebSocket client connected: 258039a3-002f-4584-bbfe-dbb484a9c0f8 from 192.168.68.113 (IPv4)
+WebSocket client connected: c9370d3c-e863-4c52-b968-ba5cc8090290 from 192.168.68.113 (IPv4)
+WebSocket client connected: 63c69451-e2eb-4514-a836-e039672261f2 from 192.168.68.113 (IPv4)
+WebSocket client connected: 852b34be-f3b1-473c-bd24-c388f8f63d6f from 192.168.68.113 (IPv4)
+WebSocket client connected: 3b898c01-6cb6-44b0-ab1a-1d8e349c7d8c from 192.168.68.113 (IPv4)
+WebSocket client connected: 3a3aaec0-54fb-45a1-a416-06da1ef01785 from 192.168.68.113 (IPv4)
+192.168.68.113 - - [24/Jul/2025:23:57:19 +0000] "GET /health HTTP/1.1" 200 104 "-" "Claude%20Companion/1 CFNetwork/3826.400.120 Darwin/24.5.0"
+WebSocket client connected: 10630dc7-38cf-4f8c-8f30-2b717027827a from 192.168.68.113 (IPv4)
+WebSocket client disconnected: 10630dc7-38cf-4f8c-8f30-2b717027827a (1006: )
+192.168.68.113 - - [24/Jul/2025:23:58:24 +0000] "GET /health HTTP/1.1" 200 104 "-" "Claude%20Companion/1 CFNetwork/3826.400.120 Darwin/24.5.0"
+WebSocket client connected: 77e74a0b-894a-432d-bd40-b411a4d42295 from 192.168.68.113 (IPv4)
+WebSocket client disconnected: 77e74a0b-894a-432d-bd40-b411a4d42295 (1006: )
+192.168.68.113 - - [24/Jul/2025:23:58:58 +0000] "GET /health HTTP/1.1" 200 104 "-" "Claude%20Companion/1 CFNetwork/3826.400.120 Darwin/24.5.0"
+WebSocket client connected: 3b4b6679-371f-47e4-a381-cb8d2d3d4381 from 192.168.68.113 (IPv4)
+WebSocket client disconnected: 3b4b6679-371f-47e4-a381-cb8d2d3d4381 (1006: )
+192.168.68.113 - - [25/Jul/2025:00:00:49 +0000] "GET /health HTTP/1.1" 200 104 "-" "Claude%20Companion/1 CFNetwork/3826.400.120 Darwin/24.5.0"
+WebSocket client connected: b0bf56ff-1731-4b5f-af34-68a1e781d1a5 from 192.168.68.113 (IPv4)
+WebSocket client disconnected: b0bf56ff-1731-4b5f-af34-68a1e781d1a5 (1006: )
+WebSocket client connected: c84064f4-fbc1-4f70-8ab5-f95b62af0f96 from 192.168.68.113 (IPv4)
+WebSocket client disconnected: c84064f4-fbc1-4f70-8ab5-f95b62af0f96 (1006: )
+WebSocket client connected: 98d87fb1-8c5f-477b-be89-da8ae86c80f4 from 192.168.68.113 (IPv4)
+WebSocket client disconnected: 98d87fb1-8c5f-477b-be89-da8ae86c80f4 (1006: )
+WebSocket client connected: b1583d56-5a96-406b-bc36-2585b0d2cb3e from 192.168.68.113 (IPv4)
+WebSocket client disconnected: b1583d56-5a96-406b-bc36-2585b0d2cb3e (1006: )
+192.168.68.113 - - [25/Jul/2025:00:07:34 +0000] "GET /health HTTP/1.1" 200 104 "-" "Claude%20Companion/1 CFNetwork/3826.400.120 Darwin/24.5.0"
+WebSocket client connected: 812a1149-1127-4d88-b284-ece38957c33e from 192.168.68.113 (IPv4)
+🔍 Raw message from 812a1149-1127-4d88-b284-ece38957c33e: {"timestamp":"2025-07-25T00:08:05Z","type":"ping","requestId":"9E17081D-C476-48C3-8F9B-4DBD39F41424","data":{}}
+📨 Parsed message from 812a1149-1127-4d88-b284-ece38957c33e: {
+  "timestamp": "2025-07-25T00:08:05Z",
+  "type": "ping",
+  "requestId": "9E17081D-C476-48C3-8F9B-4DBD39F41424",
+  "data": {}
+}
+WebSocket client disconnected: 812a1149-1127-4d88-b284-ece38957c33e (1006: )
+WebSocket client connected: 6ce57e59-6879-4800-8f72-bfa186a28da3 from 192.168.68.113 (IPv4)
+WebSocket client disconnected: 6ce57e59-6879-4800-8f72-bfa186a28da3 (1006: )
+WebSocket client connected: 25268010-f664-4d05-bdbf-90c25fb70f06 from 192.168.68.113 (IPv4)
+WebSocket client disconnected: 25268010-f664-4d05-bdbf-90c25fb70f06 (1006: )

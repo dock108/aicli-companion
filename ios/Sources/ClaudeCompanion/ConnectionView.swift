@@ -49,21 +49,6 @@ struct ConnectionView: View {
                 .frame(height: 20)
 
             VStack(spacing: 16) {
-                // Debug button to test tap handling
-                Button(action: {
-                    print("DEBUG: Test button tapped!")
-                    errorMessage = "Test button was tapped successfully"
-                }) {
-                    Text("Test Button (Tap Me)")
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.green)
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
-                }
-                .buttonStyle(.plain)
-                .contentShape(Rectangle())
-                
                 // Discovered servers section
                 if !discoveryManager.discoveredServers.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
@@ -467,13 +452,13 @@ struct ManualConnectionView: View {
             .navigationBarTitleDisplayMode(.inline)
 
             #endif
-            .onChange(of: isConnected) { newValue in
+            .onChange(of: isConnected) { oldValue, newValue in
                 if newValue {
                     // Dismiss sheet when connected
                     dismiss()
                 }
             }
-            .onChange(of: errorMessage) { _ in
+            .onChange(of: errorMessage) { oldValue, newValue in
                 // Stop loading when error occurs
                 isConnecting = false
             }

@@ -105,6 +105,10 @@ describe('WebSocket V2 Service', () => {
       const request = {
         url: `/ws?token=${authToken}`,
         headers: { host: 'localhost:3000' },
+        socket: {
+          remoteAddress: '127.0.0.1',
+          remoteFamily: 'IPv4',
+        },
       };
 
       wss.emit('connection', ws, request);
@@ -134,6 +138,10 @@ describe('WebSocket V2 Service', () => {
       const request = {
         url: '/ws',
         headers: { host: 'localhost:3000' },
+        socket: {
+          remoteAddress: '127.0.0.1',
+          remoteFamily: 'IPv4',
+        },
       };
 
       wss.emit('connection', ws, request);
@@ -152,6 +160,10 @@ describe('WebSocket V2 Service', () => {
       request = {
         url: `/ws?token=${authToken}`,
         headers: { host: 'localhost:3000' },
+        socket: {
+          remoteAddress: '127.0.0.1',
+          remoteFamily: 'IPv4',
+        },
       };
       wss.emit('connection', ws, request);
 
@@ -290,6 +302,10 @@ describe('WebSocket V2 Service', () => {
       const request = {
         url: `/ws?token=${authToken}`,
         headers: { host: 'localhost:3000' },
+        socket: {
+          remoteAddress: '127.0.0.1',
+          remoteFamily: 'IPv4',
+        },
       };
       wss.emit('connection', ws, request);
 
@@ -327,6 +343,10 @@ describe('WebSocket V2 Service', () => {
       const request = {
         url: `/ws?token=${authToken}`,
         headers: { host: 'localhost:3000' },
+        socket: {
+          remoteAddress: '127.0.0.1',
+          remoteFamily: 'IPv4',
+        },
       };
 
       wss.emit('connection', ws, request);
@@ -370,6 +390,10 @@ describe('WebSocket V2 Service', () => {
       const request = {
         url: `/ws?token=${authToken}`,
         headers: { host: 'localhost:3000' },
+        socket: {
+          remoteAddress: '127.0.0.1',
+          remoteFamily: 'IPv4',
+        },
       };
       wss.emit('connection', ws, request);
 
@@ -467,6 +491,10 @@ describe('WebSocket V2 Service', () => {
       const request = {
         url: `/ws?token=${authToken}`,
         headers: { host: 'localhost:3000' },
+        socket: {
+          remoteAddress: '127.0.0.1',
+          remoteFamily: 'IPv4',
+        },
       };
       wss.emit('connection', ws, request);
 
@@ -549,6 +577,10 @@ describe('WebSocket V2 Service', () => {
       const request = {
         url: `/ws?token=${authToken}`,
         headers: { host: 'localhost:3000' },
+        socket: {
+          remoteAddress: '127.0.0.1',
+          remoteFamily: 'IPv4',
+        },
       };
       wss.emit('connection', ws, request);
 
@@ -634,6 +666,10 @@ describe('WebSocket V2 Service', () => {
       const request = {
         url: `/ws?token=${authToken}`,
         headers: { host: 'localhost:3000' },
+        socket: {
+          remoteAddress: '127.0.0.1',
+          remoteFamily: 'IPv4',
+        },
       };
       wss.emit('connection', ws, request);
 
@@ -691,6 +727,10 @@ describe('WebSocket V2 Service', () => {
       const request = {
         url: `/ws?token=${authToken}`,
         headers: { host: 'localhost:3000' },
+        socket: {
+          remoteAddress: '127.0.0.1',
+          remoteFamily: 'IPv4',
+        },
       };
       wss.emit('connection', ws, request);
 
@@ -832,6 +872,10 @@ describe('WebSocket V2 Service', () => {
       const request = {
         url: `/ws?token=${authToken}`,
         headers: { host: 'localhost:3000' },
+        socket: {
+          remoteAddress: '127.0.0.1',
+          remoteFamily: 'IPv4',
+        },
       };
       wss.emit('connection', ws, request);
 

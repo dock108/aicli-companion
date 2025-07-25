@@ -5,7 +5,9 @@ export function setupWebSocket(wss, claudeService, authToken) {
 
   wss.on('connection', (ws, request) => {
     const clientId = uuidv4();
-    console.log(`WebSocket client connected: ${clientId}`);
+    const clientIP = request.socket.remoteAddress;
+    const clientFamily = request.socket.remoteFamily;
+    console.log(`WebSocket client connected: ${clientId} from ${clientIP} (${clientFamily})`);
 
     // Authentication check
     if (authToken) {
@@ -76,11 +78,21 @@ export function setupWebSocket(wss, claudeService, authToken) {
     // Handle incoming messages
     ws.on('message', async (data) => {
       try {
-        const message = JSON.parse(data.toString());
-        console.log(`📨 Received message from ${clientId}: ${message.type}`);
+        const rawMessage = data.toString();
+        console.log(`🔍 Raw message from ${clientId}:`, rawMessage);
+
+        const message = JSON.parse(rawMessage);
+        console.log(`📨 Parsed message from ${clientId}:`, JSON.stringify(message, null, 2));
+
+        // Validate message structure
+        if (!message.type) {
+          throw new Error('Message missing required field: type');
+        }
+
         await handleWebSocketMessage(clientId, message, claudeService, clients);
       } catch (error) {
         console.error('WebSocket message error:', error);
+        console.error('Failed to parse message:', data.toString());
         sendErrorMessage(clientId, null, 'INVALID_REQUEST', error.message, clients);
       }
     });

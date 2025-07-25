@@ -1,8 +1,13 @@
 #!/usr/bin/env sh
 
-# Run server linting
-npm run lint:server
+# Run lint-staged to handle file-specific linting and formatting
+npx lint-staged
 
-# TODO: Fix root directory test execution - temporarily run directly in server directory
-# Run server unit tests with coverage enforcement directly in server directory
+# Run server unit tests with coverage enforcement
 cd server && npm run test:coverage
+
+# Run hostapp JavaScript tests with coverage enforcement
+cd ../server/hostapp && npm run test:coverage
+
+# Return to root directory
+cd ../..

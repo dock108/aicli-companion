@@ -1,5 +1,5 @@
 [package]
-name = "claude-companion-desktop"
+name = "claude-companion-hostapp"
 version = "0.1.0"
 description = "Desktop UI for Claude Companion Server"
 authors = ["Claude Companion Team"]
@@ -18,6 +18,15 @@ reqwest = { version = "0.11", features = ["json"] }
 tokio = { version = "1", features = ["full"] }
 local-ip-address = "0.5"
 
+[dev-dependencies]
+mockall = "0.11"
+tokio-test = "0.4"
+wiremock = "0.5"
+
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+
+# [patch.crates-io]
+# glib = { version = "=0.20.12" }
+# Note: Uncomment the patch above if you need to force glib to 0.20.12 for security reasons

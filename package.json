@@ -4,28 +4,42 @@
   "description": "Claude Code Mobile Companion - iOS app and server",
   "private": true,
   "scripts": {
-    "prepare": "husky",
-    "test": "npm run test:server && npm run test:ios",
+    "prepare": "node -e \"if (process.env.CI !== 'true') { require('child_process').execSync('husky', {stdio: 'inherit'}); }\"",
+    "test": "npm run test:server && npm run test:hostapp && npm run test:ios",
     "test:server": "cd server && npm test",
+    "test:hostapp": "cd server/hostapp && npm test",
+    "test:hostapp:rust": "cd server/hostapp/src-tauri && cargo test",
     "_TODO_FIX_COVERAGE": "test:coverage:server script has path resolution issues - temporarily bypassed in pre-commit",
     "test:coverage:server": "npm run test:coverage --prefix server",
+    "test:coverage:hostapp": "cd server/hostapp && npm run test:coverage",
+    "test:coverage:all": "npm run test:coverage:server && npm run test:coverage:hostapp",
     "test:ios": "cd ios && swift test",
-    "lint": "npm run lint:server",
+    "lint": "npm run lint:server && npm run lint:hostapp",
     "lint:server": "cd server && npm run lint",
-    "format": "npm run format:server",
-    "format:server": "cd server && npm run format"
+    "lint:hostapp": "cd server/hostapp && npm run lint",
+    "format": "npm run format:server && npm run format:hostapp",
+    "format:server": "cd server && npm run format",
+    "format:hostapp": "cd server/hostapp && npm run lint:fix"
   },
   "devDependencies": {
     "husky": "^9.1.7",
     "lint-staged": "^16.1.2"
   },
   "workspaces": [
-    "server"
+    "server",
+    "server/hostapp"
   ],
   "lint-staged": {
     "server/src/**/*.js": [
       "cd server && npm run lint",
       "cd server && npm run format"
+    ],
+    "server/hostapp/src/**/*.{js,ts}": [
+      "cd server/hostapp && npm run lint:fix"
+    ],
+    "server/hostapp/src-tauri/src/**/*.rs": [
+      "sh -c 'command -v cargo >/dev/null 2>&1 && cd server/hostapp/src-tauri && cargo fmt || echo \"Skipping Rust formatting (cargo not installed)\"'",
+      "sh -c 'command -v cargo >/dev/null 2>&1 && cd server/hostapp/src-tauri && cargo clippy -- -D warnings || echo \"Skipping Rust linting (cargo not installed)\"'"
     ],
     "ios/**/*.swift": [
       "cd ios && swiftlint lint --fix"

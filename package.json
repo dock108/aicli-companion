@@ -4,7 +4,7 @@
   "description": "Claude Code Mobile Companion - iOS app and server",
   "private": true,
   "scripts": {
-    "prepare": "husky",
+    "prepare": "node -e \"if (process.env.CI !== 'true') { require('child_process').execSync('husky', {stdio: 'inherit'}); }\"",
     "test": "npm run test:server && npm run test:hostapp && npm run test:ios",
     "test:server": "cd server && npm test",
     "test:hostapp": "cd server/hostapp && npm test",

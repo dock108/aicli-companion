@@ -8,9 +8,13 @@ export class ServerStartup {
   /**
    * Generate or use existing auth token
    * @param {string|null} existingToken - Existing auth token from config
-   * @returns {string} Auth token to use
+   * @param {boolean} authRequired - Whether authentication is required
+   * @returns {string|null} Auth token to use
    */
-  static generateAuthToken(existingToken) {
+  static generateAuthToken(existingToken, authRequired) {
+    if (!authRequired) {
+      return null;
+    }
     if (!existingToken) {
       const token = TokenManager.generateSecureToken();
       console.log(`🔑 Generated auth token: ${token}`);
@@ -58,6 +62,9 @@ export class ServerStartup {
       console.log(
         `   📱 Mobile app connection: ${wsProtocol}://${hostname}:${config.port}/ws?token=${authToken}`
       );
+    } else {
+      console.log(`   🔓 Authentication disabled (AUTH_REQUIRED=false)`);
+      console.log(`   📱 Mobile app connection: ${wsProtocol}://${hostname}:${config.port}/ws`);
     }
 
     if (config.enableTLS) {

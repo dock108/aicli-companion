@@ -16,155 +16,166 @@ struct ConnectionView: View {
     @State private var isLoading = false
     @State private var errorMessage = ""
     @State private var showingManualSetup = false
+    @State private var showingQRScanner = false
     @State private var selectedServer: DiscoveredClaudeServer?
     @State private var cancellables = Set<AnyCancellable>()
+    @State private var connectionState: ConnectionState = .default
+    
+    enum ConnectionState {
+        case `default`
+        case scanning
+        case connected
+        case error
+    }
+    
+    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 30) {
-                Spacer()
-                    .frame(height: 60)
+        VStack(spacing: 0) {
+            Spacer()
+                .frame(height: Spacing.Layout.navBarToHero)
             
-            Image(systemName: "desktopcomputer")
-                .font(.system(size: 80))
-                .foregroundColor(.blue)
-                .padding(.bottom, 10)
+            // Hero Illustration
+            ZStack {
+                Circle()
+                    .fill(Gradients.heroIcon)
+                    .frame(width: 120, height: 120)
+                
+                if connectionState == .connected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 60, weight: .semibold))
+                        .foregroundColor(.white)
+                        .transition(.scale.combined(with: .opacity))
+                } else {
+                    Image(systemName: "terminal.fill")
+                        .font(.system(size: 60))
+                        .foregroundColor(.white)
+                        .transition(.scale.combined(with: .opacity))
+                }
+            }
+            .scaleEffect(connectionState == .connected ? 1.1 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: connectionState)
+            
+            Spacer()
+                .frame(height: Spacing.Layout.heroToTitle)
 
-            VStack(spacing: 12) {
-                Text("Connect to Claude Companion")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                    .multilineTextAlignment(.center)
+            // Title Block
+            VStack(spacing: Spacing.sm) {
+                Text("Connect to Code Companion")
+                    .h1()
                     .fixedSize(horizontal: false, vertical: true)
 
-                Text("Connect to your Claude Code companion server to start coding on mobile")
-                    .font(.body)
-                    .multilineTextAlignment(.center)
-                    .foregroundColor(.secondary)
+                Text("Scan the QR code displayed by your desktop server to start coding on mobile.")
+                    .secondaryText()
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 20)
+                    .frame(maxWidth: 280)
             }
             
             Spacer()
-                .frame(height: 20)
+                .frame(height: Spacing.Layout.titleToButton)
 
-            VStack(spacing: 16) {
-                // Discovered servers section
+            // Buttons section
+            VStack(spacing: 0) {
+                // Primary CTA
+                PrimaryButton(
+                    "Scan QR Code",
+                    isLoading: connectionState == .scanning,
+                    isEnabled: connectionState != .scanning
+                ) {
+                    showingQRScanner = true
+                    connectionState = .scanning
+                }
+                .padding(.horizontal, Spacing.Layout.screenPaddingHorizontal)
+                
+                Spacer()
+                    .frame(height: Spacing.Layout.buttonToDivider)
+                
+                // Divider
+                DividerView()
+                    .padding(.horizontal, Spacing.Layout.screenPaddingHorizontal)
+                
+                Spacer()
+                    .frame(height: Spacing.Layout.dividerToSecondaryButton)
+                
+                // Secondary CTA
+                SecondaryButton("Manual Setup") {
+                    showingManualSetup = true
+                }
+                .padding(.horizontal, Spacing.Layout.screenPaddingHorizontal)
+                
+                // Auto-discovery servers (if any)
                 if !discoveryManager.discoveredServers.isEmpty {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text("Discovered Servers")
-                                .font(.headline)
-                            Spacer()
-                            Button("Refresh") {
-                                discoveryManager.refreshDiscovery()
-                            }
-                            .font(.caption)
-                            .foregroundColor(.blue)
-                        }
-
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        Text("Discovered Servers")
+                            .font(Typography.font(.small))
+                            .foregroundColor(Colors.secondaryText)
+                            .padding(.top, Spacing.md)
+                        
                         ForEach(discoveryManager.discoveredServers) { server in
-                            DiscoveredServerRow(
+                            DiscoveredServerCard(
                                 server: server,
                                 isSelected: selectedServer?.id == server.id,
-                                onSelect: { selectedServer = server }
+                                onSelect: {
+                                    selectedServer = server
+                                    connectToDiscoveredServer(server)
+                                }
                             )
                         }
                     }
-                    .padding(.horizontal)
+                    .padding(.horizontal, Spacing.Layout.screenPaddingHorizontal)
                 }
-
-                // Auto-discovery section
-                Button(action: {
-                    print("Scan button tapped")
-                    discoverServers()
-                }) {
-                    HStack {
-                        if discoveryManager.isScanning {
-                            ProgressView()
-                                .scaleEffect(0.8)
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        } else {
-                            Image(systemName: "wifi")
-                        }
-                        Text(discoveryManager.isScanning ? "Scanning..." : "Scan for Local Servers")
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(discoveryManager.isScanning ? Color.gray : Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
-                }
-                .buttonStyle(.plain)
-                .contentShape(Rectangle())
-                .disabled(isLoading || discoveryManager.isScanning)
-
-                if let selectedServer = selectedServer {
-                    Button(action: { connectToDiscoveredServer(selectedServer) }) {
-                        HStack {
-                            Image(systemName: "link")
-                            Text("Connect to \(selectedServer.displayName)")
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.green)
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
-                    }
-                    .buttonStyle(.plain)
-                    .contentShape(Rectangle())
-                    .disabled(isLoading)
-                }
-
-                Text("or")
-                    .foregroundColor(.secondary)
-
-                // Manual connection button
-                Button(action: { 
-                    print("Manual setup button tapped")
-                    showingManualSetup = true 
-                }) {
-                    HStack {
-                        Image(systemName: "gear")
-                        Text("Manual Setup")
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.gray.opacity(0.2))
-                    .foregroundColor(.primary)
-                    .cornerRadius(10)
-                }
-                .buttonStyle(.plain)
-                .contentShape(Rectangle())
-            }
-            .padding(.horizontal, 20)
-
-            if !errorMessage.isEmpty {
-                Text(errorMessage)
-                    .foregroundColor(.red)
-                    .font(.caption)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 20)
-                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Spacer()
-
-            VStack(spacing: 8) {
+                .frame(height: Spacing.Layout.secondaryButtonToHelp)
+            
+            // Help Footer
+            VStack(spacing: Spacing.xs) {
                 Text("Need Help?")
-                    .font(.headline)
-
-                Button("Setup Instructions") {
+                    .font(Typography.font(.link))
+                    .foregroundColor(Colors.ink900)
+                
+                Button(action: {
                     // TODO: Open setup instructions
+                }) {
+                    Text("Setup Instructions")
+                        .linkText()
                 }
-                .foregroundColor(.blue)
             }
-            .padding(.bottom, 30)
-        }
+            .padding(.bottom, Spacing.Layout.screenPaddingBottom)
+            
+            Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(UIColor.systemBackground))
+        .background(Colors.adaptiveBackground(colorScheme: colorScheme))
+        .overlay(
+            // Error state card
+            Group {
+                if connectionState == .error && !errorMessage.isEmpty {
+                    ErrorCard(message: errorMessage) {
+                        withAnimation {
+                            connectionState = .default
+                            errorMessage = ""
+                        }
+                    }
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .padding(.top, 100)
+                }
+            }
+            , alignment: .top
+        )
         .ignoresSafeArea(edges: .bottom)
+        .sheet(isPresented: $showingQRScanner) {
+            QRScannerSheet(isConnected: $isConnected) { result in
+                showingQRScanner = false
+                connectionState = .default
+                // Handle QR scan result
+                if case .success(let url) = result {
+                    // Parse and connect using the URL
+                    handleQRCodeURL(url)
+                }
+            }
+        }
         .sheet(isPresented: $showingManualSetup) {
             ManualConnectionView(
                 serverAddress: $serverAddress,
@@ -246,6 +257,33 @@ struct ConnectionView: View {
         }
     }
 
+    private func handleQRCodeURL(_ url: URL) {
+        // Parse the QR code URL and extract connection details
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            connectionState = .error
+            errorMessage = "Invalid QR code format"
+            return
+        }
+        
+        // Extract host, port, and token from URL
+        if let host = components.host,
+           let port = components.port {
+            serverAddress = host
+            serverPort = String(port)
+            
+            // Extract token from query parameters
+            if let token = components.queryItems?.first(where: { $0.name == "token" })?.value {
+                authToken = token
+            }
+            
+            // Attempt connection
+            connectManually()
+        } else {
+            connectionState = .error
+            errorMessage = "QR code missing connection details"
+        }
+    }
+    
     private func connectWithWebSocket(_ connection: ServerConnection, authToken: String?) {
         guard let wsURL = connection.wsURL else {
             DispatchQueue.main.async {
@@ -283,15 +321,23 @@ struct ConnectionView: View {
                 case .error(let message):
                     self.isLoading = false
                     self.errorMessage = message
+                    self.connectionState = .error
                 case .connecting:
                     self.isLoading = true
                     self.errorMessage = ""
+                    self.connectionState = .scanning
                 case .connected:
                     self.isLoading = false
                     self.errorMessage = ""
+                    self.connectionState = .connected
+                    // Add a small delay before transitioning to the chat view
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        self.isConnected = true
+                    }
                 case .disconnected:
                     if !self.isLoading {
                         self.isConnected = false
+                        self.connectionState = .default
                     }
                 }
             }
@@ -300,55 +346,52 @@ struct ConnectionView: View {
 }
 
 @available(iOS 15.0, macOS 12.0, *)
-struct DiscoveredServerRow: View {
+struct DiscoveredServerCard: View {
     let server: DiscoveredClaudeServer
     let isSelected: Bool
     let onSelect: () -> Void
+    
+    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         Button(action: onSelect) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
                 HStack {
-                    VStack(alignment: .leading) {
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
                         Text(server.displayName)
-                            .font(.headline)
-                            .foregroundColor(.primary)
+                            .font(Typography.font(.body))
+                            .foregroundColor(Colors.adaptivePrimaryText(colorScheme: colorScheme))
 
                         Text("\(server.address):\(server.port)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                            .font(Typography.font(.small))
+                            .foregroundColor(Colors.adaptiveSecondaryText(colorScheme: colorScheme))
                     }
 
                     Spacer()
 
-                    if isSelected {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.blue)
-                    } else {
-                        Image(systemName: "circle")
-                            .foregroundColor(.gray)
-                    }
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .foregroundColor(isSelected ? Colors.brandBlue500 : Colors.ink700.opacity(0.3))
+                        .font(.system(size: 20))
                 }
 
                 if !server.connectionInfo.isEmpty {
                     Text(server.connectionInfo)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(Typography.font(.small))
+                        .foregroundColor(Colors.adaptiveSecondaryText(colorScheme: colorScheme))
                 }
             }
-            .padding(.vertical, 4)
+            .padding(Spacing.md)
+            .background(
+                RoundedRectangle(cornerRadius: CornerRadius.card)
+                    .fill(isSelected ? Colors.brandBlue500.opacity(0.1) : Colors.surface10)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: CornerRadius.card)
+                    .stroke(isSelected ? Colors.brandBlue500 : Color.clear, lineWidth: 2)
+            )
+            .shadow(Shadows.medium)
         }
         .buttonStyle(.plain)
-        .contentShape(Rectangle())
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(isSelected ? Color.blue.opacity(0.1) : Color.gray.opacity(0.1))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
-        )
     }
 }
 

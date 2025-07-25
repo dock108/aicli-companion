@@ -22,32 +22,31 @@ public struct ContentView: View {
                 .ignoresSafeArea()
                 
                 VStack(spacing: 0) {
-                    // Custom header with logo
-                    HStack {
-                        Image(colorScheme == .dark ? "AppLogoDark" : "AppLogo")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 32, height: 32)
-                            .cornerRadius(8)
+                    // NavBar with design system styling
+                    HStack(spacing: Spacing.sm) {
+                        // Terminal bubble icon
+                        Image(systemName: "terminal.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(Colors.brandBlue500)
+                            .frame(width: 24, height: 24)
                         
-                        Text("Claude Companion")
-                            .font(.title2)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.primary)
+                        Text("Code Companion")
+                            .font(Typography.font(.navTitle))
+                            .foregroundColor(Colors.adaptivePrimaryText(colorScheme: colorScheme))
                         
                         Spacer()
                         
                         NavigationLink(destination: SettingsView()) {
-                            Image(systemName: "gear")
-                                .font(.title2)
-                                .foregroundColor(.secondary)
+                            Image(systemName: "gearshape")
+                                .font(.system(size: 24))
+                                .foregroundColor(Colors.adaptiveSecondaryText(colorScheme: colorScheme))
                                 .frame(width: 44, height: 44)
-                                .background(Color.secondary.opacity(0.1))
+                                .background(Colors.surface10)
                                 .clipShape(Circle())
                         }
                     }
-                    .padding(.horizontal)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, Spacing.Component.navBarPadding)
+                    .padding(.vertical, Spacing.Component.navBarVerticalPadding)
                     .background(.ultraThinMaterial)
                     
                     // Main content

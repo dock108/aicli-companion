@@ -76,6 +76,8 @@ describe('WebSocket V2 Service', () => {
   let claudeService;
   let authToken;
   let clearIntervalSpy;
+  let originalSetInterval;
+  let originalClearInterval;
 
   beforeEach(() => {
     wss = new MockWebSocketServer();
@@ -83,18 +85,38 @@ describe('WebSocket V2 Service', () => {
     authToken = 'test-token-123';
 
     // Mock setInterval to prevent hanging tests
-    const originalSetInterval = global.setInterval;
-    const originalClearInterval = global.clearInterval;
+    originalSetInterval = global.setInterval;
+    originalClearInterval = global.clearInterval;
     clearIntervalSpy = createMockFn();
 
     global.setInterval = createMockFn(() => 12345); // Return mock timer ID
     global.clearInterval = clearIntervalSpy;
+  });
 
-    // Restore after test
-    wss.on('test-cleanup', () => {
+  afterEach(() => {
+    // Always restore timers, even if test fails
+    if (originalSetInterval) {
       global.setInterval = originalSetInterval;
+    }
+    if (originalClearInterval) {
       global.clearInterval = originalClearInterval;
-    });
+    }
+
+    // Clean up any WebSocket connections
+    if (wss && wss.clients) {
+      wss.clients.forEach((client) => {
+        if (client.readyState === 1) {
+          // OPEN
+          client.terminate();
+        }
+      });
+      wss.clients.clear();
+    }
+
+    // Emit close event to trigger interval cleanup
+    if (wss) {
+      wss.emit('close');
+    }
   });
 
   describe('connection handling', () => {
@@ -1069,10 +1091,5 @@ describe('WebSocket V2 Service', () => {
         assert.strictEqual(response.data.content.data, null);
       }
     });
-  });
-
-  // Cleanup
-  afterEach(() => {
-    wss.emit('test-cleanup');
   });
 });

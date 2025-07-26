@@ -86,7 +86,14 @@ class InputValidator {
       throw new Error('Arguments must be an array');
     }
 
-    const allowedArgs = ['--print', '--output-format', '--verbose', '--help', '--version', '--continue'];
+    const allowedArgs = [
+      '--print',
+      '--output-format',
+      '--verbose',
+      '--help',
+      '--version',
+      '--continue',
+    ];
 
     const allowedFormats = ['json', 'text', 'markdown', 'stream-json'];
 
@@ -141,7 +148,7 @@ export class ClaudeCodeService extends EventEmitter {
       console.log(`Using Claude CLI path from CLAUDE_CLI_PATH: ${process.env.CLAUDE_CLI_PATH}`);
       return process.env.CLAUDE_CLI_PATH;
     }
-    
+
     // Try to use 'which' command to find claude
     try {
       const path = execSync('which claude', { encoding: 'utf8' }).trim();
@@ -152,22 +159,22 @@ export class ClaudeCodeService extends EventEmitter {
     } catch (error) {
       // 'which' failed, try common locations
     }
-    
+
     // Common installation paths to check
     const commonPaths = [
       '/Users/michaelfuscoletti/.nvm/versions/node/v20.19.1/bin/claude',
       '/usr/local/bin/claude',
       '/opt/homebrew/bin/claude',
-      process.env.HOME + '/.local/bin/claude',
-      process.env.HOME + '/.npm/bin/claude',
-      process.env.HOME + '/.yarn/bin/claude'
+      `${process.env.HOME}/.local/bin/claude`,
+      `${process.env.HOME}/.npm/bin/claude`,
+      `${process.env.HOME}/.yarn/bin/claude`,
     ];
-    
+
     // Also check NVM paths dynamically
     if (process.env.NVM_BIN) {
-      commonPaths.unshift(process.env.NVM_BIN + '/claude');
+      commonPaths.unshift(`${process.env.NVM_BIN}/claude`);
     }
-    
+
     for (const path of commonPaths) {
       try {
         if (existsSync(path)) {
@@ -178,7 +185,7 @@ export class ClaudeCodeService extends EventEmitter {
         // Path doesn't exist, continue
       }
     }
-    
+
     // If not found, fall back to 'claude' and hope it's in PATH
     console.warn('Claude CLI not found in common locations, falling back to PATH lookup');
     return 'claude';
@@ -219,7 +226,10 @@ export class ClaudeCodeService extends EventEmitter {
       // Validate and sanitize inputs
       const sanitizedPrompt = InputValidator.sanitizePrompt(prompt);
       const validatedFormat = InputValidator.validateFormat(format);
-      const validatedWorkingDir = await InputValidator.validateWorkingDirectory(workingDirectory, this.safeRootDirectory);
+      const validatedWorkingDir = await InputValidator.validateWorkingDirectory(
+        workingDirectory,
+        this.safeRootDirectory
+      );
       const sanitizedSessionId = InputValidator.sanitizeSessionId(sessionId);
 
       if (streaming) {
@@ -261,16 +271,17 @@ export class ClaudeCodeService extends EventEmitter {
         });
       } catch (spawnError) {
         console.error(`❌ Failed to spawn Claude CLI:`, spawnError);
-        const errorMsg = spawnError.code === 'ENOENT' 
-          ? 'Claude CLI not found. Please ensure Claude CLI is installed and in your PATH.'
-          : `Failed to start Claude CLI: ${spawnError.message}`;
-        
+        const errorMsg =
+          spawnError.code === 'ENOENT'
+            ? 'Claude CLI not found. Please ensure Claude CLI is installed and in your PATH.'
+            : `Failed to start Claude CLI: ${spawnError.message}`;
+
         // Emit error event
         this.emit('processError', {
           error: errorMsg,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
-        
+
         reject(new Error(errorMsg));
         return;
       }
@@ -282,38 +293,38 @@ export class ClaudeCodeService extends EventEmitter {
       let stderr = '';
 
       console.log(`   Process started with PID: ${claudeProcess.pid}`);
-      
+
       // Check if process actually started
       if (!claudeProcess.pid) {
         const errorMsg = 'Claude CLI process failed to start (no PID)';
         console.error(`❌ ${errorMsg}`);
         this.emit('processError', {
           error: errorMsg,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
         reject(new Error(errorMsg));
         return;
       }
-      
+
       // Emit process start event
       this.emit('processStart', {
         pid: claudeProcess.pid,
         command: this.claudeCommand,
         args: args.slice(0, 3), // Don't include full prompt
         workingDirectory,
-        type: 'one-time'
+        type: 'one-time',
       });
 
       claudeProcess.stdout.on('data', (data) => {
         const chunk = data.toString();
         console.log(`   STDOUT chunk: ${chunk.length} chars`);
         stdout += chunk;
-        
+
         // Emit stdout data for logging
         this.emit('processStdout', {
           pid: claudeProcess.pid,
           data: chunk,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
       });
 
@@ -321,12 +332,12 @@ export class ClaudeCodeService extends EventEmitter {
         const chunk = data.toString();
         console.log(`   STDERR chunk: ${chunk}`);
         stderr += chunk;
-        
+
         // Emit stderr data for logging
         this.emit('processStderr', {
           pid: claudeProcess.pid,
           data: chunk,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
       });
 
@@ -334,14 +345,14 @@ export class ClaudeCodeService extends EventEmitter {
         console.log(`   Process closed with code: ${code}`);
         console.log(`   STDOUT length: ${stdout.length}`);
         console.log(`   STDERR length: ${stderr.length}`);
-        
+
         // Emit process exit event
         this.emit('processExit', {
           pid: claudeProcess.pid,
           code,
           stdout: stdout.substring(0, 1000), // First 1000 chars for debugging
           stderr,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
 
         if (code !== 0) {
@@ -425,7 +436,7 @@ export class ClaudeCodeService extends EventEmitter {
     };
 
     this.activeSessions.set(sanitizedSessionId, session);
-    
+
     // Initialize message buffer for this session
     this.sessionMessageBuffers.set(sanitizedSessionId, {
       assistantMessages: [],
@@ -433,7 +444,7 @@ export class ClaudeCodeService extends EventEmitter {
       toolUseInProgress: false,
       permissionRequests: [],
       deliverables: [],
-      pendingFinalResponse: null
+      pendingFinalResponse: null,
     });
 
     // Set up session timeout
@@ -472,23 +483,25 @@ export class ClaudeCodeService extends EventEmitter {
       // Update last activity
       session.lastActivity = Date.now();
 
-      console.log(`📝 Executing Claude CLI command for session ${sanitizedSessionId}: "${sanitizedPrompt}"`);
+      console.log(
+        `📝 Executing Claude CLI command for session ${sanitizedSessionId}: "${sanitizedPrompt}"`
+      );
 
       // Execute Claude CLI with continuation and print mode
       const response = await this.executeClaudeCommand(session, sanitizedPrompt);
-      
+
       // Emit command sent event
       this.emit('commandSent', {
         sessionId: sanitizedSessionId,
         prompt: sanitizedPrompt.substring(0, 100) + (sanitizedPrompt.length > 100 ? '...' : ''),
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
 
       return {
         sessionId: sanitizedSessionId,
         success: true,
         message: 'Command executed successfully',
-        response: response,
+        response,
       };
     } catch (error) {
       console.error(`❌ Failed to execute command for session ${sanitizedSessionId}:`, error);
@@ -498,10 +511,10 @@ export class ClaudeCodeService extends EventEmitter {
 
   async testClaudeCommand(testType = 'version') {
     console.log(`🧪 Testing Claude CLI command: ${testType}`);
-    
+
     let args = [];
-    let prompt = null;
-    
+    const prompt = null;
+
     switch (testType) {
       case 'version':
         args = ['--version'];
@@ -518,7 +531,7 @@ export class ClaudeCodeService extends EventEmitter {
       default:
         throw new Error(`Unknown test type: ${testType}`);
     }
-    
+
     return this.runClaudeProcess(args, prompt, process.cwd(), 'test-session', 30000);
   }
 
@@ -527,7 +540,7 @@ export class ClaudeCodeService extends EventEmitter {
 
     // Build Claude CLI arguments - use stream-json to avoid buffer limits
     const args = ['--print', '--output-format', 'stream-json', '--verbose'];
-    
+
     // Add continue flag if conversation has started
     if (conversationStarted) {
       args.push('--continue');
@@ -552,29 +565,31 @@ export class ClaudeCodeService extends EventEmitter {
 
     // Calculate dynamic timeout based on command complexity
     const timeoutMs = this.calculateTimeoutForCommand(prompt);
-    
+
     // Check if this is a long-running operation (> 5 minutes)
     if (timeoutMs > 300000) {
       const estimatedMinutes = Math.round(timeoutMs / 60000);
       console.log(`🕐 Long-running operation detected (${estimatedMinutes} min timeout)`);
-      
+
       // Send immediate status response
       this.emit('assistantMessage', {
         sessionId,
         data: {
           type: 'assistant_response',
-          content: [{
-            type: 'text',
-            text: `🔍 **Processing Complex Request**\n\nI'm working on your request: "${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}"\n\n⏱️ **Estimated time:** ${estimatedMinutes} minutes\n📊 **Status:** Starting analysis...\n\nI'll send you the complete results when finished. You can continue using the chat - I'm working in the background!`
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `🔍 **Processing Complex Request**\n\nI'm working on your request: "${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}"\n\n⏱️ **Estimated time:** ${estimatedMinutes} minutes\n📊 **Status:** Starting analysis...\n\nI'll send you the complete results when finished. You can continue using the chat - I'm working in the background!`,
+            },
+          ],
           timestamp: new Date().toISOString(),
         },
         isComplete: false,
       });
-      
+
       // Run the process in the background and send results when complete
       this.runLongRunningProcess(args, finalPrompt, workingDirectory, sessionId, timeoutMs, prompt);
-      
+
       // Return immediate acknowledgment
       return {
         type: 'status',
@@ -583,82 +598,100 @@ export class ClaudeCodeService extends EventEmitter {
         result: `Long-running operation started. Estimated completion: ${estimatedMinutes} minutes.`,
         session_id: sessionId,
         estimated_duration_ms: timeoutMs,
-        status: 'processing'
+        status: 'processing',
       };
     }
-    
+
     return this.runClaudeProcess(args, finalPrompt, workingDirectory, sessionId, timeoutMs);
   }
 
-  async runLongRunningProcess(args, prompt, workingDirectory, sessionId, timeoutMs, originalPrompt) {
+  async runLongRunningProcess(
+    args,
+    prompt,
+    workingDirectory,
+    sessionId,
+    timeoutMs,
+    originalPrompt
+  ) {
     console.log(`🔄 Starting long-running background process for session ${sessionId}`);
-    
+
     // Send periodic status updates
     const statusUpdateInterval = setInterval(() => {
       this.emit('assistantMessage', {
         sessionId,
         data: {
           type: 'assistant_response',
-          content: [{
-            type: 'text',
-            text: `⏳ Still working on your request: "${originalPrompt.substring(0, 60)}..."\n\n📊 **Status:** Processing in background...`
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `⏳ Still working on your request: "${originalPrompt.substring(0, 60)}..."\n\n📊 **Status:** Processing in background...`,
+            },
+          ],
           timestamp: new Date().toISOString(),
         },
         isComplete: false,
       });
     }, 120000); // Send update every 2 minutes
-    
+
     try {
       // Run the actual Claude process
-      const result = await this.runClaudeProcess(args, prompt, workingDirectory, sessionId, timeoutMs);
-      
+      const result = await this.runClaudeProcess(
+        args,
+        prompt,
+        workingDirectory,
+        sessionId,
+        timeoutMs
+      );
+
       // Clear the status updates
       clearInterval(statusUpdateInterval);
-      
+
       // Send completion notification first
       this.emit('assistantMessage', {
         sessionId,
         data: {
           type: 'assistant_response',
-          content: [{
-            type: 'text',
-            text: `✅ **Complex Request Completed!**\n\nYour request: "${originalPrompt.substring(0, 80)}${originalPrompt.length > 80 ? '...' : ''}"\n\n📋 **Results are ready below:**`
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✅ **Complex Request Completed!**\n\nYour request: "${originalPrompt.substring(0, 80)}${originalPrompt.length > 80 ? '...' : ''}"\n\n📋 **Results are ready below:**`,
+            },
+          ],
           timestamp: new Date().toISOString(),
         },
         isComplete: false,
       });
-      
+
       // Process and emit the actual results
       this.emitClaudeResponse(sessionId, result, true);
-      
+
       console.log(`✅ Long-running process completed for session ${sessionId}`);
-      
     } catch (error) {
       // Clear the status updates
       clearInterval(statusUpdateInterval);
-      
+
       console.error(`❌ Long-running process failed for session ${sessionId}:`, error);
-      
+
       // Send error notification
       this.emit('assistantMessage', {
         sessionId,
         data: {
           type: 'assistant_response',
-          content: [{
-            type: 'text',
-            text: `❌ **Complex Request Failed**\n\nYour request: "${originalPrompt.substring(0, 80)}${originalPrompt.length > 80 ? '...' : ''}"\n\n🔍 **Error:** ${error.message}\n\n💡 **Suggestion:** Try breaking this into smaller, more specific requests.`
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `❌ **Complex Request Failed**\n\nYour request: "${originalPrompt.substring(0, 80)}${originalPrompt.length > 80 ? '...' : ''}"\n\n🔍 **Error:** ${error.message}\n\n💡 **Suggestion:** Try breaking this into smaller, more specific requests.`,
+            },
+          ],
           timestamp: new Date().toISOString(),
         },
         isComplete: true,
       });
-      
+
       // Also emit error through normal channels
       this.emit('streamError', {
         sessionId,
-        error: error.message
+        error: error.message,
       });
     }
   }
@@ -666,26 +699,29 @@ export class ClaudeCodeService extends EventEmitter {
   async runClaudeProcess(args, prompt, workingDirectory, sessionId, timeoutMs) {
     console.log(`🔧 Running Claude CLI process:`);
     console.log(`   Args: ${JSON.stringify(args)}`);
-    console.log(`   Prompt: ${prompt ? `"${prompt.substring(0, 50)}${prompt.length > 50 ? '...' : ''}"` : 'none'}`);
+    console.log(
+      `   Prompt: ${prompt ? `"${prompt.substring(0, 50)}${prompt.length > 50 ? '...' : ''}"` : 'none'}`
+    );
     console.log(`   Working dir: ${workingDirectory}`);
     console.log(`   Timeout: ${timeoutMs}ms`);
 
-    return new Promise((resolve, reject) => {
+    return new Promise((promiseResolve, reject) => {
       let claudeProcess;
-      
+
       try {
         // Build the complete command arguments
         const fullArgs = prompt ? [...args, prompt] : args;
-        
+
         claudeProcess = spawn(this.claudeCommand, fullArgs, {
           cwd: workingDirectory,
           stdio: ['pipe', 'pipe', 'pipe'],
         });
       } catch (spawnError) {
         console.error(`❌ Failed to spawn Claude CLI:`, spawnError);
-        const errorMsg = spawnError.code === 'ENOENT' 
-          ? 'Claude CLI not found. Please ensure Claude CLI is installed and in your PATH.'
-          : `Failed to start Claude CLI: ${spawnError.message}`;
+        const errorMsg =
+          spawnError.code === 'ENOENT'
+            ? 'Claude CLI not found. Please ensure Claude CLI is installed and in your PATH.'
+            : `Failed to start Claude CLI: ${spawnError.message}`;
         reject(new Error(errorMsg));
         return;
       }
@@ -702,75 +738,86 @@ export class ClaudeCodeService extends EventEmitter {
         command: this.claudeCommand,
         args,
         workingDirectory,
-        type: 'command'
+        type: 'command',
       });
 
       let stdout = '';
       let stderr = '';
       let lastActivityTime = Date.now();
       let hasReceivedOutput = false;
-      let stdoutBuffers = []; // Store raw buffers to prevent encoding issues
-      let stderrBuffers = [];
+      const stdoutBuffers = []; // Store raw buffers to prevent encoding issues
+      const stderrBuffers = [];
 
       // Function to reset activity timer on any output (will be updated below)
+      // eslint-disable-next-line prefer-const
       let resetActivityTimer;
 
       claudeProcess.stdout.on('data', (data) => {
         // Store raw buffer to prevent encoding truncation
         stdoutBuffers.push(data);
-        
+
         const chunk = data.toString();
         stdout += chunk;
-        console.log(`📊 Claude CLI STDOUT (${chunk.length} chars, total: ${stdout.length}):`, JSON.stringify(chunk.substring(0, 200)));
-        
+        console.log(
+          `📊 Claude CLI STDOUT (${chunk.length} chars, total: ${stdout.length}):`,
+          JSON.stringify(chunk.substring(0, 200))
+        );
+
         resetActivityTimer();
-        
+
         // Emit partial data for progress tracking
         this.emit('commandProgress', {
           sessionId,
           pid: claudeProcess.pid,
           data: chunk,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
       });
 
       claudeProcess.stderr.on('data', (data) => {
         // Store raw buffer to prevent encoding truncation
         stderrBuffers.push(data);
-        
+
         const chunk = data.toString();
         stderr += chunk;
-        console.log(`📛 Claude CLI STDERR (${chunk.length} chars, total: ${stderr.length}):`, JSON.stringify(chunk));
-        
+        console.log(
+          `📛 Claude CLI STDERR (${chunk.length} chars, total: ${stderr.length}):`,
+          JSON.stringify(chunk)
+        );
+
         resetActivityTimer();
-        
+
         // Emit stderr for logging
         this.emit('processStderr', {
           sessionId,
           pid: claudeProcess.pid,
           data: chunk,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
       });
 
       claudeProcess.on('close', (code) => {
         console.log(`🔚 Claude CLI process closed with code: ${code}`);
-        
+
         // Reconstruct complete output from buffers to prevent encoding issues
         let completeStdout = '';
         let completeStderr = '';
-        
+
         try {
           if (stdoutBuffers.length > 0) {
             const combinedBuffer = Buffer.concat(stdoutBuffers);
             completeStdout = combinedBuffer.toString('utf8');
-            console.log(`   STDOUT reconstructed: ${completeStdout.length} chars (${stdoutBuffers.length} chunks)`);
+            console.log(
+              `   STDOUT reconstructed: ${completeStdout.length} chars (${stdoutBuffers.length} chunks)`
+            );
           }
-          
+
           if (stderrBuffers.length > 0) {
             const combinedBuffer = Buffer.concat(stderrBuffers);
             completeStderr = combinedBuffer.toString('utf8');
-            console.log(`   STDERR reconstructed: ${completeStderr.length} chars (${stderrBuffers.length} chunks)`);
+            console.log(
+              `   STDERR reconstructed: ${completeStderr.length} chars (${stderrBuffers.length} chunks)`
+            );
           }
         } catch (bufferError) {
           console.error(`❌ Failed to reconstruct buffers:`, bufferError);
@@ -778,10 +825,10 @@ export class ClaudeCodeService extends EventEmitter {
           completeStdout = stdout;
           completeStderr = stderr;
         }
-        
+
         console.log(`   Final STDOUT length: ${completeStdout.length}`);
         console.log(`   Final STDERR length: ${completeStderr.length}`);
-        
+
         // Emit process exit event
         this.emit('processExit', {
           sessionId,
@@ -789,7 +836,7 @@ export class ClaudeCodeService extends EventEmitter {
           code,
           stdout: completeStdout.substring(0, 1000),
           stderr: completeStderr,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
 
         if (code !== 0) {
@@ -815,15 +862,16 @@ export class ClaudeCodeService extends EventEmitter {
           const responses = this.parseStreamJsonOutput(trimmedOutput);
           console.log(`✅ Claude CLI command completed successfully`);
           console.log(`   Parsed ${responses.length} response objects from stream-json`);
-          
+
           if (responses.length === 0) {
             reject(new Error('No valid JSON objects found in Claude CLI output'));
             return;
           }
-          
+
           // Find the final result
-          let finalResult = responses.find(r => r.type === 'result') || responses[responses.length - 1];
-          
+          const finalResult =
+            responses.find((r) => r.type === 'result') || responses[responses.length - 1];
+
           // Ensure message buffer exists for this session
           if (!this.sessionMessageBuffers.has(sessionId)) {
             this.sessionMessageBuffers.set(sessionId, {
@@ -831,24 +879,29 @@ export class ClaudeCodeService extends EventEmitter {
               systemInit: null,
               toolUseInProgress: false,
               permissionRequests: [],
-              deliverables: []
+              deliverables: [],
             });
             console.log(`🔧 Created missing message buffer for session ${sessionId}`);
           }
 
           // Emit all responses for detailed tracking
           responses.forEach((response, index) => {
-            console.log(`   Response ${index + 1}: type=${response.type}, subtype=${response.subtype || 'none'}`);
+            console.log(
+              `   Response ${index + 1}: type=${response.type}, subtype=${response.subtype || 'none'}`
+            );
             this.emitClaudeResponse(sessionId, response, index === responses.length - 1);
           });
-          
-          resolve(finalResult);
+
+          promiseResolve(finalResult);
         } catch (error) {
           console.error(`❌ Failed to parse Claude CLI response:`, error);
           console.error(`   Raw stdout length:`, completeStdout.length);
           console.error(`   First 200 chars:`, completeStdout.substring(0, 200));
-          console.error(`   Last 200 chars:`, completeStdout.substring(Math.max(0, completeStdout.length - 200)));
-          
+          console.error(
+            `   Last 200 chars:`,
+            completeStdout.substring(Math.max(0, completeStdout.length - 200))
+          );
+
           // Try to provide more helpful error information
           if (error.message.includes('Unterminated string')) {
             reject(new Error('Claude CLI response was truncated - output is incomplete'));
@@ -869,49 +922,66 @@ export class ClaudeCodeService extends EventEmitter {
       let timeoutHandle;
       const startTime = Date.now();
       const maxSilentTime = Math.min(timeoutMs / 3, 180000); // Max 3 minutes of silence, or 1/3 the total timeout
-      
+
       const updateTimeout = () => {
         if (timeoutHandle) {
           clearTimeout(timeoutHandle);
         }
-        
+
         const timeoutToUse = hasReceivedOutput ? maxSilentTime : timeoutMs;
-        
-        console.log(`🕐 Setting timeout: ${Math.round(timeoutToUse/1000)}s (${hasReceivedOutput ? 'heartbeat mode' : 'initial mode'})`);
-        
+
+        console.log(
+          `🕐 Setting timeout: ${Math.round(timeoutToUse / 1000)}s (${hasReceivedOutput ? 'heartbeat mode' : 'initial mode'})`
+        );
+
         timeoutHandle = setTimeout(() => {
           const timeSinceActivity = Date.now() - lastActivityTime;
           const totalRuntime = Date.now() - startTime;
-          
+
           if (hasReceivedOutput) {
-            console.log(`⏰ Claude CLI process silent timeout (${Math.round(timeSinceActivity/1000)}s since last activity), killing PID ${claudeProcess.pid}...`);
-            reject(new Error(`Claude CLI process timed out after ${Math.round(timeSinceActivity/1000)}s of silence`));
+            console.log(
+              `⏰ Claude CLI process silent timeout (${Math.round(timeSinceActivity / 1000)}s since last activity), killing PID ${claudeProcess.pid}...`
+            );
+            reject(
+              new Error(
+                `Claude CLI process timed out after ${Math.round(timeSinceActivity / 1000)}s of silence`
+              )
+            );
           } else {
-            console.log(`⏰ Claude CLI process initial timeout (${Math.round(totalRuntime/1000)}s total), killing PID ${claudeProcess.pid}...`);
+            console.log(
+              `⏰ Claude CLI process initial timeout (${Math.round(totalRuntime / 1000)}s total), killing PID ${claudeProcess.pid}...`
+            );
             reject(new Error('Claude CLI process timed out'));
           }
           claudeProcess.kill('SIGTERM');
         }, timeoutToUse);
       };
-      
+
       // Define the reset function now that updateTimeout exists
       resetActivityTimer = () => {
         lastActivityTime = Date.now();
         const wasFirstOutput = !hasReceivedOutput;
         hasReceivedOutput = true;
-        console.log(`💓 Claude CLI activity detected${wasFirstOutput ? ' (first output)' : ''}, resetting timeout timer`);
+        console.log(
+          `💓 Claude CLI activity detected${wasFirstOutput ? ' (first output)' : ''}, resetting timeout timer`
+        );
         updateTimeout();
       };
-      
+
       // Initial timeout
       updateTimeout();
 
       // Add periodic status logging
-      const statusInterval = setInterval(() => {
-        if (claudeProcess && claudeProcess.pid) {
-          console.log(`📊 Claude CLI PID ${claudeProcess.pid} still running... (stdout: ${stdout.length} chars, stderr: ${stderr.length} chars)`);
-        }
-      }, Math.min(timeoutMs / 4, 10000)); // Status every 1/4 of timeout or 10s max
+      const statusInterval = setInterval(
+        () => {
+          if (claudeProcess && claudeProcess.pid) {
+            console.log(
+              `📊 Claude CLI PID ${claudeProcess.pid} still running... (stdout: ${stdout.length} chars, stderr: ${stderr.length} chars)`
+            );
+          }
+        },
+        Math.min(timeoutMs / 4, 10000)
+      ); // Status every 1/4 of timeout or 10s max
 
       claudeProcess.on('close', () => {
         if (timeoutHandle) {
@@ -932,10 +1002,10 @@ export class ClaudeCodeService extends EventEmitter {
     try {
       // First, try basic JSON parsing
       const parsed = JSON.parse(jsonString);
-      
+
       // Additional checks for completeness
       const trimmed = jsonString.trim();
-      
+
       // Check that it starts and ends properly
       if (trimmed.startsWith('[')) {
         if (!trimmed.endsWith(']')) {
@@ -951,21 +1021,25 @@ export class ClaudeCodeService extends EventEmitter {
         console.log(`JSON validation: Doesn't start with [ or {`);
         return false;
       }
-      
+
       // Check for common truncation indicators
       // Only check if the JSON doesn't end properly
       if (!trimmed.endsWith('}') && !trimmed.endsWith(']')) {
         console.log(`JSON validation: Doesn't end with } or ]`);
         return false;
       }
-      
+
       // Simplified truncation detection - primarily rely on JSON.parse
       // Only check for obvious incomplete endings
-      if (trimmed.endsWith(',') || trimmed.endsWith(':') || trimmed.endsWith('"') && !trimmed.endsWith('"}') && !trimmed.endsWith('"]')) {
+      if (
+        trimmed.endsWith(',') ||
+        trimmed.endsWith(':') ||
+        (trimmed.endsWith('"') && !trimmed.endsWith('"}') && !trimmed.endsWith('"]'))
+      ) {
         console.log(`JSON validation: Ends with incomplete syntax`);
         return false;
       }
-      
+
       // For arrays, check if the parsed result looks complete
       if (Array.isArray(parsed)) {
         // Check if each object in the array has expected structure
@@ -973,20 +1047,22 @@ export class ClaudeCodeService extends EventEmitter {
           if (typeof item === 'object' && item !== null) {
             // Check for objects that seem incomplete (very basic check)
             if (item.type && Object.keys(item).length === 1) {
-              console.log(`JSON validation: Object with only 'type' field detected:`, JSON.stringify(item));
+              console.log(
+                `JSON validation: Object with only 'type' field detected:`,
+                JSON.stringify(item)
+              );
               return false;
             }
           }
         }
       }
-      
+
       console.log(`✅ JSON validation passed for ${trimmed.length} character response`);
       return true;
-      
     } catch (parseError) {
       console.log(`JSON validation failed:`, parseError.message);
       console.log(`   Error type: ${parseError.name}`);
-      
+
       // Provide more specific error information for debugging
       if (parseError.message.includes('Unterminated string')) {
         console.log(`   Detected unterminated string - likely truncation`);
@@ -995,7 +1071,7 @@ export class ClaudeCodeService extends EventEmitter {
       } else if (parseError.message.includes('Unexpected token')) {
         console.log(`   Detected unexpected token - possible corruption`);
       }
-      
+
       return false;
     }
   }
@@ -1004,11 +1080,11 @@ export class ClaudeCodeService extends EventEmitter {
   parseStreamJsonOutput(output) {
     const responses = [];
     const lines = output.split('\n');
-    
+
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
       if (line.length === 0) continue;
-      
+
       try {
         const parsed = JSON.parse(line);
         responses.push(parsed);
@@ -1020,10 +1096,10 @@ export class ClaudeCodeService extends EventEmitter {
         responses.push(...extracted);
       }
     }
-    
+
     return responses;
   }
-  
+
   // Extract complete JSON objects from a potentially malformed line
   extractCompleteObjectsFromLine(line) {
     const objects = [];
@@ -1032,33 +1108,33 @@ export class ClaudeCodeService extends EventEmitter {
     let inString = false;
     let escaped = false;
     let objectStart = -1;
-    
+
     for (let i = 0; i < line.length; i++) {
       const char = line[i];
-      
+
       if (escaped) {
         escaped = false;
         if (depth > 0) currentObject += char;
         continue;
       }
-      
+
       if (char === '\\' && inString) {
         escaped = true;
         if (depth > 0) currentObject += char;
         continue;
       }
-      
+
       if (char === '"') {
         inString = !inString;
         if (depth > 0) currentObject += char;
         continue;
       }
-      
+
       if (inString) {
         if (depth > 0) currentObject += char;
         continue;
       }
-      
+
       if (char === '{') {
         if (depth === 0) {
           objectStart = i;
@@ -1069,7 +1145,7 @@ export class ClaudeCodeService extends EventEmitter {
       } else if (char === '}') {
         depth--;
         currentObject += char;
-        
+
         if (depth === 0 && objectStart >= 0) {
           try {
             const parsed = JSON.parse(currentObject);
@@ -1085,7 +1161,7 @@ export class ClaudeCodeService extends EventEmitter {
         currentObject += char;
       }
     }
-    
+
     return objects;
   }
 
@@ -1103,7 +1179,7 @@ export class ClaudeCodeService extends EventEmitter {
     } catch (error) {
       // Try different approaches
     }
-    
+
     // If it's an array, try to extract the last complete object
     if (truncatedJSON.startsWith('[')) {
       try {
@@ -1115,50 +1191,50 @@ export class ClaudeCodeService extends EventEmitter {
         // Continue to next approach
       }
     }
-    
+
     return null;
   }
-  
+
   findLastCompleteJSONStart(text) {
     let braceCount = 0;
     let bracketCount = 0;
     let inString = false;
     let escaped = false;
-    
+
     for (let i = text.length - 1; i >= 0; i--) {
       const char = text[i];
-      
+
       if (escaped) {
         escaped = false;
         continue;
       }
-      
+
       if (char === '\\' && inString) {
         escaped = true;
         continue;
       }
-      
+
       if (char === '"') {
         inString = !inString;
         continue;
       }
-      
+
       if (inString) continue;
-      
+
       if (char === '}') braceCount++;
       else if (char === '{') braceCount--;
       else if (char === ']') bracketCount++;
       else if (char === '[') bracketCount--;
-      
+
       // Found a complete structure
       if ((braceCount === 0 && char === '{') || (bracketCount === 0 && char === '[')) {
         return i;
       }
     }
-    
+
     return -1;
   }
-  
+
   extractCompleteObjectsFromArray(arrayText) {
     const objects = [];
     let depth = 0;
@@ -1166,33 +1242,33 @@ export class ClaudeCodeService extends EventEmitter {
     let inString = false;
     let escaped = false;
     let objectStart = -1;
-    
+
     for (let i = 0; i < arrayText.length; i++) {
       const char = arrayText[i];
-      
+
       if (escaped) {
         escaped = false;
         currentObject += char;
         continue;
       }
-      
+
       if (char === '\\' && inString) {
         escaped = true;
         currentObject += char;
         continue;
       }
-      
+
       if (char === '"') {
         inString = !inString;
         currentObject += char;
         continue;
       }
-      
+
       if (inString) {
         currentObject += char;
         continue;
       }
-      
+
       if (char === '{') {
         if (depth === 0) {
           objectStart = i;
@@ -1203,7 +1279,7 @@ export class ClaudeCodeService extends EventEmitter {
       } else if (char === '}') {
         depth--;
         currentObject += char;
-        
+
         if (depth === 0 && objectStart >= 0) {
           try {
             const parsed = JSON.parse(currentObject);
@@ -1218,11 +1294,11 @@ export class ClaudeCodeService extends EventEmitter {
         currentObject += char;
       }
     }
-    
+
     return objects;
   }
 
-  emitClaudeResponse(sessionId, response, isComplete = false) {
+  emitClaudeResponse(sessionId, response, _isComplete = false) {
     const buffer = this.sessionMessageBuffers.get(sessionId);
     if (!buffer) {
       console.warn(`No message buffer found for session ${sessionId}`);
@@ -1320,20 +1396,24 @@ export class ClaudeCodeService extends EventEmitter {
     console.log(`   Deliverables: ${buffer.deliverables.length}`);
 
     // Check if the final result contains an embedded permission request
-    const finalResultContent = response.result ? [{
-      type: 'text',
-      text: response.result
-    }] : [];
+    const finalResultContent = response.result
+      ? [
+          {
+            type: 'text',
+            text: response.result,
+          },
+        ]
+      : [];
 
     const hasEmbeddedPermission = this.containsPermissionRequest(finalResultContent);
-    
+
     if (hasEmbeddedPermission) {
       console.log(`🔐 Found embedded permission request in final result for session ${sessionId}`);
-      
+
       // Extract the permission request and send it as a structured prompt
       const permissionPrompt = this.extractPermissionPrompt(response.result);
-      
-      // Send permission request immediately  
+
+      // Send permission request immediately
       this.emit('assistantMessage', {
         sessionId,
         data: {
@@ -1345,10 +1425,10 @@ export class ClaudeCodeService extends EventEmitter {
         },
         isComplete: false,
       });
-      
+
       // Don't send aggregated response yet - wait for approval
       console.log(`⏸️  Waiting for user approval before sending aggregated response`);
-      
+
       // Store the pending response in buffer for later
       buffer.pendingFinalResponse = {
         aggregatedContent: this.aggregateBufferedContent(buffer),
@@ -1362,9 +1442,9 @@ export class ClaudeCodeService extends EventEmitter {
           cost: response.total_cost_usd,
           usage: response.usage,
           timestamp: new Date().toISOString(),
-        }
+        },
       };
-      
+
       return; // Don't proceed with normal flow
     }
 
@@ -1380,7 +1460,7 @@ export class ClaudeCodeService extends EventEmitter {
     if (response.result) {
       aggregatedContent.push({
         type: 'text',
-        text: response.result
+        text: response.result,
       });
     }
 
@@ -1420,50 +1500,54 @@ export class ClaudeCodeService extends EventEmitter {
 
   extractPermissionPrompt(resultText) {
     if (!resultText) return null;
-    
+
     // Look for the specific permission question in the text
     const lines = resultText.split('\n');
-    
+
     // Find lines that contain permission-related questions
-    const permissionLines = lines.filter(line => {
+    const permissionLines = lines.filter((line) => {
       const lowerLine = line.toLowerCase();
-      return lowerLine.includes('would you like') || 
-             lowerLine.includes('should i') ||
-             lowerLine.includes('need permission') ||
-             lowerLine.includes('need write') ||
-             lowerLine.includes('proceed') ||
-             line.endsWith('?');
+      return (
+        lowerLine.includes('would you like') ||
+        lowerLine.includes('should i') ||
+        lowerLine.includes('need permission') ||
+        lowerLine.includes('need write') ||
+        lowerLine.includes('proceed') ||
+        line.endsWith('?')
+      );
     });
-    
+
     if (permissionLines.length > 0) {
       return permissionLines.join(' ').trim();
     }
-    
+
     // Fallback - return last paragraph if it seems like a question
     const lastParagraph = resultText.split('\n\n').pop();
     if (lastParagraph && lastParagraph.includes('?')) {
       return lastParagraph.trim();
     }
-    
+
     return 'Permission required to proceed';
   }
 
   containsPermissionRequest(content) {
     if (!Array.isArray(content)) return false;
-    
-    return content.some(block => {
+
+    return content.some((block) => {
       if (block.type === 'text' && block.text) {
         const text = block.text.toLowerCase();
-        
+
         // Traditional permission patterns
-        if (text.includes('permission') || 
-            text.includes('approve') || 
-            text.includes('(y/n)') ||
-            text.includes('[y/n]') ||
-            text.includes('confirm')) {
+        if (
+          text.includes('permission') ||
+          text.includes('approve') ||
+          text.includes('(y/n)') ||
+          text.includes('[y/n]') ||
+          text.includes('confirm')
+        ) {
           return true;
         }
-        
+
         // Conversational permission patterns
         const conversationalPatterns = [
           'would you like me to proceed',
@@ -1485,18 +1569,20 @@ export class ClaudeCodeService extends EventEmitter {
           'would you like me to execute',
           'should i execute',
           'would you like me to implement',
-          'should i implement'
+          'should i implement',
         ];
-        
-        const hasConversationalPattern = conversationalPatterns.some(pattern => 
+
+        const hasConversationalPattern = conversationalPatterns.some((pattern) =>
           text.includes(pattern)
         );
-        
+
         if (hasConversationalPattern) {
-          console.log(`🔍 Detected conversational permission request: "${text.substring(0, 100)}..."`);
+          console.log(
+            `🔍 Detected conversational permission request: "${text.substring(0, 100)}..."`
+          );
           return true;
         }
-        
+
         // Questions ending with "?" that might need approval
         const questionPatterns = [
           /would you like.*\?/,
@@ -1504,15 +1590,15 @@ export class ClaudeCodeService extends EventEmitter {
           /shall i.*\?/,
           /do you want.*\?/,
           /can i.*\?/,
-          /may i.*\?/
+          /may i.*\?/,
         ];
-        
-        const hasQuestionPattern = questionPatterns.some(pattern => 
-          pattern.test(text)
-        );
-        
+
+        const hasQuestionPattern = questionPatterns.some((pattern) => pattern.test(text));
+
         if (hasQuestionPattern) {
-          console.log(`❓ Detected question-based permission request: "${text.substring(0, 100)}..."`);
+          console.log(
+            `❓ Detected question-based permission request: "${text.substring(0, 100)}..."`
+          );
           return true;
         }
       }
@@ -1522,49 +1608,68 @@ export class ClaudeCodeService extends EventEmitter {
 
   containsToolUse(content) {
     if (!Array.isArray(content)) return false;
-    return content.some(block => block.type === 'tool_use');
+    return content.some((block) => block.type === 'tool_use');
   }
 
   containsApprovalResponse(text) {
     if (!text || typeof text !== 'string') return false;
-    
+
     const normalizedText = text.toLowerCase().trim();
-    
+
     // Direct approval phrases
     const directApprovals = [
-      'yes', 'y', 'yep', 'yeah', 'yup',
-      'approved', 'approve', 'approval',
-      'ok', 'okay', 'k',
-      'sure', 'fine', 'good',
-      'proceed', 'continue', 'go ahead', 'go for it',
-      'do it', 'execute', 'run it',
-      'confirm', 'confirmed',
-      'allow', 'permit', 'authorized'
+      'yes',
+      'y',
+      'yep',
+      'yeah',
+      'yup',
+      'approved',
+      'approve',
+      'approval',
+      'ok',
+      'okay',
+      'k',
+      'sure',
+      'fine',
+      'good',
+      'proceed',
+      'continue',
+      'go ahead',
+      'go for it',
+      'do it',
+      'execute',
+      'run it',
+      'confirm',
+      'confirmed',
+      'allow',
+      'permit',
+      'authorized',
     ];
-    
+
     // Check for exact matches or phrases that start with approval
-    const hasDirectApproval = directApprovals.some(approval => 
-      normalizedText === approval || 
-      normalizedText.startsWith(approval + ' ') ||
-      normalizedText.startsWith(approval + ',') ||
-      normalizedText.startsWith(approval + '.')
+    const hasDirectApproval = directApprovals.some(
+      (approval) =>
+        normalizedText === approval ||
+        normalizedText.startsWith(`${approval} `) ||
+        normalizedText.startsWith(`${approval},`) ||
+        normalizedText.startsWith(`${approval}.`)
     );
-    
+
     if (hasDirectApproval) {
       console.log(`✅ Detected approval response: "${text}"`);
       return true;
     }
-    
+
     // Longer approval phrases
     const phraseApprovals = [
       'go ahead',
-      'go for it', 
+      'go for it',
       'sounds good',
       'looks good',
       'that works',
       'do it',
       'make it so',
-      'let\'s do it',
+      "let's do it",
       'i approve',
       'you have permission',
       'you can proceed',
@@ -1573,26 +1678,24 @@ export class ClaudeCodeService extends EventEmitter {
       'yes please',
       'sure thing',
       'absolutely',
-      'definitely'
+      'definitely',
     ];
-    
-    const hasPhraseApproval = phraseApprovals.some(phrase => 
-      normalizedText.includes(phrase)
-    );
-    
+
+    const hasPhraseApproval = phraseApprovals.some((phrase) => normalizedText.includes(phrase));
+
     if (hasPhraseApproval) {
       console.log(`✅ Detected phrase-based approval: "${text}"`);
       return true;
     }
-    
+
     return false;
   }
 
   extractCodeBlocks(content) {
     if (!Array.isArray(content)) return [];
-    
+
     const codeBlocks = [];
-    content.forEach(block => {
+    content.forEach((block) => {
       if (block.type === 'text' && block.text) {
         // Look for code blocks in text (```language...```)
         const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
@@ -1601,23 +1704,23 @@ export class ClaudeCodeService extends EventEmitter {
           codeBlocks.push({
             type: 'code_block',
             language: match[1] || 'text',
-            code: match[2].trim()
+            code: match[2].trim(),
           });
         }
       }
     });
-    
+
     return codeBlocks;
   }
 
   aggregateBufferedContent(buffer) {
     const aggregatedContent = [];
-    
+
     // Combine all text content from assistant messages
     const textBlocks = [];
-    
-    buffer.assistantMessages.forEach(message => {
-      message.content.forEach(block => {
+
+    buffer.assistantMessages.forEach((message) => {
+      message.content.forEach((block) => {
         if (block.type === 'text' && block.text) {
           textBlocks.push(block.text);
         }
@@ -1626,14 +1729,14 @@ export class ClaudeCodeService extends EventEmitter {
 
     // Combine text blocks, removing duplicates and tool usage details
     const combinedText = textBlocks
-      .filter(text => text.trim().length > 0)
+      .filter((text) => text.trim().length > 0)
       .filter((text, index, array) => array.indexOf(text) === index) // Remove duplicates
       .join('\n\n');
 
     if (combinedText) {
       aggregatedContent.push({
         type: 'text',
-        text: combinedText
+        text: combinedText,
       });
     }
 
@@ -1665,14 +1768,14 @@ export class ClaudeCodeService extends EventEmitter {
     try {
       // Mark session as inactive
       session.isActive = false;
-      
+
       // Remove from active sessions and clean up message buffer
       this.activeSessions.delete(sessionId);
       this.sessionMessageBuffers.delete(sessionId);
 
       console.log(`✅ Session ${sessionId} closed successfully`);
       console.log(`   Remaining active sessions: ${this.activeSessions.size}`);
-      
+
       return { success: true, message: 'Session closed' };
     } catch (error) {
       console.error('Error closing session:', error);
@@ -1690,7 +1793,9 @@ export class ClaudeCodeService extends EventEmitter {
     sessions.forEach((sessionId, index) => {
       const session = this.activeSessions.get(sessionId);
       const age = Math.round((Date.now() - session.createdAt) / 1000);
-      console.log(`   ${index + 1}. ${sessionId} (age: ${age}s, conversation: ${session.conversationStarted ? 'started' : 'pending'})`);
+      console.log(
+        `   ${index + 1}. ${sessionId} (age: ${age}s, conversation: ${session.conversationStarted ? 'started' : 'pending'})`
+      );
     });
     return sessions;
   }
@@ -1740,34 +1845,56 @@ export class ClaudeCodeService extends EventEmitter {
 
     const length = command.length;
     const lowerCommand = command.toLowerCase();
-    
+
     // Keywords that indicate complex operations
     const complexKeywords = [
-      'review', 'analyze', 'audit', 'assess', 'evaluate', 'examine',
-      'refactor', 'optimize', 'improve', 'redesign', 'restructure',
-      'debug', 'troubleshoot', 'investigate', 'diagnose',
-      'document', 'explain', 'summarize', 'overview',
-      'test', 'benchmark', 'profile', 'performance'
+      'review',
+      'analyze',
+      'audit',
+      'assess',
+      'evaluate',
+      'examine',
+      'refactor',
+      'optimize',
+      'improve',
+      'redesign',
+      'restructure',
+      'debug',
+      'troubleshoot',
+      'investigate',
+      'diagnose',
+      'document',
+      'explain',
+      'summarize',
+      'overview',
+      'test',
+      'benchmark',
+      'profile',
+      'performance',
     ];
-    
+
     const veryComplexKeywords = [
-      'expert', 'comprehensive', 'thorough', 'complete', 'full',
-      'entire project', 'whole codebase', 'all files'
+      'expert',
+      'comprehensive',
+      'thorough',
+      'complete',
+      'full',
+      'entire project',
+      'whole codebase',
+      'all files',
     ];
-    
+
     // Check for very complex operations
-    const hasVeryComplexKeywords = veryComplexKeywords.some(keyword => 
+    const hasVeryComplexKeywords = veryComplexKeywords.some((keyword) =>
       lowerCommand.includes(keyword)
     );
-    
+
     // Check for complex operations
-    const hasComplexKeywords = complexKeywords.some(keyword => 
-      lowerCommand.includes(keyword)
-    );
-    
+    const hasComplexKeywords = complexKeywords.some((keyword) => lowerCommand.includes(keyword));
+
     // Calculate base timeout
     let timeoutMs;
-    
+
     if (hasVeryComplexKeywords) {
       timeoutMs = 600000; // 10 minutes for very complex operations
     } else if (hasComplexKeywords) {
@@ -1779,12 +1906,14 @@ export class ClaudeCodeService extends EventEmitter {
     } else {
       timeoutMs = 120000; // 2 minutes for simple commands
     }
-    
-    console.log(`🕐 Calculated timeout for command: ${timeoutMs}ms (${Math.round(timeoutMs/1000)}s)`);
+
+    console.log(
+      `🕐 Calculated timeout for command: ${timeoutMs}ms (${Math.round(timeoutMs / 1000)}s)`
+    );
     console.log(`   Command length: ${length} chars`);
     console.log(`   Has complex keywords: ${hasComplexKeywords}`);
     console.log(`   Has very complex keywords: ${hasVeryComplexKeywords}`);
-    
+
     return timeoutMs;
   }
 
@@ -1945,7 +2074,7 @@ export class ClaudeCodeService extends EventEmitter {
     return permissionPatterns.some((pattern) => pattern.test(text));
   }
 
-  extractPermissionPrompt(message) {
+  extractPermissionPromptFromMessage(message) {
     const text = this.extractTextFromMessage(message);
     if (!text) return 'Permission required';
 

@@ -81,28 +81,32 @@ class ClaudeCompanionServer {
   setupWebSocket() {
     this.wss = new WebSocketServer({ server: this.server });
     setupWebSocket(this.wss, this.claudeService, this.authToken);
-    
+
     // Forward Claude CLI events to console for host app logging
     this.claudeService.on('processStart', (data) => {
-      console.log(`[CLAUDE_PROCESS_START] PID: ${data.pid}, Type: ${data.type}, Session: ${data.sessionId || 'one-time'}`);
+      console.log(
+        `[CLAUDE_PROCESS_START] PID: ${data.pid}, Type: ${data.type}, Session: ${data.sessionId || 'one-time'}`
+      );
     });
-    
+
     this.claudeService.on('processStdout', (data) => {
       console.log(`[CLAUDE_STDOUT] PID: ${data.pid} - ${data.data}`);
     });
-    
+
     this.claudeService.on('processStderr', (data) => {
       console.error(`[CLAUDE_STDERR] PID: ${data.pid} - ${data.data}`);
     });
-    
+
     this.claudeService.on('processExit', (data) => {
-      console.log(`[CLAUDE_PROCESS_EXIT] PID: ${data.pid}, Code: ${data.code}, Session: ${data.sessionId || 'one-time'}`);
+      console.log(
+        `[CLAUDE_PROCESS_EXIT] PID: ${data.pid}, Code: ${data.code}, Session: ${data.sessionId || 'one-time'}`
+      );
     });
-    
+
     this.claudeService.on('processError', (data) => {
       console.error(`[CLAUDE_PROCESS_ERROR] PID: ${data.pid} - ${data.error}`);
     });
-    
+
     this.claudeService.on('commandSent', (data) => {
       console.log(`[CLAUDE_COMMAND] Session: ${data.sessionId} - ${data.prompt}`);
     });

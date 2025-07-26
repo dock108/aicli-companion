@@ -12,6 +12,11 @@ export function setupRoutes(app, claudeService) {
     if (!workingDirectory) return null;
 
     const baseDir = config.configPath;
+
+    // Reject absolute paths to prevent bypassing baseDir
+    if (path.isAbsolute(workingDirectory)) {
+      throw new Error('Invalid working directory: Absolute paths are not allowed');
+    }
     const requestedPath = path.resolve(baseDir, workingDirectory);
     const normalizedPath = path.normalize(requestedPath);
     const normalizedBase = path.normalize(baseDir);

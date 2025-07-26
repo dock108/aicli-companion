@@ -17,7 +17,7 @@ export function setupProjectRoutes(app) {
   router.get('/projects', async (req, res) => {
     try {
       const projectsDir = getProjectsDir();
-      console.log('Listing projects from:', projectsDir);
+      console.log('Listing projects from directory:', path.basename(projectsDir));
 
       // Read directory contents
       const items = await fs.readdir(projectsDir, { withFileTypes: true });

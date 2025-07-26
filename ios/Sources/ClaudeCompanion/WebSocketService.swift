@@ -128,8 +128,11 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
             }
 
             if isConnected {
+                print("📨 Sending WebSocket message: \(type.rawValue)")
+                print("   Message: \(messageString)")
                 webSocket?.write(string: messageString)
             } else {
+                print("⚠️ WebSocket not connected, queueing message: \(type.rawValue)")
                 // Queue message for when connection is restored
                 if let wsMessage = try? decoder.decode(WebSocketMessage.self, from: messageData) {
                     pendingMessages.append(wsMessage)

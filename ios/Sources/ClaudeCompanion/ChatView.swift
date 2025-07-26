@@ -210,6 +210,10 @@ struct ChatView: View {
             sessionId: session?.sessionId
         )
         
+        print("📤 Sending command to server: \(command)")
+        print("   Session ID: \(session?.sessionId ?? "nil")")
+        print("   Project path: \(project.path)")
+        
         // Send via WebSocket to Claude CLI session
         webSocketService.sendMessage(claudeRequest, type: .claudeCommand) { result in
             DispatchQueue.main.async {

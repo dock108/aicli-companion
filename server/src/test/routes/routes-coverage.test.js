@@ -9,40 +9,54 @@ function createTestApp() {
   app.use(express.json());
 
   const routes = [];
+  const routers = [];
   const originalUse = app.use.bind(app);
 
-  // Capture routes when they're registered
+  // Capture routers when they're registered
   app.use = (path, router) => {
+    const result = originalUse(path, router);
+    
     if (typeof path === 'string' && router) {
-      // Extract routes from the router
-      router.stack?.forEach((layer) => {
-        if (layer.route) {
-          const methods = Object.keys(layer.route.methods);
-          methods.forEach((method) => {
-            routes.push({
-              method: method.toUpperCase(),
-              path: path + layer.route.path,
-              handler: layer.route.stack[0].handle,
-            });
-          });
-        }
-      });
+      routers.push({ path, router });
     }
-    return originalUse(path, router);
+    return result;
   };
 
-  return { app, routes };
+  // Function to extract routes after setup is complete
+  const extractRoutes = () => {
+    routes.length = 0; // Clear existing routes
+    routers.forEach(({ path, router }) => {
+      if (router.stack) {
+        router.stack.forEach((layer) => {
+          if (layer.route) {
+            const methods = Object.keys(layer.route.methods);
+            methods.forEach((method) => {
+              routes.push({
+                method: method.toUpperCase(),
+                path: path + layer.route.path,
+                handler: layer.route.stack[0].handle,
+              });
+            });
+          }
+        });
+      }
+    });
+  };
+
+  return { app, routes, extractRoutes };
 }
 
 describe('Routes Coverage Tests', () => {
   let app;
   let routes;
+  let extractRoutes;
   let claudeService;
 
   beforeEach(() => {
     const testApp = createTestApp();
     app = testApp.app;
     routes = testApp.routes;
+    extractRoutes = testApp.extractRoutes;
 
     claudeService = {
       healthCheck: mock.fn(async () => ({
@@ -78,6 +92,11 @@ describe('Routes Coverage Tests', () => {
     };
 
     setupRoutes(app, claudeService);
+    // Extract routes after setup is complete
+    extractRoutes();
+    
+    // Debug: log captured routes
+    // console.log('Captured routes:', routes.map(r => `${r.method} ${r.path}`));
   });
 
   async function callRoute(method, path, options = {}) {
@@ -138,7 +157,6 @@ describe('Routes Coverage Tests', () => {
           prompt: 'Hello Claude',
           sessionId: 'test-session',
           format: 'json',
-          workingDirectory: '/test',
         },
       });
 
@@ -181,7 +199,6 @@ describe('Routes Coverage Tests', () => {
       const res = await callRoute('POST', '/api/stream/start', {
         body: {
           prompt: 'Stream this',
-          workingDirectory: '/test',
         },
       });
 

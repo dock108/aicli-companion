@@ -91,7 +91,11 @@ describe('Claude Companion Host App Core', () => {
       
       await appCore.startServer();
       
-      expect(invoke).toHaveBeenCalledWith('start_server', { port: 3001 });
+      expect(invoke).toHaveBeenCalledWith('start_server', { 
+        port: 3001,
+        authToken: null,
+        configPath: ''
+      });
       expect(appCore.getElements().startBtn.disabled).toBe(false);
       expect(appCore.getElements().startBtn.classList.remove).toHaveBeenCalledWith('loading');
     });

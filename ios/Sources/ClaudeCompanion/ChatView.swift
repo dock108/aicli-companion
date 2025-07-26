@@ -141,6 +141,7 @@ struct ChatView: View {
             connectWebSocket()
             setupKeyboardObservers()
             addWelcomeMessage()
+            setupWebSocketListeners()
         }
         .onDisappear {
             webSocketService.disconnect()
@@ -212,15 +213,16 @@ struct ChatView: View {
         // Send via WebSocket to Claude CLI session
         webSocketService.sendMessage(claudeRequest, type: .claudeCommand) { result in
             DispatchQueue.main.async {
-                self.isLoading = false
+                // Don't reset loading here - wait for actual response
                 
                 switch result {
                 case .success(let message):
                     // Debug: Log message type
                     print("Received WebSocket message type: \(message.type)")
                     
-                    // Handle Claude response
-                    if case .assistantMessage(let assistantResponse) = message.data {
+                    // Handle different message types
+                    switch message.data {
+                    case .assistantMessage(let assistantResponse):
                         // Extract text content from content blocks
                         let textContent = assistantResponse.content
                             .compactMap { block in
@@ -236,14 +238,30 @@ struct ChatView: View {
                             )
                             self.messages.append(responseMessage)
                         }
-                    } else {
-                        // Handle other response types or errors
+                        
+                    case .streamData(let streamData):
+                        // Handle streaming data
+                        if streamData.streamType == "text" {
+                            let responseMessage = Message(
+                                content: streamData.content,
+                                sender: .claude,
+                                type: .text
+                            )
+                            self.messages.append(responseMessage)
+                        }
+                        
+                    case .error(let errorResponse):
+                        // Handle error messages
                         let errorMessage = Message(
-                            content: "Unexpected response type from server",
+                            content: "Error: \(errorResponse.message)",
                             sender: .claude,
                             type: .text
                         )
                         self.messages.append(errorMessage)
+                        
+                    default:
+                        // Log unexpected message types for debugging
+                        print("Unhandled message type: \(message.type)")
                     }
                     
                 case .failure(let error):
@@ -254,6 +272,59 @@ struct ChatView: View {
                         type: .text
                     )
                     self.messages.append(errorMessage)
+                }
+            }
+        }
+    }
+    
+    private func setupWebSocketListeners() {
+        // Listen for all WebSocket messages, not just responses to our commands
+        webSocketService.onMessage = { [weak self] message in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                
+                print("WebSocket global listener - message type: \(message.type)")
+                
+                switch message.data {
+                case .assistantMessage(let assistantResponse):
+                    self.isLoading = false
+                    let textContent = assistantResponse.content
+                        .compactMap { block in
+                            block.type == "text" ? block.text : nil
+                        }
+                        .joined(separator: "\n\n")
+                    
+                    if !textContent.isEmpty {
+                        let responseMessage = Message(
+                            content: textContent,
+                            sender: .claude,
+                            type: .text
+                        )
+                        self.messages.append(responseMessage)
+                    }
+                    
+                case .streamData(let streamData):
+                    self.isLoading = false
+                    if streamData.streamType == "text" {
+                        let responseMessage = Message(
+                            content: streamData.content,
+                            sender: .claude,
+                            type: .text
+                        )
+                        self.messages.append(responseMessage)
+                    }
+                    
+                case .error(let errorResponse):
+                    self.isLoading = false
+                    let errorMessage = Message(
+                        content: "Error: \(errorResponse.message)",
+                        sender: .claude,
+                        type: .text
+                    )
+                    self.messages.append(errorMessage)
+                    
+                default:
+                    print("Global listener - unhandled message type: \(message.type)")
                 }
             }
         }

@@ -26,6 +26,9 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
     // Connection info
     private var currentURL: URL?
     private var authToken: String?
+    
+    // Message callback
+    var onMessage: ((WebSocketMessage) -> Void)?
 
     init() {
         setupDateFormatters()
@@ -283,6 +286,9 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
                 break
             }
 
+            // Call global message callback
+            onMessage?(message)
+            
             // Call registered handler if available
             messageHandlers[type]?(message)
         } catch {

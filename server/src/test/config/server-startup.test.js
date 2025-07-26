@@ -126,15 +126,19 @@ describe('ServerStartup', () => {
 
       // Should log that auth is disabled and show mobile app connection without token
       const logCalls = console.log.mock.calls.map((call) => call.arguments[0]);
-      const authDisabledMessages = logCalls.filter(
-        (msg) => msg.includes('Authentication disabled')
+      const authDisabledMessages = logCalls.filter((msg) =>
+        msg.includes('Authentication disabled')
       );
       const mobileAppMessages = logCalls.filter(
         (msg) => msg.includes('Mobile app connection') && !msg.includes('token=')
       );
-      
+
       assert.strictEqual(authDisabledMessages.length, 1, 'Should display auth disabled message');
-      assert.strictEqual(mobileAppMessages.length, 1, 'Should display mobile app connection without token');
+      assert.strictEqual(
+        mobileAppMessages.length,
+        1,
+        'Should display mobile app connection without token'
+      );
     });
 
     it('should display TLS info when enabled', () => {

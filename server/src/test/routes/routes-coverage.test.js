@@ -15,7 +15,7 @@ function createTestApp() {
   // Capture routers when they're registered
   app.use = (path, router) => {
     const result = originalUse(path, router);
-    
+
     if (typeof path === 'string' && router) {
       routers.push({ path, router });
     }
@@ -94,7 +94,7 @@ describe('Routes Coverage Tests', () => {
     setupRoutes(app, claudeService);
     // Extract routes after setup is complete
     extractRoutes();
-    
+
     // Debug: log captured routes
     // console.log('Captured routes:', routes.map(r => `${r.method} ${r.path}`));
   });

@@ -27,6 +27,6 @@ wiremock = "0.5"
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
 
-# [patch.crates-io]
-# glib = { version = "=0.20.12" }
-# Note: Uncomment the patch above if you need to force glib to 0.20.12 for security reasons
+[patch.crates-io]
+glib = { git = "https://github.com/gtk-rs/gtk-rs-core", tag = "0.20.12" }
+

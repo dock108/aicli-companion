@@ -23,8 +23,11 @@ describe('Project Routes', () => {
 
   describe('setupProjectRoutes function', () => {
     it('should be exported as a function', () => {
-      assert.strictEqual(typeof setupProjectRoutes, 'function', 
-        'setupProjectRoutes should be a function');
+      assert.strictEqual(
+        typeof setupProjectRoutes,
+        'function',
+        'setupProjectRoutes should be a function'
+      );
     });
 
     it('should setup routes without throwing errors', () => {
@@ -36,16 +39,16 @@ describe('Project Routes', () => {
     it('should add router to the app', () => {
       const originalUse = app.use;
       let routerMounted = false;
-      
-      app.use = mock.fn((path, router) => {
-        if (path === '/api' && router) {
+
+      app.use = mock.fn((routePath, router) => {
+        if (routePath === '/api' && router) {
           routerMounted = true;
         }
-        return originalUse.call(app, path, router);
+        return originalUse.call(app, routePath, router);
       });
 
       setupProjectRoutes(app);
-      
+
       assert.strictEqual(routerMounted, true, 'Should mount router on /api path');
       assert(app.use.mock.calls.length > 0, 'app.use should be called');
     });
@@ -56,7 +59,7 @@ describe('Project Routes', () => {
       const basePath = '/test/projects';
       const projectName = 'my-project';
       const fullPath = path.join(basePath, projectName);
-      
+
       assert.strictEqual(fullPath, '/test/projects/my-project');
     });
 
@@ -66,10 +69,13 @@ describe('Project Routes', () => {
       const attemptedPath = path.join(basePath, maliciousPath);
       const normalizedPath = path.normalize(attemptedPath);
       const normalizedBase = path.normalize(basePath);
-      
+
       // This should fail security check
-      assert.strictEqual(normalizedPath.startsWith(normalizedBase), false,
-        'Directory traversal attempt should be detected');
+      assert.strictEqual(
+        normalizedPath.startsWith(normalizedBase),
+        false,
+        'Directory traversal attempt should be detected'
+      );
     });
 
     it('should handle valid project paths', () => {
@@ -78,10 +84,13 @@ describe('Project Routes', () => {
       const projectPath = path.join(basePath, validProject);
       const normalizedPath = path.normalize(projectPath);
       const normalizedBase = path.normalize(basePath);
-      
+
       // This should pass security check
-      assert.strictEqual(normalizedPath.startsWith(normalizedBase), true,
-        'Valid project path should pass security check');
+      assert.strictEqual(
+        normalizedPath.startsWith(normalizedBase),
+        true,
+        'Valid project path should pass security check'
+      );
     });
 
     it('should filter hidden directories', () => {
@@ -109,7 +118,7 @@ describe('Project Routes', () => {
     it('should create proper project objects', () => {
       const basePath = '/test/projects';
       const projectName = 'test-project';
-      
+
       const projectObj = {
         name: projectName,
         path: path.join(basePath, projectName),
@@ -124,7 +133,7 @@ describe('Project Routes', () => {
     it('should handle JSON parsing for package.json', () => {
       const mockPackageJson = '{"name": "test-project", "description": "Test description"}';
       const packageData = JSON.parse(mockPackageJson);
-      
+
       assert.strictEqual(packageData.name, 'test-project');
       assert.strictEqual(packageData.description, 'Test description');
     });
@@ -144,8 +153,11 @@ describe('Project Routes', () => {
     it('should successfully import ServerConfig', async () => {
       try {
         const { ServerConfig } = await import('../../config/server-config.js');
-        assert.strictEqual(typeof ServerConfig, 'function', 
-          'ServerConfig should be a constructor function');
+        assert.strictEqual(
+          typeof ServerConfig,
+          'function',
+          'ServerConfig should be a constructor function'
+        );
       } catch (error) {
         assert.fail(`ServerConfig import failed: ${error.message}`);
       }

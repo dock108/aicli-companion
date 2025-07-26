@@ -169,12 +169,11 @@ export function setupProjectRoutes(app, claudeService) {
 
       try {
         // Start Claude CLI session using the ClaudeCodeService
-        const session = await claudeService.createInteractiveSession({
-          prompt: `Starting work in project: ${name}`,
-          workingDirectory: projectPath,
-          sessionName: `project_${name}`,
-          preserveContext: true
-        });
+        const session = await claudeService.createInteractiveSession(
+          sessionId,
+          `Starting work in project: ${name}`,
+          projectPath
+        );
         
         // Store session info for tracking
         const sessionInfo = {

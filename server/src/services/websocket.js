@@ -718,23 +718,11 @@ async function handleClaudeCommandMessage(clientId, requestId, data, claudeServi
       return;
     }
 
-    // Check if session exists
-    const session = claudeService.getSession(sessionId);
-    if (!session) {
-      sendErrorMessage(
-        clientId,
-        requestId,
-        'SESSION_NOT_FOUND',
-        `Session ${sessionId} not found`,
-        clients
-      );
-      return;
-    }
-
     console.log(`🤖 Sending command to Claude session ${sessionId}: ${command.substring(0, 50)}...`);
 
     // Send the command to the Claude CLI session
-    await claudeService.sendToStream(sessionId, command);
+    // The sendToExistingSession method will handle non-existent sessions
+    await claudeService.sendToExistingSession(sessionId, command);
 
     // Track this client as interested in this session
     const client = clients.get(clientId);
@@ -742,21 +730,7 @@ async function handleClaudeCommandMessage(clientId, requestId, data, claudeServi
       client.sessionIds.add(sessionId);
     }
 
-    // Send acknowledgment
-    sendMessage(
-      clientId,
-      {
-        type: 'claudeResponse',
-        requestId,
-        timestamp: new Date().toISOString(),
-        data: {
-          sessionId,
-          success: true,
-          content: 'Command sent to Claude CLI',
-        },
-      },
-      clients
-    );
+    // The actual response will come through the event listeners (assistantMessage, etc.)
   } catch (error) {
     console.error('Error handling Claude command:', error);
     sendErrorMessage(

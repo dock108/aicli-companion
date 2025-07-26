@@ -460,6 +460,10 @@ export class ClaudeCodeService extends EventEmitter {
     }
   }
 
+  hasSession(sessionId) {
+    return this.activeSessions.has(sessionId);
+  }
+
   getActiveSessions() {
     return Array.from(this.activeSessions.keys());
   }

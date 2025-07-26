@@ -12,7 +12,10 @@ describe('ClaudeCodeService Unit Tests', () => {
       const newService = new ClaudeCodeService();
       assert.strictEqual(newService.activeSessions.size, 0);
       // Check that claudeCommand contains 'claude' (can be full path)
-      assert.ok(newService.claudeCommand.includes('claude'), `Expected claudeCommand to include 'claude', got: ${newService.claudeCommand}`);
+      assert.ok(
+        newService.claudeCommand.includes('claude'),
+        `Expected claudeCommand to include 'claude', got: ${newService.claudeCommand}`
+      );
       assert.ok(newService.defaultWorkingDirectory);
     });
   });

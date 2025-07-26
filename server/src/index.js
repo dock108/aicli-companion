@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
 import { setupRoutes } from './routes/index.js';
+import { setupProjectRoutes } from './routes/projects.js';
 import { setupWebSocket } from './services/websocket.js';
 import { errorHandler } from './middleware/error.js';
 import { ClaudeCodeService } from './services/claude-code.js';
@@ -54,6 +55,7 @@ class ClaudeCompanionServer {
 
     // API routes
     setupRoutes(this.app, this.claudeService);
+    setupProjectRoutes(this.app);
 
     // Static files (for web interface if needed)
     this.app.use('/static', express.static(join(__dirname, '../public')));

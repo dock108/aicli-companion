@@ -52,6 +52,12 @@ export async function loadConfig() {
 
     if (state.elements.configPathInput) state.elements.configPathInput.value = state.configPath;
     if (state.elements.portInput) state.elements.portInput.value = state.serverStatus.port;
+    
+    // Load auth token
+    const authToken = localStorage.getItem('claude-companion-auth-token');
+    if (authToken && state.elements.authTokenInput) {
+      state.elements.authTokenInput.value = authToken;
+    }
   } catch (error) {
     console.error('Failed to load config:', error);
   }
@@ -107,6 +113,30 @@ export async function selectConfigPath() {
   }
 }
 
+// Token generation
+export function generateAuthToken() {
+  console.log('🔐 Generating auth token...');
+  // Generate a secure random token
+  const array = new Uint8Array(32);
+  window.crypto.getRandomValues(array);
+  const token = Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+  
+  // Save to localStorage
+  localStorage.setItem('claude-companion-auth-token', token);
+  
+  // Update UI
+  if (state.elements.authTokenInput) {
+    state.elements.authTokenInput.value = token;
+  }
+  
+  // Regenerate QR code if server is running
+  if (state.serverStatus.running) {
+    generateQRCode();
+  }
+  
+  return token;
+}
+
 // Server Management
 export async function startServer() {
   console.log('🚀 startServer() called');
@@ -121,7 +151,16 @@ export async function startServer() {
 
   try {
     console.log('Invoking start_server...');
-    const status = await invoke('start_server', { port });
+    
+    // Get auth token and config path for server
+    const authToken = localStorage.getItem('claude-companion-auth-token');
+    const configPath = state.configPath;
+    
+    const status = await invoke('start_server', { 
+      port,
+      authToken,
+      configPath 
+    });
     console.log('Server started, status:', status);
     setServerStatus(status);
     await updateUI();
@@ -295,6 +334,8 @@ export async function init() {
     configPathInput: document.getElementById('config-path'),
     browseBtn: document.getElementById('browse-btn'),
     portInput: document.getElementById('port'),
+    authTokenInput: document.getElementById('auth-token'),
+    generateTokenBtn: document.getElementById('generate-token-btn'),
     statusDot: document.getElementById('status-dot'),
     statusText: document.getElementById('status-text'),
     serverInfo: document.getElementById('server-info'),
@@ -312,6 +353,8 @@ export async function init() {
     configPathInput: !!state.elements.configPathInput,
     browseBtn: !!state.elements.browseBtn,
     portInput: !!state.elements.portInput,
+    authTokenInput: !!state.elements.authTokenInput,
+    generateTokenBtn: !!state.elements.generateTokenBtn,
     startBtn: !!state.elements.startBtn,
     stopBtn: !!state.elements.stopBtn,
   });
@@ -378,6 +421,16 @@ export async function init() {
 
   if (state.elements.portInput) {
     state.elements.portInput.addEventListener('change', saveConfig);
+  }
+
+  if (state.elements.generateTokenBtn) {
+    console.log('✅ Adding click listener to generateTokenBtn');
+    state.elements.generateTokenBtn.addEventListener('click', () => {
+      console.log('Generate token button clicked!');
+      generateAuthToken();
+    });
+  } else {
+    console.log('❌ generateTokenBtn not found');
   }
 
   // Start health check polling

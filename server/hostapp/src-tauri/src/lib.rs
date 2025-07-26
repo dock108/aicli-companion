@@ -108,7 +108,12 @@ pub fn find_process_by_port(port: u16) -> Option<u32> {
     }
 }
 
-pub async fn start_server_impl(state: &AppState, port: u16) -> Result<ServerStatus, String> {
+pub async fn start_server_impl(
+    state: &AppState, 
+    port: u16,
+    auth_token: Option<String>,
+    config_path: Option<String>
+) -> Result<ServerStatus, String> {
     // First check if server is already running on this port
     let health_check = check_server_health_impl(port).await?;
 
@@ -175,6 +180,16 @@ pub async fn start_server_impl(state: &AppState, port: u16) -> Result<ServerStat
         .env("PORT", port.to_string())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    
+    // Add auth token if provided
+    if let Some(token) = auth_token {
+        cmd.env("AUTH_TOKEN", token);
+    }
+    
+    // Add config path if provided
+    if let Some(path) = config_path {
+        cmd.env("CONFIG_PATH", path);
+    }
 
     match cmd.spawn() {
         Ok(child) => {

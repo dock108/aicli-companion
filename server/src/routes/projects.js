@@ -1,0 +1,108 @@
+import express from 'express';
+import { promises as fs } from 'fs';
+import path from 'path';
+import { ServerConfig } from '../config/server-config.js';
+
+export function setupProjectRoutes(app) {
+  const router = express.Router();
+  const config = new ServerConfig();
+
+  // Get the configured project directory from config
+  const getProjectsDir = () => {
+    return config.configPath;
+  };
+
+  // List all projects (folders) in the configured directory
+  router.get('/projects', async (req, res) => {
+    try {
+      const projectsDir = getProjectsDir();
+      console.log('Listing projects from:', projectsDir);
+
+      // Read directory contents
+      const items = await fs.readdir(projectsDir, { withFileTypes: true });
+      
+      // Filter for directories only and exclude hidden folders
+      const projects = items
+        .filter(item => item.isDirectory() && !item.name.startsWith('.'))
+        .map(item => ({
+          name: item.name,
+          path: path.join(projectsDir, item.name),
+          type: 'folder'
+        }));
+
+      res.json({
+        basePath: projectsDir,
+        projects: projects.sort((a, b) => a.name.localeCompare(b.name))
+      });
+    } catch (error) {
+      console.error('Error listing projects:', error);
+      res.status(500).json({
+        error: 'Failed to list projects',
+        message: error.message
+      });
+    }
+  });
+
+  // Get specific project info
+  router.get('/projects/:name', async (req, res) => {
+    try {
+      const { name } = req.params;
+      const projectsDir = getProjectsDir();
+      const projectPath = path.join(projectsDir, name);
+
+      // Security check - prevent directory traversal
+      const normalizedPath = path.normalize(projectPath);
+      const normalizedBase = path.normalize(projectsDir);
+      
+      if (!normalizedPath.startsWith(normalizedBase)) {
+        return res.status(403).json({
+          error: 'Access denied',
+          message: 'Invalid project path'
+        });
+      }
+
+      // Check if project exists
+      try {
+        const stat = await fs.stat(projectPath);
+        if (!stat.isDirectory()) {
+          throw new Error('Not a directory');
+        }
+      } catch (error) {
+        return res.status(404).json({
+          error: 'Project not found',
+          message: `Project '${name}' does not exist`
+        });
+      }
+
+      // Get project info
+      const info = {
+        name,
+        path: projectPath,
+        type: 'folder'
+      };
+
+      // Try to get additional info if available
+      try {
+        // Check for package.json
+        const packageJsonPath = path.join(projectPath, 'package.json');
+        const packageJson = await fs.readFile(packageJsonPath, 'utf-8');
+        const packageData = JSON.parse(packageJson);
+        info.description = packageData.description;
+        info.projectType = 'node';
+      } catch (error) {
+        // Not a Node project or no package.json
+      }
+
+      res.json(info);
+    } catch (error) {
+      console.error('Error getting project info:', error);
+      res.status(500).json({
+        error: 'Failed to get project info',
+        message: error.message
+      });
+    }
+  });
+
+  // Mount routes
+  app.use('/api', router);
+}

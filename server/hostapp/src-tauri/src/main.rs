@@ -13,8 +13,13 @@ fn get_local_ip() -> Result<String, String> {
 }
 
 #[tauri::command]
-async fn start_server(state: State<'_, AppState>, port: u16) -> Result<ServerStatus, String> {
-    start_server_impl(&state, port).await
+async fn start_server(
+    state: State<'_, AppState>, 
+    port: u16,
+    auth_token: Option<String>,
+    config_path: Option<String>
+) -> Result<ServerStatus, String> {
+    start_server_impl(&state, port, auth_token, config_path).await
 }
 
 #[tauri::command]

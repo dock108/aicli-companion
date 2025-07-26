@@ -18,6 +18,7 @@ export class ServerConfig {
     this.enableTLS = process.env.ENABLE_TLS === 'true';
     this.allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['*'];
     this.nodeEnv = process.env.NODE_ENV || 'development';
+    this.configPath = process.env.CONFIG_PATH || process.cwd();
   }
 
   /**

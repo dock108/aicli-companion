@@ -232,6 +232,7 @@ struct ProjectSelectionView: View {
                 do {
                     let response = try JSONDecoder().decode(ProjectsResponse.self, from: data)
                     projects = response.projects
+                    errorMessage = nil  // Clear any previous error
                     print("Successfully loaded \(projects.count) projects")
                 } catch let decodingError {
                     print("Decoding error: \(decodingError)")

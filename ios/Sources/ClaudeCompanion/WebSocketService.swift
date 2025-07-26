@@ -284,6 +284,10 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
                 handleConversationResult(message)
             case .workingDirectorySet:
                 handleWorkingDirectorySet(message)
+            
+            // Progress and status message types
+            case .progress:
+                handleProgressMessage(message)
 
             default:
                 break
@@ -438,6 +442,16 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
 
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date format")
         }
+    }
+
+    private func handleProgressMessage(_ message: WebSocketMessage) {
+        if case .progress(let progress) = message.data {
+            print("Progress update: \(progress.stage) - \(progress.message)")
+            if let progressValue = progress.progress {
+                print("  Progress: \(Int(progressValue * 100))%")
+            }
+        }
+        // This will be handled by registered handlers in the UI
     }
 
     // MARK: - WebSocketDelegate

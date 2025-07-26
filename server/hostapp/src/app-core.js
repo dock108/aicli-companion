@@ -2,6 +2,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { appDataDir } from '@tauri-apps/api/path';
+import { listen } from '@tauri-apps/api/event';
 import QRCode from 'qrcode';
 
 // State
@@ -16,6 +17,12 @@ const state = {
   localIp: '',
   configPath: '',
   elements: {},
+  logs: [],
+  logsUnlisten: null,
+  currentTab: 'server',
+  claudeStatus: null,
+  claudeLogs: [],
+  claudeLogsUnlisten: null,
 };
 
 // Export getters and setters for testing
@@ -322,6 +329,284 @@ export async function generateQRCode() {
   }
 }
 
+// Logs Management
+export async function loadLogs() {
+  try {
+    const logs = await invoke('get_logs');
+    state.logs = logs;
+    renderLogs();
+  } catch (error) {
+    console.error('Failed to load logs:', error);
+  }
+}
+
+export async function clearLogs() {
+  try {
+    await invoke('clear_logs');
+    state.logs = [];
+    renderLogs();
+  } catch (error) {
+    console.error('Failed to clear logs:', error);
+  }
+}
+
+export function renderLogs() {
+  const logsDisplay = state.elements.logsDisplay;
+  if (!logsDisplay) return;
+
+  // Get filter values
+  const searchTerm = state.elements.logSearch?.value.toLowerCase() || '';
+  const levelFilter = state.elements.logLevelFilter?.value || 'all';
+
+  // Filter logs
+  const filteredLogs = state.logs.filter(log => {
+    const matchesSearch = !searchTerm || log.message.toLowerCase().includes(searchTerm);
+    const matchesLevel = levelFilter === 'all' || log.level === levelFilter;
+    return matchesSearch && matchesLevel;
+  });
+
+  // Clear existing logs
+  logsDisplay.innerHTML = '';
+
+  if (filteredLogs.length === 0) {
+    logsDisplay.innerHTML = '<div class="log-empty-state">No logs match the current filters.</div>';
+    return;
+  }
+
+  // Render each log entry
+  filteredLogs.forEach(log => {
+    const logEntry = document.createElement('div');
+    logEntry.className = 'log-entry';
+    
+    const timestamp = document.createElement('span');
+    timestamp.className = 'log-timestamp';
+    timestamp.textContent = log.timestamp;
+    
+    const level = document.createElement('span');
+    level.className = `log-level ${log.level}`;
+    level.textContent = log.level;
+    
+    const message = document.createElement('span');
+    message.className = 'log-message';
+    message.textContent = log.message;
+    
+    logEntry.appendChild(timestamp);
+    logEntry.appendChild(level);
+    logEntry.appendChild(message);
+    
+    logsDisplay.appendChild(logEntry);
+  });
+
+  // Auto-scroll if enabled
+  if (state.elements.autoScroll?.checked) {
+    logsDisplay.scrollTop = logsDisplay.scrollHeight;
+  }
+}
+
+// Tab Navigation
+export function switchTab(tabName) {
+  // Update tab buttons
+  document.querySelectorAll('.tab-button').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tabName);
+  });
+
+  // Update tab panels
+  document.querySelectorAll('.tab-panel').forEach(panel => {
+    panel.classList.toggle('active', panel.id === `${tabName}-tab`);
+  });
+
+  state.currentTab = tabName;
+
+  // Load logs when switching to logs tab
+  if (tabName === 'logs') {
+    loadLogs();
+  } else if (tabName === 'claude') {
+    loadClaudeStatus();
+  }
+}
+
+// Claude CLI Management
+export async function loadClaudeStatus() {
+  if (!state.serverStatus.running) {
+    updateClaudeStatusUI({
+      claude: { installed: false, version: null, path: null, available: false },
+      sessions: { active: 0, max: 0, details: [] }
+    });
+    return;
+  }
+
+  try {
+    const response = await fetch(`http://localhost:${state.serverStatus.port}/api/claude/status`);
+    if (response.ok) {
+      const status = await response.json();
+      state.claudeStatus = status;
+      updateClaudeStatusUI(status);
+    }
+  } catch (error) {
+    console.error('Failed to load Claude status:', error);
+  }
+}
+
+export async function testClaude() {
+  if (!state.serverStatus.running) {
+    alert('Server must be running to test Claude CLI');
+    return;
+  }
+
+  const testBtn = state.elements.testClaudeBtn;
+  testBtn.disabled = true;
+  testBtn.textContent = 'Testing...';
+
+  try {
+    const response = await fetch(`http://localhost:${state.serverStatus.port}/api/claude/test`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: 'Hello! Please respond with a brief greeting.' })
+    });
+
+    const result = await response.json();
+    
+    if (result.success) {
+      alert('Claude CLI test successful! Check the Claude logs for the response.');
+      addClaudeLog('test', `Test successful: ${JSON.stringify(result.response).substring(0, 200)}...`);
+    } else {
+      alert(`Claude CLI test failed: ${result.message}`);
+      addClaudeLog('error', `Test failed: ${result.message}`);
+    }
+  } catch (error) {
+    alert(`Failed to test Claude CLI: ${error.message}`);
+    addClaudeLog('error', `Test error: ${error.message}`);
+  } finally {
+    testBtn.disabled = false;
+    testBtn.textContent = 'Test Claude CLI';
+  }
+}
+
+function updateClaudeStatusUI(status) {
+  if (!status) return;
+
+  // Update Claude installation status
+  const installedEl = state.elements.claudeInstalled;
+  const versionEl = state.elements.claudeVersion;
+  const pathEl = state.elements.claudePath;
+  const availableEl = state.elements.claudeAvailable;
+
+  if (installedEl) {
+    installedEl.textContent = status.claude.installed ? 'Installed' : 'Not Installed';
+    installedEl.className = status.claude.installed ? 'status-value success' : 'status-value error';
+  }
+
+  if (versionEl) {
+    versionEl.textContent = status.claude.version || '-';
+  }
+
+  if (pathEl) {
+    pathEl.textContent = status.claude.path || '-';
+  }
+
+  if (availableEl) {
+    availableEl.textContent = status.claude.available ? 'Yes' : 'No';
+    availableEl.className = status.claude.available ? 'status-value success' : 'status-value error';
+  }
+
+  // Update session info
+  if (state.elements.activeSessionsCount) {
+    state.elements.activeSessionsCount.textContent = status.sessions.active;
+  }
+
+  if (state.elements.maxSessions) {
+    state.elements.maxSessions.textContent = status.sessions.max;
+  }
+
+  // Update sessions list
+  const sessionsList = state.elements.sessionsList;
+  if (sessionsList) {
+    sessionsList.innerHTML = '';
+    
+    if (status.sessions.details.length === 0) {
+      sessionsList.innerHTML = '<div class="log-empty-state">No active Claude CLI sessions</div>';
+    } else {
+      status.sessions.details.forEach(session => {
+        const sessionEl = document.createElement('div');
+        sessionEl.className = 'session-item';
+        sessionEl.innerHTML = `
+          <div class="session-header">
+            <span class="session-id">${session.sessionId}</span>
+            <span class="session-pid">PID: ${session.pid || 'N/A'}</span>
+          </div>
+          <div class="session-details">
+            <div>Working Directory: ${session.workingDirectory}</div>
+            <div>Created: ${new Date(session.createdAt).toLocaleTimeString()}</div>
+            <div>Last Activity: ${new Date(session.lastActivity).toLocaleTimeString()}</div>
+          </div>
+        `;
+        sessionsList.appendChild(sessionEl);
+      });
+    }
+  }
+}
+
+function addClaudeLog(type, content) {
+  const log = {
+    type,
+    content,
+    timestamp: new Date().toISOString()
+  };
+  
+  state.claudeLogs.push(log);
+  if (state.claudeLogs.length > 1000) {
+    state.claudeLogs = state.claudeLogs.slice(-1000);
+  }
+  
+  renderClaudeLogs();
+}
+
+export function renderClaudeLogs() {
+  const logsDisplay = state.elements.claudeLogsDisplay;
+  if (!logsDisplay) return;
+
+  const filterValue = state.elements.claudeLogFilter?.value || 'all';
+  
+  const filteredLogs = state.claudeLogs.filter(log => {
+    if (filterValue === 'all') return true;
+    return log.type === filterValue;
+  });
+
+  logsDisplay.innerHTML = '';
+
+  if (filteredLogs.length === 0) {
+    logsDisplay.innerHTML = '<div class="log-empty-state">No Claude CLI logs match the filter.</div>';
+    return;
+  }
+
+  filteredLogs.forEach(log => {
+    const logEntry = document.createElement('div');
+    logEntry.className = 'claude-log-entry';
+    
+    const logType = document.createElement('span');
+    logType.className = `claude-log-type ${log.type}`;
+    logType.textContent = log.type;
+    
+    const logContent = document.createElement('span');
+    logContent.className = 'claude-log-content';
+    logContent.textContent = log.content;
+    
+    logEntry.appendChild(logType);
+    logEntry.appendChild(logContent);
+    
+    logsDisplay.appendChild(logEntry);
+  });
+
+  if (state.elements.claudeAutoScroll?.checked) {
+    logsDisplay.scrollTop = logsDisplay.scrollHeight;
+  }
+}
+
+export function clearClaudeLogs() {
+  state.claudeLogs = [];
+  renderClaudeLogs();
+}
+
 // Initialize
 export async function init() {
   console.log('🚀 Starting init()...');
@@ -347,6 +632,26 @@ export async function init() {
     qrCanvas: document.getElementById('qr-code'),
     connectionString: document.getElementById('connection-string'),
     externalNotice: document.getElementById('external-notice'),
+    // Logs elements
+    logsDisplay: document.getElementById('logs-display'),
+    logSearch: document.getElementById('log-search'),
+    logLevelFilter: document.getElementById('log-level-filter'),
+    clearLogsBtn: document.getElementById('clear-logs-btn'),
+    autoScroll: document.getElementById('auto-scroll'),
+    // Claude elements
+    claudeInstalled: document.getElementById('claude-installed'),
+    claudeVersion: document.getElementById('claude-version'),
+    claudePath: document.getElementById('claude-path'),
+    claudeAvailable: document.getElementById('claude-available'),
+    refreshClaudeBtn: document.getElementById('refresh-claude-btn'),
+    testClaudeBtn: document.getElementById('test-claude-btn'),
+    activeSessionsCount: document.getElementById('active-sessions-count'),
+    maxSessions: document.getElementById('max-sessions'),
+    sessionsList: document.getElementById('sessions-list'),
+    claudeLogsDisplay: document.getElementById('claude-logs-display'),
+    claudeLogFilter: document.getElementById('claude-log-filter'),
+    clearClaudeLogsBtn: document.getElementById('clear-claude-logs-btn'),
+    claudeAutoScroll: document.getElementById('claude-auto-scroll'),
   });
 
   console.log('DOM elements found:', {
@@ -433,6 +738,71 @@ export async function init() {
     console.log('❌ generateTokenBtn not found');
   }
 
+  // Tab navigation listeners
+  document.querySelectorAll('.tab-button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      switchTab(btn.dataset.tab);
+    });
+  });
+
+  // Logs event listeners
+  if (state.elements.logSearch) {
+    state.elements.logSearch.addEventListener('input', renderLogs);
+  }
+
+  if (state.elements.logLevelFilter) {
+    state.elements.logLevelFilter.addEventListener('change', renderLogs);
+  }
+
+  if (state.elements.clearLogsBtn) {
+    state.elements.clearLogsBtn.addEventListener('click', clearLogs);
+  }
+
+  // Claude event listeners
+  if (state.elements.refreshClaudeBtn) {
+    state.elements.refreshClaudeBtn.addEventListener('click', loadClaudeStatus);
+  }
+
+  if (state.elements.testClaudeBtn) {
+    state.elements.testClaudeBtn.addEventListener('click', testClaude);
+  }
+
+  if (state.elements.claudeLogFilter) {
+    state.elements.claudeLogFilter.addEventListener('change', renderClaudeLogs);
+  }
+
+  if (state.elements.clearClaudeLogsBtn) {
+    state.elements.clearClaudeLogsBtn.addEventListener('click', clearClaudeLogs);
+  }
+
+  // Listen for real-time log updates
+  state.logsUnlisten = await listen('log-entry', (event) => {
+    const log = event.payload;
+    state.logs.push(log);
+    // Keep only last 10000 logs in UI
+    if (state.logs.length > 10000) {
+      state.logs = state.logs.slice(-10000);
+    }
+    renderLogs();
+    
+    // Parse Claude-specific logs
+    if (log.message) {
+      if (log.message.includes('[CLAUDE_PROCESS_START]')) {
+        addClaudeLog('start', log.message.replace('[CLAUDE_PROCESS_START]', '').trim());
+      } else if (log.message.includes('[CLAUDE_STDOUT]')) {
+        addClaudeLog('stdout', log.message.replace('[CLAUDE_STDOUT]', '').trim());
+      } else if (log.message.includes('[CLAUDE_STDERR]')) {
+        addClaudeLog('stderr', log.message.replace('[CLAUDE_STDERR]', '').trim());
+      } else if (log.message.includes('[CLAUDE_PROCESS_EXIT]')) {
+        addClaudeLog('exit', log.message.replace('[CLAUDE_PROCESS_EXIT]', '').trim());
+      } else if (log.message.includes('[CLAUDE_PROCESS_ERROR]')) {
+        addClaudeLog('error', log.message.replace('[CLAUDE_PROCESS_ERROR]', '').trim());
+      } else if (log.message.includes('[CLAUDE_COMMAND]')) {
+        addClaudeLog('command', log.message.replace('[CLAUDE_COMMAND]', '').trim());
+      }
+    }
+  });
+
   // Start health check polling
-  setInterval(checkServerHealth, 2000);
+  setInterval(checkServerHealth, 10000); // Reduced from 2s to 10s for cleaner logs
 }

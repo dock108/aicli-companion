@@ -216,6 +216,26 @@ which claude
 claude --version
 ```
 
+If Claude CLI is installed but not in PATH, you can:
+
+1. **Set the CLAUDE_CLI_PATH environment variable:**
+```bash
+# Find where claude is installed
+which claude
+
+# Start server with explicit path
+CLAUDE_CLI_PATH=/path/to/claude npm start
+
+# Or add to .env file
+echo "CLAUDE_CLI_PATH=/path/to/claude" >> .env
+```
+
+2. **Common installation locations:**
+- NVM: `~/.nvm/versions/node/vX.X.X/bin/claude`
+- NPM global: `/usr/local/bin/claude`
+- Homebrew: `/opt/homebrew/bin/claude`
+- Local: `~/.local/bin/claude`
+
 ### Permission Denied
 
 ```

@@ -7,7 +7,11 @@ export function setupWebSocket(wss, claudeService, authToken) {
     const clientId = uuidv4();
     const clientIP = request.socket.remoteAddress;
     const clientFamily = request.socket.remoteFamily;
+    const userAgent = request.headers['user-agent'] || 'unknown';
+    
     console.log(`WebSocket client connected: ${clientId} from ${clientIP} (${clientFamily})`);
+    console.log(`   User-Agent: ${userAgent}`);
+    console.log(`   Total clients: ${clients.size + 1}`);
 
     // Authentication check
     if (authToken) {
@@ -27,12 +31,18 @@ export function setupWebSocket(wss, claudeService, authToken) {
       sessionIds: new Set(),
       isAlive: true,
       subscribedEvents: new Set(),
+      connectedAt: new Date(),
+      lastActivity: new Date(),
     });
 
     // Set up ping/pong for connection health
     ws.isAlive = true;
     ws.on('pong', () => {
       ws.isAlive = true;
+      const client = clients.get(clientId);
+      if (client) {
+        client.lastActivity = new Date();
+      }
     });
 
     // Send welcome message
@@ -84,6 +94,12 @@ export function setupWebSocket(wss, claudeService, authToken) {
         const message = JSON.parse(rawMessage);
         console.log(`📨 Parsed message from ${clientId}:`, JSON.stringify(message, null, 2));
 
+        // Update client activity
+        const client = clients.get(clientId);
+        if (client) {
+          client.lastActivity = new Date();
+        }
+
         // Validate message structure
         if (!message.type) {
           throw new Error('Message missing required field: type');
@@ -99,17 +115,23 @@ export function setupWebSocket(wss, claudeService, authToken) {
 
     // Handle client disconnect
     ws.on('close', (code, reason) => {
+      const client = clients.get(clientId);
+      const connectionDuration = client ? Date.now() - client.connectedAt.getTime() : 0;
+      
       console.log(`WebSocket client disconnected: ${clientId} (${code}: ${reason})`);
+      console.log(`   Connection duration: ${Math.round(connectionDuration / 1000)}s`);
+      console.log(`   Active sessions: ${client?.sessionIds.size || 0}`);
 
       // Clean up any active sessions for this client
-      const client = clients.get(clientId);
       if (client) {
         client.sessionIds.forEach((sessionId) => {
+          console.log(`   Closing Claude session: ${sessionId}`);
           claudeService.closeSession(sessionId);
         });
       }
 
       clients.delete(clientId);
+      console.log(`   Remaining clients: ${clients.size}`);
     });
 
     ws.on('error', (error) => {
@@ -153,6 +175,7 @@ export function setupWebSocket(wss, claudeService, authToken) {
 
   // Handle assistant responses with rich content
   claudeService.on('assistantMessage', (data) => {
+    console.log(`📢 Broadcasting assistantMessage for session ${data.sessionId}`);
     broadcastToSessionClients(
       data.sessionId,
       {
@@ -262,19 +285,50 @@ export function setupWebSocket(wss, claudeService, authToken) {
     );
   });
 
-  // Health check ping interval
+  // Handle command progress for real-time updates
+  claudeService.on('commandProgress', (data) => {
+    const progressInfo = parseProgressFromOutput(data.data);
+    
+    if (progressInfo) {
+      broadcastToSessionClients(
+        data.sessionId,
+        {
+          type: 'progress',
+          requestId: null,
+          timestamp: new Date().toISOString(),
+          data: {
+            sessionId: data.sessionId,
+            stage: progressInfo.stage,
+            progress: progressInfo.progress,
+            message: progressInfo.message,
+            estimatedTimeRemaining: progressInfo.estimatedTimeRemaining,
+          },
+        },
+        clients
+      );
+    }
+  });
+
+  // Health check ping interval - more frequent for better connection monitoring
   const pingInterval = setInterval(() => {
     clients.forEach((client, clientId) => {
       if (!client.isAlive) {
+        console.log(`WebSocket client ${clientId} failed ping test, terminating connection`);
         client.ws.terminate();
         clients.delete(clientId);
         return;
       }
-
+      // Don't fail clients that are actively processing commands
+      const recentActivity = Date.now() - client.lastActivity.getTime();
+      if (recentActivity < 30000) { // 30 seconds grace period for active clients
+        console.log(`Skipping ping test for active client ${clientId} (last activity: ${Math.round(recentActivity/1000)}s ago)`);
+        return;
+      }
+      
+      console.log(`Sending ping to client ${clientId}`);
       client.isAlive = false;
-      client.ws.ping();
-    });
-  }, 30000);
+      client.ws.ping();    });
+  }, 15000); // Reduced from 30s to 15s for faster detection
 
   wss.on('close', () => {
     clearInterval(pingInterval);
@@ -725,40 +779,146 @@ async function handleClaudeCommandMessage(clientId, requestId, data, claudeServi
 
     console.log(`🤖 Sending command to Claude session ${sessionId}: ${command.substring(0, 50)}...`);
 
+    // Check if session exists first
+    if (!claudeService.hasSession(sessionId)) {
+      const errorMsg = `Session ${sessionId} does not exist. Please start a Claude CLI session first.`;
+      console.error(`❌ ${errorMsg}`);
+      sendErrorMessage(
+        clientId,
+        requestId,
+        'SESSION_NOT_FOUND',
+        errorMsg,
+        clients,
+        { sessionId }
+      );
+      return;
+    }
+
+    // Associate this client with the session BEFORE executing the command
+    const client = clients.get(clientId);
+    if (client) {
+      console.log(`🔗 Associating client ${clientId} with session ${sessionId} BEFORE command execution`);
+      console.log(`   Client sessions before: [${Array.from(client.sessionIds).join(', ')}]`);
+      client.sessionIds.add(sessionId);
+      console.log(`   Client sessions after: [${Array.from(client.sessionIds).join(', ')}]`);
+    } else {
+      console.error(`❌ Client ${clientId} not found when trying to associate with session ${sessionId}`);
+      sendErrorMessage(
+        clientId,
+        requestId,
+        'CLIENT_ERROR',
+        'Client not found for session association',
+        clients,
+        { sessionId }
+      );
+      return;
+    }
+
+    // Verify client is now associated with the session
+    console.log(`🔍 Verifying client association before command execution:`);
+    console.log(`   Client ${clientId} has sessions: [${Array.from(client.sessionIds).join(', ')}]`);
+    console.log(`   Client is subscribed to target session: ${client.sessionIds.has(sessionId)}`);
+
     // Send the command to the Claude CLI session
-    // The sendToExistingSession method will handle non-existent sessions
     try {
       const result = await claudeService.sendToExistingSession(sessionId, command);
       console.log(`✅ Command sent successfully:`, result);
+      
+      // If this was a long-running operation that started in background, 
+      // send immediate response to clear iOS loading state
+      if (result && result.subtype === 'long_running_started') {
+        console.log(`🔄 Long-running operation started, sending immediate response to client`);
+        // The background process will send the actual results when complete
+        // iOS app should exit loading state now
+      }
+      
     } catch (error) {
-      console.error(`❌ Failed to send command to Claude:`, error);
+      console.error(`❌ Failed to send command to Claude session ${sessionId}:`, error.message);
       throw error;
-    }
-
-    // Track this client as interested in this session
-    const client = clients.get(clientId);
-    if (client) {
-      client.sessionIds.add(sessionId);
     }
 
     // The actual response will come through the event listeners (assistantMessage, etc.)
   } catch (error) {
     console.error('Error handling Claude command:', error);
+    
+    // Create user-friendly error messages based on error type
+    let userFriendlyMessage = error.message || 'Failed to send command to Claude';
+    let suggestions = [];
+    
+    if (error.message.includes('timed out')) {
+      if (error.message.includes('silence')) {
+        userFriendlyMessage = 'Claude CLI stopped responding during processing. This can happen with very complex requests.';
+        suggestions = [
+          'Try breaking your request into smaller, more specific parts',
+          'Use simpler commands to test if Claude CLI is working',
+          'Check if the request requires too many resources'
+        ];
+      } else {
+        userFriendlyMessage = 'Claude CLI took too long to complete your request.';
+        suggestions = [
+          'Try using a simpler or more specific command',
+          'Break complex requests into smaller parts',
+          'Try again - sometimes complex operations need multiple attempts'
+        ];
+      }
+    } else if (error.message.includes('not found') || error.message.includes('SESSION_NOT_FOUND')) {
+      userFriendlyMessage = 'The Claude CLI session was not found or has expired.';
+      suggestions = [
+        'Try refreshing the chat to create a new session',
+        'Make sure the server is running properly'
+      ];
+    } else if (error.message.includes('permission') || error.message.includes('access')) {
+      userFriendlyMessage = 'Claude CLI does not have the necessary permissions.';
+      suggestions = [
+        'Check file and directory permissions',
+        'Make sure Claude CLI is properly installed',
+        'Try running the server with appropriate permissions'
+      ];
+    }
+    
+    // Include suggestions in the error details if we have any
+    const errorDetails = suggestions.length > 0 ? {
+      originalError: error.message,
+      suggestions: suggestions,
+      sessionId: sessionId
+    } : { sessionId: sessionId };
+    
     sendErrorMessage(
       clientId,
       requestId,
       'COMMAND_ERROR',
-      error.message || 'Failed to send command to Claude',
-      clients
+      userFriendlyMessage,
+      clients,
+      errorDetails
     );
   }
 }
 
 function sendMessage(clientId, message, clients) {
   const client = clients.get(clientId);
-  if (client && client.ws.readyState === 1) {
-    // WebSocket.OPEN
-    client.ws.send(JSON.stringify(message));
+  if (!client) {
+    console.warn(`Attempted to send message to non-existent client: ${clientId}`);
+    return false;
+  }
+
+  const ws = client.ws;
+  if (ws.readyState === 1) { // WebSocket.OPEN
+    try {
+      ws.send(JSON.stringify(message));
+      client.lastActivity = new Date();
+      return true;
+    } catch (error) {
+      console.error(`Failed to send message to client ${clientId}:`, error);
+      // Remove invalid client
+      clients.delete(clientId);
+      return false;
+    }
+  } else {
+    console.warn(`WebSocket not open for client ${clientId}, readyState: ${ws.readyState}`);
+    if (ws.readyState === 3) { // WebSocket.CLOSED
+      clients.delete(clientId);
+    }
+    return false;
   }
 }
 
@@ -780,11 +940,49 @@ function sendErrorMessage(clientId, requestId, code, message, clients, details =
 }
 
 function broadcastToSessionClients(sessionId, message, clients) {
+  console.log(`📡 Broadcasting ${message.type} to session ${sessionId}`);
+  console.log(`   Total clients: ${clients.size}`);
+  console.log(`   Message data:`, JSON.stringify(message, null, 2).substring(0, 500));
+  
+  let sentCount = 0;
+  let failedCount = 0;
+  let clientsWithSession = 0;
+  
   clients.forEach((client, clientId) => {
+    console.log(`   Checking client ${clientId}:`);
+    console.log(`     Has sessions: [${Array.from(client.sessionIds).join(', ')}]`);
+    console.log(`     Target session: ${sessionId}`);
+    console.log(`     Has target session: ${client.sessionIds.has(sessionId)}`);
+    console.log(`     WebSocket state: ${client.ws.readyState}`);
+    
     if (client.sessionIds.has(sessionId)) {
-      sendMessage(clientId, message, clients);
+      clientsWithSession++;
+      console.log(`   ✅ Sending to client ${clientId}`);
+      const success = sendMessage(clientId, message, clients);
+      if (success) {
+        sentCount++;
+        console.log(`   📤 Successfully sent to client ${clientId}`);
+      } else {
+        failedCount++;
+        console.log(`   ❌ Failed to send to client ${clientId}`);
+      }
+    } else {
+      console.log(`   ⏭️  Skipping client ${clientId} (not subscribed to session)`);
     }
   });
+  
+  console.log(`📊 Broadcast summary for session ${sessionId}:`);
+  console.log(`   Clients with session: ${clientsWithSession}`);
+  console.log(`   Messages sent: ${sentCount}`);
+  console.log(`   Messages failed: ${failedCount}`);
+  
+  if (clientsWithSession === 0) {
+    console.warn(`⚠️  No clients subscribed to session ${sessionId}!`);
+  }
+  
+  if (failedCount > 0) {
+    console.warn(`❌ Broadcast to session ${sessionId}: ${sentCount} sent, ${failedCount} failed`);
+  }
 }
 
 function determineStreamType(data) {
@@ -851,4 +1049,74 @@ async function getClaudeCodeVersion() {
   } catch (error) {
     return null;
   }
+}
+
+function parseProgressFromOutput(output) {
+  if (!output || typeof output !== 'string') return null;
+  
+  // Parse tool usage indicators
+  const toolUseMatch = output.match(/Using tool: (\w+)/i);
+  if (toolUseMatch) {
+    return {
+      stage: 'tool_use',
+      progress: null,
+      message: `Using ${toolUseMatch[1]} tool`,
+      estimatedTimeRemaining: null,
+    };
+  }
+  
+  // Parse file operations
+  const fileOpMatch = output.match(/(Reading|Writing|Creating|Analyzing) (.+)/i);
+  if (fileOpMatch) {
+    return {
+      stage: 'file_operation',
+      progress: null,
+      message: `${fileOpMatch[1]} ${fileOpMatch[2]}`,
+      estimatedTimeRemaining: null,
+    };
+  }
+  
+  // Parse search operations
+  const searchMatch = output.match(/Searching (\d+) files?/i);
+  if (searchMatch) {
+    return {
+      stage: 'searching',
+      progress: null,
+      message: `Searching ${searchMatch[1]} files`,
+      estimatedTimeRemaining: null,
+    };
+  }
+  
+  // Parse bash command execution
+  const bashMatch = output.match(/Executing command: (.+)/i);
+  if (bashMatch) {
+    return {
+      stage: 'command_execution',
+      progress: null,
+      message: `Running: ${bashMatch[1].substring(0, 50)}${bashMatch[1].length > 50 ? '...' : ''}`,
+      estimatedTimeRemaining: null,
+    };
+  }
+  
+  // Parse thinking/analyzing indicators
+  if (output.includes('analyzing') || output.includes('thinking') || output.includes('considering')) {
+    return {
+      stage: 'analyzing',
+      progress: null,
+      message: 'Analyzing request...',
+      estimatedTimeRemaining: null,
+    };
+  }
+  
+  // Parse completion indicators
+  if (output.includes('completed') || output.includes('finished') || output.includes('done')) {
+    return {
+      stage: 'completing',
+      progress: 1.0,
+      message: 'Finishing up...',
+      estimatedTimeRemaining: null,
+    };
+  }
+  
+  return null;
 }

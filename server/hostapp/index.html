@@ -20,11 +20,20 @@
             <h1>Claude Companion Server</h1>
         </header>
 
+        <!-- Tab Navigation -->
+        <nav class="tab-nav">
+            <button class="tab-button active" data-tab="server">Server</button>
+            <button class="tab-button" data-tab="claude">Claude CLI</button>
+            <button class="tab-button" data-tab="logs">Logs</button>
+        </nav>
+
         <!-- Main Content -->
         <main class="content">
-            <!-- Configuration Section -->
-            <section class="card">
-                <h2>Configuration</h2>
+            <!-- Server Tab Panel -->
+            <div class="tab-panel active" id="server-tab">
+                <!-- Configuration Section -->
+                <section class="card">
+                    <h2>Configuration</h2>
                 <div class="form-group">
                     <label for="config-path">Config Path</label>
                     <div class="input-group">
@@ -92,6 +101,108 @@
                     </div>
                 </div>
             </section>
+            </div>
+
+            <!-- Claude CLI Tab Panel -->
+            <div class="tab-panel" id="claude-tab">
+                <!-- Claude Status Section -->
+                <section class="card">
+                    <h2>Claude CLI Status</h2>
+                    <div class="claude-status-container">
+                        <div class="status-row">
+                            <span class="status-label">Installation:</span>
+                            <span class="status-value" id="claude-installed">Checking...</span>
+                        </div>
+                        <div class="status-row">
+                            <span class="status-label">Version:</span>
+                            <span class="status-value" id="claude-version">-</span>
+                        </div>
+                        <div class="status-row">
+                            <span class="status-label">Path:</span>
+                            <span class="status-value" id="claude-path">-</span>
+                        </div>
+                        <div class="status-row">
+                            <span class="status-label">Available:</span>
+                            <span class="status-value" id="claude-available">-</span>
+                        </div>
+                    </div>
+                    <div class="button-group">
+                        <button class="secondary-button" id="refresh-claude-btn">Refresh Status</button>
+                        <button class="secondary-button" id="test-claude-btn">Test Claude CLI</button>
+                    </div>
+                </section>
+
+                <!-- Active Sessions Section -->
+                <section class="card">
+                    <h2>Active Sessions</h2>
+                    <div class="session-info">
+                        <div class="info-row">
+                            <span class="info-label">Active Sessions:</span>
+                            <span class="info-value" id="active-sessions-count">0</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Maximum Sessions:</span>
+                            <span class="info-value" id="max-sessions">10</span>
+                        </div>
+                    </div>
+                    <div id="sessions-list" class="sessions-list"></div>
+                </section>
+
+                <!-- Claude Logs Section -->
+                <section class="card">
+                    <h2>Claude Process Logs</h2>
+                    <div class="logs-toolbar">
+                        <div class="logs-controls">
+                            <select id="claude-log-filter" class="log-filter-select">
+                                <option value="all">All Events</option>
+                                <option value="start">Process Start</option>
+                                <option value="command">Commands</option>
+                                <option value="stdout">Stdout</option>
+                                <option value="stderr">Stderr</option>
+                                <option value="exit">Process Exit</option>
+                            </select>
+                            <button class="secondary-button small" id="clear-claude-logs-btn">Clear Logs</button>
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="claude-auto-scroll" checked>
+                                Auto-scroll
+                            </label>
+                        </div>
+                    </div>
+                    <div class="claude-logs-container">
+                        <div id="claude-logs-display" class="logs-display">
+                            <div class="log-empty-state">No Claude CLI logs yet.</div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Logs Tab Panel -->
+            <div class="tab-panel" id="logs-tab">
+                <!-- Logs Toolbar -->
+                <section class="logs-toolbar">
+                    <div class="logs-controls">
+                        <input type="text" id="log-search" placeholder="Search logs..." class="log-search-input">
+                        <select id="log-level-filter" class="log-filter-select">
+                            <option value="all">All Levels</option>
+                            <option value="info">Info</option>
+                            <option value="warning">Warning</option>
+                            <option value="error">Error</option>
+                        </select>
+                        <button class="secondary-button small" id="clear-logs-btn">Clear Logs</button>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="auto-scroll" checked>
+                            Auto-scroll
+                        </label>
+                    </div>
+                </section>
+
+                <!-- Logs Display -->
+                <section class="logs-container">
+                    <div id="logs-display" class="logs-display">
+                        <div class="log-empty-state">No logs yet. Start the server to see logs.</div>
+                    </div>
+                </section>
+            </div>
         </main>
     </div>
 

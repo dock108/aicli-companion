@@ -169,11 +169,16 @@ export function setupProjectRoutes(app, claudeService) {
 
       try {
         // Start Claude CLI session using the ClaudeCodeService
+        console.log(`📋 Creating Claude CLI session...`);
         const session = await claudeService.createInteractiveSession(
           sessionId,
           `Starting work in project: ${name}`,
           projectPath
         );
+        
+        console.log(`✅ Claude CLI session created successfully!`);
+        console.log(`   Session ID: ${session.sessionId}`);
+        console.log(`   Message: ${session.message}`);
         
         // Store session info for tracking
         const sessionInfo = {
@@ -185,6 +190,9 @@ export function setupProjectRoutes(app, claudeService) {
           claudeSession: session
         };
         activeSessions.set(session.sessionId, sessionInfo);
+        
+        console.log(`📊 Active sessions: ${activeSessions.size}`);
+        console.log(`   Sessions: ${Array.from(activeSessions.keys()).join(', ')}`);
 
         // Return session info
         const responseSession = {

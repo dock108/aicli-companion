@@ -13,11 +13,16 @@ struct ChatView: View {
     @State private var messageText = ""
     @State private var messages: [Message] = []
     @State private var isLoading = false
+    @State private var progressInfo: ProgressInfo? = nil
     @State private var showingPermissionAlert = false
     @State private var permissionRequest: PermissionRequestData?
     @State private var keyboardHeight: CGFloat = 0
     @State private var inputBarOffset: CGFloat = 0
     @State private var projectContext: String = ""
+    @State private var activeSession: ProjectSession?
+    @State private var sessionError: String?
+    @State private var messageTimeout: Timer?
+    @State private var connectionStateTimer: Timer?
     @Environment(\.colorScheme) var colorScheme
     
     // Project information passed from parent view
@@ -54,21 +59,7 @@ struct ChatView: View {
                             }
                             
                             if isLoading {
-                                HStack {
-                                    ProgressView()
-                                        .progressViewStyle(CircularProgressViewStyle(tint: Colors.accentPrimaryEnd))
-                                        .scaleEffect(0.8)
-                                    Text("Thinking...")
-                                        .font(Typography.font(.caption))
-                                        .foregroundColor(Colors.textSecondary(for: colorScheme))
-                                }
-                                .padding()
-                                .background(Colors.bgCard(for: colorScheme))
-                                .cornerRadius(12)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Colors.strokeLight, lineWidth: 1)
-                                )
+                                LoadingIndicator(progressInfo: progressInfo, colorScheme: colorScheme)
                             }
                         }
                         .padding()
@@ -140,10 +131,12 @@ struct ChatView: View {
             loadProjectSession()
             connectWebSocket()
             setupKeyboardObservers()
-            addWelcomeMessage()
             setupWebSocketListeners()
+            startClaudeSession()
         }
         .onDisappear {
+            messageTimeout?.invalidate()
+            connectionStateTimer?.invalidate()
             webSocketService.disconnect()
         }
     }
@@ -162,11 +155,64 @@ struct ChatView: View {
         guard let project = selectedProject else { return }
         
         let welcomeMessage = Message(
-            content: "🚀 Claude CLI started in **\(project.name)**\n\nYou can now interact with your project. I have access to all files in this directory and can help you with coding tasks, analysis, and more.\n\nType your first message to get started!",
+            content: "🚀 Claude CLI starting in **\(project.name)**...\n\nPlease wait while I set up the session.",
             sender: .claude,
             type: .text
         )
         messages.append(welcomeMessage)
+    }
+    
+    private func startClaudeSession() {
+        guard let project = selectedProject else { return }
+        guard let connection = settings.currentConnection else {
+            sessionError = "No server connection configured"
+            return
+        }
+        
+        addWelcomeMessage()
+        isLoading = true
+        
+        // Start Claude CLI session for this project
+        claudeService.startProjectSession(project: project, connection: connection) { result in
+            DispatchQueue.main.async {
+                self.isLoading = false
+                    self.progressInfo = nil
+
+
+                switch result {
+                case .success(let session):
+                    self.activeSession = session
+                    self.sessionError = nil
+                    
+                    // Update welcome message
+                    if let lastMessage = self.messages.last, lastMessage.sender == .claude {
+                        self.messages.removeLast()
+                    }
+                    
+                    let successMessage = Message(
+                        content: "✅ Claude CLI ready in **\(project.name)**\n\nYou can now interact with your project. I have access to all files in this directory and can help you with coding tasks, analysis, and more.\n\nType your first message to get started!",
+                        sender: .claude,
+                        type: .text
+                    )
+                    self.messages.append(successMessage)
+                    
+                case .failure(let error):
+                    self.sessionError = error.localizedDescription
+                    
+                    // Update welcome message with error
+                    if let lastMessage = self.messages.last, lastMessage.sender == .claude {
+                        self.messages.removeLast()
+                    }
+                    
+                    let errorMessage = Message(
+                        content: "❌ Failed to start Claude CLI\n\n\(error.localizedDescription)\n\nPlease check that:\n1. The server is running\n2. Claude CLI is installed\n3. The project path is accessible",
+                        sender: .claude,
+                        type: .text
+                    )
+                    self.messages.append(errorMessage)
+                }
+            }
+        }
     }
     
     private func connectWebSocket() {
@@ -174,6 +220,31 @@ struct ChatView: View {
         if let connection = settings.currentConnection,
            let wsURL = connection.wsURL {
             webSocketService.connect(to: wsURL, authToken: connection.authToken)
+            
+            // Monitor connection state
+            startConnectionStateMonitoring()
+        }
+    }
+    
+    private func startConnectionStateMonitoring() {
+        connectionStateTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { _ in
+            
+            // Check if we're stuck in loading state while disconnected
+            if self.isLoading && !self.webSocketService.isConnected {
+                DispatchQueue.main.async {
+                    self.isLoading = false
+                    self.progressInfo = nil
+
+
+                    
+                    let connectionLostMessage = Message(
+                        content: "🔌 Connection lost. Attempting to reconnect...\n\nPlease wait while we try to restore the connection to the server.",
+                        sender: .claude,
+                        type: .text
+                    )
+                    self.messages.append(connectionLostMessage)
+                }
+            }
         }
     }
     
@@ -203,16 +274,45 @@ struct ChatView: View {
             return
         }
         
+        // Check if we have an active session
+        guard let session = activeSession else {
+            isLoading = false
+            let errorMessage = Message(
+                content: "❌ No active Claude session. Please wait for the session to start or try reloading the chat.",
+                sender: .claude,
+                type: .text
+            )
+            messages.append(errorMessage)
+            
+            // Try to start a session again
+            startClaudeSession()
+            return
+        }
+        
         // Create the command request for Claude CLI
         let claudeRequest = ClaudeCommandRequest(
             command: command,
             projectPath: project.path,
-            sessionId: session?.sessionId
+            sessionId: session.sessionId
         )
         
         print("📤 Sending command to server: \(command)")
-        print("   Session ID: \(session?.sessionId ?? "nil")")
+        print("   Session ID: \(session.sessionId)")
         print("   Project path: \(project.path)")
+        
+        // Set a timeout to clear loading state if no response comes
+        messageTimeout?.invalidate()
+        messageTimeout = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: false) { _ in
+            DispatchQueue.main.async {
+                self.isLoading = false
+                let timeoutMessage = Message(
+                    content: "⏰ Request timed out. The connection may have been lost or the server is taking too long to respond. Please try again.",
+                    sender: .claude,
+                    type: .text
+                )
+                self.messages.append(timeoutMessage)
+            }
+        }
         
         // Send via WebSocket to Claude CLI session
         webSocketService.sendMessage(claudeRequest, type: .claudeCommand) { result in
@@ -221,6 +321,12 @@ struct ChatView: View {
                 
                 switch result {
                 case .success(let message):
+                    // Clear timeout since we got a response
+                    self.messageTimeout?.invalidate()
+                    self.isLoading = false
+                    self.progressInfo = nil
+
+
                     // Debug: Log message type
                     print("Received WebSocket message type: \(message.type)")
                     
@@ -263,12 +369,25 @@ struct ChatView: View {
                         )
                         self.messages.append(errorMessage)
                         
+                        // If session not found, clear our active session
+                        if errorResponse.code == "SESSION_NOT_FOUND" {
+                            self.activeSession = nil
+                            // Try to start a new session
+                            self.startClaudeSession()
+                        }
+                        
                     default:
                         // Log unexpected message types for debugging
                         print("Unhandled message type: \(message.type)")
                     }
                     
                 case .failure(let error):
+                    // Clear timeout and loading state
+                    self.messageTimeout?.invalidate()
+                    self.isLoading = false
+                    self.progressInfo = nil
+
+
                     // Add error message
                     let errorMessage = Message(
                         content: "Error: \(error.localizedDescription)",
@@ -288,9 +407,14 @@ struct ChatView: View {
                 
                 print("WebSocket global listener - message type: \(message.type)")
                 
+                // Clear timeout for any incoming message that indicates activity
+                self.messageTimeout?.invalidate()
+                
                 switch message.data {
                 case .assistantMessage(let assistantResponse):
                     self.isLoading = false
+                    self.progressInfo = nil
+
                     let textContent = assistantResponse.content
                         .compactMap { block in
                             block.type == "text" ? block.text : nil
@@ -308,6 +432,8 @@ struct ChatView: View {
                     
                 case .streamData(let streamData):
                     self.isLoading = false
+                    self.progressInfo = nil
+
                     if streamData.streamType == "text", let text = streamData.content.text {
                         let responseMessage = Message(
                             content: text,
@@ -319,14 +445,19 @@ struct ChatView: View {
                     
                 case .error(let errorResponse):
                     self.isLoading = false
+                    self.progressInfo = nil
                     let errorMessage = Message(
+
                         content: "Error: \(errorResponse.message)",
                         sender: .claude,
                         type: .text
                     )
                     self.messages.append(errorMessage)
                     
-                default:
+                case .progress(let progressResponse):
+                    // Update progress info while keeping loading state
+                    self.progressInfo = ProgressInfo(from: progressResponse)
+                                    default:
                     print("Global listener - unhandled message type: \(message.type)")
                 }
             }
@@ -503,5 +634,70 @@ struct ProjectContextHeader: View {
         case "stopped": return "Claude CLI stopped"
         default: return "Unknown status"
         }
+    }
+}
+// MARK: - Loading Indicator
+
+@available(iOS 14.0, macOS 11.0, *)
+struct LoadingIndicator: View {
+    let progressInfo: ProgressInfo?
+    let colorScheme: ColorScheme
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 12) {
+                // Progress indicator
+                if let progressInfo = progressInfo, let progress = progressInfo.progress {
+                    // Show determinate progress
+                    ProgressView(value: progress, total: 1.0)
+                        .progressViewStyle(LinearProgressViewStyle(tint: Colors.accentPrimaryEnd))
+                        .frame(width: 60)
+                } else {
+                    // Show indeterminate spinner
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: Colors.accentPrimaryEnd))
+                        .scaleEffect(0.8)
+                }
+                
+                // Status text
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(progressInfo?.message ?? "Thinking...")
+                        .font(Typography.font(.caption))
+                        .foregroundColor(Colors.textPrimary(for: colorScheme))
+                        .lineLimit(2)
+                    
+                    if let progressInfo = progressInfo {
+                        HStack(spacing: 4) {
+                            Text("Stage:")
+                                .font(Typography.font(.caption))
+                                .foregroundColor(Colors.textSecondary(for: colorScheme))
+                            
+                            Text(progressInfo.stage)
+                                .font(Typography.font(.caption))
+                                .foregroundColor(Colors.accentPrimaryEnd)
+                                .fontWeight(.medium)
+                        }
+                    }
+                }
+                
+                Spacer()
+                
+                // Progress percentage
+                if let progressInfo = progressInfo, let progress = progressInfo.progress {
+                    Text("\(Int(progress * 100))%")
+                        .font(Typography.font(.caption))
+                        .foregroundColor(Colors.textSecondary(for: colorScheme))
+                        .fontWeight(.medium)
+                }
+            }
+        }
+        .padding()
+        .background(Colors.bgCard(for: colorScheme))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Colors.strokeLight, lineWidth: 1)
+        )
+        .animation(.easeInOut(duration: 0.3), value: progressInfo?.progress)
     }
 }

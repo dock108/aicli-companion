@@ -276,6 +276,7 @@ struct WebSocketMessage: Codable {
         case toolResult(ToolResultResponse)
         case conversationResult(ConversationResultResponse)
         case workingDirectorySet(WorkingDirectorySetResponse)
+        case progress(ProgressResponse)
     }
     
     // Custom decoding to handle server message format
@@ -322,6 +323,8 @@ struct WebSocketMessage: Codable {
             self.data = .conversationResult(try ConversationResultResponse(from: dataDecoder))
         case .workingDirectorySet:
             self.data = .workingDirectorySet(try WorkingDirectorySetResponse(from: dataDecoder))
+        case .progress:
+            self.data = .progress(try ProgressResponse(from: dataDecoder))
         case .claudeResponse:
             self.data = .claudeResponse(try ClaudeCommandResponse(from: dataDecoder))
         default:
@@ -366,6 +369,9 @@ enum WebSocketMessageType: String, Codable {
     case toolResult = "toolResult"
     case conversationResult = "conversationResult"
     case workingDirectorySet = "workingDirectorySet"
+    
+    // Progress and status message types
+    case progress = "progress"
 }
 
 // MARK: - Client Request Models
@@ -578,6 +584,14 @@ struct ClaudeCommandResponse: Codable {
     let error: String?
 }
 
+struct ProgressResponse: Codable {
+    let sessionId: String
+    let stage: String
+    let progress: Double?
+    let message: String
+    let timestamp: Date
+}
+
 // MARK: - Helper Types
 
 struct AnyCodable: Codable {
@@ -667,5 +681,21 @@ enum ClaudeCompanionError: LocalizedError {
         case .timeout:
             return "Request timed out"
         }
+    }
+}
+
+// MARK: - Progress Info for UI
+
+struct ProgressInfo {
+    let stage: String
+    let progress: Double?
+    let message: String
+    let timestamp: Date
+    
+    init(from progressResponse: ProgressResponse) {
+        self.stage = progressResponse.stage
+        self.progress = progressResponse.progress
+        self.message = progressResponse.message
+        self.timestamp = progressResponse.timestamp
     }
 }

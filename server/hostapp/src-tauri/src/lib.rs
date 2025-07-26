@@ -2,8 +2,11 @@
 
 use serde::{Deserialize, Serialize};
 use std::env;
+use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+use std::thread;
+use tauri::{AppHandle, Emitter};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerStatus {
@@ -12,6 +15,19 @@ pub struct ServerStatus {
     pub pid: Option<u32>,
     pub health_url: String,
     pub external: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogEntry {
+    pub timestamp: String,
+    pub level: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogsState {
+    pub entries: Vec<LogEntry>,
+    pub max_entries: usize,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -23,6 +39,7 @@ pub struct NetworkInfo {
 pub struct AppState {
     pub server_process: Mutex<Option<std::process::Child>>,
     pub server_status: Mutex<ServerStatus>,
+    pub logs: Arc<Mutex<LogsState>>,
 }
 
 impl AppState {
@@ -36,6 +53,10 @@ impl AppState {
                 health_url: "http://localhost:3001/health".to_string(),
                 external: false,
             }),
+            logs: Arc::new(Mutex::new(LogsState {
+                entries: Vec::new(),
+                max_entries: 10000,
+            })),
         }
     }
 }
@@ -51,6 +72,42 @@ pub fn get_local_ip() -> Result<String, String> {
         Ok(ip) => Ok(ip.to_string()),
         Err(e) => Err(format!("Failed to get local IP: {e}")),
     }
+}
+
+// Helper function to add log entry
+fn add_log_entry(logs: &Arc<Mutex<LogsState>>, level: &str, message: String, app_handle: Option<&AppHandle>) {
+    let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string();
+    let entry = LogEntry {
+        timestamp,
+        level: level.to_string(),
+        message,
+    };
+
+    let mut logs_guard = logs.lock().unwrap();
+    logs_guard.entries.push(entry.clone());
+    
+    // Keep only the last max_entries
+    let len = logs_guard.entries.len();
+    let max = logs_guard.max_entries;
+    if len > max {
+        logs_guard.entries.drain(0..len - max);
+    }
+    drop(logs_guard);
+    
+    // Emit log event if app handle is provided
+    if let Some(handle) = app_handle {
+        let _ = handle.emit("log-entry", entry);
+    }
+}
+
+// Get all logs
+pub fn get_logs_impl(state: &AppState) -> Vec<LogEntry> {
+    state.logs.lock().unwrap().entries.clone()
+}
+
+// Clear logs
+pub fn clear_logs_impl(state: &AppState) {
+    state.logs.lock().unwrap().entries.clear();
 }
 
 // Helper function to find process ID by port
@@ -112,7 +169,8 @@ pub async fn start_server_impl(
     state: &AppState, 
     port: u16,
     auth_token: Option<String>,
-    config_path: Option<String>
+    config_path: Option<String>,
+    app_handle: Option<&AppHandle>
 ) -> Result<ServerStatus, String> {
     // First check if server is already running on this port
     let health_check = check_server_health_impl(port).await?;
@@ -192,8 +250,45 @@ pub async fn start_server_impl(
     }
 
     match cmd.spawn() {
-        Ok(child) => {
+        Ok(mut child) => {
             let pid = child.id();
+            
+            // Set up log capturing for stdout
+            if let Some(stdout) = child.stdout.take() {
+                let logs_clone = Arc::clone(&state.logs);
+                let app_handle_clone = app_handle.cloned();
+                thread::spawn(move || {
+                    let reader = BufReader::new(stdout);
+                    for line in reader.lines() {
+                        if let Ok(line) = line {
+                            // Determine log level based on content
+                            let level = if line.contains("ERROR") || line.contains("error") {
+                                "error"
+                            } else if line.contains("WARN") || line.contains("warning") {
+                                "warning"
+                            } else {
+                                "info"
+                            };
+                            add_log_entry(&logs_clone, level, line, app_handle_clone.as_ref());
+                        }
+                    }
+                });
+            }
+            
+            // Set up log capturing for stderr
+            if let Some(stderr) = child.stderr.take() {
+                let logs_clone = Arc::clone(&state.logs);
+                let app_handle_clone = app_handle.cloned();
+                thread::spawn(move || {
+                    let reader = BufReader::new(stderr);
+                    for line in reader.lines() {
+                        if let Ok(line) = line {
+                            add_log_entry(&logs_clone, "error", line, app_handle_clone.as_ref());
+                        }
+                    }
+                });
+            }
+            
             *process_guard = Some(child);
 
             // Update status
@@ -205,16 +300,24 @@ pub async fn start_server_impl(
                 health_url: format!("http://localhost:{port}/health"),
                 external: false,
             };
+            
+            // Add start log entry
+            add_log_entry(&state.logs, "info", format!("Server started on port {} (PID: {})", port, pid), app_handle);
 
             Ok(status_guard.clone())
         }
-        Err(e) => Err(format!("Failed to start server: {e}")),
+        Err(e) => {
+            let error_msg = format!("Failed to start server: {e}");
+            add_log_entry(&state.logs, "error", error_msg.clone(), app_handle);
+            Err(error_msg)
+        }
     }
 }
 
 pub async fn stop_server_impl(
     state: &AppState,
     force_external: Option<bool>,
+    app_handle: Option<&AppHandle>
 ) -> Result<(), String> {
     let status_guard = state.server_status.lock().unwrap();
     let is_external = status_guard.external;
@@ -239,6 +342,7 @@ pub async fn stop_server_impl(
                 status_guard.running = false;
                 status_guard.pid = None;
                 status_guard.external = false;
+                add_log_entry(&state.logs, "info", "Server stopped successfully".to_string(), app_handle);
                 return Ok(());
             }
             Err(e) => return Err(format!("Failed to stop managed server: {e}")),
@@ -261,10 +365,13 @@ pub async fn stop_server_impl(
                     status_guard.running = false;
                     status_guard.pid = None;
                     status_guard.external = false;
+                    add_log_entry(&state.logs, "info", format!("External server on port {} stopped successfully", port), app_handle);
                     return Ok(());
                 } else {
                     let stderr = String::from_utf8_lossy(&output.stderr);
-                    return Err(format!("Failed to kill process {pid}: {stderr}"));
+                    let error_msg = format!("Failed to kill process {pid}: {stderr}");
+                    add_log_entry(&state.logs, "error", error_msg.clone(), app_handle);
+                    return Err(error_msg);
                 }
             }
 
@@ -280,10 +387,13 @@ pub async fn stop_server_impl(
                     status_guard.running = false;
                     status_guard.pid = None;
                     status_guard.external = false;
+                    add_log_entry(&state.logs, "info", format!("External server on port {} stopped successfully", port), app_handle);
                     return Ok(());
                 } else {
                     let stderr = String::from_utf8_lossy(&output.stderr);
-                    return Err(format!("Failed to kill process {pid}: {stderr}"));
+                    let error_msg = format!("Failed to kill process {pid}: {stderr}");
+                    add_log_entry(&state.logs, "error", error_msg.clone(), app_handle);
+                    return Err(error_msg);
                 }
             }
         } else {

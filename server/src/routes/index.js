@@ -54,7 +54,7 @@ export function setupRoutes(app, claudeService) {
         validatedWorkingDir = validateWorkingDirectory(workingDirectory);
       } catch (error) {
         return res.status(403).json({
-          error: error.message
+          error: error.message,
         });
       }
 
@@ -92,7 +92,7 @@ export function setupRoutes(app, claudeService) {
         validatedWorkingDir = validateWorkingDirectory(workingDirectory);
       } catch (error) {
         return res.status(403).json({
-          error: error.message
+          error: error.message,
         });
       }
 

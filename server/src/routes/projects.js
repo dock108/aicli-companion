@@ -20,25 +20,25 @@ export function setupProjectRoutes(app) {
 
       // Read directory contents
       const items = await fs.readdir(projectsDir, { withFileTypes: true });
-      
+
       // Filter for directories only and exclude hidden folders
       const projects = items
-        .filter(item => item.isDirectory() && !item.name.startsWith('.'))
-        .map(item => ({
+        .filter((item) => item.isDirectory() && !item.name.startsWith('.'))
+        .map((item) => ({
           name: item.name,
           path: path.join(projectsDir, item.name),
-          type: 'folder'
+          type: 'folder',
         }));
 
       res.json({
         basePath: projectsDir,
-        projects: projects.sort((a, b) => a.name.localeCompare(b.name))
+        projects: projects.sort((a, b) => a.name.localeCompare(b.name)),
       });
     } catch (error) {
       console.error('Error listing projects:', error);
       res.status(500).json({
         error: 'Failed to list projects',
-        message: error.message
+        message: error.message,
       });
     }
   });
@@ -53,11 +53,11 @@ export function setupProjectRoutes(app) {
       // Security check - prevent directory traversal
       const normalizedPath = path.normalize(projectPath);
       const normalizedBase = path.normalize(projectsDir);
-      
+
       if (!normalizedPath.startsWith(normalizedBase)) {
         return res.status(403).json({
           error: 'Access denied',
-          message: 'Invalid project path'
+          message: 'Invalid project path',
         });
       }
 
@@ -70,7 +70,7 @@ export function setupProjectRoutes(app) {
       } catch (error) {
         return res.status(404).json({
           error: 'Project not found',
-          message: `Project '${name}' does not exist`
+          message: `Project '${name}' does not exist`,
         });
       }
 
@@ -78,7 +78,7 @@ export function setupProjectRoutes(app) {
       const info = {
         name,
         path: projectPath,
-        type: 'folder'
+        type: 'folder',
       };
 
       // Try to get additional info if available
@@ -98,7 +98,7 @@ export function setupProjectRoutes(app) {
       console.error('Error getting project info:', error);
       res.status(500).json({
         error: 'Failed to get project info',
-        message: error.message
+        message: error.message,
       });
     }
   });

@@ -122,13 +122,13 @@ describe('API Routes', () => {
       // The handler may or may not reject absolute paths depending on implementation
       // Just verify the handler exists and can be called
       assert.ok(handler);
-      
+
       try {
         await handler(req, res);
       } catch (error) {
         // Expected if validation fails
       }
-      
+
       // Verify some response was set
       assert.ok(res.status.mock.calls.length > 0 || res.json.mock.calls.length > 0);
     });

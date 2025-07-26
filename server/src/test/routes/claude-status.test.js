@@ -75,7 +75,7 @@ describe('Claude Status Routes', () => {
 
     it('should setup routes on the app', () => {
       setupClaudeStatusRoutes(app, claudeService);
-      
+
       assert.strictEqual(app.use.mock.calls.length, 1);
       assert.strictEqual(app.use.mock.calls[0].arguments[0], '/api');
     });
@@ -245,7 +245,10 @@ describe('Claude Status Routes', () => {
 
       await handlers['GET /claude/sessions/:sessionId/logs'](req, res);
 
-      assert.strictEqual(res.json.mock.calls[0].arguments[0].message, 'Log capture not yet implemented');
+      assert.strictEqual(
+        res.json.mock.calls[0].arguments[0].message,
+        'Log capture not yet implemented'
+      );
     });
   });
 });

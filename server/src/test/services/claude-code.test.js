@@ -423,7 +423,8 @@ describe('ClaudeCodeService Unit Tests', () => {
     });
 
     it('should extract question from multiline text', () => {
-      const resultText = 'Some context here\nWould you like me to proceed with creating these files?\nMore context';
+      const resultText =
+        'Some context here\nWould you like me to proceed with creating these files?\nMore context';
       const prompt = service.extractPermissionPrompt(resultText);
       assert.strictEqual(prompt, 'Would you like me to proceed with creating these files?');
     });

@@ -2,6 +2,7 @@ import express from 'express';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { ServerConfig } from '../config/server-config.js';
+import rateLimit from 'express-rate-limit';
 
 export function setupProjectRoutes(app) {
   const router = express.Router();
@@ -43,8 +44,18 @@ export function setupProjectRoutes(app) {
     }
   });
 
+  // Define rate limiter for project info route
+  const projectInfoLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per windowMs
+    message: {
+      error: 'Too many requests',
+      message: 'Please try again later.',
+    },
+  });
+
   // Get specific project info
-  router.get('/projects/:name', async (req, res) => {
+  router.get('/projects/:name', projectInfoLimiter, async (req, res) => {
     try {
       const { name } = req.params;
       const projectsDir = getProjectsDir();

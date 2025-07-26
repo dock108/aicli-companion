@@ -350,6 +350,8 @@ export class ClaudeCodeService extends EventEmitter {
 
           // Classify and handle different types of Claude Code messages
           const classifiedMessage = this.classifyClaudeMessage(message);
+          
+          console.log(`   📨 Claude response classified as: ${classifiedMessage.eventType}`);
 
           // Check for permission prompts
           if (this.isPermissionPrompt(message)) {
@@ -428,6 +430,7 @@ export class ClaudeCodeService extends EventEmitter {
       // Update last activity
       session.lastActivity = Date.now();
 
+      console.log(`📝 Sending prompt to Claude session ${sanitizedSessionId}: "${sanitizedPrompt}"`);
       session.process.stdin.write(`${sanitizedPrompt}\n`);
 
       return {

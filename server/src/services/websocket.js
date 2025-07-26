@@ -693,6 +693,11 @@ async function handleSetWorkingDirectoryMessage(clientId, requestId, data, claud
 
 async function handleClaudeCommandMessage(clientId, requestId, data, claudeService, clients) {
   const { command, projectPath, sessionId } = data;
+  
+  console.log(`📬 Received claudeCommand from client ${clientId}`);
+  console.log(`   Command: "${command}"`);
+  console.log(`   Session ID: ${sessionId}`);
+  console.log(`   Project Path: ${projectPath}`);
 
   try {
     // Validate input
@@ -722,7 +727,13 @@ async function handleClaudeCommandMessage(clientId, requestId, data, claudeServi
 
     // Send the command to the Claude CLI session
     // The sendToExistingSession method will handle non-existent sessions
-    await claudeService.sendToExistingSession(sessionId, command);
+    try {
+      const result = await claudeService.sendToExistingSession(sessionId, command);
+      console.log(`✅ Command sent successfully:`, result);
+    } catch (error) {
+      console.error(`❌ Failed to send command to Claude:`, error);
+      throw error;
+    }
 
     // Track this client as interested in this session
     const client = clients.get(clientId);

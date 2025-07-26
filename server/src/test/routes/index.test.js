@@ -114,10 +114,10 @@ describe('API Routes', () => {
           prompt: 'Hello Claude',
           sessionId: 'test-session',
           format: 'json',
-          workingDirectory: '/test',
         },
       };
       const res = {
+        status: mock.fn(() => res),
         json: mock.fn(),
       };
 
@@ -128,7 +128,7 @@ describe('API Routes', () => {
       assert.deepStrictEqual(claudeService.sendPrompt.mock.calls[0].arguments[1], {
         sessionId: 'test-session',
         format: 'json',
-        workingDirectory: '/test',
+        workingDirectory: null,
         streaming: false,
       });
 
@@ -193,10 +193,10 @@ describe('API Routes', () => {
       const req = {
         body: {
           prompt: 'Stream this',
-          workingDirectory: '/test',
         },
       };
       const res = {
+        status: mock.fn(() => res),
         json: mock.fn(),
       };
 

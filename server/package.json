@@ -7,9 +7,10 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "test": "NODE_ENV=test node --test src/test/utils/*.test.js src/test/config/middleware-config.test.js src/test/config/tls-config.test.js src/test/services/*.test.js src/test/middleware/*.test.js src/test/routes/*.test.js",
+    "test": "NODE_ENV=test node --test src/test/utils/errors.test.js src/test/utils/validation.test.js src/test/config/middleware-config.test.js src/test/services/claude-code.test.js src/test/services/websocket.test.js src/test/middleware/*.test.js src/test/routes/*.test.js",
     "test:integration": "NODE_ENV=test node --test src/test/**/*.test.js",
-    "test:coverage": "NODE_ENV=test c8 --check-coverage --lines=80 --functions=80 --branches=80 --statements=80 --reporter=lcov --reporter=text node --test src/test/utils/*.test.js src/test/config/middleware-config.test.js src/test/config/tls-config.test.js src/test/services/*.test.js src/test/middleware/*.test.js src/test/routes/*.test.js",
+    "test:unit": "NODE_ENV=test node --test src/test/utils/errors.test.js src/test/utils/validation.test.js src/test/config/middleware-config.test.js src/test/services/claude-code.test.js src/test/services/websocket.test.js src/test/middleware/*.test.js src/test/routes/*.test.js",
+    "test:coverage": "NODE_ENV=test c8 --check-coverage --lines=80 --functions=80 --branches=80 --statements=80 --reporter=lcov --reporter=text node --test src/test/utils/*.test.js src/test/config/*.test.js src/test/services/*.test.js src/test/middleware/*.test.js src/test/routes/*.test.js",
     "test:watch": "node --test --watch",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",

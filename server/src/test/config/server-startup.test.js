@@ -17,13 +17,13 @@ describe('ServerStartup', () => {
   describe('generateAuthToken', () => {
     it('should return existing token when provided', () => {
       const existingToken = 'existing-test-token';
-      const result = ServerStartup.generateAuthToken(existingToken);
+      const result = ServerStartup.generateAuthToken(existingToken, true);
 
       assert.strictEqual(result, existingToken);
     });
 
     it('should generate new token when not provided', () => {
-      const result = ServerStartup.generateAuthToken(null);
+      const result = ServerStartup.generateAuthToken(null, true);
 
       assert.ok(result, 'Should generate a token');
       assert.ok(typeof result === 'string', 'Token should be a string');
@@ -34,7 +34,7 @@ describe('ServerStartup', () => {
     });
 
     it('should generate new token when empty string provided', () => {
-      const result = ServerStartup.generateAuthToken('');
+      const result = ServerStartup.generateAuthToken('', true);
 
       assert.ok(result, 'Should generate a token');
       assert.ok(typeof result === 'string', 'Token should be a string');
@@ -42,8 +42,8 @@ describe('ServerStartup', () => {
     });
 
     it('should generate different tokens on multiple calls', () => {
-      const token1 = ServerStartup.generateAuthToken(null);
-      const token2 = ServerStartup.generateAuthToken(null);
+      const token1 = ServerStartup.generateAuthToken(null, true);
+      const token2 = ServerStartup.generateAuthToken(null, true);
 
       assert.notStrictEqual(token1, token2, 'Should generate unique tokens');
     });
@@ -117,19 +117,24 @@ describe('ServerStartup', () => {
       assert.ok(authMessages.length > 0, 'Should display auth information');
     });
 
-    it('should not display auth info when no token', () => {
+    it('should display auth disabled when no token', () => {
       const authToken = null;
       const claudeAvailable = true;
       const fingerprint = null;
 
       ServerStartup.displayStartupInfo(mockConfig, authToken, claudeAvailable, fingerprint);
 
-      // Should not log auth-related messages
+      // Should log that auth is disabled and show mobile app connection without token
       const logCalls = console.log.mock.calls.map((call) => call.arguments[0]);
-      const authMessages = logCalls.filter(
-        (msg) => msg.includes('Authentication') || msg.includes('Mobile app')
+      const authDisabledMessages = logCalls.filter(
+        (msg) => msg.includes('Authentication disabled')
       );
-      assert.strictEqual(authMessages.length, 0, 'Should not display auth information');
+      const mobileAppMessages = logCalls.filter(
+        (msg) => msg.includes('Mobile app connection') && !msg.includes('token=')
+      );
+      
+      assert.strictEqual(authDisabledMessages.length, 1, 'Should display auth disabled message');
+      assert.strictEqual(mobileAppMessages.length, 1, 'Should display mobile app connection without token');
     });
 
     it('should display TLS info when enabled', () => {

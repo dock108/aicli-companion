@@ -7,7 +7,6 @@ describe('API Routes', () => {
   let app;
   let claudeService;
   let handlers;
-  let validateWorkingDirectory;
 
   beforeEach(() => {
     app = express();

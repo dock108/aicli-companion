@@ -279,10 +279,9 @@ struct ChatView: View {
     
     private func setupWebSocketListeners() {
         // Listen for all WebSocket messages, not just responses to our commands
-        webSocketService.onMessage = { [weak self] message in
-            guard let self else { return }
-            
-            DispatchQueue.main.async {
+        webSocketService.onMessage = { message in
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
                 
                 print("WebSocket global listener - message type: \(message.type)")
                 

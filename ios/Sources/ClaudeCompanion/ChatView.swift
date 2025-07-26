@@ -241,9 +241,9 @@ struct ChatView: View {
                         
                     case .streamData(let streamData):
                         // Handle streaming data
-                        if streamData.streamType == "text" {
+                        if streamData.streamType == "text", let text = streamData.content.text {
                             let responseMessage = Message(
-                                content: streamData.content,
+                                content: text,
                                 sender: .claude,
                                 type: .text
                             )
@@ -305,9 +305,9 @@ struct ChatView: View {
                     
                 case .streamData(let streamData):
                     self.isLoading = false
-                    if streamData.streamType == "text" {
+                    if streamData.streamType == "text", let text = streamData.content.text {
                         let responseMessage = Message(
-                            content: streamData.content,
+                            content: text,
                             sender: .claude,
                             type: .text
                         )

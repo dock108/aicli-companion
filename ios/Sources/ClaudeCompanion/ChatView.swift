@@ -86,7 +86,7 @@ struct ChatView: View {
                 VStack(spacing: 0) {
                     Rectangle()
                         .fill(colorScheme == .dark ? Colors.divider : Colors.dividerLight)
-                        .frame(height: 0.5)
+                        .frame(height: 1)
                     
                     HStack(spacing: 12) {
                         // Message input field with terminal styling

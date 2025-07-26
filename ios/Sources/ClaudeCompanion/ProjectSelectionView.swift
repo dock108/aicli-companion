@@ -208,11 +208,34 @@ struct ProjectSelectionView: View {
                     return
                 }
                 
+                // Log raw response for debugging
+                if let responseString = String(data: data, encoding: .utf8) {
+                    print("Raw server response: \(responseString)")
+                }
+                
+                // Check HTTP status code
+                if let httpResponse = response as? HTTPURLResponse {
+                    print("HTTP Status Code: \(httpResponse.statusCode)")
+                    
+                    if httpResponse.statusCode != 200 {
+                        // Try to parse error response
+                        if let errorDict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                           let error = errorDict["error"] as? String {
+                            errorMessage = "Server error: \(error)"
+                            return
+                        }
+                        errorMessage = "Server returned error: \(httpResponse.statusCode)"
+                        return
+                    }
+                }
+                
                 do {
                     let response = try JSONDecoder().decode(ProjectsResponse.self, from: data)
                     projects = response.projects
-                } catch {
-                    errorMessage = "Failed to parse server response"
+                    print("Successfully loaded \(projects.count) projects")
+                } catch let decodingError {
+                    print("Decoding error: \(decodingError)")
+                    errorMessage = "Failed to parse server response: \(decodingError.localizedDescription)"
                 }
             }
         }.resume()

@@ -91,7 +91,7 @@ public struct SettingsDivider: View {
     public var body: some View {
         Rectangle()
             .fill(Colors.divider)
-            .frame(height: 0.7)
+            .frame(height: 1)
             .padding(.horizontal, Spacing.md)
     }
 }

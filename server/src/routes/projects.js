@@ -1,11 +1,10 @@
 import express from 'express';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { spawn } from 'child_process';
 import { ServerConfig } from '../config/server-config.js';
 import rateLimit from 'express-rate-limit';
 
-export function setupProjectRoutes(app) {
+export function setupProjectRoutes(app, claudeService) {
   const router = express.Router();
   const config = new ServerConfig();
 
@@ -17,60 +16,6 @@ export function setupProjectRoutes(app) {
     return config.configPath;
   };
 
-  // Helper function to start Claude CLI process
-  const startClaudeProcess = (projectPath, sessionId) => {
-    return new Promise((resolve, reject) => {
-      console.log(`Starting Claude CLI in directory: ${projectPath}`);
-      
-      // Spawn Claude CLI process with the project directory as working directory
-      const claudeProcess = spawn('claude', [], {
-        cwd: projectPath,
-        stdio: ['pipe', 'pipe', 'pipe'],
-        env: { ...process.env }
-      });
-
-      const sessionInfo = {
-        sessionId,
-        process: claudeProcess,
-        projectPath,
-        status: 'running',
-        startedAt: new Date().toISOString(),
-        pid: claudeProcess.pid
-      };
-
-      // Handle process events
-      claudeProcess.on('spawn', () => {
-        console.log(`Claude CLI started with PID: ${claudeProcess.pid}`);
-        sessionInfo.status = 'running';
-        activeSessions.set(sessionId, sessionInfo);
-        resolve(sessionInfo);
-      });
-
-      claudeProcess.on('error', (error) => {
-        console.error(`Failed to start Claude CLI: ${error.message}`);
-        sessionInfo.status = 'failed';
-        sessionInfo.error = error.message;
-        reject(error);
-      });
-
-      claudeProcess.on('exit', (code, signal) => {
-        console.log(`Claude CLI process exited with code ${code}, signal ${signal}`);
-        sessionInfo.status = 'stopped';
-        sessionInfo.exitCode = code;
-        sessionInfo.exitSignal = signal;
-        sessionInfo.stoppedAt = new Date().toISOString();
-        
-        // Clean up session after a delay
-        setTimeout(() => {
-          activeSessions.delete(sessionId);
-        }, 60000); // Keep session info for 1 minute after exit
-      });
-
-      // Store session immediately with 'starting' status
-      sessionInfo.status = 'starting';
-      activeSessions.set(sessionId, sessionInfo);
-    });
-  };
 
   // List all projects (folders) in the configured directory
   router.get('/projects', async (req, res) => {
@@ -211,18 +156,44 @@ export function setupProjectRoutes(app) {
       console.log(`Project path: ${projectPath}`);
       console.log(`Session ID: ${sessionId}`);
 
+      // Check if Claude CLI is available first
+      const isAvailable = await claudeService.checkAvailability();
+      if (!isAvailable) {
+        console.error('Claude CLI is not available on this system');
+        return res.status(503).json({
+          success: false,
+          error: 'Claude CLI not available',
+          message: 'Claude CLI is not installed or not in PATH. Please install Claude CLI to use this feature.',
+        });
+      }
+
       try {
-        // Start Claude CLI process in the project directory
-        const sessionInfo = await startClaudeProcess(projectPath, sessionId);
+        // Start Claude CLI session using the ClaudeCodeService
+        const session = await claudeService.createInteractiveSession({
+          prompt: `Starting work in project: ${name}`,
+          workingDirectory: projectPath,
+          sessionName: `project_${name}`,
+          preserveContext: true
+        });
         
-        // Return session info without the process object (not serializable)
-        const responseSession = {
-          sessionId: sessionInfo.sessionId,
+        // Store session info for tracking
+        const sessionInfo = {
+          sessionId: session.sessionId,
           projectName: name,
-          projectPath: sessionInfo.projectPath,
-          status: sessionInfo.status,
-          startedAt: sessionInfo.startedAt,
-          pid: sessionInfo.pid
+          projectPath,
+          status: 'running',
+          startedAt: new Date().toISOString(),
+          claudeSession: session
+        };
+        activeSessions.set(session.sessionId, sessionInfo);
+
+        // Return session info
+        const responseSession = {
+          sessionId: session.sessionId,
+          projectName: name,
+          projectPath,
+          status: 'running',
+          startedAt: sessionInfo.startedAt
         };
 
         res.json({
@@ -232,10 +203,30 @@ export function setupProjectRoutes(app) {
         });
       } catch (error) {
         console.error(`Failed to start Claude CLI for project ${name}:`, error);
-        res.status(500).json({
+        
+        // Provide more specific error messages based on the error type
+        let statusCode = 500;
+        let errorType = 'Failed to start Claude CLI';
+        let message = error.message;
+        
+        if (error.message.includes('Maximum number of sessions')) {
+          statusCode = 429;
+          errorType = 'Too many sessions';
+          message = 'Maximum number of Claude CLI sessions reached. Please close some sessions before starting new ones.';
+        } else if (error.message.includes('not accessible')) {
+          statusCode = 403;
+          errorType = 'Permission denied';
+          message = `Cannot access project directory: ${name}. Please check permissions.`;
+        } else if (error.message.includes('Working directory must be within')) {
+          statusCode = 403;
+          errorType = 'Invalid project location';
+          message = 'Project is outside the allowed directory. Please check server configuration.';
+        }
+        
+        res.status(statusCode).json({
           success: false,
-          error: 'Failed to start Claude CLI',
-          message: error.message,
+          error: errorType,
+          message: message,
         });
       }
     } catch (error) {
@@ -256,8 +247,6 @@ export function setupProjectRoutes(app) {
         status: session.status,
         startedAt: session.startedAt,
         stoppedAt: session.stoppedAt,
-        pid: session.pid,
-        exitCode: session.exitCode,
         error: session.error
       }));
 
@@ -293,8 +282,6 @@ export function setupProjectRoutes(app) {
         status: session.status,
         startedAt: session.startedAt,
         stoppedAt: session.stoppedAt,
-        pid: session.pid,
-        exitCode: session.exitCode,
         error: session.error
       };
 
@@ -328,19 +315,16 @@ export function setupProjectRoutes(app) {
         });
       }
 
-      console.log(`Stopping Claude CLI session: ${sessionId} (PID: ${session.pid})`);
+      console.log(`Stopping Claude CLI session: ${sessionId}`);
       
-      // Gracefully terminate the process
-      session.process.kill('SIGTERM');
-      session.status = 'stopping';
-
-      // Force kill after 5 seconds if it doesn't exit gracefully
-      setTimeout(() => {
-        if (session.status === 'stopping') {
-          console.log(`Force killing Claude CLI session: ${sessionId}`);
-          session.process.kill('SIGKILL');
-        }
-      }, 5000);
+      // Close the session using ClaudeCodeService
+      try {
+        await claudeService.closeSession(sessionId, 'user_requested');
+        session.status = 'stopped';
+        session.stoppedAt = new Date().toISOString();
+      } catch (error) {
+        console.error(`Error closing session: ${error.message}`);
+      }
 
       res.json({
         success: true,

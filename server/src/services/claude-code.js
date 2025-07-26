@@ -40,19 +40,21 @@ class InputValidator {
     return cleanFormat;
   }
 
-  static async validateWorkingDirectory(workingDir) {
-    const SAFE_ROOT = '/safe/root/dir'; // Define the safe root directory
-
+  static async validateWorkingDirectory(workingDir, safeRoot = null) {
     if (!workingDir || typeof workingDir !== 'string') {
-      return SAFE_ROOT; // Default to the safe root directory
+      // If no working directory provided, use safe root or current directory
+      return safeRoot || process.cwd();
     }
 
     // Resolve to absolute path
     const resolvedPath = resolve(workingDir);
 
-    // Ensure the resolved path is within the safe root directory
-    if (!resolvedPath.startsWith(SAFE_ROOT)) {
-      throw new Error('Working directory must be within the safe root directory');
+    // If a safe root is provided, ensure the resolved path is within it
+    if (safeRoot) {
+      const resolvedSafeRoot = resolve(safeRoot);
+      if (!resolvedPath.startsWith(resolvedSafeRoot)) {
+        throw new Error(`Working directory must be within the configured project directory`);
+      }
     }
 
     try {
@@ -126,6 +128,7 @@ export class ClaudeCodeService extends EventEmitter {
     this.activeSessions = new Map();
     this.claudeCommand = 'claude';
     this.defaultWorkingDirectory = process.cwd();
+    this.safeRootDirectory = null; // Will be set from server config
     this.maxSessions = 10;
     this.sessionTimeout = 30 * 60 * 1000; // 30 minutes
   }
@@ -159,7 +162,7 @@ export class ClaudeCodeService extends EventEmitter {
       // Validate and sanitize inputs
       const sanitizedPrompt = InputValidator.sanitizePrompt(prompt);
       const validatedFormat = InputValidator.validateFormat(format);
-      const validatedWorkingDir = await InputValidator.validateWorkingDirectory(workingDirectory);
+      const validatedWorkingDir = await InputValidator.validateWorkingDirectory(workingDirectory, this.safeRootDirectory);
       const sanitizedSessionId = InputValidator.sanitizeSessionId(sessionId);
 
       if (streaming) {

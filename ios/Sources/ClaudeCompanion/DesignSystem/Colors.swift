@@ -25,6 +25,9 @@ public struct Colors {
     /// Warning/Success accent (connected status)
     public static let accentWarning = Color(hex: "#10B981")
     
+    /// Danger/Error accent
+    public static let accentDanger = Color(hex: "#EF4444")
+    
     // MARK: - Text Colors
     /// Primary text color
     public static let textPrimary = Color("text/primary", bundle: .main)

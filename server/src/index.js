@@ -25,6 +25,7 @@ class ClaudeCompanionServer {
     this.app = express();
     this.config = new ServerConfig();
     this.claudeService = new ClaudeCodeService();
+    this.claudeService.safeRootDirectory = this.config.configPath; // Set project directory as safe root
     this.tlsConfig = new TLSConfig();
 
     // Will be set up during start()
@@ -55,7 +56,7 @@ class ClaudeCompanionServer {
 
     // API routes
     setupRoutes(this.app, this.claudeService);
-    setupProjectRoutes(this.app);
+    setupProjectRoutes(this.app, this.claudeService);
 
     // Static files (for web interface if needed)
     this.app.use('/static', express.static(join(__dirname, '../public')));

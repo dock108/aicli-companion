@@ -17,12 +17,12 @@ struct ChatView: View {
     @State private var permissionRequest: PermissionRequestData?
     @State private var keyboardHeight: CGFloat = 0
     @State private var inputBarOffset: CGFloat = 0
-    @State private var currentSession: ProjectSession?
     @State private var projectContext: String = ""
     @Environment(\.colorScheme) var colorScheme
     
     // Project information passed from parent view
     let selectedProject: Project?
+    let session: ProjectSession?
     let onSwitchProject: () -> Void
 
     var body: some View {
@@ -34,7 +34,7 @@ struct ChatView: View {
             VStack(spacing: 0) {
                 // Project context header
                 if let project = selectedProject {
-                    ProjectContextHeader(project: project, session: currentSession, onSwitchProject: onSwitchProject)
+                    ProjectContextHeader(project: project, session: session, onSwitchProject: onSwitchProject)
                         .padding(.horizontal)
                         .padding(.bottom, 8)
                 }
@@ -206,7 +206,7 @@ struct ChatView: View {
         let claudeRequest = ClaudeCommandRequest(
             command: command,
             projectPath: project.path,
-            sessionId: currentSession?.sessionId
+            sessionId: session?.sessionId
         )
         
         // Send via WebSocket to Claude CLI session
@@ -288,6 +288,13 @@ struct ChatView: View {
 #Preview("Chat View - Light") {
     ChatView(
         selectedProject: Project(name: "sample-project", path: "/path/to/project", type: "folder"),
+        session: ProjectSession(
+            sessionId: "test-session",
+            projectName: "sample-project",
+            projectPath: "/path/to/project",
+            status: "running",
+            startedAt: Date().ISO8601Format()
+        ),
         onSwitchProject: { print("Switch project") }
     )
     .environmentObject(ClaudeCodeService())
@@ -299,6 +306,13 @@ struct ChatView: View {
 #Preview("Chat View - Dark") {
     ChatView(
         selectedProject: Project(name: "sample-project", path: "/path/to/project", type: "folder"),
+        session: ProjectSession(
+            sessionId: "test-session",
+            projectName: "sample-project",
+            projectPath: "/path/to/project",
+            status: "running",
+            startedAt: Date().ISO8601Format()
+        ),
         onSwitchProject: { print("Switch project") }
     )
     .environmentObject(ClaudeCodeService())

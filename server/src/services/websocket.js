@@ -318,6 +318,10 @@ async function handleWebSocketMessage(clientId, message, claudeService, clients)
         await handleSetWorkingDirectoryMessage(clientId, requestId, data, claudeService, clients);
         break;
 
+      case 'claudeCommand':
+        await handleClaudeCommandMessage(clientId, requestId, data, claudeService, clients);
+        break;
+
       default:
         sendErrorMessage(
           clientId,
@@ -682,6 +686,84 @@ async function handleSetWorkingDirectoryMessage(clientId, requestId, data, claud
       requestId,
       'WORKING_DIRECTORY_ERROR',
       'Failed to validate working directory',
+      clients
+    );
+  }
+}
+
+async function handleClaudeCommandMessage(clientId, requestId, data, claudeService, clients) {
+  const { command, projectPath, sessionId } = data;
+
+  try {
+    // Validate input
+    if (!command || typeof command !== 'string') {
+      sendErrorMessage(
+        clientId,
+        requestId,
+        'INVALID_INPUT',
+        'Command must be a valid string',
+        clients
+      );
+      return;
+    }
+
+    if (!sessionId || typeof sessionId !== 'string') {
+      sendErrorMessage(
+        clientId,
+        requestId,
+        'INVALID_INPUT',
+        'Session ID is required',
+        clients
+      );
+      return;
+    }
+
+    // Check if session exists
+    const session = claudeService.getSession(sessionId);
+    if (!session) {
+      sendErrorMessage(
+        clientId,
+        requestId,
+        'SESSION_NOT_FOUND',
+        `Session ${sessionId} not found`,
+        clients
+      );
+      return;
+    }
+
+    console.log(`🤖 Sending command to Claude session ${sessionId}: ${command.substring(0, 50)}...`);
+
+    // Send the command to the Claude CLI session
+    await claudeService.sendToStream(sessionId, command);
+
+    // Track this client as interested in this session
+    const client = clients.get(clientId);
+    if (client) {
+      client.sessionIds.add(sessionId);
+    }
+
+    // Send acknowledgment
+    sendMessage(
+      clientId,
+      {
+        type: 'claudeResponse',
+        requestId,
+        timestamp: new Date().toISOString(),
+        data: {
+          sessionId,
+          success: true,
+          content: 'Command sent to Claude CLI',
+        },
+      },
+      clients
+    );
+  } catch (error) {
+    console.error('Error handling Claude command:', error);
+    sendErrorMessage(
+      clientId,
+      requestId,
+      'COMMAND_ERROR',
+      error.message || 'Failed to send command to Claude',
       clients
     );
   }

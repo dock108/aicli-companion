@@ -38,6 +38,8 @@ struct ProjectStartResponse: Codable {
 struct ProjectSelectionView: View {
     @Binding var selectedProject: Project?
     @Binding var isProjectSelected: Bool
+    let onDisconnect: (() -> Void)?
+    let onSessionStarted: ((ProjectSession) -> Void)?
     @State private var projects: [Project] = []
     @State private var isLoading = true
     @State private var errorMessage: String?
@@ -45,6 +47,13 @@ struct ProjectSelectionView: View {
     
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject var settings: SettingsManager
+    
+    init(selectedProject: Binding<Project?>, isProjectSelected: Binding<Bool>, onDisconnect: (() -> Void)? = nil, onSessionStarted: ((ProjectSession) -> Void)? = nil) {
+        self._selectedProject = selectedProject
+        self._isProjectSelected = isProjectSelected
+        self.onDisconnect = onDisconnect
+        self.onSessionStarted = onSessionStarted
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -178,6 +187,8 @@ struct ProjectSelectionView: View {
         let url = serverURL.appendingPathComponent("api/projects")
         var request = URLRequest(url: url)
         
+        print("Loading projects from: \(url.absoluteString)")
+        
         // Add auth token if available
         if let token = settings.authToken {
             request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -245,21 +256,36 @@ struct ProjectSelectionView: View {
                     if response.success {
                         // Success! Store the selected project and session info
                         selectedProject = project
-                        // TODO: Store session info for later use
+                        
+                        // Pass session info to parent
+                        if let onSessionStarted = onSessionStarted {
+                            onSessionStarted(response.session)
+                        }
+                        
                         isProjectSelected = true
                     } else {
                         errorMessage = "Failed to start project: \(response.message)"
                     }
                 } catch {
-                    errorMessage = "Failed to parse server response"
+                    // Check if we got an error response
+                    if let errorResponse = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                       let serverError = errorResponse["error"] as? String,
+                       let serverMessage = errorResponse["message"] as? String {
+                        errorMessage = "\(serverError): \(serverMessage)"
+                    } else {
+                        errorMessage = "Failed to parse server response"
+                    }
                 }
             }
         }.resume()
     }
     
     private func disconnectFromServer() {
-        settings.clearConnection()
-        // This will trigger the parent view to show connection screen
+        if let onDisconnect = onDisconnect {
+            onDisconnect()
+        } else {
+            settings.clearConnection()
+        }
     }
 }
 

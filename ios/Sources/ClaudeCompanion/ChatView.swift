@@ -216,14 +216,26 @@ struct ChatView: View {
                 
                 switch result {
                 case .success(let message):
+                    // Debug: Log message type
+                    print("Received WebSocket message type: \(message.type)")
+                    
                     // Handle Claude response
-                    if case .claudeResponse(let claudeResponse) = message.data {
-                        let responseMessage = Message(
-                            content: claudeResponse.content,
-                            sender: .claude,
-                            type: .text
-                        )
-                        self.messages.append(responseMessage)
+                    if case .assistantMessage(let assistantResponse) = message.data {
+                        // Extract text content from content blocks
+                        let textContent = assistantResponse.content
+                            .compactMap { block in
+                                block.type == "text" ? block.text : nil
+                            }
+                            .joined(separator: "\n\n")
+                        
+                        if !textContent.isEmpty {
+                            let responseMessage = Message(
+                                content: textContent,
+                                sender: .claude,
+                                type: .text
+                            )
+                            self.messages.append(responseMessage)
+                        }
                     } else {
                         // Handle other response types or errors
                         let errorMessage = Message(

@@ -8,6 +8,7 @@ import AppKit
 @available(iOS 14.0, macOS 11.0, *)
 struct ChatView: View {
     @EnvironmentObject var claudeService: ClaudeCodeService
+    @EnvironmentObject var settings: SettingsManager
     @StateObject private var webSocketService = WebSocketService()
     @State private var messageText = ""
     @State private var messages: [Message] = []
@@ -16,7 +17,13 @@ struct ChatView: View {
     @State private var permissionRequest: PermissionRequestData?
     @State private var keyboardHeight: CGFloat = 0
     @State private var inputBarOffset: CGFloat = 0
+    @State private var currentSession: ProjectSession?
+    @State private var projectContext: String = ""
     @Environment(\.colorScheme) var colorScheme
+    
+    // Project information passed from parent view
+    let selectedProject: Project?
+    let onSwitchProject: () -> Void
 
     var body: some View {
         ZStack {
@@ -25,6 +32,13 @@ struct ChatView: View {
                 .ignoresSafeArea()
             
             VStack(spacing: 0) {
+                // Project context header
+                if let project = selectedProject {
+                    ProjectContextHeader(project: project, session: currentSession, onSwitchProject: onSwitchProject)
+                        .padding(.horizontal)
+                        .padding(.bottom, 8)
+                }
+                
                 // Messages list
                 ScrollViewReader { proxy in
                     ScrollView {
@@ -123,8 +137,10 @@ struct ChatView: View {
             }
         }
         .onAppear {
+            loadProjectSession()
             connectWebSocket()
             setupKeyboardObservers()
+            addWelcomeMessage()
         }
         .onDisappear {
             webSocketService.disconnect()
@@ -133,9 +149,27 @@ struct ChatView: View {
     
     // MARK: - Private Methods
     
+    private func loadProjectSession() {
+        guard let project = selectedProject else { return }
+        
+        // In a real implementation, we would fetch the active session from the server
+        // For now, we'll create a mock session to show the project context
+        projectContext = "Working in project: \(project.name)\nPath: \(project.path)"
+    }
+    
+    private func addWelcomeMessage() {
+        guard let project = selectedProject else { return }
+        
+        let welcomeMessage = Message(
+            content: "🚀 Claude CLI started in **\(project.name)**\n\nYou can now interact with your project. I have access to all files in this directory and can help you with coding tasks, analysis, and more.\n\nType your first message to get started!",
+            sender: .claude,
+            type: .text
+        )
+        messages.append(welcomeMessage)
+    }
+    
     private func connectWebSocket() {
         // Connect using saved settings
-        let settings = SettingsManager()
         if let connection = settings.currentConnection,
            let wsURL = connection.wsURL {
             webSocketService.connect(to: wsURL, authToken: connection.authToken)
@@ -158,19 +192,57 @@ struct ChatView: View {
         messageText = ""
         isLoading = true
         
-        // Send via WebSocket
-        let pingRequest = PingRequest()
-        webSocketService.sendMessage(pingRequest, type: .ping) { result in
+        // Send command to Claude CLI session
+        sendClaudeCommand(messageCopy)
+    }
+    
+    private func sendClaudeCommand(_ command: String) {
+        guard let project = selectedProject else {
+            isLoading = false
+            return
+        }
+        
+        // Create the command request for Claude CLI
+        let claudeRequest = ClaudeCommandRequest(
+            command: command,
+            projectPath: project.path,
+            sessionId: currentSession?.sessionId
+        )
+        
+        // Send via WebSocket to Claude CLI session
+        webSocketService.sendMessage(claudeRequest, type: .claudeCommand) { result in
             DispatchQueue.main.async {
                 self.isLoading = false
                 
-                // Add response message
-                let responseMessage = Message(
-                    content: "Connected! Message sent: \(messageCopy)",
-                    sender: .claude,
-                    type: .text
-                )
-                self.messages.append(responseMessage)
+                switch result {
+                case .success(let message):
+                    // Handle Claude response
+                    if case .claudeResponse(let claudeResponse) = message.data {
+                        let responseMessage = Message(
+                            content: claudeResponse.content,
+                            sender: .claude,
+                            type: .text
+                        )
+                        self.messages.append(responseMessage)
+                    } else {
+                        // Handle other response types or errors
+                        let errorMessage = Message(
+                            content: "Unexpected response type from server",
+                            sender: .claude,
+                            type: .text
+                        )
+                        self.messages.append(errorMessage)
+                    }
+                    
+                case .failure(let error):
+                    // Add error message
+                    let errorMessage = Message(
+                        content: "Error: \(error.localizedDescription)",
+                        sender: .claude,
+                        type: .text
+                    )
+                    self.messages.append(errorMessage)
+                }
             }
         }
     }
@@ -214,14 +286,122 @@ struct ChatView: View {
 
 @available(iOS 17.0, macOS 14.0, *)
 #Preview("Chat View - Light") {
-    ChatView()
-        .environmentObject(ClaudeCodeService())
-        .preferredColorScheme(.light)
+    ChatView(
+        selectedProject: Project(name: "sample-project", path: "/path/to/project", type: "folder"),
+        onSwitchProject: { print("Switch project") }
+    )
+    .environmentObject(ClaudeCodeService())
+    .environmentObject(SettingsManager())
+    .preferredColorScheme(.light)
 }
 
 @available(iOS 17.0, macOS 14.0, *)
 #Preview("Chat View - Dark") {
-    ChatView()
-        .environmentObject(ClaudeCodeService())
-        .preferredColorScheme(.dark)
+    ChatView(
+        selectedProject: Project(name: "sample-project", path: "/path/to/project", type: "folder"),
+        onSwitchProject: { print("Switch project") }
+    )
+    .environmentObject(ClaudeCodeService())
+    .environmentObject(SettingsManager())
+    .preferredColorScheme(.dark)
+}
+
+// MARK: - Project Context Header
+
+@available(iOS 14.0, macOS 11.0, *)
+struct ProjectContextHeader: View {
+    let project: Project
+    let session: ProjectSession?
+    let onSwitchProject: () -> Void
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            // Project icon
+            Image(systemName: "folder.fill")
+                .font(.system(size: 20))
+                .foregroundColor(Colors.accentPrimaryEnd)
+                .frame(width: 32, height: 32)
+                .background(
+                    Circle()
+                        .fill(Colors.accentPrimaryEnd.opacity(0.1))
+                )
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(project.name)
+                    .font(Typography.font(.heading3))
+                    .foregroundColor(Colors.textPrimary(for: colorScheme))
+                    .lineLimit(1)
+                
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(statusColor)
+                        .frame(width: 6, height: 6)
+                    
+                    Text(statusText)
+                        .font(Typography.font(.caption))
+                        .foregroundColor(Colors.textSecondary(for: colorScheme))
+                }
+            }
+            
+            Spacer()
+            
+            // Switch project button
+            Button(action: onSwitchProject) {
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 14))
+                    Text("Switch")
+                        .font(Typography.font(.caption))
+                }
+                .foregroundColor(Colors.accentPrimaryEnd)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Colors.accentPrimaryEnd.opacity(0.1))
+                )
+            }
+            
+            // Session info button
+            Button(action: {
+                // TODO: Show session details
+            }) {
+                Image(systemName: "info.circle")
+                    .font(.system(size: 16))
+                    .foregroundColor(Colors.textSecondary(for: colorScheme))
+            }
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Colors.bgCard(for: colorScheme))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Colors.strokeLight, lineWidth: 1)
+                )
+        )
+    }
+    
+    private var statusColor: Color {
+        guard let session = session else { return .orange }
+        
+        switch session.status {
+        case "running": return .green
+        case "starting": return .orange
+        case "stopped": return .red
+        default: return .gray
+        }
+    }
+    
+    private var statusText: String {
+        guard let session = session else { return "Claude CLI ready" }
+        
+        switch session.status {
+        case "running": return "Claude CLI active"
+        case "starting": return "Starting Claude CLI..."
+        case "stopped": return "Claude CLI stopped"
+        default: return "Unknown status"
+        }
+    }
 }

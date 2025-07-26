@@ -109,6 +109,23 @@ public class SettingsManager: ObservableObject {
     func hasValidConnection() -> Bool {
         return currentConnection != nil
     }
+    
+    var serverURL: URL? {
+        return currentConnection?.url
+    }
+    
+    var authToken: String? {
+        guard let connection = currentConnection else { return nil }
+        
+        // Try to get token from keychain first
+        let keychainKey = "auth_token_\(connection.address)_\(connection.port)"
+        if let token = keychain.load(forKey: keychainKey), !token.isEmpty {
+            return token
+        }
+        
+        // Fallback to stored token
+        return connection.authToken
+    }
 
     // MARK: - Chat History
 

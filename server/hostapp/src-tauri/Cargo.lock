@@ -6263,3 +6263,8 @@ dependencies = [
  "quote",
  "syn 1.0.109",
 ]
+
+[[patch.unused]]
+name = "glib"
+version = "0.20.12"
+source = "git+https://github.com/gtk-rs/gtk-rs-core?tag=0.20.12#337dde55bb1665a0a1286e689ec2819383d4e299"

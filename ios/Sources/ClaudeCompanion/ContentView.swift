@@ -6,6 +6,8 @@ public struct ContentView: View {
     @EnvironmentObject var claudeService: ClaudeCodeService
     @EnvironmentObject var settings: SettingsManager
     @State private var isConnected = false
+    @State private var selectedProject: Project?
+    @State private var isProjectSelected = false
     @State private var backgroundOpacity: Double = 0
     @Environment(\.colorScheme) var colorScheme
 
@@ -18,24 +20,36 @@ public struct ContentView: View {
                     .opacity(backgroundOpacity)
                 
                 VStack(spacing: 0) {
-                    // New TopBar component
-                    NavigationTopBar(title: "Code Companion") {
+                    // Dynamic TopBar title based on current screen
+                    NavigationTopBar(title: currentScreenTitle) {
                         SettingsView()
                     }
                     
-                    // Main content with transitions
+                    // Main content with three-state flow
                     ZStack {
-                        if isConnected {
-                            ChatView()
-                                .transition(.asymmetric(
-                                    insertion: .move(edge: .trailing).combined(with: .opacity),
-                                    removal: .move(edge: .leading).combined(with: .opacity)
-                                ))
-                        } else {
+                        if !isConnected {
+                            // Step 1: Connection screen
                             ConnectionView(isConnected: $isConnected)
                                 .transition(.asymmetric(
                                     insertion: .move(edge: .leading).combined(with: .opacity),
                                     removal: .move(edge: .trailing).combined(with: .opacity)
+                                ))
+                        } else if !isProjectSelected {
+                            // Step 2: Project selection screen
+                            ProjectSelectionView(
+                                selectedProject: $selectedProject,
+                                isProjectSelected: $isProjectSelected
+                            )
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .trailing).combined(with: .opacity),
+                                removal: .move(edge: .leading).combined(with: .opacity)
+                            ))
+                        } else {
+                            // Step 3: Chat screen with selected project
+                            ChatView(selectedProject: selectedProject, onSwitchProject: switchProject)
+                                .transition(.asymmetric(
+                                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                                    removal: .move(edge: .leading).combined(with: .opacity)
                                 ))
                         }
                     }
@@ -50,6 +64,23 @@ public struct ContentView: View {
             checkConnection()
             animateBackground()
         }
+        .onChange(of: isConnected) { connected in
+            if !connected {
+                // Reset project selection when disconnected
+                selectedProject = nil
+                isProjectSelected = false
+            }
+        }
+    }
+    
+    private var currentScreenTitle: String {
+        if !isConnected {
+            return "Code Companion"
+        } else if !isProjectSelected {
+            return "Select Project"
+        } else {
+            return selectedProject?.name ?? "Code Companion"
+        }
     }
 
     private func checkConnection() {
@@ -61,6 +92,14 @@ public struct ContentView: View {
         // Fade in background from black
         withAnimation(.easeInOut(duration: 0.24)) {
             backgroundOpacity = 1.0
+        }
+    }
+    
+    private func switchProject() {
+        // Reset to project selection screen
+        withAnimation(.easeInOut(duration: 0.3)) {
+            selectedProject = nil
+            isProjectSelected = false
         }
     }
 }

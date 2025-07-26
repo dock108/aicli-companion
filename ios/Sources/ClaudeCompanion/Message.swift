@@ -256,6 +256,7 @@ struct WebSocketMessage: Codable {
         case ping(PingRequest)
         case subscribe(SubscribeRequest)
         case setWorkingDirectory(SetWorkingDirectoryRequest)
+        case claudeCommand(ClaudeCommandRequest)
         case welcome(WelcomeResponse)
         case askResponse(AskResponseData)
         case streamStarted(StreamStartedResponse)
@@ -266,6 +267,7 @@ struct WebSocketMessage: Codable {
         case error(ErrorResponse)
         case sessionStatus(SessionStatusResponse)
         case pong(PongResponse)
+        case claudeResponse(ClaudeCommandResponse)
 
         // New rich message types
         case systemInit(SystemInitResponse)
@@ -320,6 +322,8 @@ struct WebSocketMessage: Codable {
             self.data = .conversationResult(try ConversationResultResponse(from: dataDecoder))
         case .workingDirectorySet:
             self.data = .workingDirectorySet(try WorkingDirectorySetResponse(from: dataDecoder))
+        case .claudeResponse:
+            self.data = .claudeResponse(try ClaudeCommandResponse(from: dataDecoder))
         default:
             throw DecodingError.dataCorruptedError(forKey: .data, in: container, debugDescription: "Unsupported message type for decoding: \(type)")
         }
@@ -340,6 +344,7 @@ enum WebSocketMessageType: String, Codable {
     case ping = "ping"
     case subscribe = "subscribe"
     case setWorkingDirectory = "setWorkingDirectory"
+    case claudeCommand = "claudeCommand"
 
     // Server → Client
     case welcome = "welcome"
@@ -352,6 +357,7 @@ enum WebSocketMessageType: String, Codable {
     case error = "error"
     case sessionStatus = "sessionStatus"
     case pong = "pong"
+    case claudeResponse = "claudeResponse"
 
     // New rich message types from enhanced server
     case systemInit = "systemInit"
@@ -411,6 +417,12 @@ struct SubscribeRequest: Codable {
 
 struct SetWorkingDirectoryRequest: Codable {
     let workingDirectory: String
+}
+
+struct ClaudeCommandRequest: Codable {
+    let command: String
+    let projectPath: String
+    let sessionId: String?
 }
 
 // MARK: - Server Response Models
@@ -557,6 +569,13 @@ struct ConversationResultResponse: Codable {
 struct WorkingDirectorySetResponse: Codable {
     let workingDirectory: String
     let success: Bool
+}
+
+struct ClaudeCommandResponse: Codable {
+    let content: String
+    let success: Bool
+    let sessionId: String?
+    let error: String?
 }
 
 // MARK: - Helper Types

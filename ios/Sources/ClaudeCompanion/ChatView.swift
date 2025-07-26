@@ -280,7 +280,7 @@ struct ChatView: View {
     private func setupWebSocketListeners() {
         // Listen for all WebSocket messages, not just responses to our commands
         webSocketService.onMessage = { [weak self] message in
-            guard let self = self else { return }
+            guard let self else { return }
             
             DispatchQueue.main.async {
                 

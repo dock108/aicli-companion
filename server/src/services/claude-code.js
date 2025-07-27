@@ -908,18 +908,7 @@ export class ClaudeCodeService extends EventEmitter {
           });
         }
 
-        // Create an assistant message with the actual result content
-        const _assistantMessage = {
-          type: 'assistant',
-          message: {
-            content: [
-              {
-                type: 'text',
-                text: result.result,
-              },
-            ],
-          },
-        };
+        // Create an assistant message with the actual result content (removed unused variable)
 
         // Process and send the assistant message immediately
         this.emit('assistantMessage', {

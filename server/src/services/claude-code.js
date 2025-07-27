@@ -204,6 +204,11 @@ export class ClaudeCodeService extends EventEmitter {
 
   // Start process health monitoring
   startProcessHealthMonitoring() {
+    // Skip in test environment to prevent hanging tests
+    if (process.env.NODE_ENV === 'test') {
+      return;
+    }
+
     // Check process health every 30 seconds
     this.processHealthCheckInterval = setInterval(() => {
       this.checkAllProcessHealth();
@@ -2105,11 +2110,18 @@ export class ClaudeCodeService extends EventEmitter {
 
     // Close all active sessions
     for (const [sessionId, _] of this.activeSessions) {
-      this.closeSession(sessionId);
+      try {
+        this.closeSession(sessionId);
+      } catch (error) {
+        console.warn(`Failed to close session ${sessionId}:`, error.message);
+      }
     }
 
     // Clear all buffers
     this.sessionMessageBuffers.clear();
+
+    // Clear all data structures
+    this.activeSessions.clear();
 
     console.log('✅ Claude Code Service shut down complete');
   }

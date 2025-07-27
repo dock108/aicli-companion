@@ -143,9 +143,9 @@ describe('Project Routes', () => {
       const mockStat = mock.method(fs, 'stat', async () => ({
         isDirectory: () => true,
       }));
-      
+
       // Mock fs.readFile for package.json
-      const mockReadFile = mock.method(fs, 'readFile', async () => 
+      const mockReadFile = mock.method(fs, 'readFile', async () =>
         JSON.stringify({
           name: 'test-project',
           description: 'Test project description',
@@ -175,7 +175,7 @@ describe('Project Routes', () => {
       const mockStat = mock.method(fs, 'stat', async () => ({
         isDirectory: () => true,
       }));
-      
+
       const mockReadFile = mock.method(fs, 'readFile', async () => {
         throw new Error('File not found');
       });
@@ -306,7 +306,7 @@ describe('Project Routes', () => {
       const mockStat = mock.method(fs, 'stat', async () => ({
         isDirectory: () => true,
       }));
-      
+
       claudeService.checkAvailability = mock.fn(async () => false);
 
       const req = { params: { name: 'test-project' } };
@@ -327,7 +327,7 @@ describe('Project Routes', () => {
       const mockStat = mock.method(fs, 'stat', async () => ({
         isDirectory: () => true,
       }));
-      
+
       claudeService.createInteractiveSession = mock.fn(async () => {
         throw new Error('Maximum number of sessions reached');
       });
@@ -350,7 +350,7 @@ describe('Project Routes', () => {
       const mockStat = mock.method(fs, 'stat', async () => ({
         isDirectory: () => true,
       }));
-      
+
       claudeService.createInteractiveSession = mock.fn(async () => {
         throw new Error('Directory not accessible');
       });
@@ -373,7 +373,7 @@ describe('Project Routes', () => {
       const mockStat = mock.method(fs, 'stat', async () => ({
         isDirectory: () => true,
       }));
-      
+
       claudeService.createInteractiveSession = mock.fn(async () => {
         throw new Error('Working directory must be within safe root');
       });
@@ -444,7 +444,10 @@ describe('Project Routes', () => {
       await handlers['POST /projects/:name/start'](req, res);
 
       assert.strictEqual(res.status.mock.calls[0].arguments[0], 500);
-      assert.strictEqual(res.json.mock.calls[0].arguments[0].error, 'Failed to start Claude CLI session');
+      assert.strictEqual(
+        res.json.mock.calls[0].arguments[0].error,
+        'Failed to start Claude CLI session'
+      );
       assert.strictEqual(res.json.mock.calls[0].arguments[0].message, 'Unexpected system error');
 
       mockStat.mock.restore();
@@ -478,7 +481,7 @@ describe('Project Routes', () => {
 
       const req1 = { params: { name: 'test-project' } };
       const res1 = { json: mock.fn() };
-      
+
       await handlers['POST /projects/:name/start'](req1, res1);
 
       // Now list sessions
@@ -493,7 +496,7 @@ describe('Project Routes', () => {
       const response = res.json.mock.calls[0].arguments[0];
       assert.strictEqual(response.sessions.length, 1);
       assert.strictEqual(response.count, 1);
-      
+
       const session = response.sessions[0];
       assert.ok(session.sessionId);
       assert.ok(session.projectPath);
@@ -535,7 +538,7 @@ describe('Project Routes', () => {
 
       const req1 = { params: { name: 'test-project' } };
       const res1 = { json: mock.fn() };
-      
+
       await handlers['POST /projects/:name/start'](req1, res1);
       const sessionId = res1.json.mock.calls[0].arguments[0].session.sessionId;
 
@@ -602,7 +605,7 @@ describe('Project Routes', () => {
 
       const req1 = { params: { name: 'test-project' } };
       const res1 = { json: mock.fn() };
-      
+
       await handlers['POST /projects/:name/start'](req1, res1);
       const sessionId = res1.json.mock.calls[0].arguments[0].session.sessionId;
 
@@ -636,22 +639,21 @@ describe('Project Routes', () => {
 
       const req1 = { params: { name: 'test-project' } };
       const res1 = { json: mock.fn() };
-      
+
       await handlers['POST /projects/:name/start'](req1, res1);
       const sessionId = res1.json.mock.calls[0].arguments[0].session.sessionId;
 
       // Mark session as stopped directly
-      const sessions = Array.from(handlers['GET /sessions']);
       const activeSessions = new Map();
       activeSessions.set(sessionId, {
         sessionId,
         status: 'stopped',
         projectPath: '/test',
       });
-      
+
       // Mock the activeSessions Map
       const originalGet = Map.prototype.get;
-      Map.prototype.get = function(key) {
+      Map.prototype.get = function (key) {
         if (this === activeSessions || key === sessionId) {
           return { sessionId, status: 'stopped', projectPath: '/test' };
         }
@@ -694,7 +696,7 @@ describe('Project Routes', () => {
 
       const req1 = { params: { name: 'test-project' } };
       const res1 = { json: mock.fn() };
-      
+
       await handlers['POST /projects/:name/start'](req1, res1);
       const sessionId = res1.json.mock.calls[0].arguments[0].session.sessionId;
 

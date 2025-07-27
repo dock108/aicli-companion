@@ -1,8 +1,6 @@
 import { describe, it, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert';
 import os from 'os';
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import { ProcessMonitor, processMonitor } from '../../utils/process-monitor.js';
 
 describe('ProcessMonitor', () => {
@@ -69,7 +67,7 @@ describe('ProcessMonitor', () => {
 
     it('should handle missing CPU model', async () => {
       const mockCpus = mock.method(os, 'cpus', () => []);
-      
+
       const resources = await monitor.getSystemResources();
       assert.strictEqual(resources.cpu.model, 'Unknown');
 
@@ -89,31 +87,25 @@ describe('ProcessMonitor', () => {
         writable: true,
       });
 
-      // Mock execAsync
-      const execAsync = promisify(exec);
-      const mockExecAsync = mock.method(global, 'execAsync', async (cmd) => {
-        const mockOutput = `  PID   RSS   VSZ %CPU %MEM     ELAPSED COMMAND
-12345  1024  2048  5.0  2.5   01:23:45 node test.js`;
-        return { stdout: mockOutput };
-      });
+      // Mock execAsync - removed since we're not using it
 
       // Mock the internal execAsync since it's not on global
       const originalMonitorProcess = monitor.monitorProcess;
-      monitor.monitorProcess = async function(pid) {
+      monitor.monitorProcess = async function (pid) {
         if (!pid) return null;
-        
+
         try {
           if (process.platform === 'darwin' || process.platform === 'linux') {
             const mockOutput = `  PID   RSS   VSZ %CPU %MEM     ELAPSED COMMAND
 12345  1024  2048  5.0  2.5   01:23:45 node test.js`;
-            
+
             const lines = mockOutput.trim().split('\n');
             if (lines.length < 2) {
               return null;
             }
-            
+
             const data = lines[1].trim().split(/\s+/);
-            
+
             const processInfo = {
               pid: parseInt(data[0]),
               rss: parseInt(data[1]) * 1024,
@@ -124,7 +116,7 @@ describe('ProcessMonitor', () => {
               command: data.slice(6).join(' '),
               timestamp: new Date().toISOString(),
             };
-            
+
             this.updateMetrics(pid, processInfo);
             return processInfo;
           }
@@ -134,7 +126,7 @@ describe('ProcessMonitor', () => {
       };
 
       const result = await monitor.monitorProcess(12345);
-      
+
       assert.strictEqual(result.pid, 12345);
       assert.strictEqual(result.rss, 1024 * 1024);
       assert.strictEqual(result.vsz, 2048 * 1024);
@@ -143,7 +135,7 @@ describe('ProcessMonitor', () => {
       assert.strictEqual(result.elapsed, '01:23:45');
       assert.strictEqual(result.command, 'node test.js');
       assert.ok(result.timestamp);
-      
+
       monitor.monitorProcess = originalMonitorProcess;
     });
 
@@ -154,21 +146,24 @@ describe('ProcessMonitor', () => {
       });
 
       const originalMonitorProcess = monitor.monitorProcess;
-      monitor.monitorProcess = async function(pid) {
+      monitor.monitorProcess = async function (pid) {
         if (!pid) return null;
-        
+
         try {
           if (process.platform === 'win32') {
             const mockOutput = `Node,PercentProcessorTime,ProcessId,VirtualSize,WorkingSetSize
 COMPUTER,0,12345,2097152,1048576`;
-            
-            const lines = mockOutput.trim().split('\n').filter(line => line.trim());
+
+            const lines = mockOutput
+              .trim()
+              .split('\n')
+              .filter((line) => line.trim());
             if (lines.length < 2) {
               return null;
             }
-            
+
             const data = lines[lines.length - 1].split(',');
-            
+
             const processInfo = {
               pid: parseInt(pid),
               rss: parseInt(data[4]) || 0,
@@ -179,7 +174,7 @@ COMPUTER,0,12345,2097152,1048576`;
               command: 'Claude CLI',
               timestamp: new Date().toISOString(),
             };
-            
+
             this.updateMetrics(pid, processInfo);
             return processInfo;
           }
@@ -189,7 +184,7 @@ COMPUTER,0,12345,2097152,1048576`;
       };
 
       const result = await monitor.monitorProcess(12345);
-      
+
       assert.strictEqual(result.pid, 12345);
       assert.strictEqual(result.rss, 1048576);
       assert.strictEqual(result.vsz, 2097152);
@@ -197,7 +192,7 @@ COMPUTER,0,12345,2097152,1048576`;
       assert.strictEqual(result.memory, 0);
       assert.strictEqual(result.elapsed, 'N/A');
       assert.strictEqual(result.command, 'Claude CLI');
-      
+
       monitor.monitorProcess = originalMonitorProcess;
     });
 
@@ -208,20 +203,16 @@ COMPUTER,0,12345,2097152,1048576`;
       });
 
       const originalMonitorProcess = monitor.monitorProcess;
-      monitor.monitorProcess = async function(pid) {
+      monitor.monitorProcess = async function (pid) {
         if (!pid) return null;
-        
-        try {
-          // Simulate process not found by returning null
-          return null;
-        } catch (error) {
-          return null;
-        }
+
+        // Simulate process not found by returning null
+        return null;
       };
 
       const result = await monitor.monitorProcess(99999);
       assert.strictEqual(result, null);
-      
+
       monitor.monitorProcess = originalMonitorProcess;
     });
 
@@ -244,7 +235,7 @@ COMPUTER,0,12345,2097152,1048576`;
       };
 
       monitor.updateMetrics(123, info);
-      
+
       assert.ok(monitor.metrics.has(123));
       const metrics = monitor.metrics.get(123);
       assert.strictEqual(metrics.history.length, 1);
@@ -259,7 +250,7 @@ COMPUTER,0,12345,2097152,1048576`;
 
       monitor.updateMetrics(123, info1);
       monitor.updateMetrics(123, info2);
-      
+
       const metrics = monitor.metrics.get(123);
       assert.strictEqual(metrics.history.length, 2);
       assert.strictEqual(metrics.maxMemory, 200 * 1024 * 1024);
@@ -268,12 +259,12 @@ COMPUTER,0,12345,2097152,1048576`;
 
     it('should limit history to 100 entries', () => {
       const pid = 123;
-      
+
       // Add 110 entries
       for (let i = 0; i < 110; i++) {
         monitor.updateMetrics(pid, { rss: i * 1024, cpu: i });
       }
-      
+
       const metrics = monitor.metrics.get(pid);
       assert.strictEqual(metrics.history.length, 100);
       // First 10 should be removed
@@ -289,7 +280,7 @@ COMPUTER,0,12345,2097152,1048576`;
       };
 
       const health = monitor.checkHealth(processInfo);
-      
+
       assert.strictEqual(health.healthy, true);
       assert.strictEqual(health.warnings.length, 0);
       assert.strictEqual(health.critical.length, 0);
@@ -302,7 +293,7 @@ COMPUTER,0,12345,2097152,1048576`;
       };
 
       const health = monitor.checkHealth(processInfo);
-      
+
       assert.strictEqual(health.healthy, true);
       assert.strictEqual(health.warnings.length, 1);
       assert.strictEqual(health.warnings[0].type, 'memory');
@@ -317,7 +308,7 @@ COMPUTER,0,12345,2097152,1048576`;
       };
 
       const health = monitor.checkHealth(processInfo);
-      
+
       assert.strictEqual(health.healthy, false);
       assert.strictEqual(health.warnings.length, 0);
       assert.strictEqual(health.critical.length, 1);
@@ -331,7 +322,7 @@ COMPUTER,0,12345,2097152,1048576`;
       };
 
       const health = monitor.checkHealth(processInfo);
-      
+
       assert.strictEqual(health.healthy, true);
       assert.strictEqual(health.warnings.length, 1);
       assert.strictEqual(health.warnings[0].type, 'cpu');
@@ -345,7 +336,7 @@ COMPUTER,0,12345,2097152,1048576`;
       };
 
       const health = monitor.checkHealth(processInfo);
-      
+
       assert.strictEqual(health.healthy, false);
       assert.strictEqual(health.critical.length, 1);
       assert.strictEqual(health.critical[0].type, 'cpu');
@@ -358,7 +349,7 @@ COMPUTER,0,12345,2097152,1048576`;
       };
 
       const health = monitor.checkHealth(processInfo);
-      
+
       assert.strictEqual(health.healthy, false);
       assert.strictEqual(health.warnings.length, 1);
       assert.strictEqual(health.warnings[0].type, 'memory');
@@ -375,8 +366,7 @@ COMPUTER,0,12345,2097152,1048576`;
 
     it('should return summary for tracked pid', () => {
       const pid = 123;
-      const startTime = Date.now();
-      
+
       // Add some metrics
       for (let i = 0; i < 10; i++) {
         monitor.updateMetrics(pid, {
@@ -386,7 +376,7 @@ COMPUTER,0,12345,2097152,1048576`;
       }
 
       const summary = monitor.getMetricsSummary(pid);
-      
+
       assert.strictEqual(summary.pid, pid);
       assert.strictEqual(summary.samples, 10);
       assert.ok(summary.duration >= 0);
@@ -408,7 +398,7 @@ COMPUTER,0,12345,2097152,1048576`;
       });
 
       const summary = monitor.getMetricsSummary(pid);
-      
+
       assert.strictEqual(summary.memory.current, 0);
       assert.strictEqual(summary.memory.average, 0);
       assert.strictEqual(summary.cpu.current, 0);

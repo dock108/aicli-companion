@@ -43,6 +43,10 @@ class ClaudeCompanionServer {
       this.claudeService.setDisallowedTools(tools);
     }
     
+    if (process.env.CLAUDE_SKIP_PERMISSIONS === 'true') {
+      this.claudeService.setSkipPermissions(true);
+    }
+    
     this.tlsConfig = new TLSConfig();
 
     // Will be set up during start()

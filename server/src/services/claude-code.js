@@ -94,9 +94,14 @@ class InputValidator {
       '--help',
       '--version',
       '--continue',
+      '--dangerously-skip-permissions',
+      '--permission-mode',
+      '--allowedTools',
+      '--disallowedTools',
     ];
 
     const allowedFormats = ['json', 'text', 'markdown', 'stream-json'];
+    const allowedPermissionModes = ['default', 'acceptEdits', 'bypassPermissions', 'plan'];
 
     for (let i = 0; i < args.length; i++) {
       const arg = args[i];
@@ -123,6 +128,14 @@ class InputValidator {
             throw new Error(`Invalid format: ${format}`);
           }
         }
+
+        // Validate permission mode values
+        if (arg === '--permission-mode' && i + 1 < args.length) {
+          const mode = args[i + 1];
+          if (!allowedPermissionModes.includes(mode)) {
+            throw new Error(`Invalid permission mode: ${mode}`);
+          }
+        }
       }
     }
 
@@ -144,8 +157,9 @@ export class ClaudeCodeService extends EventEmitter {
     
     // Permission configuration
     this.permissionMode = 'default'; // 'default', 'acceptEdits', 'bypassPermissions', 'plan'
-    this.allowedTools = []; // e.g., ['Bash', 'Edit', 'Read', 'Write']
+    this.allowedTools = ['Read', 'Write', 'Edit']; // Default allowed tools for basic operations
     this.disallowedTools = []; // e.g., ['Bash(rm:*)', 'Bash(sudo:*)']
+    this.skipPermissions = false; // Whether to use --dangerously-skip-permissions
     
     // Process monitoring
     this.processHealthCheckInterval = null;
@@ -179,6 +193,13 @@ export class ClaudeCodeService extends EventEmitter {
 
   setSafeRootDirectory(dir) {
     this.safeRootDirectory = dir;
+  }
+
+  setSkipPermissions(skip) {
+    this.skipPermissions = !!skip;
+    if (skip) {
+      console.log('⚠️  Permission checks will be bypassed (--dangerously-skip-permissions)');
+    }
   }
 
   // Start process health monitoring
@@ -367,17 +388,58 @@ export class ClaudeCodeService extends EventEmitter {
   }
 
   async sendOneTimePrompt(prompt, { format = 'json', workingDirectory = process.cwd() }) {
+    console.log(`📝 sendOneTimePrompt called with prompt: "${prompt?.substring(0, 50)}${prompt?.length > 50 ? '...' : ''}"`);
+    
     // Input validation already done in sendPrompt, but double-check critical params
     const sanitizedPrompt = InputValidator.sanitizePrompt(prompt);
     const validatedFormat = InputValidator.validateFormat(format);
+    
+    console.log(`   Sanitized prompt: "${sanitizedPrompt.substring(0, 50)}${sanitizedPrompt.length > 50 ? '...' : ''}"`);
+    console.log(`   Format: ${validatedFormat}`);
 
-    const args = ['--print', '--output-format', validatedFormat, sanitizedPrompt];
+    const args = ['--print', '--output-format', validatedFormat];
+
+    // Add permission flags before the prompt
+    if (this.skipPermissions) {
+      args.push('--dangerously-skip-permissions');
+    } else {
+      // Only add permission configuration if not skipping permissions
+      
+      // Add permission mode if configured
+      if (this.permissionMode && this.permissionMode !== 'default') {
+        args.push('--permission-mode');
+        args.push(this.permissionMode);
+      }
+
+      // Add allowed tools if configured
+      if (this.allowedTools.length > 0) {
+        args.push('--allowedTools');
+        args.push(this.allowedTools.join(','));
+      }
+
+      // Add disallowed tools if configured
+      if (this.disallowedTools.length > 0) {
+        args.push('--disallowedTools');
+        args.push(this.disallowedTools.join(','));
+      }
+    }
+
+    // Add the prompt at the end
+    args.push(sanitizedPrompt);
 
     // Validate arguments before spawning
     InputValidator.validateClaudeArgs(args);
 
-    console.log(`🚀 Starting Claude CLI with validated args:`, args.slice(0, 3)); // Don't log full prompt
+    console.log(`🚀 Starting Claude CLI with validated args:`, args.slice(0, -1)); // Log all args except prompt
+    console.log(`   Prompt: "${sanitizedPrompt.substring(0, 50)}${sanitizedPrompt.length > 50 ? '...' : ''}"`);
     console.log(`   Working directory: ${workingDirectory}`);
+    console.log(`   Full args array length: ${args.length}`);
+    console.log(`   Last arg (should be prompt): "${args[args.length - 1]?.substring(0, 50)}${args[args.length - 1]?.length > 50 ? '...' : ''}"`);
+    
+    // Double-check the prompt is actually in the args
+    if (!args.includes(sanitizedPrompt)) {
+      console.error(`❌ ERROR: Prompt not found in args array!`);
+    }
 
     return new Promise((resolvePromise, reject) => {
       let claudeProcess;
@@ -603,6 +665,13 @@ export class ClaudeCodeService extends EventEmitter {
       console.log(
         `📝 Executing Claude CLI command for session ${sanitizedSessionId}: "${sanitizedPrompt}"`
       );
+      console.log(`   Session object:`, {
+        sessionId: session.sessionId,
+        workingDirectory: session.workingDirectory,
+        conversationStarted: session.conversationStarted,
+        initialPrompt: session.initialPrompt?.substring(0, 50) + '...',
+        isActive: session.isActive
+      });
 
       // Execute Claude CLI with continuation and print mode
       const response = await this.executeClaudeCommand(session, sanitizedPrompt);
@@ -663,19 +732,29 @@ export class ClaudeCodeService extends EventEmitter {
       args.push('--continue');
     }
 
-    // Add permission mode if configured
-    if (this.permissionMode && this.permissionMode !== 'default') {
-      args.push('--permission-mode', this.permissionMode);
-    }
+    // Add skip permissions flag if configured
+    if (this.skipPermissions) {
+      args.push('--dangerously-skip-permissions');
+    } else {
+      // Only add permission configuration if not skipping permissions
+      
+      // Add permission mode if configured
+      if (this.permissionMode && this.permissionMode !== 'default') {
+        args.push('--permission-mode');
+        args.push(this.permissionMode);
+      }
 
-    // Add allowed tools if configured
-    if (this.allowedTools.length > 0) {
-      args.push('--allowedTools', this.allowedTools.join(','));
-    }
+      // Add allowed tools if configured
+      if (this.allowedTools.length > 0) {
+        args.push('--allowedTools');
+        args.push(this.allowedTools.join(','));
+      }
 
-    // Add disallowed tools if configured
-    if (this.disallowedTools.length > 0) {
-      args.push('--disallowedTools', this.disallowedTools.join(','));
+      // Add disallowed tools if configured
+      if (this.disallowedTools.length > 0) {
+        args.push('--disallowedTools');
+        args.push(this.disallowedTools.join(','));
+      }
     }
 
     // Validate arguments
@@ -686,13 +765,17 @@ export class ClaudeCodeService extends EventEmitter {
     if (!conversationStarted && initialPrompt) {
       finalPrompt = `${initialPrompt}\n\n${prompt}`;
       session.conversationStarted = true;
+      console.log(`   📝 Combined initial prompt with command prompt`);
     } else if (!conversationStarted) {
       session.conversationStarted = true;
     }
 
     console.log(`🚀 Executing Claude CLI with args:`, args);
     console.log(`   Working directory: ${workingDirectory}`);
-    console.log(`   Prompt length: ${finalPrompt.length} chars`);
+    console.log(`   Original prompt: "${prompt?.substring(0, 50)}..."`);
+    console.log(`   Initial prompt: "${initialPrompt?.substring(0, 50)}..."`);
+    console.log(`   Final prompt length: ${finalPrompt?.length} chars`);
+    console.log(`   Final prompt preview: "${finalPrompt?.substring(0, 100).replace(/\n/g, '\\n')}..."`);
     console.log(`   Conversation started: ${conversationStarted}`);
 
     // Calculate dynamic timeout based on command complexity
@@ -734,6 +817,11 @@ export class ClaudeCodeService extends EventEmitter {
       };
     }
 
+    console.log(`📤 Calling runClaudeProcess with:`);
+    console.log(`   Args (${args.length}):`, args);
+    console.log(`   Prompt: "${finalPrompt?.substring(0, 100)}${finalPrompt?.length > 100 ? '...' : ''}"`);
+    console.log(`   SessionId: ${sessionId}`);
+    
     return this.runClaudeProcess(args, finalPrompt, workingDirectory, sessionId, timeoutMs);
   }
 
@@ -829,12 +917,14 @@ export class ClaudeCodeService extends EventEmitter {
   }
 
   async runClaudeProcess(args, prompt, workingDirectory, sessionId, timeoutMs) {
+    console.log(`\n🔧 === runClaudeProcess CALLED ===`);
     console.log(`🔧 Running Claude CLI process:`);
-    console.log(`   Args: ${JSON.stringify(args)}`);
-    console.log(
-      `   Prompt: ${prompt ? `"${prompt.substring(0, 50)}${prompt.length > 50 ? '...' : ''}"` : 'none'}`
-    );
+    console.log(`   Args (${args.length}): ${JSON.stringify(args)}`);
+    console.log(`   Prompt provided: ${!!prompt}`);
+    console.log(`   Prompt length: ${prompt ? prompt.length : 0}`);
+    console.log(`   Prompt preview: ${prompt ? `"${prompt.substring(0, 100).replace(/\n/g, '\\n')}${prompt.length > 100 ? '...' : ''}"` : 'none'}`);
     console.log(`   Working dir: ${workingDirectory}`);
+    console.log(`   Session ID: ${sessionId}`);
     console.log(`   Timeout: ${timeoutMs}ms`);
 
     return new Promise((promiseResolve, reject) => {
@@ -842,7 +932,15 @@ export class ClaudeCodeService extends EventEmitter {
 
       try {
         // Build the complete command arguments
-        const fullArgs = prompt ? [...args, prompt] : args;
+        // When using --print with stdin, don't include prompt in args
+        const useStdin = prompt && args.includes('--print');
+        const fullArgs = useStdin ? args : (prompt ? [...args, prompt] : args);
+        
+        console.log(`📝 Final args being passed to Claude CLI:`);
+        console.log(`   Command: ${this.claudeCommand}`);
+        console.log(`   Full args array (${fullArgs.length} items):`, fullArgs.map((arg, i) => `[${i}] ${arg.substring(0, 100)}`));
+        console.log(`   Has prompt: ${!!prompt}`);
+        console.log(`   Using stdin for prompt: ${useStdin}`);
 
         claudeProcess = spawn(this.claudeCommand, fullArgs, {
           cwd: workingDirectory,
@@ -860,8 +958,16 @@ export class ClaudeCodeService extends EventEmitter {
 
       console.log(`   Process started with PID: ${claudeProcess.pid}`);
 
-      // Close stdin immediately since we're not sending any input (prompt is in args)
-      claudeProcess.stdin.end();
+      // When using --print, Claude CLI might expect input from stdin
+      // Try writing the prompt to stdin instead of passing as argument
+      if (prompt && args.includes('--print')) {
+        console.log(`   📝 Writing prompt to stdin instead of args`);
+        claudeProcess.stdin.write(prompt);
+        claudeProcess.stdin.end();
+      } else {
+        // Close stdin immediately if no prompt
+        claudeProcess.stdin.end();
+      }
       
       // Start monitoring this process
       if (claudeProcess.pid) {

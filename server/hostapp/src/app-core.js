@@ -59,7 +59,7 @@ export async function loadConfig() {
 
     if (state.elements.configPathInput) state.elements.configPathInput.value = state.configPath;
     if (state.elements.portInput) state.elements.portInput.value = state.serverStatus.port;
-    
+
     // Load auth token
     const authToken = localStorage.getItem('claude-companion-auth-token');
     if (authToken && state.elements.authTokenInput) {
@@ -126,21 +126,21 @@ export function generateAuthToken() {
   // Generate a secure random token
   const array = new Uint8Array(32);
   window.crypto.getRandomValues(array);
-  const token = Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
-  
+  const token = Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('');
+
   // Save to localStorage
   localStorage.setItem('claude-companion-auth-token', token);
-  
+
   // Update UI
   if (state.elements.authTokenInput) {
     state.elements.authTokenInput.value = token;
   }
-  
+
   // Regenerate QR code if server is running
   if (state.serverStatus.running) {
     generateQRCode();
   }
-  
+
   return token;
 }
 
@@ -149,7 +149,7 @@ export async function startServer() {
   console.log('🚀 startServer() called');
   console.log('Current state:', state);
   console.log('Port input value:', state.elements.portInput?.value);
-  
+
   state.elements.startBtn.disabled = true;
   state.elements.startBtn.classList.add('loading');
 
@@ -158,15 +158,15 @@ export async function startServer() {
 
   try {
     console.log('Invoking start_server...');
-    
+
     // Get auth token and config path for server
     const authToken = localStorage.getItem('claude-companion-auth-token');
     const configPath = state.configPath;
-    
-    const status = await invoke('start_server', { 
+
+    const status = await invoke('start_server', {
       port,
       authToken,
-      configPath 
+      configPath,
     });
     console.log('Server started, status:', status);
     setServerStatus(status);
@@ -359,7 +359,7 @@ export function renderLogs() {
   const levelFilter = state.elements.logLevelFilter?.value || 'all';
 
   // Filter logs
-  const filteredLogs = state.logs.filter(log => {
+  const filteredLogs = state.logs.filter((log) => {
     const matchesSearch = !searchTerm || log.message.toLowerCase().includes(searchTerm);
     const matchesLevel = levelFilter === 'all' || log.level === levelFilter;
     return matchesSearch && matchesLevel;
@@ -374,26 +374,26 @@ export function renderLogs() {
   }
 
   // Render each log entry
-  filteredLogs.forEach(log => {
+  filteredLogs.forEach((log) => {
     const logEntry = document.createElement('div');
     logEntry.className = 'log-entry';
-    
+
     const timestamp = document.createElement('span');
     timestamp.className = 'log-timestamp';
     timestamp.textContent = log.timestamp;
-    
+
     const level = document.createElement('span');
     level.className = `log-level ${log.level}`;
     level.textContent = log.level;
-    
+
     const message = document.createElement('span');
     message.className = 'log-message';
     message.textContent = log.message;
-    
+
     logEntry.appendChild(timestamp);
     logEntry.appendChild(level);
     logEntry.appendChild(message);
-    
+
     logsDisplay.appendChild(logEntry);
   });
 
@@ -412,12 +412,12 @@ export function switchTab(tabName) {
   }
 
   // Update tab buttons
-  document.querySelectorAll('.tab-button').forEach(btn => {
+  document.querySelectorAll('.tab-button').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.tab === tabName);
   });
 
   // Update tab panels
-  document.querySelectorAll('.tab-panel').forEach(panel => {
+  document.querySelectorAll('.tab-panel').forEach((panel) => {
     panel.classList.toggle('active', panel.id === `${tabName}-tab`);
   });
 
@@ -438,7 +438,7 @@ export async function loadClaudeStatus() {
   if (!state.serverStatus.running) {
     updateClaudeStatusUI({
       claude: { installed: false, version: null, path: null, available: false },
-      sessions: { active: 0, max: 0, details: [] }
+      sessions: { active: 0, max: 0, details: [] },
     });
     return;
   }
@@ -469,14 +469,17 @@ export async function testClaude() {
     const response = await fetch(`http://localhost:${state.serverStatus.port}/api/claude/test`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: 'Hello! Please respond with a brief greeting.' })
+      body: JSON.stringify({ prompt: 'Hello! Please respond with a brief greeting.' }),
     });
 
     const result = await response.json();
-    
+
     if (result.success) {
       alert('Claude CLI test successful! Check the Claude logs for the response.');
-      addClaudeLog('test', `Test successful: ${JSON.stringify(result.response).substring(0, 200)}...`);
+      addClaudeLog(
+        'test',
+        `Test successful: ${JSON.stringify(result.response).substring(0, 200)}...`
+      );
     } else {
       alert(`Claude CLI test failed: ${result.message}`);
       addClaudeLog('error', `Test failed: ${result.message}`);
@@ -530,11 +533,11 @@ function updateClaudeStatusUI(status) {
   const sessionsList = state.elements.sessionsList;
   if (sessionsList) {
     sessionsList.innerHTML = '';
-    
+
     if (status.sessions.details.length === 0) {
       sessionsList.innerHTML = '<div class="log-empty-state">No active Claude CLI sessions</div>';
     } else {
-      status.sessions.details.forEach(session => {
+      status.sessions.details.forEach((session) => {
         const sessionEl = document.createElement('div');
         sessionEl.className = 'session-item';
         sessionEl.innerHTML = `
@@ -558,14 +561,14 @@ function addClaudeLog(type, content) {
   const log = {
     type,
     content,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   };
-  
+
   state.claudeLogs.push(log);
   if (state.claudeLogs.length > 1000) {
     state.claudeLogs = state.claudeLogs.slice(-1000);
   }
-  
+
   renderClaudeLogs();
 }
 
@@ -574,8 +577,8 @@ export function renderClaudeLogs() {
   if (!logsDisplay) return;
 
   const filterValue = state.elements.claudeLogFilter?.value || 'all';
-  
-  const filteredLogs = state.claudeLogs.filter(log => {
+
+  const filteredLogs = state.claudeLogs.filter((log) => {
     if (filterValue === 'all') return true;
     return log.type === filterValue;
   });
@@ -583,25 +586,26 @@ export function renderClaudeLogs() {
   logsDisplay.innerHTML = '';
 
   if (filteredLogs.length === 0) {
-    logsDisplay.innerHTML = '<div class="log-empty-state">No Claude CLI logs match the filter.</div>';
+    logsDisplay.innerHTML =
+      '<div class="log-empty-state">No Claude CLI logs match the filter.</div>';
     return;
   }
 
-  filteredLogs.forEach(log => {
+  filteredLogs.forEach((log) => {
     const logEntry = document.createElement('div');
     logEntry.className = 'claude-log-entry';
-    
+
     const logType = document.createElement('span');
     logType.className = `claude-log-type ${log.type}`;
     logType.textContent = log.type;
-    
+
     const logContent = document.createElement('span');
     logContent.className = 'claude-log-content';
     logContent.textContent = log.content;
-    
+
     logEntry.appendChild(logType);
     logEntry.appendChild(logContent);
-    
+
     logsDisplay.appendChild(logEntry);
   });
 
@@ -701,7 +705,7 @@ export async function init() {
 
   // Set up event listeners
   console.log('Setting up event listeners...');
-  
+
   if (state.elements.browseBtn) {
     console.log('✅ Adding click listener to browseBtn');
     state.elements.browseBtn.addEventListener('click', () => {
@@ -747,7 +751,7 @@ export async function init() {
   }
 
   // Tab navigation listeners
-  document.querySelectorAll('.tab-button').forEach(btn => {
+  document.querySelectorAll('.tab-button').forEach((btn) => {
     btn.addEventListener('click', () => {
       switchTab(btn.dataset.tab);
     });
@@ -792,7 +796,7 @@ export async function init() {
       state.logs = state.logs.slice(-10000);
     }
     renderLogs();
-    
+
     // Parse Claude-specific logs
     if (log.message) {
       if (log.message.includes('[CLAUDE_PROCESS_START]')) {

@@ -30,7 +30,7 @@ All messages are JSON objects with the following base structure:
 {
   "type": "message_type",
   "requestId": "unique-request-id",
-  "timestamp": "2024-01-18T10:30:00Z",
+  "timestamp": "2025-07-18T10:30:00Z",
   "data": { ... }
 }
 ```
@@ -50,7 +50,7 @@ Send a single prompt to Claude Code and get a complete response.
 {
   "type": "ask",
   "requestId": "req_12345",
-  "timestamp": "2024-01-18T10:30:00Z",
+  "timestamp": "2025-07-18T10:30:00Z",
   "data": {
     "prompt": "List files in current directory",
     "workingDirectory": "/Users/user/project",
@@ -69,7 +69,7 @@ Begin a streaming conversation session.
 {
   "type": "streamStart",
   "requestId": "req_12346",
-  "timestamp": "2024-01-18T10:30:00Z",
+  "timestamp": "2025-07-18T10:30:00Z",
   "data": {
     "prompt": "Help me debug this code",
     "workingDirectory": "/Users/user/project",
@@ -88,7 +88,7 @@ Send a message to an existing streaming session.
 {
   "type": "streamSend",
   "requestId": "req_12347",
-  "timestamp": "2024-01-18T10:30:00Z",
+  "timestamp": "2025-07-18T10:30:00Z",
   "data": {
     "sessionId": "session_uuid",
     "prompt": "Continue with the next step"
@@ -103,7 +103,7 @@ Respond to a permission prompt from Claude Code.
 {
   "type": "permission",
   "requestId": "req_12348",
-  "timestamp": "2024-01-18T10:30:00Z",
+  "timestamp": "2025-07-18T10:30:00Z",
   "data": {
     "sessionId": "session_uuid",
     "response": "y",
@@ -119,7 +119,7 @@ Close an active streaming session.
 {
   "type": "streamClose",
   "requestId": "req_12349",
-  "timestamp": "2024-01-18T10:30:00Z",
+  "timestamp": "2025-07-18T10:30:00Z",
   "data": {
     "sessionId": "session_uuid",
     "reason": "user_requested"
@@ -134,7 +134,7 @@ Heartbeat message to maintain connection.
 {
   "type": "ping",
   "requestId": "req_12350",
-  "timestamp": "2024-01-18T10:30:00Z",
+  "timestamp": "2025-07-18T10:30:00Z",
   "data": {}
 }
 ```
@@ -146,7 +146,7 @@ Subscribe to specific events or session updates.
 {
   "type": "subscribe",
   "requestId": "req_12351",
-  "timestamp": "2024-01-18T10:30:00Z",
+  "timestamp": "2025-07-18T10:30:00Z",
   "data": {
     "events": ["sessionUpdates", "serverStatus"],
     "sessionIds": ["session_uuid"]
@@ -163,7 +163,7 @@ Sent immediately after successful connection.
 {
   "type": "welcome",
   "requestId": null,
-  "timestamp": "2024-01-18T10:30:00Z",
+  "timestamp": "2025-07-18T10:30:00Z",
   "data": {
     "clientId": "client_uuid",
     "serverVersion": "1.0.0",
@@ -181,7 +181,7 @@ Complete response to a one-time query.
 {
   "type": "askResponse",
   "requestId": "req_12345",
-  "timestamp": "2024-01-18T10:30:01Z",
+  "timestamp": "2025-07-18T10:30:01Z",
   "data": {
     "success": true,
     "response": {
@@ -207,7 +207,7 @@ Confirmation that streaming session was created.
 {
   "type": "streamStarted",
   "requestId": "req_12346",
-  "timestamp": "2024-01-18T10:30:01Z",
+  "timestamp": "2025-07-18T10:30:01Z",
   "data": {
     "sessionId": "session_uuid",
     "sessionName": "Debug Session",
@@ -223,7 +223,7 @@ Real-time streaming data from Claude Code.
 {
   "type": "streamData",
   "requestId": null,
-  "timestamp": "2024-01-18T10:30:02Z",
+  "timestamp": "2025-07-18T10:30:02Z",
   "data": {
     "sessionId": "session_uuid",
     "streamType": "assistant_message",
@@ -243,7 +243,7 @@ Claude Code tool usage during streaming.
 {
   "type": "streamToolUse",
   "requestId": null,
-  "timestamp": "2024-01-18T10:30:03Z",
+  "timestamp": "2025-07-18T10:30:03Z",
   "data": {
     "sessionId": "session_uuid",
     "toolName": "Read",
@@ -262,7 +262,7 @@ Claude Code requesting permission from user.
 {
   "type": "permissionRequest",
   "requestId": null,
-  "timestamp": "2024-01-18T10:30:04Z",
+  "timestamp": "2025-07-18T10:30:04Z",
   "data": {
     "sessionId": "session_uuid",
     "prompt": "Allow Claude to edit app.js?",
@@ -280,7 +280,7 @@ Streaming response completed.
 {
   "type": "streamComplete",
   "requestId": null,
-  "timestamp": "2024-01-18T10:30:05Z",
+  "timestamp": "2025-07-18T10:30:05Z",
   "data": {
     "sessionId": "session_uuid",
     "finalResult": "Debug analysis complete",
@@ -301,7 +301,7 @@ Error response for any failed operation.
 {
   "type": "error",
   "requestId": "req_12345",
-  "timestamp": "2024-01-18T10:30:01Z",
+  "timestamp": "2025-07-18T10:30:01Z",
   "data": {
     "code": "CLAUDE_UNAVAILABLE",
     "message": "Claude Code CLI not found",
@@ -320,11 +320,11 @@ Status updates for active sessions.
 {
   "type": "sessionStatus",
   "requestId": null,
-  "timestamp": "2024-01-18T10:30:01Z",
+  "timestamp": "2025-07-18T10:30:01Z",
   "data": {
     "sessionId": "session_uuid",
     "status": "active",
-    "lastActivity": "2024-01-18T10:29:45Z",
+    "lastActivity": "2025-07-18T10:29:45Z",
     "messageCount": 5,
     "totalCost": 0.25
   }
@@ -338,9 +338,9 @@ Response to ping message.
 {
   "type": "pong",
   "requestId": "req_12350",
-  "timestamp": "2024-01-18T10:30:01Z",
+  "timestamp": "2025-07-18T10:30:01Z",
   "data": {
-    "serverTime": "2024-01-18T10:30:01Z"
+    "serverTime": "2025-07-18T10:30:01Z"
   }
 }
 ```

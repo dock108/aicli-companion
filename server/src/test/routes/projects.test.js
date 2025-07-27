@@ -9,7 +9,6 @@ describe('Project Routes', () => {
   let claudeService;
   let handlers;
   let mockRouter;
-  let mockRateLimit;
 
   beforeEach(() => {
     app = express();
@@ -17,25 +16,22 @@ describe('Project Routes', () => {
 
     // Mock express router
     mockRouter = {
-      get: mock.fn((path, ...middlewares) => {
+      get: mock.fn((routePath, ...middlewares) => {
         const handler = middlewares[middlewares.length - 1];
-        handlers[`GET ${path}`] = handler;
+        handlers[`GET ${routePath}`] = handler;
       }),
-      post: mock.fn((path, ...middlewares) => {
+      post: mock.fn((routePath, ...middlewares) => {
         const handler = middlewares[middlewares.length - 1];
-        handlers[`POST ${path}`] = handler;
+        handlers[`POST ${routePath}`] = handler;
       }),
-      delete: mock.fn((path, ...middlewares) => {
+      delete: mock.fn((routePath, ...middlewares) => {
         const handler = middlewares[middlewares.length - 1];
-        handlers[`DELETE ${path}`] = handler;
+        handlers[`DELETE ${routePath}`] = handler;
       }),
     };
 
     // Override express.Router
     express.Router = () => mockRouter;
-
-    // Mock rate limiter - ensure it's a function that returns middleware
-    mockRateLimit = mock.fn(() => (req, res, next) => next());
 
     // Mock claude service
     claudeService = {

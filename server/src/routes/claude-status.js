@@ -181,7 +181,7 @@ export function setupClaudeStatusRoutes(app, claudeService) {
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
-      console.error(`Claude CLI debug test (${req.params.testType}) failed:`, error);
+      console.error('Claude CLI debug test failed for testType:', req.params.testType, error);
       res.status(500).json({
         success: false,
         testType: req.params.testType,

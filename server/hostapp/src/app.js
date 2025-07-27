@@ -7,7 +7,7 @@ import('./app-core.js')
 
     // Initialize when DOM is ready
     console.log('🎯 Current document readyState:', document.readyState);
-    
+
     if (document.readyState === 'loading') {
       console.log('⏳ Document still loading, setting up DOMContentLoaded listener...');
       document.addEventListener('DOMContentLoaded', () => {

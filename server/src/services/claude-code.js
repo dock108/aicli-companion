@@ -504,7 +504,7 @@ export class ClaudeCodeService extends EventEmitter {
         response,
       };
     } catch (error) {
-      console.error(`❌ Failed to execute command for session ${sanitizedSessionId}:`, error);
+      console.error('❌ Failed to execute command for session %s:', sanitizedSessionId, error);
       throw new Error(`Failed to execute command: ${error.message}`);
     }
   }

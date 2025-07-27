@@ -11,7 +11,11 @@ describe('ClaudeCodeService Unit Tests', () => {
     it('should initialize with correct defaults', () => {
       const newService = new ClaudeCodeService();
       assert.strictEqual(newService.activeSessions.size, 0);
-      assert.strictEqual(newService.claudeCommand, 'claude');
+      // Check that claudeCommand contains 'claude' (can be full path)
+      assert.ok(
+        newService.claudeCommand.includes('claude'),
+        `Expected claudeCommand to include 'claude', got: ${newService.claudeCommand}`
+      );
       assert.ok(newService.defaultWorkingDirectory);
     });
   });
@@ -402,27 +406,27 @@ describe('ClaudeCodeService Unit Tests', () => {
 
   describe('extractPermissionPrompt', () => {
     it('should extract permission prompt text', () => {
-      const message = {
-        result: 'Do you want to continue? (y/n)',
-      };
-
-      const prompt = service.extractPermissionPrompt(message);
-      assert.strictEqual(prompt, 'Do you want to continue?');
+      const resultText = 'Do you want to continue? (y/n)';
+      const prompt = service.extractPermissionPrompt(resultText);
+      assert.strictEqual(prompt, 'Do you want to continue? (y/n)');
     });
 
     it('should handle [Y/n] pattern', () => {
-      const message = {
-        text: 'Allow access? [Y/n]',
-      };
-
-      const prompt = service.extractPermissionPrompt(message);
+      const resultText = 'Allow access? [Y/n]';
+      const prompt = service.extractPermissionPrompt(resultText);
       assert.strictEqual(prompt, 'Allow access? [Y/n]');
     });
 
     it('should handle missing text', () => {
-      const message = {};
-      const prompt = service.extractPermissionPrompt(message);
-      assert.strictEqual(prompt, 'Permission required');
+      const prompt = service.extractPermissionPrompt(null);
+      assert.strictEqual(prompt, null);
+    });
+
+    it('should extract question from multiline text', () => {
+      const resultText =
+        'Some context here\nWould you like me to proceed with creating these files?\nMore context';
+      const prompt = service.extractPermissionPrompt(resultText);
+      assert.strictEqual(prompt, 'Would you like me to proceed with creating these files?');
     });
   });
 

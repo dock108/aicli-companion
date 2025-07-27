@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import path from 'path';
 import { DEFAULT_CONFIG, SERVER_VERSION } from '../constants/index.js';
 
 // Load environment variables
@@ -18,6 +19,7 @@ export class ServerConfig {
     this.enableTLS = process.env.ENABLE_TLS === 'true';
     this.allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['*'];
     this.nodeEnv = process.env.NODE_ENV || 'development';
+    this.configPath = process.env.CONFIG_PATH || path.dirname(process.cwd());
   }
 
   /**

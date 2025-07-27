@@ -8,6 +8,8 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
 import { setupRoutes } from './routes/index.js';
+import { setupProjectRoutes } from './routes/projects.js';
+import { setupClaudeStatusRoutes } from './routes/claude-status.js';
 import { setupWebSocket } from './services/websocket.js';
 import { errorHandler } from './middleware/error.js';
 import { ClaudeCodeService } from './services/claude-code.js';
@@ -24,6 +26,7 @@ class ClaudeCompanionServer {
     this.app = express();
     this.config = new ServerConfig();
     this.claudeService = new ClaudeCodeService();
+    this.claudeService.safeRootDirectory = this.config.configPath; // Set project directory as safe root
     this.tlsConfig = new TLSConfig();
 
     // Will be set up during start()
@@ -54,6 +57,8 @@ class ClaudeCompanionServer {
 
     // API routes
     setupRoutes(this.app, this.claudeService);
+    setupProjectRoutes(this.app, this.claudeService);
+    setupClaudeStatusRoutes(this.app, this.claudeService);
 
     // Static files (for web interface if needed)
     this.app.use('/static', express.static(join(__dirname, '../public')));
@@ -76,6 +81,35 @@ class ClaudeCompanionServer {
   setupWebSocket() {
     this.wss = new WebSocketServer({ server: this.server });
     setupWebSocket(this.wss, this.claudeService, this.authToken);
+
+    // Forward Claude CLI events to console for host app logging
+    this.claudeService.on('processStart', (data) => {
+      console.log(
+        `[CLAUDE_PROCESS_START] PID: ${data.pid}, Type: ${data.type}, Session: ${data.sessionId || 'one-time'}`
+      );
+    });
+
+    this.claudeService.on('processStdout', (data) => {
+      console.log(`[CLAUDE_STDOUT] PID: ${data.pid} - ${data.data}`);
+    });
+
+    this.claudeService.on('processStderr', (data) => {
+      console.error(`[CLAUDE_STDERR] PID: ${data.pid} - ${data.data}`);
+    });
+
+    this.claudeService.on('processExit', (data) => {
+      console.log(
+        `[CLAUDE_PROCESS_EXIT] PID: ${data.pid}, Code: ${data.code}, Session: ${data.sessionId || 'one-time'}`
+      );
+    });
+
+    this.claudeService.on('processError', (data) => {
+      console.error(`[CLAUDE_PROCESS_ERROR] PID: ${data.pid} - ${data.error}`);
+    });
+
+    this.claudeService.on('commandSent', (data) => {
+      console.log(`[CLAUDE_COMMAND] Session: ${data.sessionId} - ${data.prompt}`);
+    });
   }
 
   setupErrorHandling() {

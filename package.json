@@ -31,7 +31,7 @@
   ],
   "lint-staged": {
     "server/src/**/*.js": [
-      "cd server && npm run lint",
+      "cd server && npm run lint:fix",
       "cd server && npm run format"
     ],
     "server/hostapp/src/**/*.{js,ts}": [

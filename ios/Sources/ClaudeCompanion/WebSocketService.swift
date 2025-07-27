@@ -26,6 +26,9 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
     // Connection info
     private var currentURL: URL?
     private var authToken: String?
+    
+    // Message callback
+    var onMessage: ((WebSocketMessage) -> Void)?
 
     init() {
         setupDateFormatters()
@@ -125,8 +128,11 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
             }
 
             if isConnected {
+                print("📨 Sending WebSocket message: \(type.rawValue)")
+                print("   Message: \(messageString)")
                 webSocket?.write(string: messageString)
             } else {
+                print("⚠️ WebSocket not connected, queueing message: \(type.rawValue)")
                 // Queue message for when connection is restored
                 if let wsMessage = try? decoder.decode(WebSocketMessage.self, from: messageData) {
                     pendingMessages.append(wsMessage)
@@ -278,11 +284,18 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
                 handleConversationResult(message)
             case .workingDirectorySet:
                 handleWorkingDirectorySet(message)
+            
+            // Progress and status message types
+            case .progress:
+                handleProgressMessage(message)
 
             default:
                 break
             }
 
+            // Call global message callback
+            onMessage?(message)
+            
             // Call registered handler if available
             messageHandlers[type]?(message)
         } catch {
@@ -429,6 +442,16 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
 
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date format")
         }
+    }
+
+    private func handleProgressMessage(_ message: WebSocketMessage) {
+        if case .progress(let progress) = message.data {
+            print("Progress update: \(progress.stage) - \(progress.message)")
+            if let progressValue = progress.progress {
+                print("  Progress: \(Int(progressValue * 100))%")
+            }
+        }
+        // This will be handled by registered handlers in the UI
     }
 
     // MARK: - WebSocketDelegate

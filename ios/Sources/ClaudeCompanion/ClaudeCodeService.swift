@@ -171,6 +171,78 @@ public class ClaudeCodeService: ObservableObject {
         // TODO: Implement streaming via WebSocket
         sendPrompt(prompt, completion: completion)
     }
+    
+    // MARK: - Project Management
+    
+    func startProjectSession(project: Project, connection: ServerConnection, completion: @escaping (Result<ProjectSession, ClaudeCompanionError>) -> Void) {
+        guard let url = connection.url else {
+            completion(.failure(.connectionFailed("Invalid server URL")))
+            return
+        }
+        
+        let projectUrl = url.appendingPathComponent("/api/projects/\(project.name)/start")
+        
+        var request = URLRequest(url: projectUrl)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        if let token = connection.authToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        // Empty body for POST request
+        request.httpBody = Data()
+        
+        urlSession.dataTask(with: request) { [weak self] data, response, error in
+            if let error = error {
+                completion(.failure(.networkError(error)))
+                return
+            }
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                completion(.failure(.invalidResponse))
+                return
+            }
+            
+            guard let data = data else {
+                completion(.failure(.invalidResponse))
+                return
+            }
+            
+            // Log response for debugging
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("Project start response: \(responseString)")
+            }
+            
+            do {
+                // Check for error response
+                if httpResponse.statusCode >= 400 {
+                    let errorResponse = try self?.decoder.decode(ErrorResponse.self, from: data)
+                    let errorMessage = errorResponse?.message ?? "Server error"
+                    completion(.failure(.connectionFailed(errorMessage)))
+                    return
+                }
+                
+                // Parse successful response
+                let response = try self?.decoder.decode(ProjectStartResponse.self, from: data)
+                if let sessionData = response?.session {
+                    let session = ProjectSession(
+                        sessionId: sessionData.sessionId,
+                        projectName: sessionData.projectName,
+                        projectPath: sessionData.projectPath,
+                        status: sessionData.status,
+                        startedAt: sessionData.startedAt
+                    )
+                    completion(.success(session))
+                } else {
+                    completion(.failure(.invalidResponse))
+                }
+            } catch {
+                print("Failed to parse project start response: \(error)")
+                completion(.failure(.jsonParsingError(error)))
+            }
+        }.resume()
+    }
 
     // MARK: - Health Check
 

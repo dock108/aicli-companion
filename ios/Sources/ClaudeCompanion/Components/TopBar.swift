@@ -64,7 +64,7 @@ public struct TopBar: View {
                     Spacer()
                     Rectangle()
                         .fill(colorScheme == .dark ? Colors.divider : Colors.dividerLight)
-                        .frame(height: 0.5)
+                        .frame(height: 1)
                 }
             }
         )

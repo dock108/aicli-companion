@@ -256,6 +256,7 @@ struct WebSocketMessage: Codable {
         case ping(PingRequest)
         case subscribe(SubscribeRequest)
         case setWorkingDirectory(SetWorkingDirectoryRequest)
+        case claudeCommand(ClaudeCommandRequest)
         case welcome(WelcomeResponse)
         case askResponse(AskResponseData)
         case streamStarted(StreamStartedResponse)
@@ -266,6 +267,7 @@ struct WebSocketMessage: Codable {
         case error(ErrorResponse)
         case sessionStatus(SessionStatusResponse)
         case pong(PongResponse)
+        case claudeResponse(ClaudeCommandResponse)
 
         // New rich message types
         case systemInit(SystemInitResponse)
@@ -274,6 +276,7 @@ struct WebSocketMessage: Codable {
         case toolResult(ToolResultResponse)
         case conversationResult(ConversationResultResponse)
         case workingDirectorySet(WorkingDirectorySetResponse)
+        case progress(ProgressResponse)
     }
     
     // Custom decoding to handle server message format
@@ -320,6 +323,10 @@ struct WebSocketMessage: Codable {
             self.data = .conversationResult(try ConversationResultResponse(from: dataDecoder))
         case .workingDirectorySet:
             self.data = .workingDirectorySet(try WorkingDirectorySetResponse(from: dataDecoder))
+        case .progress:
+            self.data = .progress(try ProgressResponse(from: dataDecoder))
+        case .claudeResponse:
+            self.data = .claudeResponse(try ClaudeCommandResponse(from: dataDecoder))
         default:
             throw DecodingError.dataCorruptedError(forKey: .data, in: container, debugDescription: "Unsupported message type for decoding: \(type)")
         }
@@ -340,6 +347,7 @@ enum WebSocketMessageType: String, Codable {
     case ping = "ping"
     case subscribe = "subscribe"
     case setWorkingDirectory = "setWorkingDirectory"
+    case claudeCommand = "claudeCommand"
 
     // Server → Client
     case welcome = "welcome"
@@ -352,6 +360,7 @@ enum WebSocketMessageType: String, Codable {
     case error = "error"
     case sessionStatus = "sessionStatus"
     case pong = "pong"
+    case claudeResponse = "claudeResponse"
 
     // New rich message types from enhanced server
     case systemInit = "systemInit"
@@ -360,6 +369,9 @@ enum WebSocketMessageType: String, Codable {
     case toolResult = "toolResult"
     case conversationResult = "conversationResult"
     case workingDirectorySet = "workingDirectorySet"
+    
+    // Progress and status message types
+    case progress = "progress"
 }
 
 // MARK: - Client Request Models
@@ -411,6 +423,12 @@ struct SubscribeRequest: Codable {
 
 struct SetWorkingDirectoryRequest: Codable {
     let workingDirectory: String
+}
+
+struct ClaudeCommandRequest: Codable {
+    let command: String
+    let projectPath: String
+    let sessionId: String?
 }
 
 // MARK: - Server Response Models
@@ -559,6 +577,21 @@ struct WorkingDirectorySetResponse: Codable {
     let success: Bool
 }
 
+struct ClaudeCommandResponse: Codable {
+    let content: String
+    let success: Bool
+    let sessionId: String?
+    let error: String?
+}
+
+struct ProgressResponse: Codable {
+    let sessionId: String
+    let stage: String
+    let progress: Double?
+    let message: String
+    let timestamp: Date
+}
+
 // MARK: - Helper Types
 
 struct AnyCodable: Codable {
@@ -648,5 +681,21 @@ enum ClaudeCompanionError: LocalizedError {
         case .timeout:
             return "Request timed out"
         }
+    }
+}
+
+// MARK: - Progress Info for UI
+
+struct ProgressInfo {
+    let stage: String
+    let progress: Double?
+    let message: String
+    let timestamp: Date
+    
+    init(from progressResponse: ProgressResponse) {
+        self.stage = progressResponse.stage
+        self.progress = progressResponse.progress
+        self.message = progressResponse.message
+        self.timestamp = progressResponse.timestamp
     }
 }

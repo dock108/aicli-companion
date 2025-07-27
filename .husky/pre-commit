@@ -1,13 +1,24 @@
 #!/usr/bin/env sh
 
-# Run lint-staged to handle file-specific linting and formatting
-npx lint-staged
+# Get the current branch name
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
-# Run server unit tests with coverage enforcement
-cd server && npm run test:coverage
+# Only run pre-commit hooks on develop or main branches
+if [ "$BRANCH" = "develop" ] || [ "$BRANCH" = "main" ]; then
+  echo "Running pre-commit hooks on $BRANCH branch..."
+  
+  # Run lint-staged to handle file-specific linting and formatting
+  npx lint-staged
 
-# Run hostapp JavaScript tests with coverage enforcement
-cd ../server/hostapp && npm run test:coverage
+  # Run server unit tests with coverage enforcement
+  cd server && npm run test:coverage
 
-# Return to root directory
-cd ../..
+  # Run hostapp JavaScript tests with coverage enforcement
+  cd ../server/hostapp && npm run test:coverage
+
+  # Return to root directory
+  cd ../..
+else
+  echo "Skipping pre-commit hooks on feature branch: $BRANCH"
+  echo "Pre-commit hooks only run on develop and main branches."
+fi

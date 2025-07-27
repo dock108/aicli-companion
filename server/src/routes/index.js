@@ -1,8 +1,33 @@
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
+import path from 'path';
+import { ServerConfig } from '../config/server-config.js';
 
 export function setupRoutes(app, claudeService) {
   const router = express.Router();
+  const config = new ServerConfig();
+
+  // Validate working directory to prevent directory traversal
+  const validateWorkingDirectory = (workingDirectory) => {
+    if (!workingDirectory) return null;
+
+    const baseDir = config.configPath;
+
+    // Reject absolute paths to prevent bypassing baseDir
+    if (path.isAbsolute(workingDirectory)) {
+      throw new Error('Invalid working directory: Absolute paths are not allowed');
+    }
+    const requestedPath = path.resolve(baseDir, workingDirectory);
+    const normalizedPath = path.normalize(requestedPath);
+    const normalizedBase = path.normalize(baseDir);
+
+    // Ensure the requested path is within the configured base directory
+    if (!normalizedPath.startsWith(normalizedBase)) {
+      throw new Error('Invalid working directory: Access denied');
+    }
+
+    return normalizedPath;
+  };
 
   // Health check for Claude Code service
   router.get('/health', async (req, res) => {
@@ -28,10 +53,20 @@ export function setupRoutes(app, claudeService) {
         });
       }
 
+      // Validate working directory if provided
+      let validatedWorkingDir;
+      try {
+        validatedWorkingDir = validateWorkingDirectory(workingDirectory);
+      } catch (error) {
+        return res.status(403).json({
+          error: error.message,
+        });
+      }
+
       const response = await claudeService.sendPrompt(prompt, {
         sessionId,
         format,
-        workingDirectory,
+        workingDirectory: validatedWorkingDir,
         streaming: false,
       });
 
@@ -56,9 +91,19 @@ export function setupRoutes(app, claudeService) {
         });
       }
 
+      // Validate working directory if provided
+      let validatedWorkingDir;
+      try {
+        validatedWorkingDir = validateWorkingDirectory(workingDirectory);
+      } catch (error) {
+        return res.status(403).json({
+          error: error.message,
+        });
+      }
+
       const response = await claudeService.sendStreamingPrompt(prompt, {
         sessionId,
-        workingDirectory,
+        workingDirectory: validatedWorkingDir,
       });
 
       res.json(response);
@@ -154,6 +199,8 @@ export function setupRoutes(app, claudeService) {
         sessions: 'GET /api/sessions',
         permission: 'POST /api/permission/:sessionId',
         health: 'GET /api/health',
+        projects: 'GET /api/projects',
+        projectInfo: 'GET /api/projects/:name',
       },
       websocket: '/ws',
     });

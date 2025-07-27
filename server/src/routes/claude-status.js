@@ -1,6 +1,15 @@
 import express from 'express';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import rateLimit from 'express-rate-limit';
+
+// Rate limiter: max 10 requests per minute per IP for status route
+const statusLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10, // limit each IP to 10 requests per windowMs
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+});
 
 const execAsync = promisify(exec);
 
@@ -8,7 +17,7 @@ export function setupClaudeStatusRoutes(app, claudeService) {
   const router = express.Router();
 
   // Get Claude CLI status and version
-  router.get('/claude/status', async (req, res) => {
+  router.get('/claude/status', statusLimiter, async (req, res) => {
     try {
       // Check if Claude CLI is installed using the same path as ClaudeCodeService
       let version = null;

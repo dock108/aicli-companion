@@ -1663,7 +1663,7 @@ export class ClaudeCodeService extends EventEmitter {
         },
         isComplete: false,
       });
-      
+
       // Don't buffer permission requests since they're sent immediately
       return;
     }
@@ -1695,11 +1695,11 @@ export class ClaudeCodeService extends EventEmitter {
     console.log(`   Buffered messages: ${buffer.assistantMessages.length}`);
     console.log(`   Deliverables: ${buffer.deliverables.length}`);
 
-    // If we already sent a permission request from the assistant messages, 
+    // If we already sent a permission request from the assistant messages,
     // don't check again in the final result to avoid duplicates
     if (buffer.permissionRequestSent) {
       console.log(`⏭️  Permission request already sent, skipping final result permission check`);
-      
+
       // Store the pending response in buffer for later when permission is granted
       buffer.pendingFinalResponse = {
         aggregatedContent: this.aggregateBufferedContent(buffer),

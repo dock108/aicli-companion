@@ -405,6 +405,12 @@ export function renderLogs() {
 
 // Tab Navigation
 export function switchTab(tabName) {
+  // Prevent switching to hidden Claude tab
+  if (tabName === 'claude') {
+    console.log('Claude tab is currently hidden');
+    return;
+  }
+
   // Update tab buttons
   document.querySelectorAll('.tab-button').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.tab === tabName);
@@ -420,9 +426,11 @@ export function switchTab(tabName) {
   // Load logs when switching to logs tab
   if (tabName === 'logs') {
     loadLogs();
-  } else if (tabName === 'claude') {
-    loadClaudeStatus();
   }
+  // Claude tab functionality preserved but hidden
+  // else if (tabName === 'claude') {
+  //   loadClaudeStatus();
+  // }
 }
 
 // Claude CLI Management

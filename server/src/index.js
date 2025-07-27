@@ -27,6 +27,26 @@ class ClaudeCompanionServer {
     this.config = new ServerConfig();
     this.claudeService = new ClaudeCodeService();
     this.claudeService.safeRootDirectory = this.config.configPath; // Set project directory as safe root
+
+    // Configure Claude permission settings from environment or config
+    if (process.env.CLAUDE_PERMISSION_MODE) {
+      this.claudeService.setPermissionMode(process.env.CLAUDE_PERMISSION_MODE);
+    }
+
+    if (process.env.CLAUDE_ALLOWED_TOOLS) {
+      const tools = process.env.CLAUDE_ALLOWED_TOOLS.split(',').map((t) => t.trim());
+      this.claudeService.setAllowedTools(tools);
+    }
+
+    if (process.env.CLAUDE_DISALLOWED_TOOLS) {
+      const tools = process.env.CLAUDE_DISALLOWED_TOOLS.split(',').map((t) => t.trim());
+      this.claudeService.setDisallowedTools(tools);
+    }
+
+    if (process.env.CLAUDE_SKIP_PERMISSIONS === 'true') {
+      this.claudeService.setSkipPermissions(true);
+    }
+
     this.tlsConfig = new TLSConfig();
 
     // Will be set up during start()
@@ -189,6 +209,9 @@ class ClaudeCompanionServer {
 
   shutdown() {
     console.log('🔄 Shutting down server...');
+
+    // Shutdown Claude service
+    this.claudeService.shutdown();
 
     this.server.close(() => {
       console.log('✅ Server shut down successfully');

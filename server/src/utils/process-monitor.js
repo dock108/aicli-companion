@@ -106,6 +106,8 @@ export class ProcessMonitor {
           timestamp: new Date().toISOString(),
         };
       }
+      // Return null for unsupported platforms
+      return null;
     } catch (error) {
       // Process likely doesn't exist
       return null;
@@ -178,8 +180,8 @@ export class ProcessMonitor {
     if (!metrics) return null;
 
     const recent = metrics.history.slice(-10);
-    const avgMemory = recent.reduce((sum, m) => sum + m.rss, 0) / recent.length;
-    const avgCpu = recent.reduce((sum, m) => sum + m.cpu, 0) / recent.length;
+    const avgMemory = recent.length > 0 ? recent.reduce((sum, m) => sum + m.rss, 0) / recent.length : 0;
+    const avgCpu = recent.length > 0 ? recent.reduce((sum, m) => sum + m.cpu, 0) / recent.length : 0;
 
     return {
       pid,

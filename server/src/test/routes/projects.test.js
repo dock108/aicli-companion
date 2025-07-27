@@ -212,10 +212,10 @@ describe('Project Routes', () => {
 
       await handlers['GET /projects/:name'](req, res);
 
-      // Should return 500 for general errors
-      assert.strictEqual(res.status.mock.calls[0].arguments[0], 500);
-      assert.strictEqual(res.json.mock.calls[0].arguments[0].error, 'Failed to get project info');
-      assert.strictEqual(res.json.mock.calls[0].arguments[0].message, 'Permission denied');
+      // Should return 404 for all fs.stat errors
+      assert.strictEqual(res.status.mock.calls[0].arguments[0], 404);
+      assert.strictEqual(res.json.mock.calls[0].arguments[0].error, 'Project not found');
+      assert.strictEqual(res.json.mock.calls[0].arguments[0].message, `Project 'test-project' does not exist`);
 
       mockStat.mock.restore();
     });

@@ -55,14 +55,14 @@ export class ProcessMonitor {
         // Use ps command to get process info
         const { stdout } = await execAsync(`ps -p ${pid} -o pid,rss,vsz,%cpu,%mem,etime,command`);
         const lines = stdout.trim().split('\n');
-        
+
         if (lines.length < 2) {
           return null; // Process not found
         }
 
-        const header = lines[0].trim().split(/\s+/);
+        // Skip header line
         const data = lines[1].trim().split(/\s+/);
-        
+
         const processInfo = {
           pid: parseInt(data[0]),
           rss: parseInt(data[1]) * 1024, // RSS in bytes (ps gives KB)
@@ -83,15 +83,18 @@ export class ProcessMonitor {
         const { stdout } = await execAsync(
           `wmic process where ProcessId=${pid} get ProcessId,WorkingSetSize,VirtualSize,PercentProcessorTime /format:csv`
         );
-        
+
         // Parse Windows output
-        const lines = stdout.trim().split('\n').filter(line => line.trim());
+        const lines = stdout
+          .trim()
+          .split('\n')
+          .filter((line) => line.trim());
         if (lines.length < 2) {
           return null;
         }
 
         const data = lines[lines.length - 1].split(',');
-        
+
         return {
           pid: parseInt(pid),
           rss: parseInt(data[4]) || 0, // WorkingSetSize
@@ -122,7 +125,7 @@ export class ProcessMonitor {
 
     const metrics = this.metrics.get(pid);
     metrics.history.push(info);
-    
+
     // Keep only last 100 data points
     if (metrics.history.length > 100) {
       metrics.history.shift();
@@ -198,7 +201,7 @@ export class ProcessMonitor {
   // Clean up old metrics
   cleanup(activePids) {
     const pidsToKeep = new Set(activePids);
-    
+
     for (const [pid, _] of this.metrics) {
       if (!pidsToKeep.has(pid)) {
         this.metrics.delete(pid);

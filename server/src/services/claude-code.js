@@ -1707,7 +1707,7 @@ export class ClaudeCodeService extends EventEmitter {
         conversationResult: {
           type: 'final_result',
           success: !response.is_error,
-          // result field removed to prevent duplicate display
+          // result field intentionally omitted to prevent duplicate display
           sessionId,
           duration: response.duration_ms,
           cost: response.total_cost_usd,

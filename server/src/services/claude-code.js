@@ -886,24 +886,59 @@ export class ClaudeCodeService extends EventEmitter {
       // Clear the status updates
       clearInterval(statusUpdateInterval);
 
-      // Send completion notification first
-      this.emit('assistantMessage', {
-        sessionId,
-        data: {
-          type: 'assistant_response',
-          content: [
-            {
-              type: 'text',
-              text: `✅ **Complex Request Completed!**\n\nYour request: "${originalPrompt.substring(0, 80)}${originalPrompt.length > 80 ? '...' : ''}"\n\n📋 **Results are ready below:**`,
-            },
-          ],
-          timestamp: new Date().toISOString(),
-        },
-        isComplete: false,
+      // Log the result structure for debugging
+      console.log(`📊 Long-running result structure:`, {
+        type: result?.type,
+        hasResult: !!result?.result,
+        resultLength: result?.result?.length,
+        isError: result?.is_error,
       });
 
-      // Process and emit the actual results
-      this.emitClaudeResponse(sessionId, result, true);
+      // For long-running processes, just send the actual results directly
+      if (result && result.type === 'result' && result.result) {
+        // Create a fresh buffer for the long-running completion
+        if (!this.sessionMessageBuffers.has(sessionId)) {
+          this.sessionMessageBuffers.set(sessionId, {
+            assistantMessages: [],
+            systemInit: null,
+            toolUseInProgress: false,
+            permissionRequests: [],
+            deliverables: [],
+            permissionRequestSent: false,
+          });
+        }
+
+        // Create an assistant message with the actual result content
+        const _assistantMessage = {
+          type: 'assistant',
+          message: {
+            content: [
+              {
+                type: 'text',
+                text: result.result,
+              },
+            ],
+          },
+        };
+
+        // Process and send the assistant message immediately
+        this.emit('assistantMessage', {
+          sessionId,
+          data: {
+            type: 'assistant_response',
+            content: [
+              {
+                type: 'text',
+                text: result.result,
+              },
+            ],
+            timestamp: new Date().toISOString(),
+          },
+          isComplete: true,
+        });
+      } else {
+        console.error(`❌ Unexpected result type from long-running process:`, result?.type);
+      }
 
       console.log(`✅ Long-running process completed for session ${sessionId}`);
     } catch (error) {
@@ -1578,7 +1613,7 @@ export class ClaudeCodeService extends EventEmitter {
     return objects;
   }
 
-  emitClaudeResponse(sessionId, response, _isComplete = false) {
+  emitClaudeResponse(sessionId, response, _isComplete = false, options = {}) {
     const buffer = this.sessionMessageBuffers.get(sessionId);
     if (!buffer) {
       console.warn(`No message buffer found for session ${sessionId}`);
@@ -1601,7 +1636,7 @@ export class ClaudeCodeService extends EventEmitter {
         break;
 
       case 'result':
-        this.handleFinalResult(sessionId, response, buffer);
+        this.handleFinalResult(sessionId, response, buffer, options);
         break;
 
       default:
@@ -1690,10 +1725,18 @@ export class ClaudeCodeService extends EventEmitter {
     console.log(`📦 Buffered assistant message (total: ${buffer.assistantMessages.length})`);
   }
 
-  handleFinalResult(sessionId, response, buffer) {
+  handleFinalResult(sessionId, response, buffer, options = {}) {
     console.log(`🏁 Processing final result for session ${sessionId}`);
     console.log(`   Buffered messages: ${buffer.assistantMessages.length}`);
     console.log(`   Deliverables: ${buffer.deliverables.length}`);
+    console.log(`   Options:`, options);
+
+    // For long-running completions, always send the results immediately
+    if (options.isLongRunningCompletion) {
+      console.log(`🚀 Long-running completion detected, sending results immediately`);
+      this.sendFinalAggregatedResponse(sessionId, response, buffer);
+      return;
+    }
 
     // If we already sent a permission request from the assistant messages,
     // don't check again in the final result to avoid duplicates

@@ -16,8 +16,18 @@ export function setupProjectRoutes(app, claudeService) {
     return config.configPath;
   };
 
+  // Define rate limiter for projects list route
+  const projectsListLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per windowMs
+    message: {
+      error: 'Too many requests',
+      message: 'Please try again later.',
+    },
+  });
+
   // List all projects (folders) in the configured directory
-  router.get('/projects', async (req, res) => {
+  router.get('/projects', projectsListLimiter, async (req, res) => {
     try {
       const projectsDir = getProjectsDir();
       console.log('Listing projects from directory:', path.basename(projectsDir));

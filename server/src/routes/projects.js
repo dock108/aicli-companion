@@ -1,4 +1,5 @@
 import express from 'express';
+import crypto from 'crypto';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { ServerConfig } from '../config/server-config.js';
@@ -159,7 +160,8 @@ export function setupProjectRoutes(app, claudeService) {
       }
 
       // Generate a session ID for this project session
-      const sessionId = `project_${name}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const randomBytes = crypto.randomBytes(12).toString('hex'); // 24-character hex string
+      const sessionId = `project_${name}_${Date.now()}_${randomBytes}`;
 
       console.log(`Starting Claude CLI session for project: ${name}`);
       console.log(`Project path: ${projectPath}`);

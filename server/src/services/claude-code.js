@@ -4,6 +4,7 @@ import { EventEmitter } from 'events';
 import { resolve } from 'path';
 import { access, constants } from 'fs/promises';
 import { existsSync } from 'fs';
+import { processMonitor } from '../utils/process-monitor.js';
 
 const execAsync = promisify(exec);
 
@@ -140,6 +141,122 @@ export class ClaudeCodeService extends EventEmitter {
     this.safeRootDirectory = null; // Will be set from server config
     this.maxSessions = 10;
     this.sessionTimeout = 30 * 60 * 1000; // 30 minutes
+    
+    // Permission configuration
+    this.permissionMode = 'default'; // 'default', 'acceptEdits', 'bypassPermissions', 'plan'
+    this.allowedTools = []; // e.g., ['Bash', 'Edit', 'Read', 'Write']
+    this.disallowedTools = []; // e.g., ['Bash(rm:*)', 'Bash(sudo:*)']
+    
+    // Process monitoring
+    this.processHealthCheckInterval = null;
+    this.startProcessHealthMonitoring();
+  }
+
+  // Configure permission settings
+  setPermissionMode(mode) {
+    const validModes = ['default', 'acceptEdits', 'bypassPermissions', 'plan'];
+    if (validModes.includes(mode)) {
+      this.permissionMode = mode;
+      console.log(`🔐 Permission mode set to: ${mode}`);
+    } else {
+      console.warn(`⚠️  Invalid permission mode: ${mode}`);
+    }
+  }
+
+  setAllowedTools(tools) {
+    if (Array.isArray(tools)) {
+      this.allowedTools = tools;
+      console.log(`✅ Allowed tools set to: ${tools.join(', ')}`);
+    }
+  }
+
+  setDisallowedTools(tools) {
+    if (Array.isArray(tools)) {
+      this.disallowedTools = tools;
+      console.log(`🚫 Disallowed tools set to: ${tools.join(', ')}`);
+    }
+  }
+
+  setSafeRootDirectory(dir) {
+    this.safeRootDirectory = dir;
+  }
+
+  // Start process health monitoring
+  startProcessHealthMonitoring() {
+    // Check process health every 30 seconds
+    this.processHealthCheckInterval = setInterval(() => {
+      this.checkAllProcessHealth();
+    }, 30000);
+  }
+
+  // Stop process health monitoring
+  stopProcessHealthMonitoring() {
+    if (this.processHealthCheckInterval) {
+      clearInterval(this.processHealthCheckInterval);
+      this.processHealthCheckInterval = null;
+    }
+  }
+
+  // Check health of all active Claude processes
+  async checkAllProcessHealth() {
+    const activePids = [];
+    
+    for (const [sessionId, session] of this.activeSessions) {
+      if (session.process && session.process.pid) {
+        activePids.push(session.process.pid);
+        
+        try {
+          const processInfo = await processMonitor.monitorProcess(session.process.pid);
+          
+          if (processInfo) {
+            const health = processMonitor.checkHealth(processInfo);
+            
+            // Emit health status
+            this.emit('processHealth', {
+              sessionId,
+              pid: session.process.pid,
+              health: health.healthy ? 'healthy' : 'unhealthy',
+              metrics: processInfo,
+              warnings: health.warnings,
+              critical: health.critical,
+              timestamp: new Date().toISOString(),
+            });
+            
+            // Log warnings or critical issues
+            if (health.critical.length > 0) {
+              console.error(`🚨 Critical health issues for session ${sessionId}:`, health.critical);
+            } else if (health.warnings.length > 0) {
+              console.warn(`⚠️  Health warnings for session ${sessionId}:`, health.warnings);
+            }
+          } else {
+            // Process no longer exists
+            console.warn(`⚠️  Process ${session.process.pid} for session ${sessionId} no longer exists`);
+            this.cleanupDeadSession(sessionId);
+          }
+        } catch (error) {
+          console.error(`Failed to monitor process ${session.process.pid}:`, error);
+        }
+      }
+    }
+    
+    // Clean up old metrics
+    processMonitor.cleanup(activePids);
+  }
+
+  // Cleanup dead session
+  cleanupDeadSession(sessionId) {
+    const session = this.activeSessions.get(sessionId);
+    if (session) {
+      session.isActive = false;
+      this.activeSessions.delete(sessionId);
+      this.sessionMessageBuffers.delete(sessionId);
+      
+      this.emit('sessionCleaned', {
+        sessionId,
+        reason: 'process_died',
+        timestamp: new Date().toISOString(),
+      });
+    }
   }
 
   findClaudeCommand() {
@@ -546,6 +663,21 @@ export class ClaudeCodeService extends EventEmitter {
       args.push('--continue');
     }
 
+    // Add permission mode if configured
+    if (this.permissionMode && this.permissionMode !== 'default') {
+      args.push('--permission-mode', this.permissionMode);
+    }
+
+    // Add allowed tools if configured
+    if (this.allowedTools.length > 0) {
+      args.push('--allowedTools', this.allowedTools.join(','));
+    }
+
+    // Add disallowed tools if configured
+    if (this.disallowedTools.length > 0) {
+      args.push('--disallowedTools', this.disallowedTools.join(','));
+    }
+
     // Validate arguments
     InputValidator.validateClaudeArgs(args);
 
@@ -730,6 +862,17 @@ export class ClaudeCodeService extends EventEmitter {
 
       // Close stdin immediately since we're not sending any input (prompt is in args)
       claudeProcess.stdin.end();
+      
+      // Start monitoring this process
+      if (claudeProcess.pid) {
+        processMonitor.monitorProcess(claudeProcess.pid).then(info => {
+          if (info) {
+            console.log(`📊 Initial process metrics: Memory: ${(info.rss / 1024 / 1024).toFixed(2)}MB, CPU: ${info.cpu}%`);
+          }
+        }).catch(err => {
+          console.warn(`⚠️  Failed to get initial process metrics: ${err.message}`);
+        });
+      }
 
       // Emit process start event
       this.emit('processStart', {
@@ -1355,6 +1498,21 @@ export class ClaudeCodeService extends EventEmitter {
     if (hasPermissionRequest) {
       // Send permission requests immediately
       console.log(`🔐 Sending permission request immediately for session ${sessionId}`);
+      
+      // Extract the permission prompt text
+      const permissionPrompt = this.extractPermissionPrompt(
+        response.message.content.map(c => c.text || '').join(' ')
+      );
+      
+      // Emit the permissionRequired event that WebSocket expects
+      this.emit('permissionRequired', {
+        sessionId,
+        prompt: permissionPrompt,
+        options: ['y', 'n'],
+        default: 'n'
+      });
+      
+      // Also emit as assistantMessage for UI display
       this.emit('assistantMessage', {
         sessionId,
         data: {
@@ -1412,6 +1570,14 @@ export class ClaudeCodeService extends EventEmitter {
 
       // Extract the permission request and send it as a structured prompt
       const permissionPrompt = this.extractPermissionPrompt(response.result);
+
+      // Emit the permissionRequired event that WebSocket expects
+      this.emit('permissionRequired', {
+        sessionId,
+        prompt: permissionPrompt,
+        options: ['y', 'n'],
+        default: 'n'
+      });
 
       // Send permission request immediately
       this.emit('assistantMessage', {
@@ -1800,16 +1966,53 @@ export class ClaudeCodeService extends EventEmitter {
     return sessions;
   }
 
+  // Cleanup method for graceful shutdown
+  shutdown() {
+    console.log('🔄 Shutting down Claude Code Service...');
+    
+    // Stop health monitoring
+    this.stopProcessHealthMonitoring();
+    
+    // Close all active sessions
+    for (const [sessionId, _] of this.activeSessions) {
+      this.closeSession(sessionId);
+    }
+    
+    // Clear all buffers
+    this.sessionMessageBuffers.clear();
+    
+    console.log('✅ Claude Code Service shut down complete');
+  }
+
   async healthCheck() {
     try {
       const isAvailable = await this.checkAvailability();
 
-      // Skip automatic testing in health check to avoid noise
+      // Get system resources
+      const systemResources = await processMonitor.getSystemResources();
+      
+      // Get process metrics for active sessions
+      const sessionMetrics = [];
+      for (const [sessionId, session] of this.activeSessions) {
+        if (session.process && session.process.pid) {
+          const metrics = processMonitor.getMetricsSummary(session.process.pid);
+          if (metrics) {
+            sessionMetrics.push({
+              sessionId,
+              ...metrics,
+            });
+          }
+        }
+      }
 
       return {
         status: isAvailable ? 'healthy' : 'degraded',
         claudeCodeAvailable: isAvailable,
         activeSessions: this.activeSessions.size,
+        resources: {
+          system: systemResources,
+          sessions: sessionMetrics,
+        },
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
@@ -1830,8 +2033,63 @@ export class ClaudeCodeService extends EventEmitter {
     }
 
     try {
-      session.process.stdin.write(`${response}\n`);
-      return { success: true };
+      // In non-interactive mode, we need to send the permission response as a new command
+      console.log(`📝 Handling permission response for session ${sessionId}: "${response}"`);
+      
+      // Check if the session has a pending permission request
+      const buffer = this.sessionMessageBuffers.get(sessionId);
+      if (buffer && buffer.pendingFinalResponse) {
+        console.log(`✅ Found pending response, processing permission approval`);
+        
+        // If user approved, send the pending final response
+        if (this.containsApprovalResponse(response)) {
+          console.log(`✅ User approved, sending pending final response`);
+          
+          // Send the aggregated response
+          this.emit('assistantMessage', {
+            sessionId,
+            data: {
+              type: 'assistant_response',
+              content: buffer.pendingFinalResponse.aggregatedContent,
+              timestamp: new Date().toISOString(),
+            },
+            isComplete: false,
+          });
+          
+          // Send the final result
+          this.emit('conversationResult', {
+            sessionId,
+            data: buffer.pendingFinalResponse.conversationResult,
+          });
+          
+          // Clear the pending response
+          buffer.pendingFinalResponse = null;
+        } else {
+          console.log(`❌ User denied permission, clearing pending response`);
+          
+          // Send denial message
+          this.emit('assistantMessage', {
+            sessionId,
+            data: {
+              type: 'assistant_response',
+              content: [{
+                type: 'text',
+                text: 'Permission denied. The requested action was not performed.'
+              }],
+              timestamp: new Date().toISOString(),
+            },
+            isComplete: true,
+          });
+          
+          // Clear the pending response
+          buffer.pendingFinalResponse = null;
+        }
+        
+        return { success: true, handled: true };
+      }
+      
+      // For active conversations, send the response as a new message
+      return this.sendToExistingSession(sessionId, response);
     } catch (error) {
       throw new Error(`Failed to respond to permission prompt: ${error.message}`);
     }

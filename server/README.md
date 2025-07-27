@@ -46,7 +46,30 @@ ALLOWED_ORIGINS=http://localhost:3000,https://your-domain.com
 
 # Features
 ENABLE_BONJOUR=true
+
+# Claude CLI Permission Configuration
+CLAUDE_PERMISSION_MODE=default  # Options: default, acceptEdits, bypassPermissions, plan
+CLAUDE_ALLOWED_TOOLS=Bash,Edit,Read,Write  # Comma-separated list of allowed tools
+CLAUDE_DISALLOWED_TOOLS=Bash(rm:*),Bash(sudo:*)  # Comma-separated list of disallowed tools
 ```
+
+### Permission Configuration
+
+The server supports configuring Claude CLI permission settings to reduce permission prompts:
+
+- **CLAUDE_PERMISSION_MODE**: Controls how Claude handles permissions
+  - `default`: Normal permission prompts
+  - `acceptEdits`: Automatically accept file edits
+  - `bypassPermissions`: Skip all permission checks (use with caution)
+  - `plan`: Enter planning mode before making changes
+
+- **CLAUDE_ALLOWED_TOOLS**: Pre-approve specific tools
+  - Example: `Bash,Edit,Read,Write`
+  - Reduces permission prompts for common operations
+
+- **CLAUDE_DISALLOWED_TOOLS**: Block specific tool patterns
+  - Example: `Bash(rm:*),Bash(sudo:*)` blocks dangerous commands
+  - Adds safety restrictions
 
 ### Command Line Options
 

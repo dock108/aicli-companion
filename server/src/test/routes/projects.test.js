@@ -215,7 +215,10 @@ describe('Project Routes', () => {
       // Should return 404 for all fs.stat errors
       assert.strictEqual(res.status.mock.calls[0].arguments[0], 404);
       assert.strictEqual(res.json.mock.calls[0].arguments[0].error, 'Project not found');
-      assert.strictEqual(res.json.mock.calls[0].arguments[0].message, `Project 'test-project' does not exist`);
+      assert.strictEqual(
+        res.json.mock.calls[0].arguments[0].message,
+        `Project 'test-project' does not exist`
+      );
 
       mockStat.mock.restore();
     });

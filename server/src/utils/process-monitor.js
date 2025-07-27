@@ -180,8 +180,10 @@ export class ProcessMonitor {
     if (!metrics) return null;
 
     const recent = metrics.history.slice(-10);
-    const avgMemory = recent.length > 0 ? recent.reduce((sum, m) => sum + m.rss, 0) / recent.length : 0;
-    const avgCpu = recent.length > 0 ? recent.reduce((sum, m) => sum + m.cpu, 0) / recent.length : 0;
+    const avgMemory =
+      recent.length > 0 ? recent.reduce((sum, m) => sum + m.rss, 0) / recent.length : 0;
+    const avgCpu =
+      recent.length > 0 ? recent.reduce((sum, m) => sum + m.cpu, 0) / recent.length : 0;
 
     return {
       pid,

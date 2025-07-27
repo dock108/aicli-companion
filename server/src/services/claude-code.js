@@ -639,6 +639,7 @@ export class ClaudeCodeService extends EventEmitter {
       permissionRequests: [],
       deliverables: [],
       pendingFinalResponse: null,
+      permissionRequestSent: false,
     });
 
     // Set up session timeout
@@ -1158,6 +1159,7 @@ export class ClaudeCodeService extends EventEmitter {
               toolUseInProgress: false,
               permissionRequests: [],
               deliverables: [],
+              permissionRequestSent: false,
             });
             console.log(`🔧 Created missing message buffer for session ${sessionId}`);
           }
@@ -1634,6 +1636,9 @@ export class ClaudeCodeService extends EventEmitter {
       // Send permission requests immediately
       console.log(`🔐 Sending permission request immediately for session ${sessionId}`);
 
+      // Mark that we've sent a permission request to avoid duplicates
+      buffer.permissionRequestSent = true;
+
       // Extract the permission prompt text
       const permissionPrompt = this.extractPermissionPrompt(
         response.message.content.map((c) => c.text || '').join(' ')
@@ -1658,6 +1663,8 @@ export class ClaudeCodeService extends EventEmitter {
         },
         isComplete: false,
       });
+
+      // Don't buffer permission requests since they're sent immediately
       return;
     }
 
@@ -1687,6 +1694,29 @@ export class ClaudeCodeService extends EventEmitter {
     console.log(`🏁 Processing final result for session ${sessionId}`);
     console.log(`   Buffered messages: ${buffer.assistantMessages.length}`);
     console.log(`   Deliverables: ${buffer.deliverables.length}`);
+
+    // If we already sent a permission request from the assistant messages,
+    // don't check again in the final result to avoid duplicates
+    if (buffer.permissionRequestSent) {
+      console.log(`⏭️  Permission request already sent, skipping final result permission check`);
+
+      // Store the pending response in buffer for later when permission is granted
+      buffer.pendingFinalResponse = {
+        aggregatedContent: this.aggregateBufferedContent(buffer),
+        finalResult: response.result,
+        conversationResult: {
+          type: 'final_result',
+          success: !response.is_error,
+          // result field intentionally omitted to prevent duplicate display
+          sessionId,
+          duration: response.duration_ms,
+          cost: response.total_cost_usd,
+          usage: response.usage,
+          timestamp: new Date().toISOString(),
+        },
+      };
+      return;
+    }
 
     // Check if the final result contains an embedded permission request
     const finalResultContent = response.result
@@ -1737,7 +1767,7 @@ export class ClaudeCodeService extends EventEmitter {
         conversationResult: {
           type: 'final_result',
           success: !response.is_error,
-          result: response.result,
+          // result field removed to prevent duplicate display
           sessionId,
           duration: response.duration_ms,
           cost: response.total_cost_usd,
@@ -1757,13 +1787,8 @@ export class ClaudeCodeService extends EventEmitter {
     // Aggregate all buffered content into a single response
     const aggregatedContent = this.aggregateBufferedContent(buffer);
 
-    // Add the final result text
-    if (response.result) {
-      aggregatedContent.push({
-        type: 'text',
-        text: response.result,
-      });
-    }
+    // Note: response.result is already included in the aggregated content from buffered messages
+    // so we don't need to add it again to avoid duplication
 
     // Send the complete aggregated response to iOS
     console.log(`📱 Sending aggregated response to iOS for session ${sessionId}`);
@@ -1781,12 +1806,13 @@ export class ClaudeCodeService extends EventEmitter {
     });
 
     // Send conversation result for completion tracking
+    // Note: Don't include the result text here as it's already sent in assistantMessage
     this.emit('conversationResult', {
       sessionId,
       data: {
         type: 'final_result',
         success: !response.is_error,
-        result: response.result,
+        // result field removed to prevent duplicate display in iOS
         sessionId,
         duration: response.duration_ms,
         cost: response.total_cost_usd,
@@ -2051,6 +2077,7 @@ export class ClaudeCodeService extends EventEmitter {
       buffer.toolUseInProgress = false;
       buffer.permissionRequests = [];
       buffer.deliverables = [];
+      buffer.permissionRequestSent = false;
       console.log(`🧹 Cleared message buffer for session ${sessionId}`);
     }
   }

@@ -6,9 +6,9 @@ struct MessageBubble: View {
     @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
-        HStack {
+        HStack(alignment: .bottom, spacing: 0) {
             if message.sender == .user {
-                Spacer(minLength: 60)
+                Spacer(minLength: 40)
             }
             
             VStack(alignment: message.sender == .user ? .trailing : .leading, spacing: 4) {
@@ -20,6 +20,7 @@ struct MessageBubble: View {
                         aiBubble
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: message.sender == .user ? .trailing : .leading)
                 
                 // Timestamp
                 Text(message.timestamp, style: .time)
@@ -27,9 +28,10 @@ struct MessageBubble: View {
                     .foregroundColor(Colors.textSecondary(for: colorScheme))
                     .padding(.horizontal, 4)
             }
+            .frame(maxWidth: 500) // Reasonable max width for readability
             
             if message.sender != .user {
-                Spacer(minLength: 60)
+                Spacer(minLength: 40)
             }
         }
     }
@@ -39,10 +41,12 @@ struct MessageBubble: View {
         Text(message.content)
             .font(Typography.font(.body))
             .foregroundColor(.white)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
             .background(
-                Capsule()
+                RoundedRectangle(cornerRadius: 20)
                     .fill(
                         LinearGradient(
                             colors: Colors.accentPrimary(for: colorScheme),
@@ -51,7 +55,6 @@ struct MessageBubble: View {
                         )
                     )
             )
-            .frame(maxWidth: UIScreen.main.bounds.width * 0.7, alignment: .trailing)
     }
     
     // MARK: - AI Bubble (Left card with terminal styling)
@@ -65,6 +68,8 @@ struct MessageBubble: View {
                 Text(message.content)
                     .font(Typography.font(.body))
                     .foregroundColor(Colors.textPrimary(for: colorScheme))
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(.horizontal, 16)
@@ -77,7 +82,6 @@ struct MessageBubble: View {
                         .stroke(Colors.strokeLight, lineWidth: 1)
                 )
         )
-        .frame(maxWidth: UIScreen.main.bounds.width * 0.7, alignment: .leading)
     }
     
     // MARK: - Code Block Detection
@@ -97,6 +101,8 @@ struct MessageBubble: View {
                     Text(text)
                         .font(Typography.font(.body))
                         .foregroundColor(Colors.textPrimary(for: colorScheme))
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
                     
                 case .codeBlock(let code, let language):
                     MessageCodeBlockView(code: code, language: language)

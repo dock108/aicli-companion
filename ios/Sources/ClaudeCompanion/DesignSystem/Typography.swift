@@ -3,7 +3,6 @@ import SwiftUI
 /// Dark-Slate Terminal typography system
 @available(iOS 14.0, macOS 11.0, *)
 public struct Typography {
-    
     // MARK: - Font Styles
     public enum FontStyle {
         // Navigation

@@ -13,7 +13,7 @@ struct ChatView: View {
     @State private var messageText = ""
     @State private var messages: [Message] = []
     @State private var isLoading = false
-    @State private var progressInfo: ProgressInfo? = nil
+    @State private var progressInfo: ProgressInfo?
     @State private var showingPermissionAlert = false
     @State private var permissionRequest: PermissionRequestData?
     @State private var keyboardHeight: CGFloat = 0
@@ -75,7 +75,7 @@ struct ChatView: View {
                         .padding(.horizontal, isIPad && horizontalSizeClass == .regular ? 40 : 16)
                         .padding(.vertical, 16)
                     }
-                    .onChange(of: messages.count) { oldValue, newValue in
+                    .onChange(of: messages.count) { _, _ in
                         if let lastMessage = messages.last {
                             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                                 proxy.scrollTo(lastMessage.id, anchor: .bottom)
@@ -116,19 +116,19 @@ struct ChatView: View {
                         // Send button
                         Button(action: {
                             sendMessage()
-                        }) {
+                        }, label: {
                             Image(systemName: "arrow.up.circle.fill")
                                 .font(.system(size: 32))
                                 .foregroundStyle(
                                     LinearGradient(
-                                        colors: messageText.isEmpty 
+                                        colors: messageText.isEmpty
                                             ? [Colors.textSecondary(for: colorScheme)]
                                             : Colors.accentPrimary(for: colorScheme),
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     )
                                 )
-                        }
+                        })
                         .disabled(messageText.isEmpty || isLoading)
                         .animation(.easeInOut(duration: 0.2), value: messageText.isEmpty)
                     }
@@ -188,9 +188,8 @@ struct ChatView: View {
         claudeService.startProjectSession(project: project, connection: connection) { result in
             DispatchQueue.main.async {
                 self.isLoading = false
-                    self.progressInfo = nil
-
-
+                self.progressInfo = nil
+                
                 switch result {
                 case .success(let session):
                     self.activeSession = session
@@ -240,14 +239,11 @@ struct ChatView: View {
     
     private func startConnectionStateMonitoring() {
         connectionStateTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { _ in
-            
             // Check if we're stuck in loading state while disconnected
             if self.isLoading && !self.webSocketService.isConnected {
                 DispatchQueue.main.async {
                     self.isLoading = false
                     self.progressInfo = nil
-
-
                     
                     let connectionLostMessage = Message(
                         content: "🔌 Connection lost. Attempting to reconnect...\n\nPlease wait while we try to restore the connection to the server.",
@@ -337,8 +333,7 @@ struct ChatView: View {
                     self.messageTimeout?.invalidate()
                     self.isLoading = false
                     self.progressInfo = nil
-
-
+                    
                     // Debug: Log message type
                     print("Received WebSocket message type: \(message.type)")
                     
@@ -398,8 +393,7 @@ struct ChatView: View {
                     self.messageTimeout?.invalidate()
                     self.isLoading = false
                     self.progressInfo = nil
-
-
+                    
                     // Add error message
                     let errorMessage = Message(
                         content: "Error: \(error.localizedDescription)",
@@ -416,7 +410,6 @@ struct ChatView: View {
         // Listen for all WebSocket messages, not just responses to our commands
         webSocketService.onMessage = { [self] message in
             DispatchQueue.main.async {
-                
                 print("WebSocket global listener - message type: \(message.type)")
                 
                 // Clear timeout for any incoming message that indicates activity
@@ -426,7 +419,7 @@ struct ChatView: View {
                 case .assistantMessage(let assistantResponse):
                     self.isLoading = false
                     self.progressInfo = nil
-
+                    
                     let textContent = assistantResponse.content
                         .compactMap { block in
                             block.type == "text" ? block.text : nil
@@ -445,7 +438,7 @@ struct ChatView: View {
                 case .streamData(let streamData):
                     self.isLoading = false
                     self.progressInfo = nil
-
+                    
                     if streamData.streamType == "text", let text = streamData.content.text {
                         let responseMessage = Message(
                             content: text,
@@ -459,7 +452,6 @@ struct ChatView: View {
                     self.isLoading = false
                     self.progressInfo = nil
                     let errorMessage = Message(
-
                         content: "Error: \(errorResponse.message)",
                         sender: .claude,
                         type: .text
@@ -469,7 +461,8 @@ struct ChatView: View {
                 case .progress(let progressResponse):
                     // Update progress info while keeping loading state
                     self.progressInfo = ProgressInfo(from: progressResponse)
-                                    default:
+                    
+                default:
                     print("Global listener - unhandled message type: \(message.type)")
                 }
             }
@@ -609,11 +602,11 @@ struct ProjectContextHeader: View {
             // Session info button
             Button(action: {
                 // TODO: Show session details
-            }) {
+            }, label: {
                 Image(systemName: "info.circle")
                     .font(.system(size: 16))
                     .foregroundColor(Colors.textSecondary(for: colorScheme))
-            }
+            })
         }
         .padding()
         .background(

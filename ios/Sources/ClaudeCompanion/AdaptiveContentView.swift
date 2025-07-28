@@ -182,7 +182,7 @@ public struct AdaptiveContentView: View {
                 }
             }
             #if os(iOS)
-            .navigationBarHidden(true)
+            .toolbar(.hidden, for: .navigationBar)
             #endif
         }
     }

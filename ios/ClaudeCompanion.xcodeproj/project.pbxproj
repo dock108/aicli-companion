@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 54;
+	objectVersion = 60;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -14,7 +14,7 @@
 
 /* Begin PBXFileReference section */
 		62CDFA0CAB728FEEC03E7A03 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		66BAE168410B6951B8045A03 /* ClaudeCompanionApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = ClaudeCompanionApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		66BAE168410B6951B8045A03 /* Claude Companion.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Claude Companion.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		907290AB1FF6522CFF9193CD /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		9B9275CF280821DE8EF21FDA /* ios */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ios; path = .; sourceTree = SOURCE_ROOT; };
 		EF634300745096B81EF609E3 /* AppMain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppMain.swift; sourceTree = "<group>"; };
@@ -53,7 +53,7 @@
 		C8ACAB04B2A18F5A270D5BDE /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				66BAE168410B6951B8045A03 /* ClaudeCompanionApp.app */,
+				66BAE168410B6951B8045A03 /* Claude Companion.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -87,7 +87,7 @@
 				8776735A8E24240B6DA6347A /* ClaudeCompanion */,
 			);
 			productName = ClaudeCompanionApp;
-			productReference = 66BAE168410B6951B8045A03 /* ClaudeCompanionApp.app */;
+			productReference = 66BAE168410B6951B8045A03 /* Claude Companion.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -100,7 +100,6 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					3FD6860F8D2E9FED827EB39D = {
-						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -274,7 +273,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = E3G5D247ZN;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -297,7 +296,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = E3G5D247ZN;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (

@@ -279,7 +279,7 @@ struct ToolActivitySheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             List {
                 if !activityManager.activeTools.isEmpty {
                     Section("Active Tools") {

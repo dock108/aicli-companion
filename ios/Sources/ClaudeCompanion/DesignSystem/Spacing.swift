@@ -79,8 +79,8 @@ public struct Shadows {
     public struct Shadow {
         let color: Color
         let radius: CGFloat
-        let x: CGFloat
-        let y: CGFloat
+        let xOffset: CGFloat
+        let yOffset: CGFloat
     }
 }
 

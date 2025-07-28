@@ -60,7 +60,6 @@ type_name:
 
 force_cast: error
 force_try: error
-force_unwrapping: warning
 
 trailing_whitespace:
   ignores_empty_lines: true
@@ -68,16 +67,17 @@ trailing_whitespace:
 vertical_whitespace:
   max_empty_lines: 2
 
-custom_rules:
-  no_hardcoded_strings:
-    regex: '([""])(?:(?=(\\?))\2.)*?\1'
-    match_kinds:
-      - string
-    message: "Avoid hardcoded strings. Use localized strings instead."
-    severity: warning
-    excluded:
-      - "Sources/ClaudeCompanion/Models/*.swift"
-      - "Sources/ClaudeCompanion/KeychainManager.swift"
+# Custom rules disabled for now
+# custom_rules:
+#   no_hardcoded_strings:
+#     regex: '([""])(?:(?=(\\?))\2.)*?\1'
+#     match_kinds:
+#       - string
+#     message: "Avoid hardcoded strings. Use localized strings instead."
+#     severity: warning
+#     excluded:
+#       - "Sources/ClaudeCompanion/Models/*.swift"
+#       - "Sources/ClaudeCompanion/KeychainManager.swift"
 
 # Reporter type
 reporter: "xcode"

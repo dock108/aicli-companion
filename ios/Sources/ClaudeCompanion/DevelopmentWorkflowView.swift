@@ -29,7 +29,7 @@ struct DevelopmentWorkflowView: View {
     }
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack {
                 // Tab Selection
                 Picker("Workflow Tab", selection: $selectedTab) {

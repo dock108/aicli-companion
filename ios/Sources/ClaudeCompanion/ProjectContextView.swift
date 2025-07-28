@@ -376,7 +376,7 @@ struct ProjectContextSheet: View {
     let onSuggestionTap: (ProjectSuggestion) -> Void
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
                     // Project header

@@ -4,11 +4,25 @@ import SwiftUI
 struct MessageBubble: View {
     let message: Message
     @Environment(\.colorScheme) var colorScheme
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    
+    // Adaptive max width based on device
+    private var maxBubbleWidth: CGFloat {
+        #if os(iOS)
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            return horizontalSizeClass == .regular ? 700 : 500
+        } else {
+            return 500
+        }
+        #else
+        return 600
+        #endif
+    }
     
     var body: some View {
         HStack(alignment: .bottom, spacing: 0) {
             if message.sender == .user {
-                Spacer(minLength: 40)
+                Spacer(minLength: horizontalSizeClass == .regular ? 60 : 40)
             }
             
             VStack(alignment: message.sender == .user ? .trailing : .leading, spacing: 4) {
@@ -28,10 +42,10 @@ struct MessageBubble: View {
                     .foregroundColor(Colors.textSecondary(for: colorScheme))
                     .padding(.horizontal, 4)
             }
-            .frame(maxWidth: 500) // Reasonable max width for readability
+            .frame(maxWidth: maxBubbleWidth)
             
             if message.sender != .user {
-                Spacer(minLength: 40)
+                Spacer(minLength: horizontalSizeClass == .regular ? 60 : 40)
             }
         }
     }

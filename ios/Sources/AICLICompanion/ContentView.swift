@@ -3,7 +3,7 @@ import SwiftUI
 @available(iOS 16.0, macOS 13.0, *)
 public struct ContentView: View {
     public init() {}
-    @EnvironmentObject var claudeService: ClaudeCodeService
+    @EnvironmentObject var aicliService: AICLIService
     @EnvironmentObject var settings: SettingsManager
     @State private var isConnected = false
     @State private var selectedProject: Project?
@@ -112,7 +112,7 @@ public struct ContentView: View {
 @available(iOS 17.0, macOS 14.0, *)
 #Preview("Light Mode") {
     ContentView()
-        .environmentObject(ClaudeCodeService())
+        .environmentObject(AICLIService())
         .environmentObject(SettingsManager())
         .preferredColorScheme(.light)
 }
@@ -120,7 +120,7 @@ public struct ContentView: View {
 @available(iOS 17.0, macOS 14.0, *)
 #Preview("Dark Mode") {
     ContentView()
-        .environmentObject(ClaudeCodeService())
+        .environmentObject(AICLIService())
         .environmentObject(SettingsManager())
         .preferredColorScheme(.dark)
 }

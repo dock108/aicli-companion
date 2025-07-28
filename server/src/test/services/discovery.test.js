@@ -75,8 +75,8 @@ describe('Discovery Service', () => {
       assert.strictEqual(mockPublish.mock.calls.length, 1);
       const publishArgs = mockPublish.mock.calls[0].arguments[0];
 
-      assert.strictEqual(publishArgs.name, 'Claude Companion Server');
-      assert.strictEqual(publishArgs.type, 'claudecode');
+      assert.strictEqual(publishArgs.name, 'AICLI Companion Server');
+      assert.strictEqual(publishArgs.type, 'aiclicode');
       assert.strictEqual(publishArgs.port, port);
       assert.strictEqual(publishArgs.txt.version, '1.0.0');
       assert.strictEqual(publishArgs.txt.features, 'chat,streaming,permissions');

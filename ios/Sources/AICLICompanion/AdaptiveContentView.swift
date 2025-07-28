@@ -3,7 +3,7 @@ import SwiftUI
 @available(iOS 17.0, macOS 14.0, *)
 public struct AdaptiveContentView: View {
     public init() {}
-    @EnvironmentObject var claudeService: ClaudeCodeService
+    @EnvironmentObject var aicliService: AICLIService
     @EnvironmentObject var settings: SettingsManager
     @State private var isConnected = false
     @State private var selectedProject: Project?
@@ -115,7 +115,7 @@ public struct AdaptiveContentView: View {
                             .font(Typography.font(.heading2))
                             .foregroundColor(Colors.textPrimary(for: colorScheme))
                         
-                        Text("Choose a project from the sidebar to start chatting with Claude")
+                        Text("Choose a project from the sidebar to start chatting with AICLI")
                             .font(Typography.font(.body))
                             .foregroundColor(Colors.textSecondary(for: colorScheme))
                             .multilineTextAlignment(.center)
@@ -223,7 +223,7 @@ public struct AdaptiveContentView: View {
 @available(iOS 17.0, macOS 14.0, *)
 #Preview("iPad Light") {
     AdaptiveContentView()
-        .environmentObject(ClaudeCodeService())
+        .environmentObject(AICLIService())
         .environmentObject(SettingsManager())
         .preferredColorScheme(.light)
         .previewDevice(PreviewDevice(rawValue: "iPad Pro (12.9-inch) (6th generation)"))
@@ -232,7 +232,7 @@ public struct AdaptiveContentView: View {
 @available(iOS 17.0, macOS 14.0, *)
 #Preview("iPad Dark") {
     AdaptiveContentView()
-        .environmentObject(ClaudeCodeService())
+        .environmentObject(AICLIService())
         .environmentObject(SettingsManager())
         .preferredColorScheme(.dark)
         .previewDevice(PreviewDevice(rawValue: "iPad Pro (12.9-inch) (6th generation)"))
@@ -241,7 +241,7 @@ public struct AdaptiveContentView: View {
 @available(iOS 17.0, macOS 14.0, *)
 #Preview("iPhone Light") {
     AdaptiveContentView()
-        .environmentObject(ClaudeCodeService())
+        .environmentObject(AICLIService())
         .environmentObject(SettingsManager())
         .preferredColorScheme(.light)
         .previewDevice(PreviewDevice(rawValue: "iPhone 15 Pro"))
@@ -250,7 +250,7 @@ public struct AdaptiveContentView: View {
 @available(iOS 17.0, macOS 14.0, *)
 #Preview("iPhone Dark") {
     AdaptiveContentView()
-        .environmentObject(ClaudeCodeService())
+        .environmentObject(AICLIService())
         .environmentObject(SettingsManager())
         .preferredColorScheme(.dark)
         .previewDevice(PreviewDevice(rawValue: "iPhone 15 Pro"))

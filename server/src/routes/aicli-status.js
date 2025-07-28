@@ -4,36 +4,34 @@ import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 
-export function setupClaudeStatusRoutes(app, claudeService) {
+export function setupAICLIStatusRoutes(app, aicliService) {
   const router = express.Router();
 
-  // Get Claude CLI status and version
-  router.get('/claude/status', async (req, res) => {
+  // Get AICLI CLI status and version
+  router.get('/aicli/status', async (req, res) => {
     try {
-      // Check if Claude CLI is installed using the same path as ClaudeCodeService
+      // Check if AICLI CLI is installed using the same path as AICLICodeService
       let version = null;
       let isInstalled = false;
-      const path = claudeService.claudeCommand;
+      const path = aicliService.aicliCommand;
 
       try {
-        // Use the path from ClaudeCodeService
-        const { stdout: versionOutput } = await execAsync(
-          `${claudeService.claudeCommand} --version`
-        );
+        // Use the path from AICLICodeService
+        const { stdout: versionOutput } = await execAsync(`${aicliService.aicliCommand} --version`);
         version = versionOutput.trim();
         isInstalled = true;
       } catch (error) {
-        console.log('Claude CLI not found at:', claudeService.claudeCommand);
+        console.log('AICLI CLI not found at:', aicliService.aicliCommand);
         console.error('Error:', error.message);
 
         // Try to check availability through the service
-        isInstalled = await claudeService.checkAvailability();
+        isInstalled = await aicliService.checkAvailability();
       }
 
       // Get active sessions info
-      const activeSessions = claudeService.getActiveSessions();
+      const activeSessions = aicliService.getActiveSessions();
       const sessionDetails = activeSessions.map((sessionId) => {
-        const session = claudeService.activeSessions.get(sessionId);
+        const session = aicliService.activeSessions.get(sessionId);
         return {
           sessionId,
           workingDirectory: session?.workingDirectory || 'unknown',
@@ -56,15 +54,15 @@ export function setupClaudeStatusRoutes(app, claudeService) {
       }
 
       res.json({
-        claude: {
+        aicli: {
           installed: isInstalled,
           version,
           path,
-          available: isInstalled && claudeService.isAvailable(),
+          available: isInstalled && aicliService.isAvailable(),
         },
         sessions: {
           active: activeSessions.length,
-          max: claudeService.maxSessions,
+          max: aicliService.maxSessions,
           details: sessionDetails,
         },
         system: systemInfo,
@@ -75,19 +73,19 @@ export function setupClaudeStatusRoutes(app, claudeService) {
         },
       });
     } catch (error) {
-      console.error('Error getting Claude status:', error);
+      console.error('Error getting AICLI status:', error);
       res.status(500).json({
-        error: 'Failed to get Claude status',
+        error: 'Failed to get AICLI status',
         message: error.message,
       });
     }
   });
 
   // Get detailed session info
-  router.get('/claude/sessions/:sessionId', async (req, res) => {
+  router.get('/aicli/sessions/:sessionId', async (req, res) => {
     try {
       const { sessionId } = req.params;
-      const session = claudeService.activeSessions.get(sessionId);
+      const session = aicliService.activeSessions.get(sessionId);
 
       if (!session) {
         return res.status(404).json({
@@ -118,14 +116,14 @@ export function setupClaudeStatusRoutes(app, claudeService) {
     }
   });
 
-  // Test Claude CLI execution
-  router.post('/claude/test', async (req, res) => {
+  // Test AICLI CLI execution
+  router.post('/aicli/test', async (req, res) => {
     try {
-      const { prompt = 'Hello, Claude!' } = req.body;
+      const { prompt = 'Hello, AICLI!' } = req.body;
 
-      console.log('Testing Claude CLI with prompt:', prompt);
+      console.log('Testing AICLI CLI with prompt:', prompt);
 
-      const result = await claudeService.sendOneTimePrompt(prompt, {
+      const result = await aicliService.sendOneTimePrompt(prompt, {
         format: 'json',
         workingDirectory: process.cwd(),
       });
@@ -137,18 +135,18 @@ export function setupClaudeStatusRoutes(app, claudeService) {
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
-      console.error('Claude CLI test failed:', error);
+      console.error('AICLI CLI test failed:', error);
       res.status(500).json({
         success: false,
-        error: 'Claude CLI test failed',
+        error: 'AICLI CLI test failed',
         message: error.message,
         details: error.stack,
       });
     }
   });
 
-  // Debug Claude CLI with different command types
-  router.post('/claude/debug/:testType', async (req, res) => {
+  // Debug AICLI CLI with different command types
+  router.post('/aicli/debug/:testType', async (req, res) => {
     try {
       const { testType } = req.params;
       const validTypes = ['version', 'help', 'simple', 'json'];
@@ -161,9 +159,9 @@ export function setupClaudeStatusRoutes(app, claudeService) {
         });
       }
 
-      console.log(`🧪 Running Claude CLI debug test: ${testType}`);
+      console.log(`🧪 Running AICLI CLI debug test: ${testType}`);
 
-      const result = await claudeService.testClaudeCommand(testType);
+      const result = await aicliService.testAICLICommand(testType);
 
       res.json({
         success: true,
@@ -172,24 +170,24 @@ export function setupClaudeStatusRoutes(app, claudeService) {
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
-      console.error(`Claude CLI debug test (${req.params.testType}) failed:`, error);
+      console.error(`AICLI CLI debug test (${req.params.testType}) failed:`, error);
       res.status(500).json({
         success: false,
         testType: req.params.testType,
-        error: 'Claude CLI debug test failed',
+        error: 'AICLI CLI debug test failed',
         message: error.message,
         details: error.stack,
       });
     }
   });
 
-  // Get Claude CLI logs for a session
-  router.get('/claude/sessions/:sessionId/logs', async (req, res) => {
+  // Get AICLI CLI logs for a session
+  router.get('/aicli/sessions/:sessionId/logs', async (req, res) => {
     try {
       const { sessionId } = req.params;
       const { lines: _lines = 100 } = req.query;
 
-      // This would need to be implemented in the ClaudeCodeService
+      // This would need to be implemented in the AICLICodeService
       // to capture and store logs per session
       res.json({
         sessionId,

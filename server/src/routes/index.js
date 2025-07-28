@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import { ServerConfig } from '../config/server-config.js';
 
-export function setupRoutes(app, claudeService) {
+export function setupRoutes(app, aicliService) {
   const router = express.Router();
   const config = new ServerConfig();
 
@@ -29,10 +29,10 @@ export function setupRoutes(app, claudeService) {
     return normalizedPath;
   };
 
-  // Health check for Claude Code service
+  // Health check for AICLI Code service
   router.get('/health', async (req, res) => {
     try {
-      const health = await claudeService.healthCheck();
+      const health = await aicliService.healthCheck();
       res.json(health);
     } catch (error) {
       res.status(500).json({
@@ -42,7 +42,7 @@ export function setupRoutes(app, claudeService) {
     }
   });
 
-  // Send a prompt to Claude Code
+  // Send a prompt to AICLI Code
   router.post('/ask', async (req, res) => {
     try {
       const { prompt, sessionId, format = 'json', workingDirectory } = req.body;
@@ -63,7 +63,7 @@ export function setupRoutes(app, claudeService) {
         });
       }
 
-      const response = await claudeService.sendPrompt(prompt, {
+      const response = await aicliService.sendPrompt(prompt, {
         sessionId,
         format,
         workingDirectory: validatedWorkingDir,
@@ -101,7 +101,7 @@ export function setupRoutes(app, claudeService) {
         });
       }
 
-      const response = await claudeService.sendStreamingPrompt(prompt, {
+      const response = await aicliService.sendStreamingPrompt(prompt, {
         sessionId,
         workingDirectory: validatedWorkingDir,
       });
@@ -127,7 +127,7 @@ export function setupRoutes(app, claudeService) {
         });
       }
 
-      const response = await claudeService.sendToExistingSession(sessionId, prompt);
+      const response = await aicliService.sendToExistingSession(sessionId, prompt);
       res.json(response);
     } catch (error) {
       console.error('Error sending to streaming session:', error);
@@ -141,7 +141,7 @@ export function setupRoutes(app, claudeService) {
   router.delete('/stream/:sessionId', async (req, res) => {
     try {
       const { sessionId } = req.params;
-      const response = await claudeService.closeSession(sessionId);
+      const response = await aicliService.closeSession(sessionId);
       res.json(response);
     } catch (error) {
       console.error('Error closing session:', error);
@@ -154,7 +154,7 @@ export function setupRoutes(app, claudeService) {
   // Get active sessions
   router.get('/sessions', (req, res) => {
     try {
-      const sessions = claudeService.getActiveSessions();
+      const sessions = aicliService.getActiveSessions();
       res.json({ sessions });
     } catch (error) {
       res.status(500).json({
@@ -175,7 +175,7 @@ export function setupRoutes(app, claudeService) {
         });
       }
 
-      const result = await claudeService.handlePermissionPrompt(sessionId, userResponse);
+      const result = await aicliService.handlePermissionPrompt(sessionId, userResponse);
       res.json(result);
     } catch (error) {
       console.error('Error handling permission prompt:', error);
@@ -188,9 +188,9 @@ export function setupRoutes(app, claudeService) {
   // Get server info
   router.get('/info', (req, res) => {
     res.json({
-      name: 'Claude Companion Server',
+      name: 'AICLI Companion Server',
       version: '1.0.0',
-      claudeCodeAvailable: claudeService.isAvailable(),
+      aicliCodeAvailable: aicliService.isAvailable(),
       endpoints: {
         ask: 'POST /api/ask',
         streamStart: 'POST /api/stream/start',

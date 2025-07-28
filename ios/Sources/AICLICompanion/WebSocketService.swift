@@ -1,6 +1,9 @@
 import Foundation
 import Combine
 import Starscream
+#if os(iOS)
+import UIKit
+#endif
 
 @available(iOS 13.0, macOS 10.15, *)
 class WebSocketService: ObservableObject, WebSocketDelegate {
@@ -21,7 +24,7 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
 
     // Message handlers
     private var messageHandlers: [WebSocketMessageType: (WebSocketMessage) -> Void] = [:]
-    private var requestCallbacks: [String: (Result<WebSocketMessage, ClaudeCompanionError>) -> Void] = [:]
+    private var requestCallbacks: [String: (Result<WebSocketMessage, AICLICompanionError>) -> Void] = [:]
 
     // Connection info
     private var currentURL: URL?
@@ -29,13 +32,91 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
     
     // Message callback
     var onMessage: ((WebSocketMessage) -> Void)?
+    
+    // Session tracking
+    private var activeSessionId: String?
+    private var wasConnectedBeforeBackground = false
 
     init() {
         setupDateFormatters()
+        setupAppLifecycleObservers()
     }
 
     deinit {
         disconnect()
+        #if os(iOS)
+        NotificationCenter.default.removeObserver(self)
+        #endif
+    }
+    
+    // MARK: - App Lifecycle Management
+    
+    private func setupAppLifecycleObservers() {
+        #if os(iOS)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillResignActive),
+            name: UIApplication.willResignActiveNotification,
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidBecomeActive),
+            name: UIApplication.didBecomeActiveNotification,
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillTerminate),
+            name: UIApplication.willTerminateNotification,
+            object: nil
+        )
+        #endif
+    }
+    
+    @objc private func appWillResignActive() {
+        print("🌙 App will resign active - preserving WebSocket state")
+        wasConnectedBeforeBackground = isConnected
+        
+        // Send a graceful disconnect message if connected
+        if isConnected {
+            let disconnectMessage = ["type": "client_backgrounding", "sessionId": activeSessionId ?? ""]
+            if let data = try? JSONSerialization.data(withJSONObject: disconnectMessage),
+               let message = String(data: data, encoding: .utf8) {
+                webSocket?.write(string: message)
+            }
+        }
+        
+        // Stop heartbeat timer
+        heartbeatTimer?.invalidate()
+        heartbeatTimer = nil
+    }
+    
+    @objc private func appDidBecomeActive() {
+        print("☀️ App did become active - restoring WebSocket connection")
+        
+        // Only reconnect if we were connected before
+        if wasConnectedBeforeBackground, let url = currentURL {
+            print("🔄 Restoring previous WebSocket connection")
+            connect(to: url, authToken: authToken)
+        }
+    }
+    
+    @objc private func appWillTerminate() {
+        print("💀 App will terminate - closing WebSocket connection")
+        disconnect()
+    }
+
+    // MARK: - Session Management
+    
+    func setActiveSession(_ sessionId: String?) {
+        self.activeSessionId = sessionId
+    }
+    
+    func getActiveSession() -> String? {
+        return activeSessionId
     }
 
     // MARK: - Connection Management
@@ -106,7 +187,7 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
 
     // MARK: - Message Sending
 
-    func sendMessage<T: Codable>(_ messageData: T, type: WebSocketMessageType, requestId: String? = nil, completion: ((Result<WebSocketMessage, ClaudeCompanionError>) -> Void)? = nil) {
+    func sendMessage<T: Codable>(_ messageData: T, type: WebSocketMessageType, requestId: String? = nil, completion: ((Result<WebSocketMessage, AICLICompanionError>) -> Void)? = nil) {
         let requestIdToUse = requestId ?? UUID().uuidString
 
         do {
@@ -143,7 +224,7 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
         }
     }
 
-    func sendAsk(prompt: String, workingDirectory: String? = nil, completion: @escaping (Result<ClaudeCodeResponse, ClaudeCompanionError>) -> Void) {
+    func sendAsk(prompt: String, workingDirectory: String? = nil, completion: @escaping (Result<AICLIResponse, AICLICompanionError>) -> Void) {
         let request = AskRequest(
             prompt: prompt,
             workingDirectory: workingDirectory,
@@ -155,8 +236,8 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
             case .success(let message):
                 // Parse response from message data
                 if case .askResponse(let responseData) = message.data {
-                    if responseData.success, let claudeResponse = responseData.response {
-                        completion(.success(claudeResponse))
+                    if responseData.success, let aicliResponse = responseData.response {
+                        completion(.success(aicliResponse))
                     } else {
                         completion(.failure(.invalidResponse))
                     }
@@ -169,7 +250,7 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
         }
     }
 
-    func startStream(prompt: String, workingDirectory: String? = nil, sessionName: String? = nil, completion: @escaping (Result<String, ClaudeCompanionError>) -> Void) {
+    func startStream(prompt: String, workingDirectory: String? = nil, sessionName: String? = nil, completion: @escaping (Result<String, AICLICompanionError>) -> Void) {
         let request = StreamStartRequest(
             prompt: prompt,
             workingDirectory: workingDirectory,
@@ -209,7 +290,7 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
         sendMessage(request, type: .streamClose)
     }
 
-    func setWorkingDirectory(_ workingDirectory: String, completion: @escaping (Result<Bool, ClaudeCompanionError>) -> Void) {
+    func setWorkingDirectory(_ workingDirectory: String, completion: @escaping (Result<Bool, AICLICompanionError>) -> Void) {
         let request = SetWorkingDirectoryRequest(workingDirectory: workingDirectory)
 
         sendMessage(request, type: .setWorkingDirectory) { result in

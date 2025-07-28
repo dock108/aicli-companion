@@ -4,11 +4,11 @@ import path from 'path';
 import { ServerConfig } from '../config/server-config.js';
 import rateLimit from 'express-rate-limit';
 
-export function setupProjectRoutes(app, claudeService) {
+export function setupProjectRoutes(app, aicliService) {
   const router = express.Router();
   const config = new ServerConfig();
 
-  // Session management for active Claude CLI processes
+  // Session management for active AICLI CLI processes
   const activeSessions = new Map();
 
   // Get the configured project directory from config
@@ -117,10 +117,11 @@ export function setupProjectRoutes(app, claudeService) {
     }
   });
 
-  // Start Claude CLI in a specific project directory
+  // Start AICLI CLI in a specific project directory
   router.post('/projects/:name/start', async (req, res) => {
     try {
       const { name } = req.params;
+      const { continueSession, sessionId: existingSessionId } = req.body || {};
       const projectsDir = getProjectsDir();
       const projectPath = path.join(projectsDir, name);
 
@@ -148,35 +149,68 @@ export function setupProjectRoutes(app, claudeService) {
         });
       }
 
-      // Generate a session ID for this project session
-      const sessionId = `project_${name}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      // Generate a session ID for this project session or use existing
+      const sessionId =
+        continueSession && existingSessionId
+          ? existingSessionId
+          : `project_${name}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-      console.log(`Starting Claude CLI session for project: ${name}`);
+      console.log(
+        `${continueSession ? 'Continuing' : 'Starting'} AICLI CLI session for project: ${name}`
+      );
       console.log(`Project path: ${projectPath}`);
       console.log(`Session ID: ${sessionId}`);
+      console.log(`Continue session: ${continueSession || false}`);
 
-      // Check if Claude CLI is available first
-      const isAvailable = await claudeService.checkAvailability();
+      // Check if AICLI CLI is available first
+      const isAvailable = await aicliService.checkAvailability();
       if (!isAvailable) {
-        console.error('Claude CLI is not available on this system');
+        console.error('AICLI CLI is not available on this system');
         return res.status(503).json({
           success: false,
-          error: 'Claude CLI not available',
+          error: 'AICLI CLI not available',
           message:
-            'Claude CLI is not installed or not in PATH. Please install Claude CLI to use this feature.',
+            'AICLI CLI is not installed or not in PATH. Please install AICLI CLI to use this feature.',
         });
       }
 
       try {
-        // Start Claude CLI session using the ClaudeCodeService
-        console.log(`📋 Creating Claude CLI session...`);
-        const session = await claudeService.createInteractiveSession(
+        // Check if we're continuing an existing session
+        if (continueSession && existingSessionId) {
+          // Check if session exists in active sessions
+          const existingSession = activeSessions.get(existingSessionId);
+          if (existingSession && existingSession.status === 'running') {
+            console.log(`✅ Continuing existing AICLI CLI session: ${existingSessionId}`);
+
+            // Return existing session info
+            const responseSession = {
+              sessionId: existingSession.sessionId,
+              projectName: name,
+              projectPath,
+              status: 'running',
+              startedAt: existingSession.startedAt,
+            };
+
+            return res.json({
+              success: true,
+              session: responseSession,
+              message: `Continuing AICLI CLI session for project '${name}'`,
+              continued: true,
+            });
+          }
+        }
+
+        // Start AICLI CLI session using the AICLIService
+        console.log(`📋 Creating AICLI CLI session...`);
+        const session = await aicliService.createInteractiveSession(
           sessionId,
-          `Starting work in project: ${name}`,
+          continueSession
+            ? `Continuing work in project: ${name}. Previous session context may be available.`
+            : `Starting work in project: ${name}`,
           projectPath
         );
 
-        console.log(`✅ Claude CLI session created successfully!`);
+        console.log(`✅ AICLI CLI session created successfully!`);
         console.log(`   Session ID: ${session.sessionId}`);
         console.log(`   Message: ${session.message}`);
 
@@ -187,7 +221,7 @@ export function setupProjectRoutes(app, claudeService) {
           projectPath,
           status: 'running',
           startedAt: new Date().toISOString(),
-          claudeSession: session,
+          aicliSession: session,
         };
         activeSessions.set(session.sessionId, sessionInfo);
 
@@ -206,21 +240,21 @@ export function setupProjectRoutes(app, claudeService) {
         res.json({
           success: true,
           session: responseSession,
-          message: `Claude CLI session started for project '${name}'`,
+          message: `AICLI CLI session started for project '${name}'`,
         });
       } catch (error) {
-        console.error(`Failed to start Claude CLI for project ${name}:`, error);
+        console.error(`Failed to start AICLI CLI for project ${name}:`, error);
 
         // Provide more specific error messages based on the error type
         let statusCode = 500;
-        let errorType = 'Failed to start Claude CLI';
+        let errorType = 'Failed to start AICLI CLI';
         let message = error.message;
 
         if (error.message.includes('Maximum number of sessions')) {
           statusCode = 429;
           errorType = 'Too many sessions';
           message =
-            'Maximum number of Claude CLI sessions reached. Please close some sessions before starting new ones.';
+            'Maximum number of AICLI CLI sessions reached. Please close some sessions before starting new ones.';
         } else if (error.message.includes('not accessible')) {
           statusCode = 403;
           errorType = 'Permission denied';
@@ -238,9 +272,9 @@ export function setupProjectRoutes(app, claudeService) {
         });
       }
     } catch (error) {
-      console.error('Error starting Claude CLI session:', error);
+      console.error('Error starting AICLI CLI session:', error);
       res.status(500).json({
-        error: 'Failed to start Claude CLI session',
+        error: 'Failed to start AICLI CLI session',
         message: error.message,
       });
     }
@@ -303,7 +337,7 @@ export function setupProjectRoutes(app, claudeService) {
     }
   });
 
-  // Stop a Claude CLI session
+  // Stop an AICLI CLI session
   router.delete('/sessions/:sessionId', async (req, res) => {
     try {
       const { sessionId } = req.params;
@@ -323,11 +357,11 @@ export function setupProjectRoutes(app, claudeService) {
         });
       }
 
-      console.log(`Stopping Claude CLI session: ${sessionId}`);
+      console.log(`Stopping AICLI CLI session: ${sessionId}`);
 
-      // Close the session using ClaudeCodeService
+      // Close the session using AICLIService
       try {
-        await claudeService.closeSession(sessionId, 'user_requested');
+        await aicliService.closeSession(sessionId, 'user_requested');
         session.status = 'stopped';
         session.stoppedAt = new Date().toISOString();
       } catch (error) {
@@ -336,7 +370,7 @@ export function setupProjectRoutes(app, claudeService) {
 
       res.json({
         success: true,
-        message: `Claude CLI session '${sessionId}' is being stopped`,
+        message: `AICLI CLI session '${sessionId}' is being stopped`,
         sessionId,
       });
     } catch (error) {

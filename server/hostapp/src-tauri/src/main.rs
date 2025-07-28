@@ -2,7 +2,7 @@
 
 use tauri::State;
 
-use claude_companion_hostapp::{
+use aicli_companion_hostapp::{
     check_server_health_impl, detect_running_server_impl, get_local_ip as get_local_ip_impl,
     get_server_status_impl, start_server_impl, stop_server_impl, AppState, ServerStatus,
     get_logs_impl, clear_logs_impl, LogEntry,

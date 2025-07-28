@@ -4,7 +4,7 @@ import Combine
 
 @available(iOS 13.0, macOS 10.15, *)
 class ServiceDiscoveryManager: NSObject, ObservableObject {
-    @Published var discoveredServers: [DiscoveredClaudeServer] = []
+    @Published var discoveredServers: [DiscoveredAICLIServer] = []
     @Published var isScanning = false
     @Published var discoveryError: String?
 
@@ -14,7 +14,7 @@ class ServiceDiscoveryManager: NSObject, ObservableObject {
     private var cancellables = Set<AnyCancellable>()
 
     // Service discovery parameters
-    private let serviceType = "_claudecode._tcp."
+    private let serviceType = "_aiclicode._tcp."
     private let domain = "local."
     private let discoveryTimeout: TimeInterval = 10.0
     private var discoveryTimer: Timer?
@@ -50,7 +50,7 @@ class ServiceDiscoveryManager: NSObject, ObservableObject {
             self?.stopDiscovery()
         }
 
-        print("🔍 Starting Bonjour discovery for Claude Code servers...")
+        print("🔍 Starting Bonjour discovery for AICLI servers...")
     }
 
     func stopDiscovery() {
@@ -95,7 +95,7 @@ class ServiceDiscoveryManager: NSObject, ObservableObject {
         service.resolve(withTimeout: 5.0)
     }
 
-    private func createDiscoveredServer(from service: NetService) -> DiscoveredClaudeServer? {
+    private func createDiscoveredServer(from service: NetService) -> DiscoveredAICLIServer? {
         guard let hostName = service.hostName,
               service.port > 0 else {
             return nil
@@ -104,7 +104,7 @@ class ServiceDiscoveryManager: NSObject, ObservableObject {
         // Parse TXT record data
         let txtData = parseTXTRecord(service.txtRecordData())
 
-        return DiscoveredClaudeServer(
+        return DiscoveredAICLIServer(
             name: service.name,
             hostName: hostName,
             port: service.port,
@@ -229,7 +229,7 @@ extension ServiceDiscoveryManager: NetServiceDelegate {
 
 // MARK: - Supporting Types
 
-struct DiscoveredClaudeServer: Identifiable, Equatable {
+struct DiscoveredAICLIServer: Identifiable, Equatable {
     let id = UUID()
     let name: String
     let hostName: String
@@ -242,7 +242,7 @@ struct DiscoveredClaudeServer: Identifiable, Equatable {
     let netService: NetService
 
     var displayName: String {
-        return name.isEmpty ? "Claude Code Server" : name
+        return name.isEmpty ? "AICLI Server" : name
     }
 
     var address: String {
@@ -279,7 +279,7 @@ struct DiscoveredClaudeServer: Identifiable, Equatable {
         return info.joined(separator: " • ")
     }
 
-    static func == (lhs: DiscoveredClaudeServer, rhs: DiscoveredClaudeServer) -> Bool {
+    static func == (lhs: DiscoveredAICLIServer, rhs: DiscoveredAICLIServer) -> Bool {
         return lhs.hostName == rhs.hostName && lhs.port == rhs.port
     }
 }
@@ -316,7 +316,7 @@ struct ManualServerConfiguration {
 
 @available(iOS 14.0, macOS 11.0, *)
 extension ServiceDiscoveryManager {
-    func validateServer(_ server: DiscoveredClaudeServer, completion: @escaping (Result<ServerConnection, ClaudeCompanionError>) -> Void) {
+    func validateServer(_ server: DiscoveredAICLIServer, completion: @escaping (Result<ServerConnection, AICLICompanionError>) -> Void) {
         guard let url = server.url else {
             completion(.failure(.invalidResponse))
             return
@@ -351,7 +351,7 @@ extension ServiceDiscoveryManager {
         }.resume()
     }
 
-    func validateManualConfiguration(_ config: ManualServerConfiguration, completion: @escaping (Result<ServerConnection, ClaudeCompanionError>) -> Void) {
+    func validateManualConfiguration(_ config: ManualServerConfiguration, completion: @escaping (Result<ServerConnection, AICLICompanionError>) -> Void) {
         guard let url = config.url else {
             completion(.failure(.connectionFailed("Invalid server address format")))
             return
@@ -391,7 +391,7 @@ extension ServiceDiscoveryManager {
             case 401:
                 completion(.failure(.authenticationFailed))
             case 404:
-                completion(.failure(.connectionFailed("Server found but Claude Companion endpoint not available. Is this a Claude Companion server?")))
+                completion(.failure(.connectionFailed("Server found but AICLI Companion endpoint not available. Is this an AICLI Companion server?")))
             default:
                 completion(.failure(.connectionFailed("Server returned HTTP \(httpResponse.statusCode)")))
             }

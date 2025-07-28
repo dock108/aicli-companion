@@ -3,108 +3,109 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 60;
+	objectVersion = 54;
 	objects = {
 
 /* Begin PBXBuildFile section */
-		4C80AA5C213F235DA3ADB5FB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 62CDFA0CAB728FEEC03E7A03 /* Assets.xcassets */; };
-		5ACF9EB7D38A188D15E60A1B /* ClaudeCompanion in Frameworks */ = {isa = PBXBuildFile; productRef = 8776735A8E24240B6DA6347A /* ClaudeCompanion */; };
-		B7A41D5EFADEF755364338AE /* AppMain.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF634300745096B81EF609E3 /* AppMain.swift */; };
+		33ED99315C4AC7285BF08544 /* AICLICompanion in Frameworks */ = {isa = PBXBuildFile; productRef = 373541D5BDF5542D3029F823 /* AICLICompanion */; };
+		CBC31E348611FBD311FAA019 /* AppMain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 493F24C65BA24C0D415C3B4D /* AppMain.swift */; };
+		EA7C02406F3E6B45ADE27D88 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D6E86D62EB1495148CADCE6C /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		62CDFA0CAB728FEEC03E7A03 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		66BAE168410B6951B8045A03 /* Claude Companion.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Claude Companion.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		907290AB1FF6522CFF9193CD /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
-		9B9275CF280821DE8EF21FDA /* ios */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ios; path = .; sourceTree = SOURCE_ROOT; };
-		EF634300745096B81EF609E3 /* AppMain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppMain.swift; sourceTree = "<group>"; };
+		42CB030D3AF867FE7448B030 /* AICLICompanionApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = AICLICompanionApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		493F24C65BA24C0D415C3B4D /* AppMain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppMain.swift; sourceTree = "<group>"; };
+		641FCF8261CE052082D55A54 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		D6E86D62EB1495148CADCE6C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		E3621D9C2DEA08AED01959AC /* ios */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ios; path = .; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		8551ABE90DCEE4084BC168A6 /* Frameworks */ = {
+		F7FD5ECCAF6553CB805330D8 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				5ACF9EB7D38A188D15E60A1B /* ClaudeCompanion in Frameworks */,
+				33ED99315C4AC7285BF08544 /* AICLICompanion in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		033B39C78E47AEEDF86BCB3C /* Packages */ = {
+		1228B48F3C15B00649238FCE /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				9B9275CF280821DE8EF21FDA /* ios */,
-			);
-			name = Packages;
-			sourceTree = "<group>";
-		};
-		035FE1627BCD89FAA991D46F /* App */ = {
-			isa = PBXGroup;
-			children = (
-				EF634300745096B81EF609E3 /* AppMain.swift */,
-				62CDFA0CAB728FEEC03E7A03 /* Assets.xcassets */,
-				907290AB1FF6522CFF9193CD /* Info.plist */,
-			);
-			path = App;
-			sourceTree = "<group>";
-		};
-		C8ACAB04B2A18F5A270D5BDE /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				66BAE168410B6951B8045A03 /* Claude Companion.app */,
+				42CB030D3AF867FE7448B030 /* AICLICompanionApp.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		EC352742605110B85DECB17B = {
+		3A13741435F56BEC81930AFF = {
 			isa = PBXGroup;
 			children = (
-				035FE1627BCD89FAA991D46F /* App */,
-				033B39C78E47AEEDF86BCB3C /* Packages */,
-				C8ACAB04B2A18F5A270D5BDE /* Products */,
+				49737CC45531BC9065F6B10F /* App */,
+				9491FC4448D344B2201B7AAB /* Packages */,
+				1228B48F3C15B00649238FCE /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		49737CC45531BC9065F6B10F /* App */ = {
+			isa = PBXGroup;
+			children = (
+				493F24C65BA24C0D415C3B4D /* AppMain.swift */,
+				D6E86D62EB1495148CADCE6C /* Assets.xcassets */,
+				641FCF8261CE052082D55A54 /* Info.plist */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		9491FC4448D344B2201B7AAB /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				E3621D9C2DEA08AED01959AC /* ios */,
+			);
+			name = Packages;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		3FD6860F8D2E9FED827EB39D /* ClaudeCompanionApp */ = {
+		507B6F35654DF7DC0CB803C9 /* AICLICompanionApp */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = C75584DB2DAD1C1F464821D3 /* Build configuration list for PBXNativeTarget "ClaudeCompanionApp" */;
+			buildConfigurationList = 45E3A7BFB26FD8D4DFDF5B9B /* Build configuration list for PBXNativeTarget "AICLICompanionApp" */;
 			buildPhases = (
-				E4D5A3876C8C358A0B195410 /* Sources */,
-				37C63514A37E868EEFE986A1 /* Resources */,
-				8551ABE90DCEE4084BC168A6 /* Frameworks */,
+				956164700C24FD86E8EAD788 /* Sources */,
+				F6D10D336CD68393F105DF3A /* Resources */,
+				F7FD5ECCAF6553CB805330D8 /* Frameworks */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
-			name = ClaudeCompanionApp;
+			name = AICLICompanionApp;
 			packageProductDependencies = (
-				8776735A8E24240B6DA6347A /* ClaudeCompanion */,
+				373541D5BDF5542D3029F823 /* AICLICompanion */,
 			);
-			productName = ClaudeCompanionApp;
-			productReference = 66BAE168410B6951B8045A03 /* Claude Companion.app */;
+			productName = AICLICompanionApp;
+			productReference = 42CB030D3AF867FE7448B030 /* AICLICompanionApp.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
-		693424B40BE61400A3E7DEAE /* Project object */ = {
+		56392202FB1120D8AAFFA3EA /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
-					3FD6860F8D2E9FED827EB39D = {
+					507B6F35654DF7DC0CB803C9 = {
+						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
 				};
 			};
-			buildConfigurationList = B96B4EB5531E67FEB8E9D90B /* Build configuration list for PBXProject "ClaudeCompanion" */;
+			buildConfigurationList = E49A5A02DCCE58AEEFFDA9F4 /* Build configuration list for PBXProject "AICLICompanion" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -112,42 +113,42 @@
 				Base,
 				en,
 			);
-			mainGroup = EC352742605110B85DECB17B;
+			mainGroup = 3A13741435F56BEC81930AFF;
 			packageReferences = (
-				A4E21CCB73F56E4EBD3405DC /* XCLocalSwiftPackageReference "." */,
+				E554032BEEE84A5203F49166 /* XCLocalSwiftPackageReference "." */,
 			);
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				3FD6860F8D2E9FED827EB39D /* ClaudeCompanionApp */,
+				507B6F35654DF7DC0CB803C9 /* AICLICompanionApp */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		37C63514A37E868EEFE986A1 /* Resources */ = {
+		F6D10D336CD68393F105DF3A /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				4C80AA5C213F235DA3ADB5FB /* Assets.xcassets in Resources */,
+				EA7C02406F3E6B45ADE27D88 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		E4D5A3876C8C358A0B195410 /* Sources */ = {
+		956164700C24FD86E8EAD788 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B7A41D5EFADEF755364338AE /* AppMain.swift in Sources */,
+				CBC31E348611FBD311FAA019 /* AppMain.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
-		47AA80DBD93132D7B6E81B92 /* Release */ = {
+		47FE1A1E5596A44BB2155723 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -203,7 +204,7 @@
 			};
 			name = Release;
 		};
-		ACF2FB9CB67CFE14B4C30ECC /* Debug */ = {
+		537D99AB19D53AE4DAD8D4E7 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -266,14 +267,14 @@
 			};
 			name = Debug;
 		};
-		AD6AE42DF49FE72E19873471 /* Debug */ = {
+		A7078FC6398E46A99762E04D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = E3G5D247ZN;
+				DEVELOPMENT_TEAM = "";
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -281,22 +282,22 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.claudecompanion.ios;
-				PRODUCT_NAME = "Claude Companion";
+				PRODUCT_BUNDLE_IDENTIFIER = com.aiclicompanion.ios;
+				PRODUCT_NAME = "AICLI Companion";
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.9;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
-		FC707ED3DFBA2D3F4B29220C /* Release */ = {
+		CA84A8B8E9B95C4541EAA043 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = E3G5D247ZN;
+				DEVELOPMENT_TEAM = "";
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -304,8 +305,8 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.claudecompanion.ios;
-				PRODUCT_NAME = "Claude Companion";
+				PRODUCT_BUNDLE_IDENTIFIER = com.aiclicompanion.ios;
+				PRODUCT_NAME = "AICLI Companion";
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.9;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -315,20 +316,20 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		B96B4EB5531E67FEB8E9D90B /* Build configuration list for PBXProject "ClaudeCompanion" */ = {
+		45E3A7BFB26FD8D4DFDF5B9B /* Build configuration list for PBXNativeTarget "AICLICompanionApp" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				ACF2FB9CB67CFE14B4C30ECC /* Debug */,
-				47AA80DBD93132D7B6E81B92 /* Release */,
+				A7078FC6398E46A99762E04D /* Debug */,
+				CA84A8B8E9B95C4541EAA043 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
-		C75584DB2DAD1C1F464821D3 /* Build configuration list for PBXNativeTarget "ClaudeCompanionApp" */ = {
+		E49A5A02DCCE58AEEFFDA9F4 /* Build configuration list for PBXProject "AICLICompanion" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				AD6AE42DF49FE72E19873471 /* Debug */,
-				FC707ED3DFBA2D3F4B29220C /* Release */,
+				537D99AB19D53AE4DAD8D4E7 /* Debug */,
+				47FE1A1E5596A44BB2155723 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
@@ -336,18 +337,18 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		A4E21CCB73F56E4EBD3405DC /* XCLocalSwiftPackageReference "." */ = {
+		E554032BEEE84A5203F49166 /* XCLocalSwiftPackageReference "." */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = .;
 		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		8776735A8E24240B6DA6347A /* ClaudeCompanion */ = {
+		373541D5BDF5542D3029F823 /* AICLICompanion */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = ClaudeCompanion;
+			productName = AICLICompanion;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
-	rootObject = 693424B40BE61400A3E7DEAE /* Project object */;
+	rootObject = 56392202FB1120D8AAFFA3EA /* Project object */;
 }

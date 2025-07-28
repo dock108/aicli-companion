@@ -1,7 +1,7 @@
 {
-  "name": "claude-companion",
+  "name": "aicli-companion",
   "version": "1.0.0",
-  "description": "Claude Code Mobile Companion - iOS app and server",
+  "description": "AICLI Code Mobile Companion - iOS app and server",
   "private": true,
   "scripts": {
     "prepare": "node -e \"if (process.env.CI !== 'true') { require('child_process').execSync('husky', {stdio: 'inherit'}); }\"",

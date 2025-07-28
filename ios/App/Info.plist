@@ -27,11 +27,11 @@
 	</dict>
 	<key>NSBonjourServices</key>
 	<array>
-		<string>_claudecode._tcp</string>
+		<string>_aiclicode._tcp</string>
 		<string>_http._tcp</string>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Claude Companion needs access to your local network to connect to your development server.</string>
+	<string>AICLI Companion needs access to your local network to connect to your development server.</string>
 	<key>UIDeviceFamily</key>
 	<array>
 		<integer>1</integer>

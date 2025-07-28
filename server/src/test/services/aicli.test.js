@@ -1,29 +1,29 @@
 import { describe, it, mock } from 'node:test';
 import assert from 'node:assert';
-import { ClaudeCodeService } from '../../services/claude-code.js';
+import { AICLIService } from '../../services/aicli.js';
 import { EventEmitter } from 'events';
 
-// Unit tests for ClaudeCodeService that don't require process spawning
-describe('ClaudeCodeService Unit Tests', () => {
-  const service = new ClaudeCodeService();
+// Unit tests for AICLIService that don't require process spawning
+describe('AICLIService Unit Tests', () => {
+  const service = new AICLIService();
 
   describe('constructor', () => {
     it('should initialize with correct defaults', () => {
-      const newService = new ClaudeCodeService();
+      const newService = new AICLIService();
       assert.strictEqual(newService.activeSessions.size, 0);
-      // Check that claudeCommand contains 'claude' (can be full path)
+      // Check that aicliCommand contains 'claude' (can be full path)
       assert.ok(
-        newService.claudeCommand.includes('claude'),
-        `Expected claudeCommand to include 'claude', got: ${newService.claudeCommand}`
+        newService.aicliCommand.includes('claude'),
+        `Expected aicliCommand to include 'claude', got: ${newService.aicliCommand}`
       );
       assert.ok(newService.defaultWorkingDirectory);
     });
   });
 
-  describe('classifyClaudeMessage', () => {
+  describe('classifyAICLIMessage', () => {
     it('should classify system messages', () => {
       const message = { type: 'system', content: 'System message' };
-      const result = service.classifyClaudeMessage(message);
+      const result = service.classifyAICLIMessage(message);
 
       assert.strictEqual(result.eventType, 'streamData');
       assert.strictEqual(result.data.type, 'system');
@@ -39,7 +39,7 @@ describe('ClaudeCodeService Unit Tests', () => {
         mcp_servers: ['server1'],
         model: 'claude-3',
       };
-      const result = service.classifyClaudeMessage(message);
+      const result = service.classifyAICLIMessage(message);
 
       assert.strictEqual(result.eventType, 'systemInit');
       assert.strictEqual(result.data.type, 'system_init');
@@ -47,7 +47,7 @@ describe('ClaudeCodeService Unit Tests', () => {
 
     it('should classify assistant messages', () => {
       const message = { type: 'assistant', content: 'Hello' };
-      const result = service.classifyClaudeMessage(message);
+      const result = service.classifyAICLIMessage(message);
 
       assert.strictEqual(result.eventType, 'streamData');
       assert.strictEqual(result.data.type, 'assistant');
@@ -63,7 +63,7 @@ describe('ClaudeCodeService Unit Tests', () => {
           usage: { tokens: 100 },
         },
       };
-      const result = service.classifyClaudeMessage(message);
+      const result = service.classifyAICLIMessage(message);
 
       assert.strictEqual(result.eventType, 'assistantMessage');
       assert.strictEqual(result.data.type, 'assistant_response');
@@ -76,7 +76,7 @@ describe('ClaudeCodeService Unit Tests', () => {
         tool_input: { file_path: '/test.txt' },
         tool_id: 'tool-123',
       };
-      const result = service.classifyClaudeMessage(message);
+      const result = service.classifyAICLIMessage(message);
 
       assert.strictEqual(result.eventType, 'toolUse');
       assert.strictEqual(result.data.type, 'tool_use');
@@ -90,7 +90,7 @@ describe('ClaudeCodeService Unit Tests', () => {
         tool_name: 'Read',
         tool_id: 'tool-123',
       };
-      const result = service.classifyClaudeMessage(message);
+      const result = service.classifyAICLIMessage(message);
 
       assert.strictEqual(result.eventType, 'toolResult');
       assert.strictEqual(result.data.type, 'tool_result');
@@ -106,7 +106,7 @@ describe('ClaudeCodeService Unit Tests', () => {
         total_cost_usd: 0.01,
         usage: { tokens: 200 },
       };
-      const result = service.classifyClaudeMessage(message);
+      const result = service.classifyAICLIMessage(message);
 
       assert.strictEqual(result.eventType, 'conversationResult');
       assert.strictEqual(result.data.type, 'final_result');
@@ -114,20 +114,20 @@ describe('ClaudeCodeService Unit Tests', () => {
 
     it('should handle unknown message types', () => {
       const message = { type: 'unknown', data: 'test' };
-      const result = service.classifyClaudeMessage(message);
+      const result = service.classifyAICLIMessage(message);
 
       assert.strictEqual(result.eventType, 'streamData');
       assert.strictEqual(result.data.type, 'unknown');
     });
 
     it('should handle non-object messages', () => {
-      const result = service.classifyClaudeMessage('string message');
+      const result = service.classifyAICLIMessage('string message');
       assert.strictEqual(result.eventType, 'streamData');
       assert.strictEqual(result.data, 'string message');
     });
 
     it('should handle null messages', () => {
-      const result = service.classifyClaudeMessage(null);
+      const result = service.classifyAICLIMessage(null);
       assert.strictEqual(result.eventType, 'streamData');
       assert.strictEqual(result.data, null);
     });
@@ -521,7 +521,7 @@ describe('ClaudeCodeService Unit Tests', () => {
 
     it('should log error and return false when execAsync throws', async () => {
       // Create a new service instance to test the actual implementation
-      const testService = new ClaudeCodeService();
+      const testService = new AICLIService();
 
       // Mock the execAsync module function by replacing the checkAvailability method
       const originalCheckAvailability = testService.checkAvailability;
@@ -579,7 +579,7 @@ describe('ClaudeCodeService Unit Tests', () => {
       const result = await service.healthCheck();
 
       assert.strictEqual(result.status, 'healthy');
-      assert.strictEqual(result.claudeCodeAvailable, true);
+      assert.strictEqual(result.aicliCodeAvailable, true);
       assert.strictEqual(result.activeSessions, 1);
       assert.ok(result.timestamp);
 
@@ -594,7 +594,7 @@ describe('ClaudeCodeService Unit Tests', () => {
       const result = await service.healthCheck();
 
       assert.strictEqual(result.status, 'degraded');
-      assert.strictEqual(result.claudeCodeAvailable, false);
+      assert.strictEqual(result.aicliCodeAvailable, false);
       assert.strictEqual(result.activeSessions, 0);
       assert.ok(result.timestamp);
     });

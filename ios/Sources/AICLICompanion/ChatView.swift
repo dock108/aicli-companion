@@ -7,9 +7,10 @@ import AppKit
 
 @available(iOS 14.0, macOS 11.0, *)
 struct ChatView: View {
-    @EnvironmentObject var claudeService: ClaudeCodeService
+    @EnvironmentObject var aicliService: AICLIService
     @EnvironmentObject var settings: SettingsManager
     @StateObject private var webSocketService = WebSocketService()
+    @StateObject private var persistenceService = MessagePersistenceService.shared
     @State private var messageText = ""
     @State private var messages: [Message] = []
     @State private var isLoading = false
@@ -23,6 +24,8 @@ struct ChatView: View {
     @State private var sessionError: String?
     @State private var messageTimeout: Timer?
     @State private var connectionStateTimer: Timer?
+    @State private var autoSaveTimer: Timer?
+    @State private var isRestoring = false
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     @Environment(\.verticalSizeClass) var verticalSizeClass
@@ -144,12 +147,17 @@ struct ChatView: View {
             connectWebSocket()
             setupKeyboardObservers()
             setupWebSocketListeners()
-            startClaudeSession()
+            restoreSessionIfNeeded()
+            startAutoSave()
         }
         .onDisappear {
+            // Only cleanup timers, don't disconnect WebSocket
+            // Connection will be managed by app lifecycle
             messageTimeout?.invalidate()
             connectionStateTimer?.invalidate()
-            webSocketService.disconnect()
+            autoSaveTimer?.invalidate()
+            // Save messages before leaving
+            saveMessagesToStorage()
         }
     }
     
@@ -167,8 +175,8 @@ struct ChatView: View {
         guard let project = selectedProject else { return }
         
         let welcomeMessage = Message(
-            content: "🚀 Claude CLI starting in **\(project.name)**...\n\nPlease wait while I set up the session.",
-            sender: .claude,
+            content: "🚀 AICLI starting in **\(project.name)**...\n\nPlease wait while I set up the session.",
+            sender: .assistant,
             type: .text
         )
         messages.append(welcomeMessage)
@@ -184,8 +192,8 @@ struct ChatView: View {
         addWelcomeMessage()
         isLoading = true
         
-        // Start Claude CLI session for this project
-        claudeService.startProjectSession(project: project, connection: connection) { result in
+        // Start AICLI session for this project
+        aicliService.startProjectSession(project: project, connection: connection) { result in
             DispatchQueue.main.async {
                 self.isLoading = false
                 self.progressInfo = nil
@@ -196,13 +204,13 @@ struct ChatView: View {
                     self.sessionError = nil
                     
                     // Update welcome message
-                    if let lastMessage = self.messages.last, lastMessage.sender == .claude {
+                    if let lastMessage = self.messages.last, lastMessage.sender == .assistant {
                         self.messages.removeLast()
                     }
                     
                     let successMessage = Message(
-                        content: "✅ Claude CLI ready in **\(project.name)**\n\nYou can now interact with your project. I have access to all files in this directory and can help you with coding tasks, analysis, and more.\n\nType your first message to get started!",
-                        sender: .claude,
+                        content: "✅ AICLI ready in **\(project.name)**\n\nYou can now interact with your project. I have access to all files in this directory and can help you with coding tasks, analysis, and more.\n\nType your first message to get started!",
+                        sender: .assistant,
                         type: .text
                     )
                     self.messages.append(successMessage)
@@ -211,13 +219,13 @@ struct ChatView: View {
                     self.sessionError = error.localizedDescription
                     
                     // Update welcome message with error
-                    if let lastMessage = self.messages.last, lastMessage.sender == .claude {
+                    if let lastMessage = self.messages.last, lastMessage.sender == .assistant {
                         self.messages.removeLast()
                     }
                     
                     let errorMessage = Message(
-                        content: "❌ Failed to start Claude CLI\n\n\(error.localizedDescription)\n\nPlease check that:\n1. The server is running\n2. Claude CLI is installed\n3. The project path is accessible",
-                        sender: .claude,
+                        content: "❌ Failed to start AICLI\n\n\(error.localizedDescription)\n\nPlease check that:\n1. The server is running\n2. AICLI is installed\n3. The project path is accessible",
+                        sender: .assistant,
                         type: .text
                     )
                     self.messages.append(errorMessage)
@@ -247,7 +255,7 @@ struct ChatView: View {
                     
                     let connectionLostMessage = Message(
                         content: "🔌 Connection lost. Attempting to reconnect...\n\nPlease wait while we try to restore the connection to the server.",
-                        sender: .claude,
+                        sender: .assistant,
                         type: .text
                     )
                     self.messages.append(connectionLostMessage)
@@ -272,11 +280,11 @@ struct ChatView: View {
         messageText = ""
         isLoading = true
         
-        // Send command to Claude CLI session
-        sendClaudeCommand(messageCopy)
+        // Send command to AICLI session
+        sendAICLICommand(messageCopy)
     }
     
-    private func sendClaudeCommand(_ command: String) {
+    private func sendAICLICommand(_ command: String) {
         guard let project = selectedProject else {
             isLoading = false
             return
@@ -286,8 +294,8 @@ struct ChatView: View {
         guard let session = activeSession else {
             isLoading = false
             let errorMessage = Message(
-                content: "❌ No active Claude session. Please wait for the session to start or try reloading the chat.",
-                sender: .claude,
+                content: "❌ No active AICLI session. Please wait for the session to start or try reloading the chat.",
+                sender: .assistant,
                 type: .text
             )
             messages.append(errorMessage)
@@ -297,8 +305,8 @@ struct ChatView: View {
             return
         }
         
-        // Create the command request for Claude CLI
-        let claudeRequest = ClaudeCommandRequest(
+        // Create the command request for AICLI
+        let claudeRequest = AICLICommandRequest(
             command: command,
             projectPath: project.path,
             sessionId: session.sessionId
@@ -315,15 +323,15 @@ struct ChatView: View {
                 self.isLoading = false
                 let timeoutMessage = Message(
                     content: "⏰ Request timed out. The connection may have been lost or the server is taking too long to respond. Please try again.",
-                    sender: .claude,
+                    sender: .assistant,
                     type: .text
                 )
                 self.messages.append(timeoutMessage)
             }
         }
         
-        // Send via WebSocket to Claude CLI session
-        webSocketService.sendMessage(claudeRequest, type: .claudeCommand) { result in
+        // Send via WebSocket to AICLI session
+        webSocketService.sendMessage(claudeRequest, type: .aicliCommand) { result in
             DispatchQueue.main.async {
                 // Don't reset loading here - wait for actual response
                 
@@ -350,10 +358,12 @@ struct ChatView: View {
                         if !textContent.isEmpty {
                             let responseMessage = Message(
                                 content: textContent,
-                                sender: .claude,
+                                sender: .assistant,
                                 type: .text
                             )
                             self.messages.append(responseMessage)
+                            // Save after receiving response
+                            self.saveMessagesToStorage()
                         }
                         
                     case .streamData(let streamData):
@@ -361,17 +371,19 @@ struct ChatView: View {
                         if streamData.streamType == "text", let text = streamData.content.text {
                             let responseMessage = Message(
                                 content: text,
-                                sender: .claude,
+                                sender: .assistant,
                                 type: .text
                             )
                             self.messages.append(responseMessage)
+                            // Save after receiving response
+                            self.saveMessagesToStorage()
                         }
                         
                     case .error(let errorResponse):
                         // Handle error messages
                         let errorMessage = Message(
                             content: "Error: \(errorResponse.message)",
-                            sender: .claude,
+                            sender: .assistant,
                             type: .text
                         )
                         self.messages.append(errorMessage)
@@ -397,7 +409,7 @@ struct ChatView: View {
                     // Add error message
                     let errorMessage = Message(
                         content: "Error: \(error.localizedDescription)",
-                        sender: .claude,
+                        sender: .assistant,
                         type: .text
                     )
                     self.messages.append(errorMessage)
@@ -429,7 +441,7 @@ struct ChatView: View {
                     if !textContent.isEmpty {
                         let responseMessage = Message(
                             content: textContent,
-                            sender: .claude,
+                            sender: .assistant,
                             type: .text
                         )
                         self.messages.append(responseMessage)
@@ -442,7 +454,7 @@ struct ChatView: View {
                     if streamData.streamType == "text", let text = streamData.content.text {
                         let responseMessage = Message(
                             content: text,
-                            sender: .claude,
+                            sender: .assistant,
                             type: .text
                         )
                         self.messages.append(responseMessage)
@@ -453,7 +465,7 @@ struct ChatView: View {
                     self.progressInfo = nil
                     let errorMessage = Message(
                         content: "Error: \(errorResponse.message)",
-                        sender: .claude,
+                        sender: .assistant,
                         type: .text
                     )
                     self.messages.append(errorMessage)
@@ -502,6 +514,65 @@ struct ChatView: View {
         }
         #endif
     }
+    
+    // MARK: - Session Persistence
+    
+    private func restoreSessionIfNeeded() {
+        guard let project = selectedProject else { return }
+        
+        // Check if we should restore from a previous session
+        if let metadata = persistenceService.getSessionMetadata(for: project.path),
+           let sessionId = metadata.aicliSessionId {
+            isRestoring = true
+            
+            // Load previous messages
+            let restoredMessages = persistenceService.loadMessages(for: project.path, sessionId: sessionId)
+            if !restoredMessages.isEmpty {
+                messages = restoredMessages
+                
+                // Add restoration notice
+                let restorationNotice = Message(
+                    content: "📂 Restored \(restoredMessages.count) messages from previous session",
+                    sender: .assistant,
+                    type: .text
+                )
+                messages.append(restorationNotice)
+            }
+            
+            // Set the session ID in WebSocket service
+            webSocketService.setActiveSession(sessionId)
+            
+            isRestoring = false
+        } else {
+            // Start fresh session
+            startClaudeSession()
+        }
+    }
+    
+    private func startAutoSave() {
+        // Set up auto-save timer (every 30 seconds)
+        autoSaveTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { _ in
+            self.saveMessagesToStorage()
+        }
+    }
+    
+    private func saveMessagesToStorage() {
+        guard let project = selectedProject,
+              !messages.isEmpty else { return }
+        
+        // Get current session ID from WebSocket service or active session
+        let sessionId = webSocketService.getActiveSession() ?? activeSession?.sessionId ?? UUID().uuidString
+        
+        // Save messages
+        persistenceService.saveMessages(
+            for: project.path,
+            messages: messages,
+            sessionId: sessionId,
+            project: project
+        )
+        
+        print("💾 Auto-saved \(messages.count) messages for project \(project.name)")
+    }
 }
 
 // MARK: - Preview
@@ -519,7 +590,7 @@ struct ChatView: View {
         ),
         onSwitchProject: { print("Switch project") }
     )
-    .environmentObject(ClaudeCodeService())
+    .environmentObject(AICLIService())
     .environmentObject(SettingsManager())
     .preferredColorScheme(.light)
 }
@@ -537,7 +608,7 @@ struct ChatView: View {
         ),
         onSwitchProject: { print("Switch project") }
     )
-    .environmentObject(ClaudeCodeService())
+    .environmentObject(AICLIService())
     .environmentObject(SettingsManager())
     .preferredColorScheme(.dark)
 }
@@ -631,12 +702,12 @@ struct ProjectContextHeader: View {
     }
     
     private var statusText: String {
-        guard let session = session else { return "Claude CLI ready" }
+        guard let session = session else { return "AICLI ready" }
         
         switch session.status {
-        case "running": return "Claude CLI active"
-        case "starting": return "Starting Claude CLI..."
-        case "stopped": return "Claude CLI stopped"
+        case "running": return "AICLI active"
+        case "starting": return "Starting AICLI..."
+        case "stopped": return "AICLI stopped"
         default: return "Unknown status"
         }
     }

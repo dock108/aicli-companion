@@ -1,13 +1,13 @@
-# Claude Code Mobile Companion
+# AICLI Code Mobile Companion
 
-A iOS companion app for Anthropic's Claude Code CLI, providing mobile access to AI-assisted coding through chat and terminal interfaces.
+A iOS companion app for Anthropic's AICLI Code CLI, providing mobile access to AI-assisted coding through chat and terminal interfaces.
 
 ## Project Structure
 
 ```
-claude-companion/
+aicli-companion/
 ├── ios/                    # iOS app (SwiftUI + UIKit)
-│   ├── ClaudeCompanion/    # Main app target
+│   ├── AICLICompanion/    # Main app target
 │   ├── Models/             # Data models
 │   ├── Views/              # SwiftUI views
 │   ├── Services/           # Network and business logic
@@ -32,19 +32,19 @@ claude-companion/
 
 - **iOS Development**: Xcode 15+, iOS 15+ deployment target
 - **Server Development**: Node.js 18+, npm
-- **Claude Code**: Anthropic Claude Code CLI v1.0.55+
+- **AICLI Code**: Anthropic AICLI Code CLI v1.0.55+
 
 ## Quick Start
 
 ### 1. Clone and Setup
 ```bash
-cd claude-companion
+cd aicli-companion
 npm install  # Install server dependencies
 ```
 
 ### 2. iOS Development
 ```bash
-open ios/ClaudeCompanion.xcodeproj
+open ios/AICLICompanion.xcodeproj
 ```
 
 ### 3. Run Companion Server

@@ -82,7 +82,7 @@ class InputValidator {
     return sanitized;
   }
 
-  static validateClaudeArgs(args) {
+  static validateAICLIArgs(args) {
     if (!Array.isArray(args)) {
       throw new Error('Arguments must be an array');
     }
@@ -143,13 +143,13 @@ class InputValidator {
   }
 }
 
-export class ClaudeCodeService extends EventEmitter {
+export class AICLIService extends EventEmitter {
   constructor() {
     super();
     this.activeSessions = new Map();
     this.sessionMessageBuffers = new Map(); // Buffer messages per session for intelligent filtering
-    // Try to find claude in common locations
-    this.claudeCommand = this.findClaudeCommand();
+    // Try to find aicli in common locations
+    this.aicliCommand = this.findAICLICommand();
     this.defaultWorkingDirectory = process.cwd();
     this.safeRootDirectory = null; // Will be set from server config
     this.maxSessions = 10;
@@ -223,7 +223,7 @@ export class ClaudeCodeService extends EventEmitter {
     }
   }
 
-  // Check health of all active Claude processes
+  // Check health of all active AICLI processes
   async checkAllProcessHealth() {
     const activePids = [];
 
@@ -287,10 +287,10 @@ export class ClaudeCodeService extends EventEmitter {
     }
   }
 
-  findClaudeCommand() {
+  findAICLICommand() {
     // First check if CLAUDE_CLI_PATH env variable is set
     if (process.env.CLAUDE_CLI_PATH) {
-      console.log(`Using Claude CLI path from CLAUDE_CLI_PATH: ${process.env.CLAUDE_CLI_PATH}`);
+      console.log(`Using AICLI CLI path from CLAUDE_CLI_PATH: ${process.env.CLAUDE_CLI_PATH}`);
       return process.env.CLAUDE_CLI_PATH;
     }
 
@@ -298,7 +298,7 @@ export class ClaudeCodeService extends EventEmitter {
     try {
       const path = execSync('which claude', { encoding: 'utf8' }).trim();
       if (path) {
-        console.log(`Found Claude CLI at: ${path}`);
+        console.log(`Found AICLI CLI at: ${path}`);
         return path;
       }
     } catch (error) {
@@ -323,7 +323,7 @@ export class ClaudeCodeService extends EventEmitter {
     for (const path of commonPaths) {
       try {
         if (existsSync(path)) {
-          console.log(`Found Claude CLI at: ${path}`);
+          console.log(`Found AICLI CLI at: ${path}`);
           return path;
         }
       } catch (error) {
@@ -332,24 +332,24 @@ export class ClaudeCodeService extends EventEmitter {
     }
 
     // If not found, fall back to 'claude' and hope it's in PATH
-    console.warn('Claude CLI not found in common locations, falling back to PATH lookup');
+    console.warn('AICLI CLI not found in common locations, falling back to PATH lookup');
     return 'claude';
   }
 
   async checkAvailability() {
     try {
-      console.log(`Checking Claude CLI availability at: ${this.claudeCommand}`);
-      const { stdout, _stderr } = await execAsync(`${this.claudeCommand} --version`);
+      console.log(`Checking AICLI CLI availability at: ${this.aicliCommand}`);
+      const { stdout, _stderr } = await execAsync(`${this.aicliCommand} --version`);
       const version = stdout.trim();
-      console.log(`Claude Code version: ${version}`);
+      console.log(`AICLI Code version: ${version}`);
       return true;
     } catch (error) {
-      console.error('Claude Code not available:', error.message);
-      console.error(`Tried to execute: ${this.claudeCommand} --version`);
+      console.error('AICLI Code not available:', error.message);
+      console.error(`Tried to execute: ${this.aicliCommand} --version`);
       console.error('To fix this issue:');
-      console.error('1. Make sure Claude CLI is installed: npm install -g @anthropic-ai/claude');
-      console.error('2. Set CLAUDE_CLI_PATH environment variable to the full path');
-      console.error('3. Or ensure claude is in your PATH');
+      console.error('1. Make sure AICLI CLI is installed: npm install -g @anthropic-ai/aicli');
+      console.error('2. Set AICLI_CLI_PATH environment variable to the full path');
+      console.error('3. Or ensure aicli is in your PATH');
       return false;
     }
   }
@@ -389,8 +389,8 @@ export class ClaudeCodeService extends EventEmitter {
         });
       }
     } catch (error) {
-      console.error('Error sending prompt to Claude Code:', error);
-      throw new Error(`Claude Code execution failed: ${error.message}`);
+      console.error('Error sending prompt to AICLI Code:', error);
+      throw new Error(`AICLI Code execution failed: ${error.message}`);
     }
   }
 
@@ -439,9 +439,9 @@ export class ClaudeCodeService extends EventEmitter {
     args.push(sanitizedPrompt);
 
     // Validate arguments before spawning
-    InputValidator.validateClaudeArgs(args);
+    InputValidator.validateAICLIArgs(args);
 
-    console.log(`🚀 Starting Claude CLI with validated args:`, args.slice(0, -1)); // Log all args except prompt
+    console.log(`🚀 Starting AICLI CLI with validated args:`, args.slice(0, -1)); // Log all args except prompt
     console.log(
       `   Prompt: "${sanitizedPrompt.substring(0, 50)}${sanitizedPrompt.length > 50 ? '...' : ''}"`
     );
@@ -457,18 +457,18 @@ export class ClaudeCodeService extends EventEmitter {
     }
 
     return new Promise((resolvePromise, reject) => {
-      let claudeProcess;
+      let aicliProcess;
       try {
-        claudeProcess = spawn(this.claudeCommand, args, {
+        aicliProcess = spawn(this.aicliCommand, args, {
           cwd: workingDirectory,
           stdio: ['pipe', 'pipe', 'pipe'],
         });
       } catch (spawnError) {
-        console.error(`❌ Failed to spawn Claude CLI:`, spawnError);
+        console.error(`❌ Failed to spawn AICLI CLI:`, spawnError);
         const errorMsg =
           spawnError.code === 'ENOENT'
-            ? 'Claude CLI not found. Please ensure Claude CLI is installed and in your PATH.'
-            : `Failed to start Claude CLI: ${spawnError.message}`;
+            ? 'AICLI CLI not found. Please ensure AICLI CLI is installed and in your PATH.'
+            : `Failed to start AICLI CLI: ${spawnError.message}`;
 
         // Emit error event
         this.emit('processError', {
@@ -481,16 +481,16 @@ export class ClaudeCodeService extends EventEmitter {
       }
 
       // Close stdin immediately since we're not sending any input
-      claudeProcess.stdin.end();
+      aicliProcess.stdin.end();
 
       let stdout = '';
       let stderr = '';
 
-      console.log(`   Process started with PID: ${claudeProcess.pid}`);
+      console.log(`   Process started with PID: ${aicliProcess.pid}`);
 
       // Check if process actually started
-      if (!claudeProcess.pid) {
-        const errorMsg = 'Claude CLI process failed to start (no PID)';
+      if (!aicliProcess.pid) {
+        const errorMsg = 'AICLI CLI process failed to start (no PID)';
         console.error(`❌ ${errorMsg}`);
         this.emit('processError', {
           error: errorMsg,
@@ -502,47 +502,47 @@ export class ClaudeCodeService extends EventEmitter {
 
       // Emit process start event
       this.emit('processStart', {
-        pid: claudeProcess.pid,
-        command: this.claudeCommand,
+        pid: aicliProcess.pid,
+        command: this.aicliCommand,
         args: args.slice(0, 3), // Don't include full prompt
         workingDirectory,
         type: 'one-time',
       });
 
-      claudeProcess.stdout.on('data', (data) => {
+      aicliProcess.stdout.on('data', (data) => {
         const chunk = data.toString();
         console.log(`   STDOUT chunk: ${chunk.length} chars`);
         stdout += chunk;
 
         // Emit stdout data for logging
         this.emit('processStdout', {
-          pid: claudeProcess.pid,
+          pid: aicliProcess.pid,
           data: chunk,
           timestamp: new Date().toISOString(),
         });
       });
 
-      claudeProcess.stderr.on('data', (data) => {
+      aicliProcess.stderr.on('data', (data) => {
         const chunk = data.toString();
         console.log(`   STDERR chunk: ${chunk}`);
         stderr += chunk;
 
         // Emit stderr data for logging
         this.emit('processStderr', {
-          pid: claudeProcess.pid,
+          pid: aicliProcess.pid,
           data: chunk,
           timestamp: new Date().toISOString(),
         });
       });
 
-      claudeProcess.on('close', (code) => {
+      aicliProcess.on('close', (code) => {
         console.log(`   Process closed with code: ${code}`);
         console.log(`   STDOUT length: ${stdout.length}`);
         console.log(`   STDERR length: ${stderr.length}`);
 
         // Emit process exit event
         this.emit('processExit', {
-          pid: claudeProcess.pid,
+          pid: aicliProcess.pid,
           code,
           stdout: stdout.substring(0, 1000), // First 1000 chars for debugging
           stderr,
@@ -550,7 +550,7 @@ export class ClaudeCodeService extends EventEmitter {
         });
 
         if (code !== 0) {
-          reject(new Error(`Claude Code exited with code ${code}: ${stderr}`));
+          reject(new Error(`AICLI Code exited with code ${code}: ${stderr}`));
           return;
         }
 
@@ -565,23 +565,23 @@ export class ClaudeCodeService extends EventEmitter {
           }
         } catch (error) {
           console.log(`   ❌ JSON parse error: ${error.message}`);
-          reject(new Error(`Failed to parse Claude Code response: ${error.message}`));
+          reject(new Error(`Failed to parse AICLI Code response: ${error.message}`));
         }
       });
 
-      claudeProcess.on('error', (error) => {
+      aicliProcess.on('error', (error) => {
         console.log(`   ❌ Process error: ${error.message}`);
-        reject(new Error(`Failed to start Claude Code: ${error.message}`));
+        reject(new Error(`Failed to start AICLI Code: ${error.message}`));
       });
 
       // Add timeout protection
       const timeout = setTimeout(() => {
         console.log(`   ⏰ Process timeout, killing...`);
-        claudeProcess.kill('SIGTERM');
-        reject(new Error('Claude Code process timed out'));
+        aicliProcess.kill('SIGTERM');
+        reject(new Error('AICLI Code process timed out'));
       }, 30000);
 
-      claudeProcess.on('close', () => {
+      aicliProcess.on('close', () => {
         clearTimeout(timeout);
       });
     });
@@ -613,7 +613,7 @@ export class ClaudeCodeService extends EventEmitter {
     const sanitizedPrompt = InputValidator.sanitizePrompt(initialPrompt);
     const validatedWorkingDir = await InputValidator.validateWorkingDirectory(workingDirectory);
 
-    console.log(`🚀 Creating Claude CLI session (metadata-only)`);
+    console.log(`🚀 Creating AICLI CLI session (metadata-only)`);
     console.log(`   Session ID: ${sanitizedSessionId}`);
     console.log(`   Working directory: ${validatedWorkingDir}`);
     console.log(`   Initial prompt: "${sanitizedPrompt}"`);
@@ -650,7 +650,7 @@ export class ClaudeCodeService extends EventEmitter {
       }
     }, this.sessionTimeout);
 
-    console.log(`✅ Claude CLI session metadata created successfully`);
+    console.log(`✅ AICLI CLI session metadata created successfully`);
 
     return {
       sessionId: sanitizedSessionId,
@@ -679,7 +679,7 @@ export class ClaudeCodeService extends EventEmitter {
       session.lastActivity = Date.now();
 
       console.log(
-        `📝 Executing Claude CLI command for session ${sanitizedSessionId}: "${sanitizedPrompt}"`
+        `📝 Executing AICLI CLI command for session ${sanitizedSessionId}: "${sanitizedPrompt}"`
       );
       console.log(`   Session object:`, {
         sessionId: session.sessionId,
@@ -689,8 +689,8 @@ export class ClaudeCodeService extends EventEmitter {
         isActive: session.isActive,
       });
 
-      // Execute Claude CLI with continuation and print mode
-      const response = await this.executeClaudeCommand(session, sanitizedPrompt);
+      // Execute AICLI CLI with continuation and print mode
+      const response = await this.executeAICLICommand(session, sanitizedPrompt);
 
       // Emit command sent event
       this.emit('commandSent', {
@@ -711,8 +711,8 @@ export class ClaudeCodeService extends EventEmitter {
     }
   }
 
-  async testClaudeCommand(testType = 'version') {
-    console.log(`🧪 Testing Claude CLI command: ${testType}`);
+  async testAICLICommand(testType = 'version') {
+    console.log(`🧪 Testing AICLI CLI command: ${testType}`);
 
     let args = [];
     const prompt = null;
@@ -734,13 +734,13 @@ export class ClaudeCodeService extends EventEmitter {
         throw new Error(`Unknown test type: ${testType}`);
     }
 
-    return this.runClaudeProcess(args, prompt, process.cwd(), 'test-session', 30000);
+    return this.runAICLIProcess(args, prompt, process.cwd(), 'test-session', 30000);
   }
 
-  async executeClaudeCommand(session, prompt) {
+  async executeAICLICommand(session, prompt) {
     const { sessionId, workingDirectory, conversationStarted, initialPrompt } = session;
 
-    // Build Claude CLI arguments - use stream-json to avoid buffer limits
+    // Build AICLI CLI arguments - use stream-json to avoid buffer limits
     const args = ['--print', '--output-format', 'stream-json', '--verbose'];
 
     // Add continue flag if conversation has started
@@ -774,7 +774,7 @@ export class ClaudeCodeService extends EventEmitter {
     }
 
     // Validate arguments
-    InputValidator.validateClaudeArgs(args);
+    InputValidator.validateAICLIArgs(args);
 
     // Determine the prompt to send
     let finalPrompt = prompt;
@@ -786,7 +786,7 @@ export class ClaudeCodeService extends EventEmitter {
       session.conversationStarted = true;
     }
 
-    console.log(`🚀 Executing Claude CLI with args:`, args);
+    console.log(`🚀 Executing AICLI CLI with args:`, args);
     console.log(`   Working directory: ${workingDirectory}`);
     console.log(`   Original prompt: "${prompt?.substring(0, 50)}..."`);
     console.log(`   Initial prompt: "${initialPrompt?.substring(0, 50)}..."`);
@@ -835,14 +835,14 @@ export class ClaudeCodeService extends EventEmitter {
       };
     }
 
-    console.log(`📤 Calling runClaudeProcess with:`);
+    console.log(`📤 Calling runAICLIProcess with:`);
     console.log(`   Args (${args.length}):`, args);
     console.log(
       `   Prompt: "${finalPrompt?.substring(0, 100)}${finalPrompt?.length > 100 ? '...' : ''}"`
     );
     console.log(`   SessionId: ${sessionId}`);
 
-    return this.runClaudeProcess(args, finalPrompt, workingDirectory, sessionId, timeoutMs);
+    return this.runAICLIProcess(args, finalPrompt, workingDirectory, sessionId, timeoutMs);
   }
 
   async runLongRunningProcess(
@@ -874,8 +874,8 @@ export class ClaudeCodeService extends EventEmitter {
     }, 120000); // Send update every 2 minutes
 
     try {
-      // Run the actual Claude process
-      const result = await this.runClaudeProcess(
+      // Run the actual AICLI process
+      const result = await this.runAICLIProcess(
         args,
         prompt,
         workingDirectory,
@@ -960,9 +960,9 @@ export class ClaudeCodeService extends EventEmitter {
     }
   }
 
-  async runClaudeProcess(args, prompt, workingDirectory, sessionId, timeoutMs) {
-    console.log(`\n🔧 === runClaudeProcess CALLED ===`);
-    console.log(`🔧 Running Claude CLI process:`);
+  async runAICLIProcess(args, prompt, workingDirectory, sessionId, timeoutMs) {
+    console.log(`\n🔧 === runAICLIProcess CALLED ===`);
+    console.log(`🔧 Running AICLI CLI process:`);
     console.log(`   Args (${args.length}): ${JSON.stringify(args)}`);
     console.log(`   Prompt provided: ${!!prompt}`);
     console.log(`   Prompt length: ${prompt ? prompt.length : 0}`);
@@ -974,7 +974,7 @@ export class ClaudeCodeService extends EventEmitter {
     console.log(`   Timeout: ${timeoutMs}ms`);
 
     return new Promise((promiseResolve, reject) => {
-      let claudeProcess;
+      let aicliProcess;
 
       try {
         // Build the complete command arguments
@@ -982,8 +982,8 @@ export class ClaudeCodeService extends EventEmitter {
         const useStdin = prompt && args.includes('--print');
         const fullArgs = useStdin ? args : prompt ? [...args, prompt] : args;
 
-        console.log(`📝 Final args being passed to Claude CLI:`);
-        console.log(`   Command: ${this.claudeCommand}`);
+        console.log(`📝 Final args being passed to AICLI CLI:`);
+        console.log(`   Command: ${this.aicliCommand}`);
         console.log(
           `   Full args array (${fullArgs.length} items):`,
           fullArgs.map((arg, i) => `[${i}] ${arg.substring(0, 100)}`)
@@ -991,37 +991,37 @@ export class ClaudeCodeService extends EventEmitter {
         console.log(`   Has prompt: ${!!prompt}`);
         console.log(`   Using stdin for prompt: ${useStdin}`);
 
-        claudeProcess = spawn(this.claudeCommand, fullArgs, {
+        aicliProcess = spawn(this.aicliCommand, fullArgs, {
           cwd: workingDirectory,
           stdio: ['pipe', 'pipe', 'pipe'],
         });
       } catch (spawnError) {
-        console.error(`❌ Failed to spawn Claude CLI:`, spawnError);
+        console.error(`❌ Failed to spawn AICLI CLI:`, spawnError);
         const errorMsg =
           spawnError.code === 'ENOENT'
-            ? 'Claude CLI not found. Please ensure Claude CLI is installed and in your PATH.'
-            : `Failed to start Claude CLI: ${spawnError.message}`;
+            ? 'AICLI CLI not found. Please ensure AICLI CLI is installed and in your PATH.'
+            : `Failed to start AICLI CLI: ${spawnError.message}`;
         reject(new Error(errorMsg));
         return;
       }
 
-      console.log(`   Process started with PID: ${claudeProcess.pid}`);
+      console.log(`   Process started with PID: ${aicliProcess.pid}`);
 
-      // When using --print, Claude CLI might expect input from stdin
+      // When using --print, AICLI CLI might expect input from stdin
       // Try writing the prompt to stdin instead of passing as argument
       if (prompt && args.includes('--print')) {
         console.log(`   📝 Writing prompt to stdin instead of args`);
-        claudeProcess.stdin.write(prompt);
-        claudeProcess.stdin.end();
+        aicliProcess.stdin.write(prompt);
+        aicliProcess.stdin.end();
       } else {
         // Close stdin immediately if no prompt
-        claudeProcess.stdin.end();
+        aicliProcess.stdin.end();
       }
 
       // Start monitoring this process
-      if (claudeProcess.pid) {
+      if (aicliProcess.pid) {
         processMonitor
-          .monitorProcess(claudeProcess.pid)
+          .monitorProcess(aicliProcess.pid)
           .then((info) => {
             if (info) {
               console.log(
@@ -1037,8 +1037,8 @@ export class ClaudeCodeService extends EventEmitter {
       // Emit process start event
       this.emit('processStart', {
         sessionId,
-        pid: claudeProcess.pid,
-        command: this.claudeCommand,
+        pid: aicliProcess.pid,
+        command: this.aicliCommand,
         args,
         workingDirectory,
         type: 'command',
@@ -1055,14 +1055,14 @@ export class ClaudeCodeService extends EventEmitter {
       // eslint-disable-next-line prefer-const
       let resetActivityTimer;
 
-      claudeProcess.stdout.on('data', (data) => {
+      aicliProcess.stdout.on('data', (data) => {
         // Store raw buffer to prevent encoding truncation
         stdoutBuffers.push(data);
 
         const chunk = data.toString();
         stdout += chunk;
         console.log(
-          `📊 Claude CLI STDOUT (${chunk.length} chars, total: ${stdout.length}):`,
+          `📊 AICLI CLI STDOUT (${chunk.length} chars, total: ${stdout.length}):`,
           JSON.stringify(chunk.substring(0, 200))
         );
 
@@ -1071,20 +1071,20 @@ export class ClaudeCodeService extends EventEmitter {
         // Emit partial data for progress tracking
         this.emit('commandProgress', {
           sessionId,
-          pid: claudeProcess.pid,
+          pid: aicliProcess.pid,
           data: chunk,
           timestamp: new Date().toISOString(),
         });
       });
 
-      claudeProcess.stderr.on('data', (data) => {
+      aicliProcess.stderr.on('data', (data) => {
         // Store raw buffer to prevent encoding truncation
         stderrBuffers.push(data);
 
         const chunk = data.toString();
         stderr += chunk;
         console.log(
-          `📛 Claude CLI STDERR (${chunk.length} chars, total: ${stderr.length}):`,
+          `📛 AICLI CLI STDERR (${chunk.length} chars, total: ${stderr.length}):`,
           JSON.stringify(chunk)
         );
 
@@ -1093,14 +1093,14 @@ export class ClaudeCodeService extends EventEmitter {
         // Emit stderr for logging
         this.emit('processStderr', {
           sessionId,
-          pid: claudeProcess.pid,
+          pid: aicliProcess.pid,
           data: chunk,
           timestamp: new Date().toISOString(),
         });
       });
 
-      claudeProcess.on('close', (code) => {
-        console.log(`🔚 Claude CLI process closed with code: ${code}`);
+      aicliProcess.on('close', (code) => {
+        console.log(`🔚 AICLI CLI process closed with code: ${code}`);
 
         // Reconstruct complete output from buffers to prevent encoding issues
         let completeStdout = '';
@@ -1135,7 +1135,7 @@ export class ClaudeCodeService extends EventEmitter {
         // Emit process exit event
         this.emit('processExit', {
           sessionId,
-          pid: claudeProcess.pid,
+          pid: aicliProcess.pid,
           code,
           stdout: completeStdout.substring(0, 1000),
           stderr: completeStderr,
@@ -1143,31 +1143,31 @@ export class ClaudeCodeService extends EventEmitter {
         });
 
         if (code !== 0) {
-          reject(new Error(`Claude CLI exited with code ${code}: ${completeStderr}`));
+          reject(new Error(`AICLI CLI exited with code ${code}: ${completeStderr}`));
           return;
         }
 
         try {
           // Validate JSON before parsing
           if (!completeStdout || completeStdout.length === 0) {
-            reject(new Error('Claude CLI returned empty output'));
+            reject(new Error('AICLI CLI returned empty output'));
             return;
           }
 
           // For stream-json format, we don't need strict JSON validation since it's newline-delimited
           const trimmedOutput = completeStdout.trim();
           if (!trimmedOutput || trimmedOutput.length === 0) {
-            reject(new Error('Claude CLI returned empty output'));
+            reject(new Error('AICLI CLI returned empty output'));
             return;
           }
 
           // Parse stream-json format - newline-delimited JSON objects
           const responses = this.parseStreamJsonOutput(trimmedOutput);
-          console.log(`✅ Claude CLI command completed successfully`);
+          console.log(`✅ AICLI CLI command completed successfully`);
           console.log(`   Parsed ${responses.length} response objects from stream-json`);
 
           if (responses.length === 0) {
-            reject(new Error('No valid JSON objects found in Claude CLI output'));
+            reject(new Error('No valid JSON objects found in AICLI CLI output'));
             return;
           }
 
@@ -1193,12 +1193,12 @@ export class ClaudeCodeService extends EventEmitter {
             console.log(
               `   Response ${index + 1}: type=${response.type}, subtype=${response.subtype || 'none'}`
             );
-            this.emitClaudeResponse(sessionId, response, index === responses.length - 1);
+            this.emitAICLIResponse(sessionId, response, index === responses.length - 1);
           });
 
           promiseResolve(finalResult);
         } catch (error) {
-          console.error(`❌ Failed to parse Claude CLI response:`, error);
+          console.error(`❌ Failed to parse AICLI CLI response:`, error);
           console.error(`   Raw stdout length:`, completeStdout.length);
           console.error(`   First 200 chars:`, completeStdout.substring(0, 200));
           console.error(
@@ -1208,18 +1208,18 @@ export class ClaudeCodeService extends EventEmitter {
 
           // Try to provide more helpful error information
           if (error.message.includes('Unterminated string')) {
-            reject(new Error('Claude CLI response was truncated - output is incomplete'));
+            reject(new Error('AICLI CLI response was truncated - output is incomplete'));
           } else if (error.message.includes('Unexpected end')) {
-            reject(new Error('Claude CLI response ended unexpectedly - possible truncation'));
+            reject(new Error('AICLI CLI response ended unexpectedly - possible truncation'));
           } else {
-            reject(new Error(`Failed to parse Claude CLI response: ${error.message}`));
+            reject(new Error(`Failed to parse AICLI CLI response: ${error.message}`));
           }
         }
       });
 
-      claudeProcess.on('error', (error) => {
-        console.error(`❌ Claude CLI process error:`, error);
-        reject(new Error(`Claude CLI process error: ${error.message}`));
+      aicliProcess.on('error', (error) => {
+        console.error(`❌ AICLI CLI process error:`, error);
+        reject(new Error(`AICLI CLI process error: ${error.message}`));
       });
 
       // Implement intelligent timeout with heartbeat detection
@@ -1244,20 +1244,20 @@ export class ClaudeCodeService extends EventEmitter {
 
           if (hasReceivedOutput) {
             console.log(
-              `⏰ Claude CLI process silent timeout (${Math.round(timeSinceActivity / 1000)}s since last activity), killing PID ${claudeProcess.pid}...`
+              `⏰ AICLI CLI process silent timeout (${Math.round(timeSinceActivity / 1000)}s since last activity), killing PID ${aicliProcess.pid}...`
             );
             reject(
               new Error(
-                `Claude CLI process timed out after ${Math.round(timeSinceActivity / 1000)}s of silence`
+                `AICLI CLI process timed out after ${Math.round(timeSinceActivity / 1000)}s of silence`
               )
             );
           } else {
             console.log(
-              `⏰ Claude CLI process initial timeout (${Math.round(totalRuntime / 1000)}s total), killing PID ${claudeProcess.pid}...`
+              `⏰ AICLI CLI process initial timeout (${Math.round(totalRuntime / 1000)}s total), killing PID ${aicliProcess.pid}...`
             );
-            reject(new Error('Claude CLI process timed out'));
+            reject(new Error('AICLI CLI process timed out'));
           }
-          claudeProcess.kill('SIGTERM');
+          aicliProcess.kill('SIGTERM');
         }, timeoutToUse);
       };
 
@@ -1267,7 +1267,7 @@ export class ClaudeCodeService extends EventEmitter {
         const wasFirstOutput = !hasReceivedOutput;
         hasReceivedOutput = true;
         console.log(
-          `💓 Claude CLI activity detected${wasFirstOutput ? ' (first output)' : ''}, resetting timeout timer`
+          `💓 AICLI CLI activity detected${wasFirstOutput ? ' (first output)' : ''}, resetting timeout timer`
         );
         updateTimeout();
       };
@@ -1278,16 +1278,16 @@ export class ClaudeCodeService extends EventEmitter {
       // Add periodic status logging
       const statusInterval = setInterval(
         () => {
-          if (claudeProcess && claudeProcess.pid) {
+          if (aicliProcess && aicliProcess.pid) {
             console.log(
-              `📊 Claude CLI PID ${claudeProcess.pid} still running... (stdout: ${stdout.length} chars, stderr: ${stderr.length} chars)`
+              `📊 AICLI CLI PID ${aicliProcess.pid} still running... (stdout: ${stdout.length} chars, stderr: ${stderr.length} chars)`
             );
           }
         },
         Math.min(timeoutMs / 4, 10000)
       ); // Status every 1/4 of timeout or 10s max
 
-      claudeProcess.on('close', () => {
+      aicliProcess.on('close', () => {
         if (timeoutHandle) {
           clearTimeout(timeoutHandle);
         }
@@ -1602,14 +1602,14 @@ export class ClaudeCodeService extends EventEmitter {
     return objects;
   }
 
-  emitClaudeResponse(sessionId, response, _isComplete = false, options = {}) {
+  emitAICLIResponse(sessionId, response, _isComplete = false, options = {}) {
     const buffer = this.sessionMessageBuffers.get(sessionId);
     if (!buffer) {
       console.warn(`No message buffer found for session ${sessionId}`);
       return;
     }
 
-    // Process different types of Claude CLI responses
+    // Process different types of AICLI CLI responses
     switch (response.type) {
       case 'system':
         this.handleSystemResponse(sessionId, response, buffer);
@@ -2122,7 +2122,7 @@ export class ClaudeCodeService extends EventEmitter {
       return { success: false, message: 'Session not found' };
     }
 
-    console.log(`🔚 Closing Claude CLI session: ${sessionId}`);
+    console.log(`🔚 Closing AICLI CLI session: ${sessionId}`);
     console.log(`   Session type: metadata-only (no long-running process)`);
 
     try {
@@ -2149,7 +2149,7 @@ export class ClaudeCodeService extends EventEmitter {
 
   getActiveSessions() {
     const sessions = Array.from(this.activeSessions.keys());
-    console.log(`📊 Active Claude CLI sessions: ${sessions.length}`);
+    console.log(`📊 Active AICLI CLI sessions: ${sessions.length}`);
     sessions.forEach((sessionId, index) => {
       const session = this.activeSessions.get(sessionId);
       const age = Math.round((Date.now() - session.createdAt) / 1000);
@@ -2162,7 +2162,7 @@ export class ClaudeCodeService extends EventEmitter {
 
   // Cleanup method for graceful shutdown
   shutdown() {
-    console.log('🔄 Shutting down Claude Code Service...');
+    console.log('🔄 Shutting down AICLI Code Service...');
 
     // Stop health monitoring
     this.stopProcessHealthMonitoring();
@@ -2182,7 +2182,7 @@ export class ClaudeCodeService extends EventEmitter {
     // Clear all data structures
     this.activeSessions.clear();
 
-    console.log('✅ Claude Code Service shut down complete');
+    console.log('✅ AICLI Code Service shut down complete');
   }
 
   async healthCheck() {
@@ -2208,7 +2208,7 @@ export class ClaudeCodeService extends EventEmitter {
 
       return {
         status: isAvailable ? 'healthy' : 'degraded',
-        claudeCodeAvailable: isAvailable,
+        aicliCodeAvailable: isAvailable,
         activeSessions: this.activeSessions.size,
         resources: {
           system: systemResources,
@@ -2378,8 +2378,8 @@ export class ClaudeCodeService extends EventEmitter {
     return timeoutMs;
   }
 
-  // Classify different types of Claude Code messages
-  classifyClaudeMessage(message) {
+  // Classify different types of AICLI Code messages
+  classifyAICLIMessage(message) {
     if (!message || typeof message !== 'object') {
       return { eventType: 'streamData', data: message };
     }
@@ -2440,7 +2440,7 @@ export class ClaudeCodeService extends EventEmitter {
   }
 
   handleAssistantMessage(message) {
-    // Claude's response messages
+    // AICLI's response messages
     const content = message.message?.content;
 
     if (Array.isArray(content)) {

@@ -3,7 +3,7 @@ import Combine
 import Network
 
 @available(iOS 13.0, macOS 10.15, *)
-public class ClaudeCodeService: ObservableObject {
+public class AICLIService: ObservableObject {
     @Published var isConnected = false
     @Published var connectionStatus: ConnectionStatus = .disconnected
     @Published var currentSession: String?
@@ -38,7 +38,7 @@ public class ClaudeCodeService: ObservableObject {
 
     // MARK: - Connection Management
 
-    func connect(to address: String, port: Int, authToken: String?, completion: @escaping (Result<Void, ClaudeCompanionError>) -> Void) {
+    func connect(to address: String, port: Int, authToken: String?, completion: @escaping (Result<Void, AICLICompanionError>) -> Void) {
         let connection = ServerConnection(
             address: address,
             port: port,
@@ -81,7 +81,7 @@ public class ClaudeCodeService: ObservableObject {
 
     // MARK: - Server Discovery
 
-    func discoverLocalServers(completion: @escaping (Result<[DiscoveredServer], ClaudeCompanionError>) -> Void) {
+    func discoverLocalServers(completion: @escaping (Result<[DiscoveredServer], AICLICompanionError>) -> Void) {
         // Use Bonjour to discover local Claude Code servers
         let browser = NetworkServiceBrowser()
 
@@ -109,17 +109,17 @@ public class ClaudeCodeService: ObservableObject {
 
     // MARK: - Claude Code API
 
-    func sendPrompt(_ prompt: String, completion: @escaping (Result<ClaudeCodeResponse, ClaudeCompanionError>) -> Void) {
+    func sendPrompt(_ prompt: String, completion: @escaping (Result<AICLIResponse, AICLICompanionError>) -> Void) {
         guard let connection = currentConnection,
               let url = connection.url else {
-            completion(.failure(.connectionFailed("No active connection")))
+            completion(.failure(AICLICompanionError.connectionFailed("No active connection")))
             return
         }
 
-        let requestBody = ClaudeCodeRequest(prompt: prompt, format: "json")
+        let requestBody = AICLIRequest(prompt: prompt, format: "json")
 
         guard let bodyData = try? encoder.encode(requestBody) else {
-            completion(.failure(.jsonParsingError(NSError(domain: "EncodingError", code: 0))))
+            completion(.failure(AICLICompanionError.jsonParsingError(NSError(domain: "EncodingError", code: 0))))
             return
         }
 
@@ -135,7 +135,7 @@ public class ClaudeCodeService: ObservableObject {
 
         urlSession.dataTask(with: request) { [weak self] data, response, error in
             if let error = error {
-                completion(.failure(.networkError(error)))
+                completion(.failure(AICLICompanionError.networkError(error)))
                 return
             }
 
@@ -155,7 +155,7 @@ public class ClaudeCodeService: ObservableObject {
             }
 
             do {
-                let claudeResponse = try self?.decoder.decode(ClaudeCodeResponse.self, from: data)
+                let claudeResponse = try self?.decoder.decode(AICLIResponse.self, from: data)
                 if let response = claudeResponse {
                     completion(.success(response))
                 } else {
@@ -167,14 +167,14 @@ public class ClaudeCodeService: ObservableObject {
         }.resume()
     }
 
-    func sendStreamingPrompt(_ prompt: String, onPartialResponse: @escaping (String) -> Void, completion: @escaping (Result<ClaudeCodeResponse, ClaudeCompanionError>) -> Void) {
+    func sendStreamingPrompt(_ prompt: String, onPartialResponse: @escaping (String) -> Void, completion: @escaping (Result<AICLIResponse, AICLICompanionError>) -> Void) {
         // TODO: Implement streaming via WebSocket
         sendPrompt(prompt, completion: completion)
     }
     
     // MARK: - Project Management
     
-    func startProjectSession(project: Project, connection: ServerConnection, completion: @escaping (Result<ProjectSession, ClaudeCompanionError>) -> Void) {
+    func startProjectSession(project: Project, connection: ServerConnection, completion: @escaping (Result<ProjectSession, AICLICompanionError>) -> Void) {
         guard let url = connection.url else {
             completion(.failure(.connectionFailed("Invalid server URL")))
             return
@@ -195,7 +195,7 @@ public class ClaudeCodeService: ObservableObject {
         
         urlSession.dataTask(with: request) { [weak self] data, response, error in
             if let error = error {
-                completion(.failure(.networkError(error)))
+                completion(.failure(AICLICompanionError.networkError(error)))
                 return
             }
             
@@ -246,10 +246,10 @@ public class ClaudeCodeService: ObservableObject {
 
     // MARK: - Health Check
 
-    func healthCheck(completion: @escaping (Result<ServerHealth, ClaudeCompanionError>) -> Void) {
+    func healthCheck(completion: @escaping (Result<ServerHealth, AICLICompanionError>) -> Void) {
         guard let connection = currentConnection,
               let url = connection.url else {
-            completion(.failure(.connectionFailed("No active connection")))
+            completion(.failure(AICLICompanionError.connectionFailed("No active connection")))
             return
         }
 
@@ -262,7 +262,7 @@ public class ClaudeCodeService: ObservableObject {
 
         urlSession.dataTask(with: request) { _, response, error in
             if let error = error {
-                completion(.failure(.networkError(error)))
+                completion(.failure(AICLICompanionError.networkError(error)))
                 return
             }
 
@@ -287,7 +287,7 @@ public class ClaudeCodeService: ObservableObject {
         encoder.dateEncodingStrategy = .formatted(formatter)
     }
 
-    private func testConnection(_ connection: ServerConnection, completion: @escaping (Result<Void, ClaudeCompanionError>) -> Void) {
+    private func testConnection(_ connection: ServerConnection, completion: @escaping (Result<Void, AICLICompanionError>) -> Void) {
         guard let url = connection.url else {
             completion(.failure(.connectionFailed("Invalid server URL")))
             return
@@ -303,7 +303,7 @@ public class ClaudeCodeService: ObservableObject {
 
         urlSession.dataTask(with: request) { _, response, error in
             if let error = error {
-                completion(.failure(.networkError(error)))
+                completion(.failure(AICLICompanionError.networkError(error)))
                 return
             }
 
@@ -326,7 +326,7 @@ public class ClaudeCodeService: ObservableObject {
         }.resume()
     }
 
-    private func establishWebSocketConnection(_ connection: ServerConnection, completion: @escaping (Result<Void, ClaudeCompanionError>) -> Void) {
+    private func establishWebSocketConnection(_ connection: ServerConnection, completion: @escaping (Result<Void, AICLICompanionError>) -> Void) {
         guard let wsURL = connection.wsURL else {
             completion(.failure(.connectionFailed("Invalid WebSocket URL")))
             return
@@ -384,10 +384,10 @@ enum ConnectionStatus {
     case disconnected
     case connecting
     case connected
-    case error(ClaudeCompanionError)
+    case error(AICLICompanionError)
 }
 
-struct ClaudeCodeRequest: Codable {
+struct AICLIRequest: Codable {
     let prompt: String
     let format: String
     let sessionId: String?

@@ -1,23 +1,23 @@
-# Claude Companion Server
+# AICLI Companion Server
 
-A Node.js companion server that provides HTTP and WebSocket APIs for connecting mobile devices to Claude Code CLI.
+A Node.js companion server that provides HTTP and WebSocket APIs for connecting mobile devices to AICLI Code CLI.
 
 ## Features
 
-- **HTTP REST API** for one-time Claude Code interactions
+- **HTTP REST API** for one-time AICLI Code interactions
 - **WebSocket API** for real-time streaming conversations
 - **Bonjour/mDNS discovery** for automatic server detection on local networks
 - **Authentication support** with token-based security
 - **Session management** for maintaining conversation context
-- **Permission handling** for interactive Claude Code prompts
+- **Permission handling** for interactive AICLI Code prompts
 - **Process monitoring** for resource management
 
 ## Installation
 
 ### Option 1: Global Installation
 ```bash
-npm install -g claude-companion-server
-claude-companion-server
+npm install -g aicli-companion-server
+aicli-companion-server
 ```
 
 ### Option 2: Local Development
@@ -48,34 +48,34 @@ ALLOWED_ORIGINS=http://localhost:3000,https://your-domain.com
 # Features
 ENABLE_BONJOUR=true
 
-# Claude CLI Permission Configuration
-# Note: Claude CLI uses camelCase for permission flags (--allowedTools, not --allowed-tools)
-CLAUDE_PERMISSION_MODE=default  # Options: default, acceptEdits, bypassPermissions, plan
-CLAUDE_ALLOWED_TOOLS=Read,Write,Edit  # Comma-separated list of allowed tools (default: Read,Write,Edit)
-CLAUDE_DISALLOWED_TOOLS=Bash(rm:*),Bash(sudo:*)  # Comma-separated list of disallowed tools
-CLAUDE_SKIP_PERMISSIONS=false  # Set to 'true' to use --dangerously-skip-permissions (use with caution)
+# AICLI CLI Permission Configuration
+# Note: AICLI CLI uses camelCase for permission flags (--allowedTools, not --allowed-tools)
+AICLI_PERMISSION_MODE=default  # Options: default, acceptEdits, bypassPermissions, plan
+AICLI_ALLOWED_TOOLS=Read,Write,Edit  # Comma-separated list of allowed tools (default: Read,Write,Edit)
+AICLI_DISALLOWED_TOOLS=Bash(rm:*),Bash(sudo:*)  # Comma-separated list of disallowed tools
+AICLI_SKIP_PERMISSIONS=false  # Set to 'true' to use --dangerously-skip-permissions (use with caution)
 ```
 
 ### Permission Configuration
 
-The server supports configuring Claude CLI permission settings to reduce permission prompts:
+The server supports configuring AICLI CLI permission settings to reduce permission prompts:
 
-- **CLAUDE_PERMISSION_MODE**: Controls how Claude handles permissions
+- **AICLI_PERMISSION_MODE**: Controls how AICLI handles permissions
   - `default`: Normal permission prompts
   - `acceptEdits`: Automatically accept file edits
   - `bypassPermissions`: Skip all permission checks (use with caution)
   - `plan`: Enter planning mode before making changes
 
-- **CLAUDE_ALLOWED_TOOLS**: Pre-approve specific tools
+- **AICLI_ALLOWED_TOOLS**: Pre-approve specific tools
   - Default: `Read,Write,Edit` (basic file operations)
   - Example: `Bash,Edit,Read,Write` (includes bash commands)
   - Reduces permission prompts for common operations
 
-- **CLAUDE_DISALLOWED_TOOLS**: Block specific tool patterns
+- **AICLI_DISALLOWED_TOOLS**: Block specific tool patterns
   - Example: `Bash(rm:*),Bash(sudo:*)` blocks dangerous commands
   - Adds safety restrictions
 
-- **CLAUDE_SKIP_PERMISSIONS**: Bypass all permission checks
+- **AICLI_SKIP_PERMISSIONS**: Bypass all permission checks
   - Set to `true` to use `--dangerously-skip-permissions`
   - Only use in trusted, sandboxed environments
   - Useful for automated workflows
@@ -89,8 +89,8 @@ PORT=8080 npm start
 # Start with authentication
 AUTH_TOKEN=my-secret-token npm start
 
-# Start with custom Claude path
-CLAUDE_CLI_PATH=/usr/local/bin/claude npm start
+# Start with custom AICLI path
+AICLI_CLI_PATH=/usr/local/bin/aicli npm start
 ```
 
 ## API Endpoints
@@ -99,7 +99,7 @@ CLAUDE_CLI_PATH=/usr/local/bin/claude npm start
 
 - `GET /health` - Health check
 - `GET /api/info` - Server information
-- `POST /api/ask` - Send prompt to Claude Code
+- `POST /api/ask` - Send prompt to AICLI Code
 - `POST /api/stream/start` - Start streaming session
 - `POST /api/stream/:sessionId` - Send to existing session
 - `DELETE /api/stream/:sessionId` - Close session
@@ -114,7 +114,7 @@ ws://localhost:3001/ws?token=your-auth-token
 ```
 
 Message types:
-- `askClaude` - Send prompt
+- `askAICLI` - Send prompt
 - `continueSession` - Continue existing session
 - `closeSession` - Close session
 - `permission` - Respond to permission prompt
@@ -158,14 +158,14 @@ npm run hostapp:build    # Build desktop app
 
 ## Troubleshooting
 
-### Claude CLI not found
-- Ensure Claude CLI is installed: `npm install -g @anthropic/claude-code`
-- Set custom path: `CLAUDE_CLI_PATH=/path/to/claude npm start`
+### AICLI CLI not found
+- Ensure AICLI CLI is installed: `npm install -g @anthropic/aicli-code`
+- Set custom path: `AICLI_CLI_PATH=/path/to/aicli npm start`
 
 ### Permission denied errors
 - Check file permissions in working directory
-- Use `CLAUDE_ALLOWED_TOOLS` to pre-approve tools
-- Consider `CLAUDE_SKIP_PERMISSIONS=true` for trusted environments
+- Use `AICLI_ALLOWED_TOOLS` to pre-approve tools
+- Consider `AICLI_SKIP_PERMISSIONS=true` for trusted environments
 
 ### High memory usage
 - Monitor active sessions with `/api/sessions`

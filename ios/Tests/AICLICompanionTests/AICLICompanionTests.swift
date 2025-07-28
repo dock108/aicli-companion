@@ -1,7 +1,7 @@
 import XCTest
-@testable import ClaudeCompanion
+@testable import AICLICompanion
 
-final class ClaudeCompanionTests: XCTestCase {
+final class AICLICompanionTests: XCTestCase {
     func testHapticManagerInitialization() throws {
         let manager = HapticManager.shared
 
@@ -19,8 +19,8 @@ final class ClaudeCompanionTests: XCTestCase {
         XCTAssertNotNil(manager)
     }
 
-    func testClaudeCodeServiceInitialization() throws {
-        let service = ClaudeCodeService()
+    func testAICLIServiceInitialization() throws {
+        let service = AICLIService()
 
         XCTAssertNotNil(service)
 

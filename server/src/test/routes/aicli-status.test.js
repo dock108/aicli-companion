@@ -1,11 +1,11 @@
 import { describe, it, beforeEach, mock } from 'node:test';
 import assert from 'node:assert';
 import express from 'express';
-import { setupClaudeStatusRoutes } from '../../routes/claude-status.js';
+import { setupAICLIStatusRoutes } from '../../routes/aicli-status.js';
 
-describe('Claude Status Routes', () => {
+describe('AICLI Status Routes', () => {
   let app;
-  let claudeService;
+  let aicliService;
   let handlers;
   let mockRouter;
 
@@ -29,8 +29,8 @@ describe('Claude Status Routes', () => {
     express.Router = () => mockRouter;
 
     // Mock claude service
-    claudeService = {
-      claudeCommand: '/usr/local/bin/claude',
+    aicliService = {
+      aicliCommand: '/usr/local/bin/claude',
       isAvailable: mock.fn(() => true),
       checkAvailability: mock.fn(async () => true),
       getActiveSessions: mock.fn(() => ['session-1', 'session-2']),
@@ -48,12 +48,12 @@ describe('Claude Status Routes', () => {
         ],
       ]),
       sendOneTimePrompt: mock.fn(async () => ({ result: 'Test response' })),
-      testClaudeCommand: mock.fn(async (type) => {
+      testAICLICommand: mock.fn(async (type) => {
         switch (type) {
           case 'version':
             return 'claude version 0.1.0';
           case 'help':
-            return 'Claude CLI help text';
+            return 'AICLI CLI help text';
           case 'simple':
             return 'Simple test result';
           case 'json':
@@ -68,27 +68,27 @@ describe('Claude Status Routes', () => {
     app.use = mock.fn();
   });
 
-  describe('setupClaudeStatusRoutes', () => {
+  describe('setupAICLIStatusRoutes', () => {
     it('should be a function', () => {
-      assert.strictEqual(typeof setupClaudeStatusRoutes, 'function');
+      assert.strictEqual(typeof setupAICLIStatusRoutes, 'function');
     });
 
     it('should setup routes on the app', () => {
-      setupClaudeStatusRoutes(app, claudeService);
+      setupAICLIStatusRoutes(app, aicliService);
 
       assert.strictEqual(app.use.mock.calls.length, 1);
       assert.strictEqual(app.use.mock.calls[0].arguments[0], '/api');
     });
 
     it('should register all expected routes', () => {
-      setupClaudeStatusRoutes(app, claudeService);
+      setupAICLIStatusRoutes(app, aicliService);
 
       const expectedRoutes = [
-        'GET /claude/status',
-        'GET /claude/sessions/:sessionId',
-        'POST /claude/test',
-        'POST /claude/debug/:testType',
-        'GET /claude/sessions/:sessionId/logs',
+        'GET /aicli/status',
+        'GET /aicli/sessions/:sessionId',
+        'POST /aicli/test',
+        'POST /aicli/debug/:testType',
+        'GET /aicli/sessions/:sessionId/logs',
       ];
 
       expectedRoutes.forEach((route) => {
@@ -97,9 +97,9 @@ describe('Claude Status Routes', () => {
     });
   });
 
-  describe('GET /claude/status', () => {
+  describe('GET /aicli/status', () => {
     beforeEach(() => {
-      setupClaudeStatusRoutes(app, claudeService);
+      setupAICLIStatusRoutes(app, aicliService);
     });
 
     it('should return claude status', async () => {
@@ -108,18 +108,18 @@ describe('Claude Status Routes', () => {
         json: mock.fn(),
       };
 
-      await handlers['GET /claude/status'](req, res);
+      await handlers['GET /aicli/status'](req, res);
 
       assert.strictEqual(res.json.mock.calls.length, 1);
       const response = res.json.mock.calls[0].arguments[0];
-      assert.ok(response.claude);
+      assert.ok(response.aicli);
       assert.ok(response.sessions);
       assert.ok(response.system);
       assert.ok(response.service);
     });
 
     it('should handle errors', async () => {
-      claudeService.getActiveSessions.mock.mockImplementation(() => {
+      aicliService.getActiveSessions.mock.mockImplementation(() => {
         throw new Error('Test error');
       });
 
@@ -129,16 +129,16 @@ describe('Claude Status Routes', () => {
         json: mock.fn(),
       };
 
-      await handlers['GET /claude/status'](req, res);
+      await handlers['GET /aicli/status'](req, res);
 
       assert.strictEqual(res.status.mock.calls[0].arguments[0], 500);
-      assert.strictEqual(res.json.mock.calls[0].arguments[0].error, 'Failed to get Claude status');
+      assert.strictEqual(res.json.mock.calls[0].arguments[0].error, 'Failed to get AICLI status');
     });
   });
 
-  describe('GET /claude/sessions/:sessionId', () => {
+  describe('GET /aicli/sessions/:sessionId', () => {
     beforeEach(() => {
-      setupClaudeStatusRoutes(app, claudeService);
+      setupAICLIStatusRoutes(app, aicliService);
     });
 
     it('should return session info', async () => {
@@ -147,7 +147,7 @@ describe('Claude Status Routes', () => {
         json: mock.fn(),
       };
 
-      await handlers['GET /claude/sessions/:sessionId'](req, res);
+      await handlers['GET /aicli/sessions/:sessionId'](req, res);
 
       assert.strictEqual(res.json.mock.calls.length, 1);
       const response = res.json.mock.calls[0].arguments[0];
@@ -161,15 +161,15 @@ describe('Claude Status Routes', () => {
         json: mock.fn(),
       };
 
-      await handlers['GET /claude/sessions/:sessionId'](req, res);
+      await handlers['GET /aicli/sessions/:sessionId'](req, res);
 
       assert.strictEqual(res.status.mock.calls[0].arguments[0], 404);
     });
   });
 
-  describe('POST /claude/test', () => {
+  describe('POST /aicli/test', () => {
     beforeEach(() => {
-      setupClaudeStatusRoutes(app, claudeService);
+      setupAICLIStatusRoutes(app, aicliService);
     });
 
     it('should test claude with default prompt', async () => {
@@ -178,14 +178,14 @@ describe('Claude Status Routes', () => {
         json: mock.fn(),
       };
 
-      await handlers['POST /claude/test'](req, res);
+      await handlers['POST /aicli/test'](req, res);
 
-      assert.strictEqual(claudeService.sendOneTimePrompt.mock.calls.length, 1);
+      assert.strictEqual(aicliService.sendOneTimePrompt.mock.calls.length, 1);
       assert.strictEqual(res.json.mock.calls[0].arguments[0].success, true);
     });
 
     it('should handle errors', async () => {
-      claudeService.sendOneTimePrompt.mock.mockImplementation(async () => {
+      aicliService.sendOneTimePrompt.mock.mockImplementation(async () => {
         throw new Error('Test error');
       });
 
@@ -195,16 +195,16 @@ describe('Claude Status Routes', () => {
         json: mock.fn(),
       };
 
-      await handlers['POST /claude/test'](req, res);
+      await handlers['POST /aicli/test'](req, res);
 
       assert.strictEqual(res.status.mock.calls[0].arguments[0], 500);
       assert.strictEqual(res.json.mock.calls[0].arguments[0].success, false);
     });
   });
 
-  describe('POST /claude/debug/:testType', () => {
+  describe('POST /aicli/debug/:testType', () => {
     beforeEach(() => {
-      setupClaudeStatusRoutes(app, claudeService);
+      setupAICLIStatusRoutes(app, aicliService);
     });
 
     it('should run debug test', async () => {
@@ -213,7 +213,7 @@ describe('Claude Status Routes', () => {
         json: mock.fn(),
       };
 
-      await handlers['POST /claude/debug/:testType'](req, res);
+      await handlers['POST /aicli/debug/:testType'](req, res);
 
       assert.strictEqual(res.json.mock.calls[0].arguments[0].success, true);
       assert.strictEqual(res.json.mock.calls[0].arguments[0].testType, 'version');
@@ -226,15 +226,15 @@ describe('Claude Status Routes', () => {
         json: mock.fn(),
       };
 
-      await handlers['POST /claude/debug/:testType'](req, res);
+      await handlers['POST /aicli/debug/:testType'](req, res);
 
       assert.strictEqual(res.status.mock.calls[0].arguments[0], 400);
     });
   });
 
-  describe('GET /claude/sessions/:sessionId/logs', () => {
+  describe('GET /aicli/sessions/:sessionId/logs', () => {
     beforeEach(() => {
-      setupClaudeStatusRoutes(app, claudeService);
+      setupAICLIStatusRoutes(app, aicliService);
     });
 
     it('should return logs placeholder', async () => {
@@ -243,7 +243,7 @@ describe('Claude Status Routes', () => {
         json: mock.fn(),
       };
 
-      await handlers['GET /claude/sessions/:sessionId/logs'](req, res);
+      await handlers['GET /aicli/sessions/:sessionId/logs'](req, res);
 
       assert.strictEqual(
         res.json.mock.calls[0].arguments[0].message,

@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 // MARK: - Project Models for Server API
 
@@ -44,9 +45,13 @@ struct ProjectSelectionView: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var isStartingProject = false
+    @State private var showingContinuationSheet = false
+    @State private var pendingProject: Project?
+    @State private var cancellables = Set<AnyCancellable>()
     
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject var settings: SettingsManager
+    @StateObject private var persistenceService = MessagePersistenceService.shared
     
     init(selectedProject: Binding<Project?>, isProjectSelected: Binding<Bool>, onDisconnect: (() -> Void)? = nil, onSessionStarted: ((ProjectSession) -> Void)? = nil) {
         self._selectedProject = selectedProject
@@ -129,7 +134,11 @@ struct ProjectSelectionView: View {
                 ScrollView {
                     LazyVStack(spacing: Spacing.sm) {
                         ForEach(projects) { project in
-                            ProjectRowView(project: project) {
+                            ProjectRowView(
+                                project: project,
+                                hasSession: persistenceService.hasSession(for: project.path),
+                                sessionMetadata: persistenceService.getSessionMetadata(for: project.path)
+                            ) {
                                 selectProject(project)
                             }
                         }
@@ -142,6 +151,9 @@ struct ProjectSelectionView: View {
         .background(Colors.bgBase(for: colorScheme))
         .onAppear {
             loadProjects()
+            persistenceService.objectWillChange.sink { _ in
+                // Force UI update when persistence service changes
+            }.store(in: &cancellables)
         }
         .disabled(isStartingProject)
         .overlay(
@@ -157,7 +169,7 @@ struct ProjectSelectionView: View {
                                 .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                 .scaleEffect(1.2)
                             
-                            Text("Starting Claude CLI...")
+                            Text("Starting AICLI...")
                                 .font(Typography.font(.body))
                                 .foregroundColor(.white)
                         }
@@ -170,6 +182,25 @@ struct ProjectSelectionView: View {
                 }
             }
         )
+        .sheet(isPresented: $showingContinuationSheet) {
+            if let project = pendingProject,
+               let metadata = persistenceService.getSessionMetadata(for: project.path) {
+                SessionContinuationSheet(
+                    project: project,
+                    sessionMetadata: metadata,
+                    onContinue: {
+                        continueExistingSession(project, metadata: metadata)
+                    },
+                    onStartFresh: {
+                        startFreshSession(project)
+                    },
+                    onViewHistory: {
+                        // TODO: Implement history view
+                        print("View history for \(project.name)")
+                    }
+                )
+            }
+        }
     }
     
     // MARK: - Private Methods
@@ -243,6 +274,16 @@ struct ProjectSelectionView: View {
     }
     
     private func selectProject(_ project: Project) {
+        // Check if there's an existing session for this project
+        if persistenceService.hasSession(for: project.path) {
+            pendingProject = project
+            showingContinuationSheet = true
+        } else {
+            startProjectSession(project, continueExisting: false)
+        }
+    }
+    
+    private func startProjectSession(_ project: Project, continueExisting: Bool) {
         isStartingProject = true
         
         guard let serverURL = settings.serverURL else {
@@ -259,6 +300,18 @@ struct ProjectSelectionView: View {
         // Add auth token if available
         if let token = settings.authToken {
             request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        // Add continue session info if applicable
+        if continueExisting,
+           let metadata = persistenceService.getSessionMetadata(for: project.path),
+           let sessionId = metadata.aicliSessionId {
+            let body = [
+                "continueSession": true,
+                "sessionId": sessionId
+            ] as [String : Any]
+            
+            request.httpBody = try? JSONSerialization.data(withJSONObject: body)
         }
         
         URLSession.shared.dataTask(with: request) { data, response, error in
@@ -304,6 +357,20 @@ struct ProjectSelectionView: View {
         }.resume()
     }
     
+    private func continueExistingSession(_ project: Project, metadata: SessionMetadata) {
+        // TODO: Add server endpoint to continue with existing session ID
+        startProjectSession(project, continueExisting: true)
+    }
+    
+    private func startFreshSession(_ project: Project) {
+        // Archive the old session
+        persistenceService.archiveCurrentSession(for: project.path)
+        // Clear current messages
+        persistenceService.clearMessages(for: project.path)
+        // Start new session
+        startProjectSession(project, continueExisting: false)
+    }
+    
     private func disconnectFromServer() {
         if let onDisconnect = onDisconnect {
             onDisconnect()
@@ -318,6 +385,8 @@ struct ProjectSelectionView: View {
 @available(iOS 14.0, macOS 11.0, *)
 struct ProjectRowView: View {
     let project: Project
+    let hasSession: Bool
+    let sessionMetadata: SessionMetadata?
     let onTap: () -> Void
     
     @Environment(\.colorScheme) var colorScheme
@@ -325,27 +394,56 @@ struct ProjectRowView: View {
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: Spacing.md) {
-                // Project icon
-                Image(systemName: "folder.fill")
-                    .font(.title2)
-                    .foregroundColor(Colors.accentPrimaryEnd)
-                    .frame(width: 40, height: 40)
-                    .background(
+                // Project icon with session indicator
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: "folder.fill")
+                        .font(.title2)
+                        .foregroundColor(Colors.accentPrimaryEnd)
+                        .frame(width: 40, height: 40)
+                        .background(
+                            Circle()
+                                .fill(Colors.accentPrimaryEnd.opacity(0.1))
+                        )
+                    
+                    // Session indicator dot
+                    if hasSession {
                         Circle()
-                            .fill(Colors.accentPrimaryEnd.opacity(0.1))
-                    )
+                            .fill(Color.green)
+                            .frame(width: 10, height: 10)
+                            .overlay(
+                                Circle()
+                                    .stroke(Colors.bgCard(for: colorScheme), lineWidth: 2)
+                            )
+                            .offset(x: 4, y: -4)
+                    }
+                }
                 
                 // Project info
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(project.name)
-                        .font(Typography.font(.heading3))
-                        .foregroundColor(Colors.textPrimary(for: colorScheme))
-                        .lineLimit(1)
+                    HStack {
+                        Text(project.name)
+                            .font(Typography.font(.heading3))
+                            .foregroundColor(Colors.textPrimary(for: colorScheme))
+                            .lineLimit(1)
+                        
+                        if hasSession {
+                            Text("• Active")
+                                .font(Typography.font(.caption))
+                                .foregroundColor(.green)
+                        }
+                    }
                     
-                    Text("Tap to start Claude CLI in this project")
-                        .font(Typography.font(.caption))
-                        .foregroundColor(Colors.textSecondary(for: colorScheme))
-                        .lineLimit(2)
+                    if let metadata = sessionMetadata {
+                        Text("\(metadata.messageCount) messages • \(metadata.formattedLastUsed)")
+                            .font(Typography.font(.caption))
+                            .foregroundColor(Colors.textSecondary(for: colorScheme))
+                            .lineLimit(1)
+                    } else {
+                        Text("Tap to start AICLI in this project")
+                            .font(Typography.font(.caption))
+                            .foregroundColor(Colors.textSecondary(for: colorScheme))
+                            .lineLimit(2)
+                    }
                 }
                 
                 Spacer()
@@ -361,7 +459,7 @@ struct ProjectRowView: View {
                     .fill(Colors.bgCard(for: colorScheme))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(Colors.strokeLight, lineWidth: 1)
+                            .stroke(hasSession ? Color.green.opacity(0.3) : Colors.strokeLight, lineWidth: 1)
                     )
             )
         }
@@ -384,7 +482,18 @@ struct ProjectRowView: View {
 @available(iOS 17.0, macOS 14.0, *)
 #Preview("Project Row") {
     ProjectRowView(
-        project: Project(name: "my-awesome-app", path: "/path/to/project", type: "folder")
+        project: Project(name: "my-awesome-app", path: "/path/to/project", type: "folder"),
+        hasSession: true,
+        sessionMetadata: SessionMetadata(
+            sessionId: "test-session",
+            projectId: "my-awesome-app",
+            projectName: "my-awesome-app",
+            projectPath: "/path/to/project",
+            lastMessageDate: Date().addingTimeInterval(-3600),
+            messageCount: 42,
+            aicliSessionId: "aicli-123",
+            createdAt: Date().addingTimeInterval(-86400)
+        )
     ) {
         print("Project tapped")
     }

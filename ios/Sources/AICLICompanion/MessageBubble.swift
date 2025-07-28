@@ -255,7 +255,7 @@ struct MessageCodeBlockView: View {
     VStack(spacing: 20) {
         MessageBubble(message: Message(
             content: "Hello, how can I help you today?",
-            sender: .claude
+            sender: .assistant
         ))
         
         MessageBubble(message: Message(
@@ -265,7 +265,7 @@ struct MessageCodeBlockView: View {
         
         MessageBubble(message: Message(
             content: "Here's a code example:\n\n```swift\nfunc greet(name: String) {\n    print(\"Hello, \\(name)!\")\n}\n```\n\nYou can also use `inline code` like this.",
-            sender: .claude
+            sender: .assistant
         ))
         
         MessageBubble(message: Message(

@@ -2,14 +2,14 @@ import SwiftUI
 import ClaudeCompanion
 
 @main
-@available(iOS 16.0, macOS 13.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 struct AppMain: App {
     @StateObject private var claudeService = ClaudeCompanion.ClaudeCodeService()
     @StateObject private var settingsManager = ClaudeCompanion.SettingsManager()
     
     var body: some Scene {
         WindowGroup {
-            ClaudeCompanion.ContentView()
+            ClaudeCompanion.AdaptiveContentView()
                 .environmentObject(claudeService)
                 .environmentObject(settingsManager)
         }

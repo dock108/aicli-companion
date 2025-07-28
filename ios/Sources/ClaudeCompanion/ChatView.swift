@@ -24,6 +24,16 @@ struct ChatView: View {
     @State private var messageTimeout: Timer?
     @State private var connectionStateTimer: Timer?
     @Environment(\.colorScheme) var colorScheme
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    @Environment(\.verticalSizeClass) var verticalSizeClass
+    
+    private var isIPad: Bool {
+        #if os(iOS)
+        return UIDevice.current.userInterfaceIdiom == .pad
+        #else
+        return false
+        #endif
+    }
     
     // Project information passed from parent view
     let selectedProject: Project?
@@ -40,8 +50,8 @@ struct ChatView: View {
                 // Project context header
                 if let project = selectedProject {
                     ProjectContextHeader(project: project, session: session, onSwitchProject: onSwitchProject)
-                        .padding(.horizontal)
-                        .padding(.bottom, 8)
+                        .padding(.horizontal, isIPad && horizontalSizeClass == .regular ? 40 : 16)
+                        .padding(.vertical, 12)
                 }
                 
                 // Messages list
@@ -62,7 +72,8 @@ struct ChatView: View {
                                 LoadingIndicator(progressInfo: progressInfo, colorScheme: colorScheme)
                             }
                         }
-                        .padding()
+                        .padding(.horizontal, isIPad && horizontalSizeClass == .regular ? 40 : 16)
+                        .padding(.vertical, 16)
                     }
                     .onChange(of: messages.count) { oldValue, newValue in
                         if let lastMessage = messages.last {
@@ -121,7 +132,8 @@ struct ChatView: View {
                         .disabled(messageText.isEmpty || isLoading)
                         .animation(.easeInOut(duration: 0.2), value: messageText.isEmpty)
                     }
-                    .padding()
+                    .padding(.horizontal, isIPad && horizontalSizeClass == .regular ? 40 : 16)
+                    .padding(.vertical, 16)
                     .background(.ultraThinMaterial)
                 }
                 .offset(y: inputBarOffset)

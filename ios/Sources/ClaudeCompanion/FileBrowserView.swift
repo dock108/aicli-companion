@@ -36,7 +36,7 @@ struct FileBrowserView: View {
     }
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack {
                 // Current path header
                 if !fileManagementService.currentDirectory.isEmpty {
@@ -382,7 +382,7 @@ struct RecentFilesView: View {
     let onFileSelected: (FileItem) -> Void
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack {
                 if fileManagementService.recentFiles.isEmpty {
                     VStack(spacing: 16) {
@@ -447,7 +447,7 @@ struct FileDetailsView: View {
     @State private var contentError: String?
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             List {
                 Section("File Information") {
                     DetailRow(label: "Name", value: file.name, icon: "tag")

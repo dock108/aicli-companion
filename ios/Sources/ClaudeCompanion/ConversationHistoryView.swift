@@ -72,7 +72,7 @@ struct ConversationHistoryView: View {
     }
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack {
                 // Filter tabs
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -513,7 +513,7 @@ struct ConversationExportSheet: View {
     @Environment(\.presentationMode) var presentationMode
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 20) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Export Options")
@@ -620,7 +620,7 @@ struct BulkExportSheet: View {
     @Environment(\.presentationMode) var presentationMode
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 20) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Bulk Export")
@@ -729,7 +729,7 @@ struct ConversationStatisticsView: View {
     }
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             List {
                 Section("Overview") {
                     StatisticRow(

@@ -157,23 +157,23 @@ jobs:
     - name: Resolve Swift Package Dependencies
       run: |
         cd ios
-        xcodebuild -resolvePackageDependencies -scheme ClaudeCompanionApp
+        xcodebuild -resolvePackageDependencies -project AICLICompanion.xcodeproj -scheme AICLICompanionApp
     
     - name: Build iOS App
       run: |
         cd ios
-        xcodebuild -scheme ClaudeCompanionApp -destination 'platform=iOS Simulator,name=iPhone 16 Pro' build CODE_SIGNING_ALLOWED=NO
+        xcodebuild -project AICLICompanion.xcodeproj -scheme AICLICompanionApp -destination 'platform=iOS Simulator,name=iPhone 16 Pro' build CODE_SIGNING_ALLOWED=NO
     
     - name: Run iOS Tests
       run: |
         cd ios
-        xcodebuild -scheme ClaudeCompanionApp -destination 'platform=iOS Simulator,name=iPhone 16 Pro' test CODE_SIGNING_ALLOWED=NO
+        xcodebuild -project AICLICompanion.xcodeproj -scheme AICLICompanionApp -destination 'platform=iOS Simulator,name=iPhone 16 Pro' test CODE_SIGNING_ALLOWED=NO
       continue-on-error: true
     
     - name: Build for Release
       run: |
         cd ios
-        xcodebuild -scheme ClaudeCompanionApp -configuration Release -destination 'generic/platform=iOS' -archivePath build/ClaudeCompanion.xcarchive archive CODE_SIGNING_ALLOWED=NO
+        xcodebuild -project AICLICompanion.xcodeproj -scheme AICLICompanionApp -configuration Release -destination 'generic/platform=iOS' -archivePath build/AICLICompanion.xcarchive archive CODE_SIGNING_ALLOWED=NO
       continue-on-error: true
 
   # Integration Tests

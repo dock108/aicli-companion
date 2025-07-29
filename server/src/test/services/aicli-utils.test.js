@@ -168,7 +168,10 @@ describe('AICLI Utils Unit Tests', () => {
           () => InputValidator.validateAICLIArgs(['arg1;dangerous']),
           /dangerous shell metacharacters/
         );
-        assert.throws(() => InputValidator.validateAICLIArgs(['arg1|pipe']), /dangerous shell metacharacters/);
+        assert.throws(
+          () => InputValidator.validateAICLIArgs(['arg1|pipe']),
+          /dangerous shell metacharacters/
+        );
       });
     });
   });

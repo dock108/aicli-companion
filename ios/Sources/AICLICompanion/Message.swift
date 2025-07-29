@@ -257,6 +257,7 @@ struct WebSocketMessage: Codable {
         case subscribe(SubscribeRequest)
         case setWorkingDirectory(SetWorkingDirectoryRequest)
         case aicliCommand(AICLICommandRequest)
+        case registerDevice(RegisterDeviceRequest)
         case welcome(WelcomeResponse)
         case askResponse(AskResponseData)
         case streamStarted(StreamStartedResponse)
@@ -278,6 +279,7 @@ struct WebSocketMessage: Codable {
         case workingDirectorySet(WorkingDirectorySetResponse)
         case progress(ProgressResponse)
         case streamChunk(StreamChunkResponse)
+        case deviceRegistered(DeviceRegisteredResponse)
     }
     
     // Custom decoding to handle server message format
@@ -330,6 +332,8 @@ struct WebSocketMessage: Codable {
             self.data = .aicliResponse(try AICLICommandResponse(from: dataDecoder))
         case .streamChunk:
             self.data = .streamChunk(try StreamChunkResponse(from: dataDecoder))
+        case .deviceRegistered:
+            self.data = .deviceRegistered(try DeviceRegisteredResponse(from: dataDecoder))
         default:
             throw DecodingError.dataCorruptedError(forKey: .data, in: container, debugDescription: "Unsupported message type for decoding: \(type)")
         }
@@ -365,6 +369,8 @@ struct WebSocketMessage: Codable {
         case .setWorkingDirectory(let request):
             try container.encode(request, forKey: .data)
         case .aicliCommand(let request):
+            try container.encode(request, forKey: .data)
+        case .registerDevice(let request):
             try container.encode(request, forKey: .data)
         case .welcome(let response):
             try container.encode(response, forKey: .data)
@@ -404,6 +410,8 @@ struct WebSocketMessage: Codable {
             try container.encode(response, forKey: .data)
         case .streamChunk(let response):
             try container.encode(response, forKey: .data)
+        case .deviceRegistered(let response):
+            try container.encode(response, forKey: .data)
         }
     }
 }
@@ -419,6 +427,7 @@ enum WebSocketMessageType: String, Codable {
     case subscribe = "subscribe"
     case setWorkingDirectory = "setWorkingDirectory"
     case aicliCommand = "aicliCommand"
+    case registerDevice = "registerDevice"
 
     // Server → Client
     case welcome = "welcome"
@@ -446,6 +455,9 @@ enum WebSocketMessageType: String, Codable {
     
     // Stream chunk for sophisticated streaming
     case streamChunk = "streamChunk"
+    
+    // Device registration
+    case deviceRegistered = "deviceRegistered"
 }
 
 // MARK: - Client Request Models
@@ -563,6 +575,11 @@ struct StreamChunk: Codable {
 struct StreamChunkMetadata: Codable {
     let language: String?
     let level: Int?
+    
+    init(language: String? = nil, level: Int? = nil) {
+        self.language = language
+        self.level = level
+    }
     
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: DynamicCodingKeys.self)
@@ -805,4 +822,16 @@ struct ProgressInfo {
         self.message = progressResponse.message
         self.timestamp = progressResponse.timestamp
     }
+}
+
+// MARK: - Device Registration
+
+struct RegisterDeviceRequest: Codable {
+    let token: String
+    let platform: String
+}
+
+struct DeviceRegisteredResponse: Codable {
+    let success: Bool
+    let message: String?
 }

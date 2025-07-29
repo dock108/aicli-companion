@@ -10,6 +10,7 @@ export class ClaudeStreamParser {
     this.inCodeBlock = false;
     this.codeBlockBuffer = '';
     this.codeBlockLanguage = '';
+    this.jsonBuffer = '';
   }
 
   /**
@@ -22,7 +23,51 @@ export class ClaudeStreamParser {
     this.buffer += data;
     const chunks = [];
 
-    // Process buffer line by line
+    // Check if this is stream-json format (newline-delimited JSON)
+    if (this.looksLikeStreamJson(this.buffer)) {
+      const lines = this.buffer.split('\n');
+
+      // Keep the last line in buffer if stream is not complete (might be partial)
+      if (!isComplete && lines.length > 0) {
+        this.buffer = lines.pop();
+      } else {
+        this.buffer = '';
+      }
+
+      // Process each JSON line
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (!trimmedLine) continue;
+
+        try {
+          const parsed = JSON.parse(trimmedLine);
+
+          // Only process result messages
+          if (parsed.type === 'result' && parsed.result) {
+            console.log('📦 Found result in stream-json, extracting text content');
+            chunks.push(
+              this.createChunk('text', parsed.result, {
+                isFinal: isComplete,
+              })
+            );
+          }
+          // Skip all other message types (system, assistant, tool_use, etc.)
+        } catch (e) {
+          // Not valid JSON, skip this line
+          console.log('⚠️ Failed to parse JSON line:', trimmedLine.substring(0, 100));
+        }
+      }
+
+      // If we found result chunks, return them
+      if (chunks.length > 0) {
+        if (isComplete && chunks.length > 0) {
+          chunks[chunks.length - 1].isFinal = true;
+        }
+        return chunks;
+      }
+    }
+
+    // If no JSON detected, process normally line by line
     const lines = this.buffer.split('\n');
 
     // Keep the last line in buffer if stream is not complete (might be partial)
@@ -122,6 +167,11 @@ export class ClaudeStreamParser {
           chunks.push(this.createChunk('text', this.getAccumulatedContent()));
         }
         chunks.push(this.createChunk('divider', ''));
+        continue;
+      }
+
+      // Skip "init" messages (chain-of-thought indicators)
+      if (trimmedLine.toLowerCase() === 'init') {
         continue;
       }
 
@@ -228,6 +278,20 @@ export class ClaudeStreamParser {
   }
 
   /**
+   * Check if the buffer looks like stream-json format
+   */
+  looksLikeStreamJson(buffer) {
+    if (!buffer || buffer.length < 10) return false;
+
+    // Check if first non-empty line starts with { and contains "type":
+    const firstLine = buffer.split('\n').find((line) => line.trim());
+    if (!firstLine) return false;
+
+    const trimmed = firstLine.trim();
+    return trimmed.startsWith('{') && trimmed.includes('"type":');
+  }
+
+  /**
    * Reset parser state
    */
   reset() {
@@ -237,6 +301,7 @@ export class ClaudeStreamParser {
     this.codeBlockBuffer = '';
     this.codeBlockLanguage = '';
     this.accumulatedContent = [];
+    this.jsonBuffer = '';
   }
 }
 

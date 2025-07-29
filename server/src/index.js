@@ -17,6 +17,7 @@ import { ServerConfig } from './config/server-config.js';
 import { MiddlewareConfig } from './config/middleware-config.js';
 import { TLSConfig } from './config/tls-config.js';
 import { ServerStartup } from './config/server-startup.js';
+import { pushNotificationService } from './services/push-notification.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -161,6 +162,14 @@ class AICLICompanionServer {
         this.authToken = null;
       }
 
+      // Initialize push notification service
+      pushNotificationService.initialize({
+        cert: process.env.APNS_CERT_PATH,
+        key: process.env.APNS_KEY_PATH,
+        passphrase: process.env.APNS_PASSPHRASE,
+        production: process.env.NODE_ENV === 'production',
+      });
+
       // Set up TLS if enabled
       let tlsOptions = null;
       if (this.config.enableTLS) {
@@ -212,6 +221,9 @@ class AICLICompanionServer {
 
     // Shutdown AICLI service
     this.aicliService.shutdown();
+
+    // Shutdown push notification service
+    pushNotificationService.shutdown();
 
     this.server.close(() => {
       console.log('✅ Server shut down successfully');

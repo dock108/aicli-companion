@@ -3,7 +3,7 @@ import SwiftUI
 
 // MARK: - Tool Activity Models
 
-@available(iOS 14.0, macOS 11.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct ToolActivity: Identifiable, Equatable {
     let id: String
     let toolName: String
@@ -29,7 +29,7 @@ struct ToolActivity: Identifiable, Equatable {
     }
 }
 
-@available(iOS 14.0, macOS 11.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 enum ToolActivityStatus: String, CaseIterable {
     case running = "running"
     case completed = "completed"
@@ -65,8 +65,8 @@ enum ToolActivityStatus: String, CaseIterable {
 
 // MARK: - Tool Activity Manager
 
-@available(iOS 13.0, macOS 10.15, *)
-@available(iOS 14.0, macOS 11.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 class ToolActivityManager: ObservableObject {
     @Published var activeTools: [ToolActivity] = []
     @Published var recentTools: [ToolActivity] = []
@@ -140,8 +140,8 @@ class ToolActivityManager: ObservableObject {
 
 // MARK: - Tool Activity Views
 
-@available(iOS 13.0, macOS 10.15, *)
-@available(iOS 14.0, macOS 11.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct ToolActivityIndicator: View {
     let activity: ToolActivity
     @State private var isAnimating = false
@@ -192,8 +192,8 @@ struct ToolActivityIndicator: View {
     }
 }
 
-@available(iOS 13.0, macOS 10.15, *)
-@available(iOS 14.0, macOS 11.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct ToolActivityList: View {
     @ObservedObject var activityManager: ToolActivityManager
     let sessionId: String?
@@ -216,8 +216,8 @@ struct ToolActivityList: View {
     }
 }
 
-@available(iOS 13.0, macOS 10.15, *)
-@available(iOS 14.0, macOS 11.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct ToolActivityOverlay: View {
     @ObservedObject var activityManager: ToolActivityManager
     let sessionId: String?
@@ -272,8 +272,8 @@ struct ToolActivityOverlay: View {
 
 // MARK: - Tool Activity Sheet
 
-@available(iOS 15.0, macOS 12.0, *)
-@available(iOS 14.0, macOS 11.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct ToolActivitySheet: View {
     @ObservedObject var activityManager: ToolActivityManager
     @Environment(\.dismiss) private var dismiss
@@ -327,8 +327,8 @@ struct ToolActivitySheet: View {
     }
 }
 
-@available(iOS 13.0, macOS 10.15, *)
-@available(iOS 14.0, macOS 11.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct ToolActivityDetailRow: View {
     let activity: ToolActivity
     @State private var isExpanded = false

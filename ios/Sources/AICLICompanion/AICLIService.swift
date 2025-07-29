@@ -2,7 +2,7 @@ import Foundation
 import Combine
 import Network
 
-@available(iOS 13.0, macOS 10.15, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 public class AICLIService: ObservableObject {
     @Published var isConnected = false
     @Published var connectionStatus: ConnectionStatus = .disconnected

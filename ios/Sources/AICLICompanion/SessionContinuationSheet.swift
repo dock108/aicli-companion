@@ -1,6 +1,6 @@
 import SwiftUI
 
-@available(iOS 15.0, macOS 12.0, *)
+@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
 struct SessionContinuationSheet: View {
     let project: Project
     let sessionMetadata: SessionMetadata
@@ -14,8 +14,45 @@ struct SessionContinuationSheet: View {
     @State private var previewMessages: [Message] = []
     
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
+        Group {
+            if sessionMetadata.sessionId.isEmpty {
+                // Debug view when metadata is invalid
+                VStack {
+                    Text("Invalid Session Data")
+                        .font(.headline)
+                        .foregroundColor(.red)
+                    Text("Session ID is empty")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                    
+                    // Additional debug info
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Debug Information:")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                        Text("Project: \(project.name)")
+                            .font(.caption2)
+                        Text("Path: \(project.path)")
+                            .font(.caption2)
+                        Text("AICLI Session: \(sessionMetadata.aicliSessionId ?? "nil")")
+                            .font(.caption2)
+                        Text("Message Count: \(sessionMetadata.messageCount)")
+                            .font(.caption2)
+                    }
+                    .padding()
+                    .background(Color.gray.opacity(0.1))
+                    .cornerRadius(8)
+                    .padding()
+                }
+                .onAppear {
+                    print("❌ SessionContinuationSheet: Invalid session metadata - empty session ID")
+                    print("   Project: \(project.name) at \(project.path)")
+                    print("   AICLI Session ID: \(sessionMetadata.aicliSessionId ?? "nil")")
+                    print("   Message Count: \(sessionMetadata.messageCount)")
+                }
+            } else {
+                NavigationStack {
+                    VStack(spacing: 0) {
                 // Header
                 VStack(spacing: 12) {
                     Image(systemName: "bubble.left.and.bubble.right.fill")
@@ -85,7 +122,9 @@ struct SessionContinuationSheet: View {
                     // Continue Button
                     Button(action: {
                         print("🟣 SessionContinuationSheet: Continue button pressed")
+                        print("   - Calling onContinue callback")
                         onContinue()
+                        print("   - onContinue callback completed")
                         // Don't dismiss here - let the parent handle it after navigation state is updated
                     }) {
                         HStack {
@@ -109,7 +148,9 @@ struct SessionContinuationSheet: View {
                     // Start Fresh Button
                     Button(action: {
                         print("🟣 SessionContinuationSheet: Start Fresh button pressed")
+                        print("   - Calling onStartFresh callback")
                         onStartFresh()
+                        print("   - onStartFresh callback completed")
                         // Don't dismiss here - let the parent handle it after navigation state is updated
                     }) {
                         HStack {
@@ -151,10 +192,28 @@ struct SessionContinuationSheet: View {
                     .foregroundColor(Colors.textSecondary(for: colorScheme))
                 }
             }
+                }
+            }
         }
         .onAppear {
             print("🎭 SessionContinuationSheet: Sheet appeared for project '\(project.name)'")
+            print("   Session metadata:")
+            print("   - Session ID: \(sessionMetadata.sessionId)")
+            print("   - AICLI Session ID: \(sessionMetadata.aicliSessionId ?? "nil")")
+            print("   - Message Count: \(sessionMetadata.messageCount)")
+            print("   - Last Used: \(sessionMetadata.formattedLastUsed)")
+            
+            // Debug check for NavigationStack availability
+            if #available(iOS 16.0, *) {
+                print("✅ NavigationStack is available")
+            } else {
+                print("❌ NavigationStack is NOT available - this should not happen on iOS 17+")
+            }
+            
             loadPreviewMessages()
+        }
+        .onDisappear {
+            print("🎭 SessionContinuationSheet: Sheet disappeared")
         }
     }
     
@@ -170,7 +229,7 @@ struct SessionContinuationSheet: View {
 
 // MARK: - Supporting Views
 
-@available(iOS 14.0, macOS 11.0, *)
+@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
 struct SessionInfoCard: View {
     let icon: String
     let value: String
@@ -198,7 +257,7 @@ struct SessionInfoCard: View {
     }
 }
 
-@available(iOS 14.0, macOS 11.0, *)
+@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
 struct MessagePreviewRow: View {
     let message: Message
     @Environment(\.colorScheme) var colorScheme

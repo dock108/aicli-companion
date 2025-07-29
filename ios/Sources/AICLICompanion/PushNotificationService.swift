@@ -5,7 +5,7 @@ import UIKit
 #endif
 
 /// Service that manages push notifications for Claude responses
-@available(iOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
 public class PushNotificationService: NSObject, ObservableObject {
     public static let shared = PushNotificationService()
     
@@ -34,6 +34,13 @@ public class PushNotificationService: NSObject, ObservableObject {
             if granted {
                 print("✅ Push notification authorization granted")
                 await setupCategories()
+                
+                // Register for remote notifications
+                await MainActor.run {
+                    #if os(iOS)
+                    UIApplication.shared.registerForRemoteNotifications()
+                    #endif
+                }
             } else {
                 print("❌ Push notification authorization denied")
             }
@@ -207,7 +214,7 @@ public class PushNotificationService: NSObject, ObservableObject {
 
 // MARK: - UNUserNotificationCenterDelegate
 
-@available(iOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
 extension PushNotificationService: UNUserNotificationCenterDelegate {
     
     // Handle notification while app is in foreground

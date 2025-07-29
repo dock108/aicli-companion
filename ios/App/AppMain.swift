@@ -4,6 +4,10 @@ import AICLICompanion
 @main
 @available(iOS 17.0, macOS 14.0, *)
 struct AppMain: App {
+    #if os(iOS)
+    @UIApplicationDelegateAdaptor(AICLICompanion.AppDelegate.self) var appDelegate
+    #endif
+    
     @StateObject private var aicliService = AICLICompanion.AICLIService()
     @StateObject private var settingsManager = AICLICompanion.SettingsManager()
     @StateObject private var pushNotificationService = AICLICompanion.PushNotificationService.shared

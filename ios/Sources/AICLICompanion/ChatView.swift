@@ -6,7 +6,7 @@ import UIKit
 import AppKit
 #endif
 
-@available(iOS 14.0, macOS 11.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct ChatView: View {
     @EnvironmentObject var aicliService: AICLIService
     @EnvironmentObject var settings: SettingsManager
@@ -641,10 +641,13 @@ struct ChatView: View {
                     if let finalMessage = self.responseStreamer.currentMessage,
                        let project = self.selectedProject {
                         Task {
+                            // Clean up the response for notification
+                            let cleanedResponse = self.cleanResponseForNotification(finalMessage.content)
+                            
                             await PushNotificationService.shared.sendResponseNotification(
                                 sessionId: sessionId,
                                 projectName: project.name,
-                                responsePreview: finalMessage.content,
+                                responsePreview: cleanedResponse,
                                 totalChunks: totalChunks,
                                 fullResponse: finalMessage.content
                             )
@@ -653,6 +656,49 @@ struct ChatView: View {
                 }
             }
             .store(in: &cancellables)
+    }
+    
+    // MARK: - Helper Methods
+    
+    private func cleanResponseForNotification(_ text: String) -> String {
+        // Remove branch references and technical details
+        var cleaned = text
+        
+        // Remove branch references
+        let branchPattern = #"(?:on|in|from)\s+(?:the\s+)?`[^`]+`\s+branch"#
+        cleaned = cleaned.replacingOccurrences(
+            of: branchPattern,
+            with: "",
+            options: .regularExpression
+        )
+        
+        // Remove file modification details
+        let filePattern = #"with\s+(?:several\s+)?modified\s+files?\s+(?:related\s+to\s+[^.]+)"#
+        cleaned = cleaned.replacingOccurrences(
+            of: filePattern,
+            with: "",
+            options: .regularExpression
+        )
+        
+        // Clean up extra spaces and punctuation
+        cleaned = cleaned.replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
+        cleaned = cleaned.replacingOccurrences(of: #"\.\s*\."#, with: ".", options: .regularExpression)
+        cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Extract just the question if the response ends with a question
+        let lines = cleaned.split(separator: "\n", omittingEmptySubsequences: true)
+        if let lastLine = lines.last,
+           lastLine.contains("?") {
+            // Return just the question
+            return String(lastLine).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        
+        // Otherwise return the cleaned full response (limited to first paragraph)
+        if let firstParagraph = cleaned.split(separator: "\n\n").first {
+            return String(firstParagraph)
+        }
+        
+        return cleaned
     }
     
     // MARK: - Session Persistence
@@ -712,15 +758,6 @@ struct ChatView: View {
         if !restoredMessages.isEmpty {
             messages = restoredMessages
             print("🔷 ChatView: Set \(messages.count) messages for '\(project.name)'")
-            
-            // Add restoration notice
-            let restorationNotice = Message(
-                content: "📂 Restored \(restoredMessages.count) messages from previous session",
-                sender: .assistant,
-                type: .text
-            )
-            messages.append(restorationNotice)
-            print("🔷 ChatView: Added restoration notice for '\(project.name)'")
         } else {
             print("ℹ️ ChatView: No messages to restore for '\(project.name)', session exists but is empty")
         }
@@ -876,7 +913,7 @@ struct ContentHeightPreferenceKey: PreferenceKey {
 
 // MARK: - Preview
 
-@available(iOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
 #Preview("Chat View - Light") {
     ChatView(
         selectedProject: Project(name: "sample-project", path: "/path/to/project", type: "folder"),
@@ -894,7 +931,7 @@ struct ContentHeightPreferenceKey: PreferenceKey {
     .preferredColorScheme(.light)
 }
 
-@available(iOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
 #Preview("Chat View - Dark") {
     ChatView(
         selectedProject: Project(name: "sample-project", path: "/path/to/project", type: "folder"),
@@ -914,7 +951,7 @@ struct ContentHeightPreferenceKey: PreferenceKey {
 
 // MARK: - Project Context Header
 
-@available(iOS 14.0, macOS 11.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct ProjectContextHeader: View {
     let project: Project
     let session: ProjectSession?
@@ -1013,7 +1050,7 @@ struct ProjectContextHeader: View {
 }
 // MARK: - Loading Indicator
 
-@available(iOS 14.0, macOS 11.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct LoadingIndicator: View {
     let progressInfo: ProgressInfo?
     let colorScheme: ColorScheme

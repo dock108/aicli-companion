@@ -2,7 +2,7 @@ import Foundation
 import Combine
 
 /// Service that manages streaming Claude responses by collecting chunks and building complete messages
-@available(iOS 13.0, macOS 10.15, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 class ClaudeResponseStreamer: ObservableObject {
     @Published var currentMessage: Message?
     @Published var streamingChunks: [StreamChunk] = []
@@ -50,12 +50,33 @@ class ClaudeResponseStreamer: ObservableObject {
         guard isStreaming else { return }
         
         chunksReceived += 1
-        streamingChunks.append(chunk)
         
-        print("📦 Processing chunk #\(chunksReceived): \(chunk.type)")
+        // // Check if the chunk contains JSON that needs parsing
+        // // TEMPORARILY DISABLED: Chain-of-thought parsing for future use
+        // var processedChunk = chunk
+        // if chunk.type == "text", let parsedOutput = ClaudeOutputParser.parseClaudeOutput(chunk.content) {
+        //     print("🔍 Detected Claude JSON in chunk, extracting user-facing content")
+        //     // Create a new chunk with just the extracted content
+        //     processedChunk = StreamChunk(
+        //         id: chunk.id,
+        //         type: "text",
+        //         content: parsedOutput.content,
+        //         isFinal: chunk.isFinal,
+        //         metadata: StreamChunkMetadata(
+        //             language: parsedOutput.metadata["type"] as? String,
+        //             level: nil
+        //         )
+        //     )
+        // }
+        
+        let processedChunk = chunk
+        
+        streamingChunks.append(processedChunk)
+        
+        print("📦 Processing chunk #\(chunksReceived): \(processedChunk.type)")
         
         // Add chunk to message builder
-        messageBuilder.addChunk(chunk)
+        messageBuilder.addChunk(processedChunk)
         
         // Update current message with built content
         if let builtContent = messageBuilder.buildContent() {
@@ -63,7 +84,7 @@ class ClaudeResponseStreamer: ObservableObject {
         }
         
         // If this is the final chunk, finalize the message
-        if chunk.isFinal {
+        if processedChunk.isFinal {
             finalizeStreaming()
         }
     }
@@ -227,7 +248,8 @@ private class MessageBuilder {
             }
         }
         
-        return output
+        // Trim any trailing whitespace
+        return output.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 

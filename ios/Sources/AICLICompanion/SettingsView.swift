@@ -1,6 +1,6 @@
 import SwiftUI
 
-@available(iOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct SettingsView: View {
     @EnvironmentObject var settings: SettingsManager
     @Environment(\.dismiss) private var dismiss
@@ -204,14 +204,14 @@ struct SettingsView: View {
     }
 }
 
-@available(iOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
 #Preview("Settings - Light") {
     SettingsView()
         .environmentObject(SettingsManager())
         .preferredColorScheme(.light)
 }
 
-@available(iOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
 #Preview("Settings - Dark") {
     SettingsView()
         .environmentObject(SettingsManager())

@@ -1,6 +1,6 @@
 import SwiftUI
 
-@available(iOS 13.0, macOS 10.15, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct AnimationConstants {
     // MARK: - Timing Constants
 
@@ -54,7 +54,7 @@ struct AnimationConstants {
 
 // MARK: - Animation View Modifiers
 
-@available(iOS 13.0, macOS 10.15, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct ScaleButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -63,7 +63,7 @@ struct ScaleButtonStyle: ButtonStyle {
     }
 }
 
-@available(iOS 13.0, macOS 10.15, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct PulseEffect: ViewModifier {
     @State private var isPulsing = false
     let scale: CGFloat
@@ -86,7 +86,7 @@ struct PulseEffect: ViewModifier {
     }
 }
 
-@available(iOS 13.0, macOS 10.15, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct SlideInEffect: ViewModifier {
     @State private var isVisible = false
     let delay: Double
@@ -112,7 +112,7 @@ struct SlideInEffect: ViewModifier {
     }
 }
 
-@available(iOS 13.0, macOS 10.15, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct FadeInEffect: ViewModifier {
     @State private var isVisible = false
     let delay: Double
@@ -134,7 +134,7 @@ struct FadeInEffect: ViewModifier {
 
 // MARK: - View Extensions
 
-@available(iOS 13.0, macOS 10.15, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 extension View {
     func scaleButtonStyle() -> some View {
         self.buttonStyle(ScaleButtonStyle())

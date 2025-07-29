@@ -1,6 +1,6 @@
 import SwiftUI
 
-@available(iOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
 struct MessageBubble: View {
     let message: Message
     @Environment(\.colorScheme) var colorScheme
@@ -262,7 +262,11 @@ struct MessageBubble: View {
         // For iPad
         if let popover = activityVC.popoverPresentationController {
             popover.sourceView = window
-            popover.sourceRect = CGRect(x: window.bounds.midX, y: window.bounds.midY, width: 0, height: 0)
+            // Validate window bounds to prevent NaN values
+            let bounds = window.bounds
+            let x = bounds.width.isFinite ? bounds.midX : bounds.width / 2
+            let y = bounds.height.isFinite ? bounds.midY : bounds.height / 2
+            popover.sourceRect = CGRect(x: x, y: y, width: 0, height: 0)
             popover.permittedArrowDirections = []
         }
         
@@ -314,7 +318,7 @@ private enum ContentPart {
 }
 
 // MARK: - Code Block View
-@available(iOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
 struct MessageCodeBlockView: View {
     let code: String
     let language: String?
@@ -393,7 +397,7 @@ struct MessageCodeBlockView: View {
 
 // MARK: - Preview
 
-@available(iOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
 #Preview("Message Bubbles") {
     VStack(spacing: 20) {
         MessageBubble(message: Message(

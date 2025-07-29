@@ -37,9 +37,17 @@ struct ProjectStartResponse: Codable {
     let message: String
 }
 
+// MARK: - Pending Session State
+
+struct PendingSessionState: Identifiable {
+    let id = UUID()
+    let project: Project
+    let metadata: SessionMetadata
+}
+
 // MARK: - Project Selection View
 
-@available(iOS 14.0, macOS 11.0, *)
+@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
 struct ProjectSelectionView: View {
     @Binding var selectedProject: Project?
     @Binding var isProjectSelected: Bool
@@ -49,8 +57,7 @@ struct ProjectSelectionView: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var isStartingProject = false
-    @State private var showingContinuationSheet = false
-    @State private var pendingProject: Project?
+    @State private var pendingSessionState: PendingSessionState?
     @State private var cancellables = Set<AnyCancellable>()
     @State private var lastSelectionTime: Date = .distantPast
     
@@ -186,44 +193,40 @@ struct ProjectSelectionView: View {
                 }
             }
         )
-        .sheet(isPresented: $showingContinuationSheet, onDismiss: {
-            // Clear pending project if sheet is dismissed without action
-            if pendingProject != nil {
-                print("🔵 ProjectSelection: Continuation sheet dismissed, clearing pending project")
-                pendingProject = nil
-            }
-        }) {
-            if let project = pendingProject,
-               let metadata = persistenceService.getSessionMetadata(for: project.path) {
-                SessionContinuationSheet(
-                    project: project,
-                    sessionMetadata: metadata,
-                    onContinue: {
-                        print("🟢 ProjectSelection: Sheet onContinue called for '\(project.name)'")
+        .sheet(item: $pendingSessionState) { sessionState in
+            SessionContinuationSheet(
+                project: sessionState.project,
+                sessionMetadata: sessionState.metadata,
+                onContinue: {
+                        print("🟢 ProjectSelection: Sheet onContinue called for '\(sessionState.project.name)'")
                         // Dismiss sheet first, then start session after a small delay
-                        showingContinuationSheet = false
-                        pendingProject = nil // Clear pending project
+                        // Sheet dismissed by setting pendingSessionState to nil
+                        let project = sessionState.project
+                        let metadata = sessionState.metadata
+                        pendingSessionState = nil
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                             continueExistingSession(project, metadata: metadata)
                         }
                     },
                     onStartFresh: {
-                        print("🟢 ProjectSelection: Sheet onStartFresh called for '\(project.name)'")
+                        print("🟢 ProjectSelection: Sheet onStartFresh called for '\(sessionState.project.name)'")
                         // Dismiss sheet first, then start session after a small delay
-                        showingContinuationSheet = false
-                        pendingProject = nil // Clear pending project
+                        // Sheet dismissed by setting pendingSessionState to nil
+                        let project = sessionState.project
+                        pendingSessionState = nil
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                             startFreshSession(project)
                         }
                     },
                     onViewHistory: {
                         // TODO: Implement history view
-                        print("View history for \(project.name)")
-                        showingContinuationSheet = false
-                        pendingProject = nil // Clear pending project
+                        print("View history for \(sessionState.project.name)")
+                        // Sheet dismissed by setting pendingSessionState to nil
+                        pendingSessionState = nil
                     }
                 )
-            }
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
     }
     
@@ -324,12 +327,21 @@ struct ProjectSelectionView: View {
                 print("⚠️ ProjectSelection: No metadata found for '\(project.name)' despite hasSession = true")
             }
             
-            // IMPORTANT: Do not set selectedProject here - only pendingProject
-            pendingProject = project
-            print("🟢 ProjectSelection: Showing continuation sheet for '\(project.name)'")
-            // Ensure UI updates before showing sheet
-            DispatchQueue.main.async {
-                self.showingContinuationSheet = true
+            // IMPORTANT: Do not set selectedProject here - only pendingSessionState
+            // Store both project and metadata before showing sheet
+            if let metadata = persistenceService.getSessionMetadata(for: project.path) {
+                print("🟢 ProjectSelection: Showing continuation sheet for '\(project.name)'")
+                print("   - Has existing session: \(hasSession)")
+                print("   - Setting pendingSessionState with project '\(project.name)' and \(metadata.messageCount) messages")
+                
+                // Add a delay and use withAnimation to ensure smooth presentation
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        pendingSessionState = PendingSessionState(project: project, metadata: metadata)
+                    }
+                }
+            } else {
+                print("❌ ProjectSelection: Failed to get metadata for project despite hasSession = true")
             }
         } else {
             print("🔵 ProjectSelection: Starting fresh session for '\(project.name)'")
@@ -453,7 +465,7 @@ struct ProjectSelectionView: View {
 
 // MARK: - Project Row View
 
-@available(iOS 14.0, macOS 11.0, *)
+@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
 struct ProjectRowView: View {
     let project: Project
     let hasSession: Bool
@@ -552,7 +564,7 @@ struct ProjectRowView: View {
 
 // MARK: - Preview
 
-@available(iOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
 #Preview("Project Selection") {
     ProjectSelectionView(
         selectedProject: .constant(nil),
@@ -562,7 +574,7 @@ struct ProjectRowView: View {
     .preferredColorScheme(.dark)
 }
 
-@available(iOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
 #Preview("Project Row") {
     ProjectRowView(
         project: Project(name: "my-awesome-app", path: "/path/to/project", type: "folder"),

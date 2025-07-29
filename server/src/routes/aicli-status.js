@@ -2,6 +2,16 @@ import express from 'express';
 import { exec } from 'child_process';
 import util from 'util';
 import { promisify } from 'util';
+import rateLimit from 'express-rate-limit';
+
+// Rate limiter for expensive system command routes
+const aicliStatusLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10, // limit each IP to 10 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' }
+});
 
 const execAsync = promisify(exec);
 
@@ -9,7 +19,7 @@ export function setupAICLIStatusRoutes(app, aicliService) {
   const router = express.Router();
 
   // Get AICLI CLI status and version
-  router.get('/aicli/status', async (req, res) => {
+  router.get('/aicli/status', aicliStatusLimiter, async (req, res) => {
     try {
       // Check if AICLI CLI is installed using the same path as AICLICodeService
       let version = null;

@@ -87,8 +87,9 @@ export class InputValidator {
       }
 
       // Security: prevent dangerous arguments
-      if (arg.includes('&&') || arg.includes('||') || arg.includes(';') || arg.includes('|')) {
-        throw new Error('Arguments cannot contain shell operators');
+      const dangerousPattern = /[|&;<>`$(){}[\]]/;
+      if (dangerousPattern.test(arg)) {
+        throw new Error('Arguments cannot contain dangerous shell metacharacters');
       }
     }
 

@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import { pushNotificationService } from './push-notification.js';
 
 export function setupWebSocket(wss, aicliService, authToken) {
   const clients = new Map();
@@ -128,6 +129,9 @@ export function setupWebSocket(wss, aicliService, authToken) {
           console.log(`   Closing AICLI session: ${sessionId}`);
           aicliService.closeSession(sessionId);
         });
+
+        // Unregister device token
+        pushNotificationService.unregisterDevice(clientId);
       }
 
       clients.delete(clientId);
@@ -141,6 +145,10 @@ export function setupWebSocket(wss, aicliService, authToken) {
 
   // Set up AICLI Code event listeners for rich message types
   aicliService.on('streamData', (data) => {
+    if (!data || !data.sessionId) {
+      console.warn('⚠️ streamData event missing data or sessionId');
+      return;
+    }
     broadcastToSessionClients(
       data.sessionId,
       {
@@ -161,6 +169,10 @@ export function setupWebSocket(wss, aicliService, authToken) {
 
   // Handle system initialization messages
   aicliService.on('systemInit', (data) => {
+    if (!data || !data.sessionId) {
+      console.warn('⚠️ systemInit event missing data or sessionId');
+      return;
+    }
     broadcastToSessionClients(
       data.sessionId,
       {
@@ -175,6 +187,10 @@ export function setupWebSocket(wss, aicliService, authToken) {
 
   // Handle assistant responses with rich content
   aicliService.on('assistantMessage', (data) => {
+    if (!data || !data.sessionId) {
+      console.warn('⚠️ assistantMessage event missing data or sessionId');
+      return;
+    }
     console.log(`📢 Broadcasting assistantMessage for session ${data.sessionId}`);
     broadcastToSessionClients(
       data.sessionId,
@@ -190,6 +206,10 @@ export function setupWebSocket(wss, aicliService, authToken) {
 
   // Handle tool usage notifications
   aicliService.on('toolUse', (data) => {
+    if (!data || !data.sessionId) {
+      console.warn('⚠️ toolUse event missing data or sessionId');
+      return;
+    }
     broadcastToSessionClients(
       data.sessionId,
       {
@@ -204,6 +224,10 @@ export function setupWebSocket(wss, aicliService, authToken) {
 
   // Handle tool results
   aicliService.on('toolResult', (data) => {
+    if (!data || !data.sessionId) {
+      console.warn('⚠️ toolResult event missing data or sessionId');
+      return;
+    }
     broadcastToSessionClients(
       data.sessionId,
       {
@@ -218,19 +242,30 @@ export function setupWebSocket(wss, aicliService, authToken) {
 
   // Handle conversation results
   aicliService.on('conversationResult', (data) => {
-    broadcastToSessionClients(
-      data.sessionId,
-      {
-        type: 'conversationResult',
-        requestId: null,
-        timestamp: new Date().toISOString(),
-        data: data.data,
-      },
-      clients
-    );
+    if (!data || !data.sessionId) {
+      console.warn('⚠️ conversationResult event missing data or sessionId');
+      return;
+    }
+    // Skip sending conversationResult to avoid duplicate messages
+    // The content is already sent via streamChunk events
+    console.log('📝 conversationResult received but not forwarded (using streamChunk instead)');
+    // broadcastToSessionClients(
+    //   data.sessionId,
+    //   {
+    //     type: 'conversationResult',
+    //     requestId: null,
+    //     timestamp: new Date().toISOString(),
+    //     data: data.data,
+    //   },
+    //   clients
+    // );
   });
 
   aicliService.on('streamError', (data) => {
+    if (!data || !data.sessionId) {
+      console.warn('⚠️ streamError event missing data or sessionId');
+      return;
+    }
     broadcastToSessionClients(
       data.sessionId,
       {
@@ -248,6 +283,10 @@ export function setupWebSocket(wss, aicliService, authToken) {
   });
 
   aicliService.on('sessionClosed', (data) => {
+    if (!data || !data.sessionId) {
+      console.warn('⚠️ sessionClosed event missing data or sessionId');
+      return;
+    }
     broadcastToSessionClients(
       data.sessionId,
       {
@@ -267,6 +306,10 @@ export function setupWebSocket(wss, aicliService, authToken) {
   });
 
   aicliService.on('permissionRequired', (data) => {
+    if (!data || !data.sessionId) {
+      console.warn('⚠️ permissionRequired event missing data or sessionId');
+      return;
+    }
     broadcastToSessionClients(
       data.sessionId,
       {
@@ -285,8 +328,75 @@ export function setupWebSocket(wss, aicliService, authToken) {
     );
   });
 
+  // Handle structured stream chunks
+  aicliService.on('streamChunk', (data) => {
+    if (!data) {
+      console.warn('⚠️ streamChunk event received with undefined data');
+      return;
+    }
+
+    const { sessionId, chunk, timestamp } = data;
+
+    if (!sessionId || !chunk) {
+      console.warn('⚠️ streamChunk event missing required fields:', { sessionId, chunk });
+      return;
+    }
+
+    // Broadcast the chunk to connected clients
+    broadcastToSessionClients(
+      sessionId,
+      {
+        type: 'streamChunk',
+        requestId: null,
+        timestamp: timestamp || new Date().toISOString(),
+        data: {
+          sessionId,
+          chunk: {
+            id: chunk.id,
+            type: chunk.type,
+            content: chunk.content,
+            isFinal: chunk.isFinal || false,
+            metadata: {
+              language: chunk.language,
+              level: chunk.level,
+              ...chunk,
+            },
+          },
+        },
+      },
+      clients
+    );
+
+    // If this is the final chunk, send push notifications
+    if (chunk.isFinal) {
+      console.log(`🔔 Final chunk received for session ${sessionId}, sending push notifications`);
+
+      // Find all clients subscribed to this session
+      clients.forEach((client, clientId) => {
+        if (client.sessionIds.has(sessionId) && client.deviceToken) {
+          // Get project info from session
+          const sessionParts = sessionId.split('_');
+          const projectName = sessionParts[1] || 'Project';
+
+          // Send push notification
+          pushNotificationService.sendClaudeResponseNotification(clientId, {
+            sessionId,
+            projectName,
+            message: chunk.content || 'Claude has responded',
+            totalChunks: 1,
+          });
+        }
+      });
+    }
+  });
+
   // Handle command progress for real-time updates
   aicliService.on('commandProgress', (data) => {
+    if (!data || !data.sessionId) {
+      console.warn('⚠️ commandProgress event missing data or sessionId');
+      return;
+    }
+
     const progressInfo = parseProgressFromOutput(data.data);
 
     if (progressInfo) {
@@ -378,6 +488,14 @@ async function handleWebSocketMessage(clientId, message, aicliService, clients) 
 
       case 'aicliCommand':
         await handleAICLICommandMessage(clientId, requestId, data, aicliService, clients);
+        break;
+
+      case 'client_backgrounding':
+        handleClientBackgroundingMessage(clientId, requestId, data, clients);
+        break;
+
+      case 'registerDevice':
+        handleRegisterDeviceMessage(clientId, requestId, data, clients);
         break;
 
       default:
@@ -606,6 +724,78 @@ function handleSubscribeMessage(clientId, requestId, data, clients) {
       },
       clients
     );
+  }
+}
+
+function handleClientBackgroundingMessage(clientId, requestId, data, clients) {
+  const sessionId = data?.sessionId || null;
+  const client = clients.get(clientId);
+
+  if (client) {
+    console.log(`📱 Client ${clientId} entering background mode`);
+    if (sessionId) {
+      console.log(`   Associated with session: ${sessionId}`);
+    }
+
+    // Mark client as backgrounded but keep connection
+    client.isBackgrounded = true;
+    client.lastActivity = new Date();
+
+    // Send acknowledgment
+    sendMessage(
+      clientId,
+      {
+        type: 'backgroundingAcknowledged',
+        requestId,
+        timestamp: new Date().toISOString(),
+        data: {
+          sessionId: sessionId || '',
+          success: true,
+        },
+      },
+      clients
+    );
+  }
+}
+
+function handleRegisterDeviceMessage(clientId, requestId, data, clients) {
+  const { token, platform } = data || {};
+  const client = clients.get(clientId);
+
+  if (!client) {
+    sendErrorMessage(clientId, requestId, 'CLIENT_ERROR', 'Client not found', clients);
+    return;
+  }
+
+  if (!token) {
+    sendErrorMessage(clientId, requestId, 'INVALID_REQUEST', 'Device token is required', clients);
+    return;
+  }
+
+  try {
+    // Register the device token
+    pushNotificationService.registerDevice(clientId, token, platform || 'ios');
+
+    // Store token info on client
+    client.deviceToken = token;
+    client.platform = platform || 'ios';
+
+    sendMessage(
+      clientId,
+      {
+        type: 'deviceRegistered',
+        requestId,
+        timestamp: new Date().toISOString(),
+        data: {
+          success: true,
+          message: 'Device token registered successfully',
+        },
+      },
+      clients
+    );
+  } catch (error) {
+    console.error('Error registering device:', error);
+    sendErrorMessage(clientId, requestId, 'REGISTRATION_ERROR', error.message, clients);
   }
 }
 

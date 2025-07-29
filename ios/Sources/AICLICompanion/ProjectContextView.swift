@@ -1,6 +1,6 @@
 import SwiftUI
 
-@available(iOS 13.0, macOS 10.15, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct ProjectContextBanner: View {
     let project: ProjectContext
     @State private var isExpanded = false
@@ -171,7 +171,7 @@ struct ProjectContextBanner: View {
     }
 }
 
-@available(iOS 13.0, macOS 10.15, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct ProjectDetailItem: View {
     let label: String
     let value: String
@@ -203,7 +203,7 @@ struct ProjectDetailItem: View {
     }
 }
 
-@available(iOS 14.0, macOS 11.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct SuggestionCard: View {
     let suggestion: ProjectSuggestion
     let onTap: () -> Void
@@ -261,7 +261,7 @@ struct SuggestionCard: View {
     }
 }
 
-@available(iOS 13.0, macOS 10.15, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct SuggestionCategorySection: View {
     let category: SuggestionCategory
     let suggestions: [ProjectSuggestion]
@@ -313,7 +313,7 @@ struct SuggestionCategorySection: View {
     }
 }
 
-@available(iOS 14.0, macOS 11.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct SuggestionRow: View {
     let suggestion: ProjectSuggestion
     let onTap: () -> Void
@@ -368,7 +368,7 @@ struct SuggestionRow: View {
     }
 }
 
-@available(iOS 15.0, macOS 12.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct ProjectContextSheet: View {
     let project: ProjectContext
     @Environment(\.dismiss) private var dismiss
@@ -470,7 +470,7 @@ struct ProjectContextSheet: View {
     }
 }
 
-@available(iOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
 #Preview {
     let sampleProject = ProjectContext(
         type: .swift,

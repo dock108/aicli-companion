@@ -1,16 +1,18 @@
 import SwiftUI
+import Combine
 #if os(iOS)
 import UIKit
 #elseif os(macOS)
 import AppKit
 #endif
 
-@available(iOS 14.0, macOS 11.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct ChatView: View {
     @EnvironmentObject var aicliService: AICLIService
     @EnvironmentObject var settings: SettingsManager
     @StateObject private var webSocketService = WebSocketService()
     @StateObject private var persistenceService = MessagePersistenceService.shared
+    @StateObject private var responseStreamer = ClaudeResponseStreamer()
     @State private var messageText = ""
     @State private var messages: [Message] = []
     @State private var isLoading = false
@@ -27,6 +29,8 @@ struct ChatView: View {
     @State private var autoSaveTimer: Timer?
     @State private var isRestoring = false
     @State private var isStartingSession = false
+    
+    @State private var cancellables = Set<AnyCancellable>()
     
     // Smart scroll tracking
     @State private var isNearBottom: Bool = true
@@ -185,6 +189,7 @@ struct ChatView: View {
                 .offset(y: inputBarOffset)
             }
         }
+        .copyConfirmationOverlay()
         .onAppear {
             if let project = selectedProject {
                 print("🔷 ChatView: onAppear for project '\(project.name)' at path: \(project.path)")
@@ -199,6 +204,7 @@ struct ChatView: View {
                 connectWebSocket()
                 setupKeyboardObservers()
                 setupWebSocketListeners()
+                setupStreamingObservers()
                 restoreSessionIfNeeded()
                 startAutoSave()
             } else {
@@ -543,6 +549,22 @@ struct ChatView: View {
                     // Update progress info while keeping loading state
                     self.progressInfo = ProgressInfo(from: progressResponse)
                     
+                case .streamChunk(let chunkResponse):
+                    // Handle streaming chunks
+                    if self.responseStreamer.currentSessionId != chunkResponse.sessionId {
+                        // Start new streaming session if needed
+                        self.responseStreamer.startStreaming(sessionId: chunkResponse.sessionId)
+                        self.isLoading = false
+                        self.progressInfo = nil
+                    }
+                    
+                    // Post notification for the streamer to handle
+                    NotificationCenter.default.post(
+                        name: .streamChunkReceived,
+                        object: nil,
+                        userInfo: ["chunk": chunkResponse.chunk]
+                    )
+                    
                 default:
                     print("Global listener - unhandled message type: \(message.type)")
                 }
@@ -582,6 +604,101 @@ struct ChatView: View {
             }
         }
         #endif
+    }
+    
+    private func setupStreamingObservers() {
+        // Observe changes to the streaming message
+        responseStreamer.$currentMessage
+            .compactMap { $0 }
+            .removeDuplicates { $0.id == $1.id && $0.content == $1.content }
+            .receive(on: DispatchQueue.main)
+            .sink { streamingMessage in
+                
+                // Find if we already have this message in our array
+                if let index = self.messages.firstIndex(where: { $0.id == streamingMessage.id }) {
+                    // Update existing message
+                    self.messages[index] = streamingMessage
+                } else {
+                    // Add new streaming message
+                    self.messages.append(streamingMessage)
+                }
+            }
+            .store(in: &cancellables)
+        
+        // Listen for streaming completion
+        NotificationCenter.default.publisher(for: .streamingComplete)
+            .receive(on: DispatchQueue.main)
+            .sink { notification in
+                
+                if let userInfo = notification.userInfo,
+                   let sessionId = userInfo["sessionId"] as? String,
+                   let totalChunks = userInfo["totalChunks"] as? Int,
+                   sessionId == self.activeSession?.sessionId {
+                    
+                    print("✅ Streaming complete for session \(sessionId) with \(totalChunks) chunks")
+                    
+                    // Send push notification for completed response
+                    if let finalMessage = self.responseStreamer.currentMessage,
+                       let project = self.selectedProject {
+                        Task {
+                            // Clean up the response for notification
+                            let cleanedResponse = self.cleanResponseForNotification(finalMessage.content)
+                            
+                            await PushNotificationService.shared.sendResponseNotification(
+                                sessionId: sessionId,
+                                projectName: project.name,
+                                responsePreview: cleanedResponse,
+                                totalChunks: totalChunks,
+                                fullResponse: finalMessage.content
+                            )
+                        }
+                    }
+                }
+            }
+            .store(in: &cancellables)
+    }
+    
+    // MARK: - Helper Methods
+    
+    private func cleanResponseForNotification(_ text: String) -> String {
+        // Remove branch references and technical details
+        var cleaned = text
+        
+        // Remove branch references
+        let branchPattern = #"(?:on|in|from)\s+(?:the\s+)?`[^`]+`\s+branch"#
+        cleaned = cleaned.replacingOccurrences(
+            of: branchPattern,
+            with: "",
+            options: .regularExpression
+        )
+        
+        // Remove file modification details
+        let filePattern = #"with\s+(?:several\s+)?modified\s+files?\s+(?:related\s+to\s+[^.]+)"#
+        cleaned = cleaned.replacingOccurrences(
+            of: filePattern,
+            with: "",
+            options: .regularExpression
+        )
+        
+        // Clean up extra spaces and punctuation
+        cleaned = cleaned.replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
+        cleaned = cleaned.replacingOccurrences(of: #"\.\s*\."#, with: ".", options: .regularExpression)
+        cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Extract just the question if the response ends with a question
+        let lines = cleaned.split(separator: "\n", omittingEmptySubsequences: true)
+        if let lastLine = lines.last,
+           lastLine.contains("?") {
+            // Return just the question
+            return String(lastLine).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        
+        // Otherwise return the cleaned full response (limited to first paragraph)
+        if let firstParagraph = cleaned.split(separator: "\n\n").first {
+            return String(firstParagraph)
+        }
+        
+        return cleaned
     }
     
     // MARK: - Session Persistence
@@ -641,15 +758,6 @@ struct ChatView: View {
         if !restoredMessages.isEmpty {
             messages = restoredMessages
             print("🔷 ChatView: Set \(messages.count) messages for '\(project.name)'")
-            
-            // Add restoration notice
-            let restorationNotice = Message(
-                content: "📂 Restored \(restoredMessages.count) messages from previous session",
-                sender: .assistant,
-                type: .text
-            )
-            messages.append(restorationNotice)
-            print("🔷 ChatView: Added restoration notice for '\(project.name)'")
         } else {
             print("ℹ️ ChatView: No messages to restore for '\(project.name)', session exists but is empty")
         }
@@ -805,7 +913,7 @@ struct ContentHeightPreferenceKey: PreferenceKey {
 
 // MARK: - Preview
 
-@available(iOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
 #Preview("Chat View - Light") {
     ChatView(
         selectedProject: Project(name: "sample-project", path: "/path/to/project", type: "folder"),
@@ -823,7 +931,7 @@ struct ContentHeightPreferenceKey: PreferenceKey {
     .preferredColorScheme(.light)
 }
 
-@available(iOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
 #Preview("Chat View - Dark") {
     ChatView(
         selectedProject: Project(name: "sample-project", path: "/path/to/project", type: "folder"),
@@ -843,7 +951,7 @@ struct ContentHeightPreferenceKey: PreferenceKey {
 
 // MARK: - Project Context Header
 
-@available(iOS 14.0, macOS 11.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct ProjectContextHeader: View {
     let project: Project
     let session: ProjectSession?
@@ -942,7 +1050,7 @@ struct ProjectContextHeader: View {
 }
 // MARK: - Loading Indicator
 
-@available(iOS 14.0, macOS 11.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct LoadingIndicator: View {
     let progressInfo: ProgressInfo?
     let colorScheme: ColorScheme

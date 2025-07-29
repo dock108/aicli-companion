@@ -230,7 +230,7 @@ export class AICLIMessageHandler {
           return true;
         }
 
-        // Conversational permission patterns
+        // Conversational permission patterns - must include action words
         const conversationalPatterns = [
           'would you like me to proceed',
           'should i proceed',
@@ -248,6 +248,14 @@ export class AICLIMessageHandler {
           'can i continue',
           'want me to proceed',
           'want me to continue',
+          'would you like me to make',
+          'would you like me to create',
+          'would you like me to implement',
+          'would you like me to write',
+          'would you like me to modify',
+          'would you like me to update',
+          'would you like me to fix',
+          'would you like me to start',
         ];
 
         const hasConversationalPattern = conversationalPatterns.some((pattern) =>
@@ -258,20 +266,70 @@ export class AICLIMessageHandler {
           return true;
         }
 
-        // Question patterns that might indicate permission requests
-        const questionPatterns = [
-          /should\s+i\s+\w+/,
-          /would\s+you\s+like/,
-          /do\s+you\s+want/,
-          /may\s+i\s+\w+/,
-          /can\s+i\s+\w+/,
-          /shall\s+i\s+\w+/,
+        // Question patterns that indicate permission - must have action context
+        const permissionActionWords = [
+          'proceed',
+          'continue',
+          'start',
+          'begin',
+          'implement',
+          'create',
+          'make',
+          'write',
+          'modify',
+          'update',
+          'fix',
+          'change',
+          'delete',
+          'remove',
+          'add',
+          'install',
+          'run',
+          'execute',
+          'perform',
+          'apply',
         ];
 
-        const hasQuestionPattern = questionPatterns.some((pattern) => pattern.test(text));
+        // Check if question patterns are followed by action words
+        const questionPatterns = [
+          /should\s+i\s+(\w+)/,
+          /would\s+you\s+like\s+me\s+to\s+(\w+)/,
+          /do\s+you\s+want\s+me\s+to\s+(\w+)/,
+          /may\s+i\s+(\w+)/,
+          /can\s+i\s+(\w+)/,
+          /shall\s+i\s+(\w+)/,
+        ];
 
-        if (hasQuestionPattern) {
+        let hasPermissionQuestion = false;
+        for (const pattern of questionPatterns) {
+          const match = text.match(pattern);
+          if (match && match[1]) {
+            // Check if the captured word is an action word
+            const actionWord = match[1].toLowerCase();
+            if (permissionActionWords.some((word) => actionWord.startsWith(word))) {
+              hasPermissionQuestion = true;
+              break;
+            }
+          }
+        }
+
+        if (hasPermissionQuestion) {
           return true;
+        }
+
+        // Exclude general questions that are just asking for user input
+        const exclusionPatterns = [
+          /what would you like me to help/,
+          /what can i help you with/,
+          /how can i assist you/,
+          /what do you need help with/,
+          /what would you like to/,
+          /what brings you here/,
+        ];
+
+        // If it matches an exclusion pattern, it's not a permission request
+        if (exclusionPatterns.some((pattern) => pattern.test(text))) {
+          return false;
         }
       }
 

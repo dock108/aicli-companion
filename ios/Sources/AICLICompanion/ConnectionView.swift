@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Connection state for the view
-@available(iOS 14.0, macOS 11.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 enum ConnectionState {
     case `default`
     case scanning
@@ -10,7 +10,7 @@ enum ConnectionState {
 }
 
 /// Dark-Slate Terminal style connection screen
-@available(iOS 14.0, macOS 11.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct ConnectionView: View {
     @Binding var isConnected: Bool
     @State private var connectionState = ConnectionState.default
@@ -222,7 +222,7 @@ struct ConnectionView: View {
 }
 
 // MARK: - Manual Setup Sheet
-@available(iOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct ManualSetupSheet: View {
     @State private var address = ""
     @State private var port = "3001"
@@ -292,7 +292,7 @@ struct ManualSetupSheet: View {
 }
 
 // MARK: - Help Sheet
-@available(iOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct HelpSheet: View {
     @Environment(\.dismiss) var dismiss
     @Environment(\.colorScheme) var colorScheme
@@ -335,7 +335,7 @@ struct HelpSheet: View {
     }
 }
 
-@available(iOS 14.0, macOS 11.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct HelpStep: View {
     let number: String
     let text: String
@@ -394,14 +394,14 @@ extension URL {
 }
 
 // MARK: - Preview
-@available(iOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
 #Preview("Connection View") {
     ConnectionView(isConnected: .constant(false))
         .environmentObject(SettingsManager())
         .preferredColorScheme(.dark)
 }
 
-@available(iOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
 #Preview("Manual Setup") {
     ManualSetupSheet { connection in
         print("Connect to: \(connection)")

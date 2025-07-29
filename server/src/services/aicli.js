@@ -4,6 +4,7 @@ import { EventEmitter } from 'events';
 import { processMonitor } from '../utils/process-monitor.js';
 import { InputValidator, MessageProcessor, AICLIConfig } from './aicli-utils.js';
 import { AICLIMessageHandler } from './aicli-message-handler.js';
+import { ClaudeStreamParser } from './stream-parser.js';
 
 const execAsync = promisify(exec);
 
@@ -851,6 +852,9 @@ export class AICLIService extends EventEmitter {
       const stdoutBuffers = []; // Store raw buffers to prevent encoding issues
       const stderrBuffers = [];
 
+      // Initialize stream parser for this command
+      const streamParser = new ClaudeStreamParser();
+
       // Function to reset activity timer on any output (will be updated below)
       // eslint-disable-next-line prefer-const
       let resetActivityTimer;
@@ -868,13 +872,28 @@ export class AICLIService extends EventEmitter {
 
         resetActivityTimer();
 
-        // Emit partial data for progress tracking
-        this.emit('commandProgress', {
-          sessionId,
-          pid: aicliProcess.pid,
-          data: chunk,
-          timestamp: new Date().toISOString(),
-        });
+        // Parse the chunk into structured messages
+        try {
+          const parsedChunks = streamParser.parseData(chunk, false);
+
+          // Emit each parsed chunk as a separate stream event
+          for (const parsedChunk of parsedChunks) {
+            this.emit('streamChunk', {
+              sessionId,
+              chunk: parsedChunk,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        } catch (parseError) {
+          console.error('❌ Failed to parse stream chunk:', parseError);
+          // Fallback to emitting raw data
+          this.emit('commandProgress', {
+            sessionId,
+            pid: aicliProcess.pid,
+            data: chunk,
+            timestamp: new Date().toISOString(),
+          });
+        }
       });
 
       aicliProcess.stderr.on('data', (data) => {
@@ -931,6 +950,20 @@ export class AICLIService extends EventEmitter {
 
         console.log(`   Final STDOUT length: ${completeStdout.length}`);
         console.log(`   Final STDERR length: ${completeStderr.length}`);
+
+        // Emit any remaining chunks with final flag
+        try {
+          const finalChunks = streamParser.parseData('', true); // Pass empty string with isComplete=true
+          for (const chunk of finalChunks) {
+            this.emit('streamChunk', {
+              sessionId,
+              chunk,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        } catch (parseError) {
+          console.error('❌ Failed to emit final chunks:', parseError);
+        }
 
         // Emit process exit event
         this.emit('processExit', {

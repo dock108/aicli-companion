@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Dark-Slate Terminal typography system
-@available(iOS 14.0, macOS 11.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 public struct Typography {
     // MARK: - Font Styles
     public enum FontStyle {
@@ -117,7 +117,7 @@ public struct Typography {
 }
 
 // MARK: - Text Style Modifiers
-@available(iOS 14.0, macOS 11.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 extension Text {
     /// Applies typography style with proper line height
     public func typographyStyle(_ style: Typography.FontStyle) -> some View {

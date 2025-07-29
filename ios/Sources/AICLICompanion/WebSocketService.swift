@@ -5,8 +5,10 @@ import Starscream
 import UIKit
 #endif
 
-@available(iOS 13.0, macOS 10.15, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 class WebSocketService: ObservableObject, WebSocketDelegate {
+    static let shared = WebSocketService()
+    
     @Published var isConnected = false
     @Published var connectionState: WebSocketConnectionState = .disconnected
 
@@ -82,7 +84,11 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
         
         // Send a graceful disconnect message if connected
         if isConnected {
-            let disconnectMessage = ["type": "client_backgrounding", "sessionId": activeSessionId ?? ""]
+            let disconnectMessage: [String: Any] = [
+                "type": "client_backgrounding",
+                "sessionId": activeSessionId ?? "",
+                "timestamp": ISO8601DateFormatter().string(from: Date())
+            ]
             if let data = try? JSONSerialization.data(withJSONObject: disconnectMessage),
                let message = String(data: data, encoding: .utf8) {
                 webSocket?.write(string: message)
@@ -117,6 +123,29 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
     
     func getActiveSession() -> String? {
         return activeSessionId
+    }
+    
+    // MARK: - Device Token Management
+    
+    func sendDeviceToken(_ token: String) {
+        guard isConnected else {
+            print("⚠️ Cannot send device token - not connected")
+            return
+        }
+        
+        let request = RegisterDeviceRequest(
+            token: token,
+            platform: "ios"
+        )
+        
+        sendMessage(request, type: .registerDevice) { result in
+            switch result {
+            case .success:
+                print("✅ Device token sent to server")
+            case .failure(let error):
+                print("❌ Failed to send device token: \(error)")
+            }
+        }
     }
 
     // MARK: - Connection Management
@@ -369,6 +398,10 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
             // Progress and status message types
             case .progress:
                 handleProgressMessage(message)
+            
+            // Stream chunk for sophisticated streaming
+            case .streamChunk:
+                handleStreamChunk(message)
 
             default:
                 break
@@ -395,6 +428,13 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
 
             // Start heartbeat
             startHeartbeat()
+            
+            // Send device token if we have one
+            #if os(iOS)
+            if let deviceToken = UserDefaults.standard.string(forKey: "devicePushToken") {
+                sendDeviceToken(deviceToken)
+            }
+            #endif
         }
     }
 
@@ -530,6 +570,21 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
             print("Progress update: \(progress.stage) - \(progress.message)")
             if let progressValue = progress.progress {
                 print("  Progress: \(Int(progressValue * 100))%")
+            }
+        }
+        // This will be handled by registered handlers in the UI
+    }
+    
+    private func handleStreamChunk(_ message: WebSocketMessage) {
+        if case .streamChunk(let chunkResponse) = message.data {
+            print("📦 Stream chunk received: \(chunkResponse.chunk.type) - isFinal: \(chunkResponse.chunk.isFinal)")
+            
+            // Log chunk details for debugging
+            print("   Chunk ID: \(chunkResponse.chunk.id)")
+            print("   Content length: \(chunkResponse.chunk.content.count) chars")
+            if let metadata = chunkResponse.chunk.metadata {
+                print("   Language: \(metadata.language ?? "none")")
+                print("   Level: \(metadata.level ?? 0)")
             }
         }
         // This will be handled by registered handlers in the UI

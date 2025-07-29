@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Primary button style with Dark-Slate Terminal design
-@available(iOS 14.0, macOS 11.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 public struct PrimaryButton: View {
     let title: String
     let action: () -> Void
@@ -76,7 +76,7 @@ public struct PrimaryButton: View {
 }
 
 /// Button press handler style
-@available(iOS 14.0, macOS 11.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct PressableButtonStyle: ButtonStyle {
     let onPress: () -> Void
     let onRelease: () -> Void
@@ -94,7 +94,7 @@ struct PressableButtonStyle: ButtonStyle {
 }
 
 // MARK: - Loading Button Variant
-@available(iOS 14.0, macOS 11.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 public struct LoadingPrimaryButton: View {
     let title: String
     let loadingTitle: String
@@ -174,7 +174,7 @@ public struct LoadingPrimaryButton: View {
 }
 
 // MARK: - Preview
-@available(iOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
 #Preview("Primary Buttons") {
     VStack(spacing: Spacing.lg) {
         PrimaryButton("Scan QR Code") {

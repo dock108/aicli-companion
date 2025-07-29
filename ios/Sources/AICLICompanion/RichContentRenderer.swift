@@ -8,7 +8,7 @@ import AppKit
 
 // MARK: - Rich Content Rendering
 
-@available(iOS 13.0, macOS 10.15, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct RichContentView: View {
     let content: RichContent
     @State private var isExpanded = false
@@ -33,7 +33,7 @@ struct RichContentView: View {
 
 // MARK: - Code Block View
 
-@available(iOS 13.0, macOS 10.15, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct CodeBlockView: View {
     let codeData: CodeBlockData
     @State private var showActions = false
@@ -150,7 +150,7 @@ struct CodeBlockView: View {
 
 // MARK: - File Content View
 
-@available(iOS 13.0, macOS 10.15, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct FileContentView: View {
     let fileData: FileContentData
     @Binding var isExpanded: Bool
@@ -297,7 +297,7 @@ struct FileContentView: View {
 
 // MARK: - Command Output View
 
-@available(iOS 13.0, macOS 10.15, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct CommandOutputView: View {
     let commandData: CommandOutputData
     @Binding var isExpanded: Bool
@@ -412,7 +412,7 @@ struct CommandOutputView: View {
 
 // MARK: - Tool Result View
 
-@available(iOS 13.0, macOS 10.15, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct ToolResultView: View {
     let toolData: ToolResultData
     @Binding var isExpanded: Bool
@@ -528,7 +528,7 @@ struct ToolResultView: View {
 
 // MARK: - Markdown View
 
-@available(iOS 13.0, macOS 10.15, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 struct MarkdownView: View {
     let markdownData: MarkdownData
     @State private var showActions = false

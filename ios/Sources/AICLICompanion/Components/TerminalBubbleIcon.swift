@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Terminal bubble icon combining terminal and chat elements
-@available(iOS 14.0, macOS 11.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 public struct TerminalBubbleIcon: View {
     let size: CGFloat
     let isGradient: Bool
@@ -56,7 +56,7 @@ public struct TerminalBubbleIcon: View {
 }
 
 /// Alternative design using message circle
-@available(iOS 14.0, macOS 11.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 public struct TerminalChatIcon: View {
     let size: CGFloat
     let style: IconStyle
@@ -143,7 +143,7 @@ public struct TerminalChatIcon: View {
 }
 
 /// Code bracket chat icon for AI messaging
-@available(iOS 14.0, macOS 11.0, *)
+@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
 public struct CodeChatIcon: View {
     let size: CGFloat
     
@@ -180,7 +180,7 @@ public struct CodeChatIcon: View {
 
 // MARK: - Preview
 
-@available(iOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
 #Preview("Terminal Icons") {
     VStack(spacing: 40) {
         VStack(spacing: 20) {

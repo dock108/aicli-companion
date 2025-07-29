@@ -3,6 +3,7 @@ import { promisify } from 'util';
 import { EventEmitter } from 'events';
 import { processMonitor } from '../utils/process-monitor.js';
 import { InputValidator, MessageProcessor, AICLIConfig } from './aicli-utils.js';
+import { AICLIMessageHandler } from './aicli-message-handler.js';
 
 const execAsync = promisify(exec);
 
@@ -446,15 +447,7 @@ export class AICLIService extends EventEmitter {
     this.activeSessions.set(sanitizedSessionId, session);
 
     // Initialize message buffer for this session
-    this.sessionMessageBuffers.set(sanitizedSessionId, {
-      assistantMessages: [],
-      systemInit: null,
-      toolUseInProgress: false,
-      permissionRequests: [],
-      deliverables: [],
-      pendingFinalResponse: null,
-      permissionRequestSent: false,
-    });
+    this.sessionMessageBuffers.set(sanitizedSessionId, AICLIMessageHandler.createSessionBuffer());
 
     // Set up session timeout
     setTimeout(() => {
@@ -712,14 +705,7 @@ export class AICLIService extends EventEmitter {
       if (result && result.type === 'result' && result.result) {
         // Create a fresh buffer for the long-running completion
         if (!this.sessionMessageBuffers.has(sessionId)) {
-          this.sessionMessageBuffers.set(sessionId, {
-            assistantMessages: [],
-            systemInit: null,
-            toolUseInProgress: false,
-            permissionRequests: [],
-            deliverables: [],
-            permissionRequestSent: false,
-          });
+          this.sessionMessageBuffers.set(sessionId, AICLIMessageHandler.createSessionBuffer());
         }
 
         // Create an assistant message with the actual result content (removed unused variable)
@@ -991,14 +977,7 @@ export class AICLIService extends EventEmitter {
 
           // Ensure message buffer exists for this session
           if (!this.sessionMessageBuffers.has(sessionId)) {
-            this.sessionMessageBuffers.set(sessionId, {
-              assistantMessages: [],
-              systemInit: null,
-              toolUseInProgress: false,
-              permissionRequests: [],
-              deliverables: [],
-              permissionRequestSent: false,
-            });
+            this.sessionMessageBuffers.set(sessionId, AICLIMessageHandler.createSessionBuffer());
             console.log(`🔧 Created missing message buffer for session ${sessionId}`);
           }
 
@@ -1423,509 +1402,181 @@ export class AICLIService extends EventEmitter {
       return;
     }
 
-    // Process different types of AICLI CLI responses
-    switch (response.type) {
-      case 'system':
-        this.handleSystemResponse(sessionId, response, buffer);
+    // Use extracted message handler for pure business logic
+    const result = AICLIMessageHandler.processResponse(response, buffer, options);
+
+    // Handle the processing result and emit appropriate events
+    switch (result.action) {
+      case 'permission_request':
+        console.log(`🔐 Sending permission request immediately for session ${sessionId}`);
+        this.emit('permissionRequired', {
+          sessionId,
+          prompt: result.data.prompt,
+          options: result.data.options,
+          default: result.data.default,
+        });
+        this.emit('assistantMessage', {
+          sessionId,
+          data: {
+            type: 'permission_request',
+            messageId: result.data.messageId,
+            content: result.data.content,
+            model: result.data.model,
+            usage: result.data.usage,
+            timestamp: new Date().toISOString(),
+          },
+        });
         break;
 
-      case 'assistant':
-        this.handleAssistantResponse(sessionId, response, buffer);
+      case 'tool_use':
+        console.log(`🔧 Tool use in progress for session ${sessionId}`);
+        this.emit('assistantMessage', {
+          sessionId,
+          data: {
+            type: 'tool_use',
+            messageId: result.data.messageId,
+            content: result.data.content,
+            model: result.data.model,
+            usage: result.data.usage,
+            timestamp: new Date().toISOString(),
+          },
+        });
         break;
 
-      case 'user':
-        // User messages are tool results - don't send to iOS
-        console.log(`📝 Buffering user/tool result for session ${sessionId}`);
+      case 'final_result':
+        this.handleFinalResultEmission(sessionId, result.data, options);
         break;
 
-      case 'result':
-        this.handleFinalResult(sessionId, response, buffer, options);
+      case 'buffer':
+        console.log(`📝 ${result.reason} for session ${sessionId}`);
+        break;
+
+      case 'skip':
+        console.log(`🤷 ${result.reason}, skipping`);
+        break;
+
+      case 'error':
+        console.error(`❌ Error processing response for session ${sessionId}: ${result.reason}`);
         break;
 
       default:
-        console.log(`🤷 Unknown message type: ${response.type}, skipping`);
+        console.log(`🤷 Unknown processing result: ${result.action}, skipping`);
         break;
     }
   }
 
-  handleSystemResponse(sessionId, response, buffer) {
-    if (response.subtype === 'init') {
-      // Store system init but don't send to iOS immediately
-      buffer.systemInit = response;
-      console.log(`📋 Buffered system init for session ${sessionId}`);
-    }
-  }
+  handleFinalResultEmission(sessionId, resultData, _options = {}) {
+    const { response, buffer, aggregatedContent, sendAggregated, embeddedPermission } = resultData;
 
-  handleAssistantResponse(sessionId, response, buffer) {
-    if (!response.message || !response.message.content) {
-      return;
-    }
-
-    console.log(`🎯 Processing assistant message for session ${sessionId}`);
-    console.log(`   Message ID: ${response.message.id}`);
-    console.log(`   Content blocks: ${response.message.content.length}`);
-
-    // Check if this contains permission requests or immediate action items
-    const hasPermissionRequest = this.containsPermissionRequest(response.message.content);
-    const hasToolUse = this.containsToolUse(response.message.content);
-    const codeBlocks = this.extractCodeBlocks(response.message.content);
-
-    if (hasPermissionRequest) {
-      // Send permission requests immediately
-      console.log(`🔐 Sending permission request immediately for session ${sessionId}`);
-
-      // Mark that we've sent a permission request to avoid duplicates
-      buffer.permissionRequestSent = true;
-
-      // Extract the permission prompt text
-      const permissionPrompt = this.extractPermissionPrompt(
-        response.message.content.map((c) => c.text || '').join(' ')
-      );
-
-      // Emit the permissionRequired event that WebSocket expects
-      this.emit('permissionRequired', {
-        sessionId,
-        prompt: permissionPrompt,
-        options: ['y', 'n'],
-        default: 'n',
-      });
-
-      // Also emit as assistantMessage for UI display
+    if (sendAggregated && aggregatedContent) {
+      // Send aggregated response
+      console.log(`📱 Sending aggregated response to iOS for session ${sessionId}`);
       this.emit('assistantMessage', {
         sessionId,
         data: {
-          type: 'permission_request',
-          messageId: response.message.id,
-          content: response.message.content,
+          type: 'assistant_response',
+          content: aggregatedContent,
+          deliverables: buffer.deliverables || [],
+          aggregated: true,
+          messageCount: buffer.assistantMessages.length,
           timestamp: new Date().toISOString(),
         },
-        isComplete: false,
+        isComplete: true,
       });
-
-      // Don't buffer permission requests since they're sent immediately
-      return;
     }
 
-    if (codeBlocks.length > 0) {
-      // Send completed code blocks as deliverables
-      console.log(`💻 Found ${codeBlocks.length} code blocks, adding to deliverables`);
-      buffer.deliverables.push(...codeBlocks);
-    }
-
-    if (hasToolUse) {
-      buffer.toolUseInProgress = true;
-    }
-
-    // Buffer all other assistant messages for aggregation
-    buffer.assistantMessages.push({
-      messageId: response.message.id,
-      content: response.message.content,
-      model: response.message.model,
-      usage: response.message.usage,
-      timestamp: new Date().toISOString(),
-    });
-
-    console.log(`📦 Buffered assistant message (total: ${buffer.assistantMessages.length})`);
-  }
-
-  handleFinalResult(sessionId, response, buffer, options = {}) {
-    console.log(`🏁 Processing final result for session ${sessionId}`);
-    console.log(`   Buffered messages: ${buffer.assistantMessages.length}`);
-    console.log(`   Deliverables: ${buffer.deliverables.length}`);
-    console.log(`   Options:`, options);
-
-    // For long-running completions, always send the results immediately
-    if (options.isLongRunningCompletion) {
-      console.log(`🚀 Long-running completion detected, sending results immediately`);
-      this.sendFinalAggregatedResponse(sessionId, response, buffer);
-      return;
-    }
-
-    // If we already sent a permission request from the assistant messages,
-    // don't check again in the final result to avoid duplicates
-    if (buffer.permissionRequestSent) {
-      console.log(`⏭️  Permission request already sent, skipping final result permission check`);
-
-      // Store the pending response in buffer for later when permission is granted
-      buffer.pendingFinalResponse = {
-        aggregatedContent: this.aggregateBufferedContent(buffer),
-        finalResult: response.result,
-        conversationResult: {
+    if (embeddedPermission) {
+      // Handle embedded permission in result
+      console.log(`🔐 Found embedded permission in result for session ${sessionId}`);
+      this.emit('permissionRequired', {
+        sessionId,
+        prompt: embeddedPermission.prompt,
+        options: embeddedPermission.options,
+        default: embeddedPermission.default,
+      });
+    } else {
+      // Send regular conversation result
+      this.emit('conversationResult', {
+        sessionId,
+        data: {
           type: 'final_result',
           success: !response.is_error,
-          // result field intentionally omitted to prevent duplicate display
-          sessionId,
+          sessionId: response.session_id,
           duration: response.duration_ms,
           cost: response.total_cost_usd,
           usage: response.usage,
           timestamp: new Date().toISOString(),
         },
-      };
-      return;
-    }
-
-    // Check if the final result contains an embedded permission request
-    const finalResultContent = response.result
-      ? [
-          {
-            type: 'text',
-            text: response.result,
-          },
-        ]
-      : [];
-
-    const hasEmbeddedPermission = this.containsPermissionRequest(finalResultContent);
-
-    if (hasEmbeddedPermission) {
-      console.log(`🔐 Found embedded permission request in final result for session ${sessionId}`);
-
-      // Extract the permission request and send it as a structured prompt
-      const permissionPrompt = this.extractPermissionPrompt(response.result);
-
-      // Emit the permissionRequired event that WebSocket expects
-      this.emit('permissionRequired', {
-        sessionId,
-        prompt: permissionPrompt,
-        options: ['y', 'n'],
-        default: 'n',
       });
-
-      // Send permission request immediately
-      this.emit('assistantMessage', {
-        sessionId,
-        data: {
-          type: 'permission_request',
-          content: finalResultContent,
-          permissionPrompt,
-          requiresApproval: true,
-          timestamp: new Date().toISOString(),
-        },
-        isComplete: false,
-      });
-
-      // Don't send aggregated response yet - wait for approval
-      console.log(`⏸️  Waiting for user approval before sending aggregated response`);
-
-      // Store the pending response in buffer for later
-      buffer.pendingFinalResponse = {
-        aggregatedContent: this.aggregateBufferedContent(buffer),
-        finalResult: response.result,
-        conversationResult: {
-          type: 'final_result',
-          success: !response.is_error,
-          // result field removed to prevent duplicate display
-          sessionId,
-          duration: response.duration_ms,
-          cost: response.total_cost_usd,
-          usage: response.usage,
-          timestamp: new Date().toISOString(),
-        },
-      };
-
-      return; // Don't proceed with normal flow
     }
-
-    // Normal flow - no permission needed
-    this.sendFinalAggregatedResponse(sessionId, response, buffer);
-  }
-
-  sendFinalAggregatedResponse(sessionId, response, buffer) {
-    // Aggregate all buffered content into a single response
-    const aggregatedContent = this.aggregateBufferedContent(buffer);
-
-    // Note: response.result is already included in the aggregated content from buffered messages
-    // so we don't need to add it again to avoid duplication
-
-    // Send the complete aggregated response to iOS
-    console.log(`📱 Sending aggregated response to iOS for session ${sessionId}`);
-    this.emit('assistantMessage', {
-      sessionId,
-      data: {
-        type: 'assistant_response',
-        content: aggregatedContent,
-        deliverables: buffer.deliverables,
-        aggregated: true,
-        messageCount: buffer.assistantMessages.length,
-        timestamp: new Date().toISOString(),
-      },
-      isComplete: true,
-    });
-
-    // Send conversation result for completion tracking
-    // Note: Don't include the result text here as it's already sent in assistantMessage
-    this.emit('conversationResult', {
-      sessionId,
-      data: {
-        type: 'final_result',
-        success: !response.is_error,
-        // result field removed to prevent duplicate display in iOS
-        sessionId,
-        duration: response.duration_ms,
-        cost: response.total_cost_usd,
-        usage: response.usage,
-        timestamp: new Date().toISOString(),
-      },
-    });
 
     // Clear the buffer for next command
-    this.clearSessionBuffer(sessionId);
+    AICLIMessageHandler.clearSessionBuffer(buffer);
   }
 
-  extractPermissionPrompt(resultText) {
-    if (!resultText) return null;
+  // Old handler methods removed - message processing now handled by AICLIMessageHandler via emitAICLIResponse
 
-    // Look for the specific permission question in the text
-    const lines = resultText.split('\n');
-
-    // Find lines that contain permission-related questions
-    const permissionLines = lines.filter((line) => {
-      const lowerLine = line.toLowerCase();
-      return (
-        lowerLine.includes('would you like') ||
-        lowerLine.includes('should i') ||
-        lowerLine.includes('need permission') ||
-        lowerLine.includes('need write') ||
-        lowerLine.includes('proceed') ||
-        line.endsWith('?')
-      );
-    });
-
-    if (permissionLines.length > 0) {
-      return permissionLines.join(' ').trim();
-    }
-
-    // Fallback - return last paragraph if it seems like a question
-    const lastParagraph = resultText.split('\n\n').pop();
-    if (lastParagraph && lastParagraph.includes('?')) {
-      return lastParagraph.trim();
-    }
-
-    return 'Permission required to proceed';
-  }
-
-  containsPermissionRequest(content) {
-    if (!Array.isArray(content)) return false;
-
-    return content.some((block) => {
-      if (block.type === 'text' && block.text) {
-        const text = block.text.toLowerCase();
-
-        // Traditional permission patterns
-        if (
-          text.includes('permission') ||
-          text.includes('approve') ||
-          text.includes('(y/n)') ||
-          text.includes('[y/n]') ||
-          text.includes('confirm')
-        ) {
-          return true;
-        }
-
-        // Conversational permission patterns
-        const conversationalPatterns = [
-          'would you like me to proceed',
-          'should i proceed',
-          'should i continue',
-          'would you like me to continue',
-          'shall i proceed',
-          'shall i continue',
-          'may i proceed',
-          'can i proceed',
-          'do you want me to',
-          'i need write permissions',
-          'i need permissions',
-          'need write access',
-          'require write permissions',
-          'would you like me to create',
-          'should i create',
-          'shall i create',
-          'would you like me to execute',
-          'should i execute',
-          'would you like me to implement',
-          'should i implement',
-        ];
-
-        const hasConversationalPattern = conversationalPatterns.some((pattern) =>
-          text.includes(pattern)
-        );
-
-        if (hasConversationalPattern) {
-          console.log(
-            `🔍 Detected conversational permission request: "${text.substring(0, 100)}..."`
-          );
-          return true;
-        }
-
-        // Questions ending with "?" that might need approval
-        const questionPatterns = [
-          /would you like.*\?/,
-          /should i.*\?/,
-          /shall i.*\?/,
-          /do you want.*\?/,
-          /can i.*\?/,
-          /may i.*\?/,
-        ];
-
-        const hasQuestionPattern = questionPatterns.some((pattern) => pattern.test(text));
-
-        if (hasQuestionPattern) {
-          console.log(
-            `❓ Detected question-based permission request: "${text.substring(0, 100)}..."`
-          );
-          return true;
-        }
-      }
-      return false;
-    });
-  }
-
-  containsToolUse(content) {
-    if (!Array.isArray(content)) return false;
-    return content.some((block) => block.type === 'tool_use');
-  }
-
-  containsApprovalResponse(text) {
-    if (!text || typeof text !== 'string') return false;
-
-    const normalizedText = text.toLowerCase().trim();
-
-    // Direct approval phrases
-    const directApprovals = [
-      'yes',
-      'y',
-      'yep',
-      'yeah',
-      'yup',
-      'approved',
-      'approve',
-      'approval',
-      'ok',
-      'okay',
-      'k',
-      'sure',
-      'fine',
-      'good',
-      'proceed',
-      'continue',
-      'go ahead',
-      'go for it',
-      'do it',
-      'execute',
-      'run it',
-      'confirm',
-      'confirmed',
-      'allow',
-      'permit',
-      'authorized',
-    ];
-
-    // Check for exact matches or phrases that start with approval
-    const hasDirectApproval = directApprovals.some(
-      (approval) =>
-        normalizedText === approval ||
-        normalizedText.startsWith(`${approval} `) ||
-        normalizedText.startsWith(`${approval},`) ||
-        normalizedText.startsWith(`${approval}.`)
-    );
-
-    if (hasDirectApproval) {
-      console.log(`✅ Detected approval response: "${text}"`);
-      return true;
-    }
-
-    // Longer approval phrases
-    const phraseApprovals = [
-      'go ahead',
-      'go for it',
-      'sounds good',
-      'looks good',
-      'that works',
-      'do it',
-      'make it so',
-      "let's do it",
-      'i approve',
-      'you have permission',
-      'you can proceed',
-      'please proceed',
-      'please continue',
-      'yes please',
-      'sure thing',
-      'absolutely',
-      'definitely',
-    ];
-
-    const hasPhraseApproval = phraseApprovals.some((phrase) => normalizedText.includes(phrase));
-
-    if (hasPhraseApproval) {
-      console.log(`✅ Detected phrase-based approval: "${text}"`);
-      return true;
-    }
-
-    return false;
-  }
-
-  extractCodeBlocks(content) {
-    if (!Array.isArray(content)) return [];
-
-    const codeBlocks = [];
-    content.forEach((block) => {
-      if (block.type === 'text' && block.text) {
-        // Look for code blocks in text (```language...```)
-        const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
-        let match;
-        while ((match = codeBlockRegex.exec(block.text)) !== null) {
-          codeBlocks.push({
-            type: 'code_block',
-            language: match[1] || 'text',
-            code: match[2].trim(),
-          });
-        }
-      }
-    });
-
-    return codeBlocks;
-  }
-
-  aggregateBufferedContent(buffer) {
-    const aggregatedContent = [];
-
-    // Combine all text content from assistant messages
-    const textBlocks = [];
-
-    buffer.assistantMessages.forEach((message) => {
-      message.content.forEach((block) => {
-        if (block.type === 'text' && block.text) {
-          textBlocks.push(block.text);
-        }
-      });
-    });
-
-    // Combine text blocks, removing duplicates and tool usage details
-    const combinedText = textBlocks
-      .filter((text) => text.trim().length > 0)
-      .filter((text, index, array) => array.indexOf(text) === index) // Remove duplicates
-      .join('\n\n');
-
-    if (combinedText) {
-      aggregatedContent.push({
-        type: 'text',
-        text: combinedText,
-      });
-    }
-
-    return aggregatedContent;
-  }
+  // Message handling methods moved to AICLIMessageHandler - using proxy methods below for backward compatibility
 
   clearSessionBuffer(sessionId) {
     const buffer = this.sessionMessageBuffers.get(sessionId);
     if (buffer) {
-      buffer.assistantMessages = [];
-      buffer.toolUseInProgress = false;
-      buffer.permissionRequests = [];
-      buffer.deliverables = [];
-      buffer.permissionRequestSent = false;
+      AICLIMessageHandler.clearSessionBuffer(buffer);
       console.log(`🧹 Cleared message buffer for session ${sessionId}`);
     }
+  }
+
+  // Proxy methods for message handler functionality (for backward compatibility and testing)
+  containsPermissionRequest(content) {
+    return AICLIMessageHandler.containsPermissionRequest(content);
+  }
+
+  containsToolUse(content) {
+    return AICLIMessageHandler.containsToolUse(content);
+  }
+
+  containsApprovalResponse(text) {
+    return AICLIMessageHandler.containsApprovalResponse(text);
+  }
+
+  extractCodeBlocks(content) {
+    return AICLIMessageHandler.extractCodeBlocks(content);
+  }
+
+  aggregateBufferedContent(buffer) {
+    return AICLIMessageHandler.aggregateBufferedContent(buffer);
+  }
+
+  extractPermissionPrompt(text) {
+    return AICLIMessageHandler.extractPermissionPrompt(text);
+  }
+
+  extractPermissionPromptFromMessage(message) {
+    const text = this.extractTextFromMessage(message);
+    if (!text) return 'Permission required';
+
+    // Clean up the prompt text
+    return text.replace(/\s*\([yn]\/[yn]\)\s*$/i, '').trim();
+  }
+
+  extractTextFromMessage(message) {
+    if (typeof message === 'string') return message;
+
+    if (message.result) return message.result;
+    if (message.text) return message.text;
+    if (message.message && message.message.content) {
+      const content = message.message.content;
+      if (typeof content === 'string') return content;
+      if (Array.isArray(content)) {
+        for (const block of content) {
+          if (block.type === 'text' && block.text) {
+            return block.text;
+          }
+        }
+      }
+    }
+
+    return null;
   }
 
   async closeSession(sessionId) {
@@ -2251,53 +1902,7 @@ export class AICLIService extends EventEmitter {
     };
   }
 
-  // Permission prompt detection
-  isPermissionPrompt(message) {
-    if (!message || typeof message !== 'object') return false;
-
-    // Check for common permission prompt patterns
-    const text = this.extractTextFromMessage(message);
-    if (!text) return false;
-
-    const permissionPatterns = [
-      /\(y\/n\)/i,
-      /allow.*\?/i,
-      /proceed.*\?/i,
-      /continue.*\?/i,
-      /\[Y\/n\]/i,
-      /\[y\/N\]/i,
-    ];
-
-    return permissionPatterns.some((pattern) => pattern.test(text));
-  }
-
-  extractPermissionPromptFromMessage(message) {
-    const text = this.extractTextFromMessage(message);
-    if (!text) return 'Permission required';
-
-    // Clean up the prompt text
-    return text.replace(/\s*\([yn]\/[yn]\)\s*$/i, '').trim();
-  }
-
-  extractTextFromMessage(message) {
-    if (typeof message === 'string') return message;
-
-    if (message.result) return message.result;
-    if (message.text) return message.text;
-    if (message.message && message.message.content) {
-      const content = message.message.content;
-      if (typeof content === 'string') return content;
-      if (Array.isArray(content)) {
-        for (const block of content) {
-          if (block.type === 'text' && block.text) {
-            return block.text;
-          }
-        }
-      }
-    }
-
-    return null;
-  }
+  // Duplicate methods removed - using the proxy methods above for backward compatibility
 
   // Proxy methods for backward compatibility with tests
   findAICLICommand() {

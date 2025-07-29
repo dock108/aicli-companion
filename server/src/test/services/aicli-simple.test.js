@@ -180,7 +180,7 @@ describe('AICLIService Simple Unit Tests', () => {
           permissionRequestSent: true,
           toolUseInProgress: true,
           permissionRequests: ['req1'],
-          deliverables: ['del1']
+          deliverables: ['del1'],
         });
 
         service.clearSessionBuffer(sessionId);
@@ -212,16 +212,12 @@ describe('AICLIService Simple Unit Tests', () => {
 
     describe('containsPermissionRequest', () => {
       it('should detect permission requests in content arrays', () => {
-        const content = [
-          { type: 'text', text: 'Do you want to continue? (y/n)' }
-        ];
+        const content = [{ type: 'text', text: 'Do you want to continue? (y/n)' }];
         assert.strictEqual(service.containsPermissionRequest(content), true);
       });
 
       it('should return false for content without permission requests', () => {
-        const content = [
-          { type: 'text', text: 'Regular text' }
-        ];
+        const content = [{ type: 'text', text: 'Regular text' }];
         assert.strictEqual(service.containsPermissionRequest(content), false);
       });
 
@@ -236,15 +232,13 @@ describe('AICLIService Simple Unit Tests', () => {
       it('should detect tool use in content arrays', () => {
         const content = [
           { type: 'text', text: 'Some text' },
-          { type: 'tool_use', name: 'Read' }
+          { type: 'tool_use', name: 'Read' },
         ];
         assert.strictEqual(service.containsToolUse(content), true);
       });
 
       it('should return false for content without tool use', () => {
-        const content = [
-          { type: 'text', text: 'Regular text' }
-        ];
+        const content = [{ type: 'text', text: 'Regular text' }];
         assert.strictEqual(service.containsToolUse(content), false);
       });
 
@@ -258,7 +252,11 @@ describe('AICLIService Simple Unit Tests', () => {
       it('should detect positive responses', () => {
         const positive = ['y', 'yes', 'approve', 'ok', 'proceed', 'continue'];
         for (const response of positive) {
-          assert.strictEqual(service.containsApprovalResponse(response), true, `Should approve: ${response}`);
+          assert.strictEqual(
+            service.containsApprovalResponse(response),
+            true,
+            `Should approve: ${response}`
+          );
         }
       });
 
@@ -284,7 +282,7 @@ describe('AICLIService Simple Unit Tests', () => {
     describe('extractCodeBlocks', () => {
       it('should extract code blocks from content', () => {
         const content = [
-          { type: 'text', text: 'Here is code:\n```javascript\nconsole.log("hello");\n```' }
+          { type: 'text', text: 'Here is code:\n```javascript\nconsole.log("hello");\n```' },
         ];
         const result = service.extractCodeBlocks(content);
         assert.strictEqual(result.length, 1);
@@ -308,8 +306,8 @@ describe('AICLIService Simple Unit Tests', () => {
         const buffer = {
           assistantMessages: [
             { content: [{ type: 'text', text: 'First' }] },
-            { content: [{ type: 'text', text: 'Second' }] }
-          ]
+            { content: [{ type: 'text', text: 'Second' }] },
+          ],
         };
         const result = service.aggregateBufferedContent(buffer);
         assert.strictEqual(result.length, 1);
@@ -324,9 +322,7 @@ describe('AICLIService Simple Unit Tests', () => {
 
       it('should handle buffers with no text content', () => {
         const buffer = {
-          assistantMessages: [
-            { content: [{ type: 'tool_use', name: 'Read' }] }
-          ]
+          assistantMessages: [{ content: [{ type: 'tool_use', name: 'Read' }] }],
         };
         assert.deepStrictEqual(service.aggregateBufferedContent(buffer), []);
       });
@@ -340,7 +336,10 @@ describe('AICLIService Simple Unit Tests', () => {
       });
 
       it('should extract text from result property', () => {
-        assert.strictEqual(service.extractTextFromMessage({ result: 'result text' }), 'result text');
+        assert.strictEqual(
+          service.extractTextFromMessage({ result: 'result text' }),
+          'result text'
+        );
       });
 
       it('should extract text from text property', () => {
@@ -357,9 +356,9 @@ describe('AICLIService Simple Unit Tests', () => {
           message: {
             content: [
               { type: 'text', text: 'text block' },
-              { type: 'tool_use', name: 'Read' }
-            ]
-          }
+              { type: 'tool_use', name: 'Read' },
+            ],
+          },
         };
         assert.strictEqual(service.extractTextFromMessage(msg), 'text block');
       });
@@ -427,7 +426,7 @@ describe('AICLIService Simple Unit Tests', () => {
         const tests = [
           { input: 'Proceed? (Y/n)', expected: 'Proceed?' },
           { input: 'Allow? [y/N]', expected: 'Allow? [y/N]' }, // This pattern isn't cleaned by the regex
-          { input: 'Continue?  (y/n)  ', expected: 'Continue?' }
+          { input: 'Continue?  (y/n)  ', expected: 'Continue?' },
         ];
 
         for (const test of tests) {
@@ -536,68 +535,21 @@ describe('AICLIService Simple Unit Tests', () => {
         const sessionId = 'test-session';
         service.sessionMessageBuffers.set(sessionId, {
           assistantMessages: [],
-          permissionRequestSent: false
+          permissionRequestSent: false,
         });
-        
+
         const response = { type: 'system', content: 'test' };
         service.emitAICLIResponse(sessionId, response);
-        
+
         // Should not throw
         assert.ok(true);
       });
     });
 
-    describe('sendFinalAggregatedResponse', () => {
-      it('should handle buffer with empty assistant messages', () => {
-        const sessionId = 'test-session';
-        const response = { type: 'result', result: 'success' };
-        const buffer = { assistantMessages: [] };
-        
-        service.sendFinalAggregatedResponse(sessionId, response, buffer);
-        // Should not throw
-        assert.ok(true);
-      });
-    });
+    // sendFinalAggregatedResponse is now handled internally via handleFinalResultEmission
 
-    describe('handleSystemResponse', () => {
-      it('should handle system init responses', () => {
-        const sessionId = 'test-session';
-        const response = {
-          type: 'system',
-          subtype: 'init',
-          session_id: 'test',
-          cwd: '/test'
-        };
-        const buffer = { assistantMessages: [] };
-        
-        service.handleSystemResponse(sessionId, response, buffer);
-        // Should not throw
-        assert.ok(true);
-      });
-    });
-
-    describe('handleAssistantResponse', () => {
-      it('should handle assistant message without content', () => {
-        const sessionId = 'test-session';
-        const response = { type: 'assistant' };
-        const buffer = { assistantMessages: [] };
-        
-        service.handleAssistantResponse(sessionId, response, buffer);
-        // Should not throw
-        assert.ok(true);
-      });
-    });
-
-    describe('handleFinalResult', () => {
-      it('should handle basic final result', () => {
-        const sessionId = 'test-session';
-        const response = { type: 'result', result: 'success' };
-        const buffer = { assistantMessages: [], permissionRequestSent: false };
-        
-        service.handleFinalResult(sessionId, response, buffer);
-        // Should not throw
-        assert.ok(true);
-      });
-    });
+    // Note: handleSystemResponse, handleAssistantResponse, handleFinalResult methods
+    // have been moved to AICLIMessageHandler and are no longer public methods.
+    // Message processing is now handled internally via emitAICLIResponse.
   });
 });

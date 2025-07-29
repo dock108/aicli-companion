@@ -158,17 +158,17 @@ describe('AICLI Utils Unit Tests', () => {
       it('should reject shell operators', () => {
         assert.throws(
           () => InputValidator.validateAICLIArgs(['arg1', 'arg2 && rm -rf']),
-          /shell operators/
+          /dangerous shell metacharacters/
         );
         assert.throws(
           () => InputValidator.validateAICLIArgs(['arg1', 'arg2||dangerous']),
-          /shell operators/
+          /dangerous shell metacharacters/
         );
         assert.throws(
           () => InputValidator.validateAICLIArgs(['arg1;dangerous']),
-          /shell operators/
+          /dangerous shell metacharacters/
         );
-        assert.throws(() => InputValidator.validateAICLIArgs(['arg1|pipe']), /shell operators/);
+        assert.throws(() => InputValidator.validateAICLIArgs(['arg1|pipe']), /dangerous shell metacharacters/);
       });
     });
   });

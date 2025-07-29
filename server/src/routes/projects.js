@@ -57,6 +57,16 @@ export function setupProjectRoutes(app, aicliService) {
     },
   });
 
+  // Define rate limiter for project start route
+  const projectStartLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per windowMs
+    message: {
+      error: 'Too many requests',
+      message: 'Please try again later.',
+    },
+  });
+
   // Get specific project info
   router.get('/projects/:name', projectInfoLimiter, async (req, res) => {
     try {
@@ -118,7 +128,7 @@ export function setupProjectRoutes(app, aicliService) {
   });
 
   // Start AICLI CLI in a specific project directory
-  router.post('/projects/:name/start', async (req, res) => {
+  router.post('/projects/:name/start', projectStartLimiter, async (req, res) => {
     try {
       const { name } = req.params;
       const { continueSession, sessionId: existingSessionId } = req.body || {};

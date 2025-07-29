@@ -17,7 +17,17 @@ export function setupProjectRoutes(app, aicliService) {
   };
 
   // List all projects (folders) in the configured directory
-  router.get('/projects', async (req, res) => {
+  // Define rate limiter for projects listing route
+  const projectsListLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per windowMs
+    message: {
+      error: 'Too many requests',
+      message: 'Please try again later.',
+    },
+  });
+
+  router.get('/projects', projectsListLimiter, async (req, res) => {
     try {
       const projectsDir = getProjectsDir();
       console.log('Listing projects from directory:', path.basename(projectsDir));

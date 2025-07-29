@@ -1912,4 +1912,8 @@ export class AICLIService extends EventEmitter {
   calculateTimeoutForCommand(command) {
     return AICLIConfig.calculateTimeoutForCommand(command);
   }
+
+  isPermissionPrompt(message) {
+    return MessageProcessor.isPermissionPrompt(message);
+  }
 }

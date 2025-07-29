@@ -1,147 +1,10 @@
-import { spawn, exec, execSync } from 'child_process';
+import { spawn, exec } from 'child_process';
 import { promisify } from 'util';
 import { EventEmitter } from 'events';
-import { resolve } from 'path';
-import { access, constants } from 'fs/promises';
-import { existsSync } from 'fs';
 import { processMonitor } from '../utils/process-monitor.js';
+import { InputValidator, MessageProcessor, AICLIConfig } from './aicli-utils.js';
 
 const execAsync = promisify(exec);
-
-// Input validation and sanitization utilities
-class InputValidator {
-  static sanitizePrompt(prompt) {
-    if (typeof prompt !== 'string') {
-      throw new Error('Prompt must be a string');
-    }
-
-    // Remove null bytes and limit length
-    const sanitized = prompt.replace(/\0/g, '').substring(0, 50000);
-
-    if (sanitized.length === 0) {
-      throw new Error('Prompt cannot be empty');
-    }
-
-    return sanitized;
-  }
-
-  static validateFormat(format) {
-    const allowedFormats = ['json', 'text', 'markdown'];
-
-    if (!format || typeof format !== 'string') {
-      return 'json'; // default
-    }
-
-    const cleanFormat = format.toLowerCase().trim();
-
-    if (!allowedFormats.includes(cleanFormat)) {
-      throw new Error(`Invalid format. Must be one of: ${allowedFormats.join(', ')}`);
-    }
-
-    return cleanFormat;
-  }
-
-  static async validateWorkingDirectory(workingDir, safeRoot = null) {
-    if (!workingDir || typeof workingDir !== 'string') {
-      // If no working directory provided, use safe root or current directory
-      return safeRoot || process.cwd();
-    }
-
-    // Resolve to absolute path
-    const resolvedPath = resolve(workingDir);
-
-    // If a safe root is provided, ensure the resolved path is within it
-    if (safeRoot) {
-      const resolvedSafeRoot = resolve(safeRoot);
-      if (!resolvedPath.startsWith(resolvedSafeRoot)) {
-        throw new Error(`Working directory must be within the configured project directory`);
-      }
-    }
-
-    try {
-      // Check if directory exists and is accessible
-      await access(resolvedPath, constants.F_OK | constants.R_OK);
-      return resolvedPath;
-    } catch (error) {
-      throw new Error(`Working directory is not accessible: ${resolvedPath}`);
-    }
-  }
-
-  static sanitizeSessionId(sessionId) {
-    if (!sessionId || typeof sessionId !== 'string') {
-      return null;
-    }
-
-    // Only allow alphanumeric characters, hyphens, and underscores
-    const sanitized = sessionId.replace(/[^a-zA-Z0-9_-]/g, '').substring(0, 64);
-
-    if (sanitized.length === 0) {
-      return null;
-    }
-
-    return sanitized;
-  }
-
-  static validateAICLIArgs(args) {
-    if (!Array.isArray(args)) {
-      throw new Error('Arguments must be an array');
-    }
-
-    const allowedArgs = [
-      '--print',
-      '--output-format',
-      '--verbose',
-      '--help',
-      '--version',
-      '--continue',
-      '--dangerously-skip-permissions',
-      '--permission-mode',
-      '--allowedTools',
-      '--disallowedTools',
-    ];
-
-    const allowedFormats = ['json', 'text', 'markdown', 'stream-json'];
-    const allowedPermissionModes = ['default', 'acceptEdits', 'bypassPermissions', 'plan'];
-
-    for (let i = 0; i < args.length; i++) {
-      const arg = args[i];
-
-      if (typeof arg !== 'string') {
-        throw new Error('All arguments must be strings');
-      }
-
-      // Check for suspicious characters
-      if (/[;&|`$(){}[\]<>]/.test(arg)) {
-        throw new Error(`Argument contains suspicious characters: ${arg}`);
-      }
-
-      // Validate known flags
-      if (arg.startsWith('--')) {
-        if (!allowedArgs.includes(arg)) {
-          throw new Error(`Disallowed argument: ${arg}`);
-        }
-
-        // Validate format values
-        if (arg === '--output-format' && i + 1 < args.length) {
-          const format = args[i + 1];
-          if (!allowedFormats.includes(format)) {
-            throw new Error(`Invalid format: ${format}`);
-          }
-        }
-
-        // Validate permission mode values
-        if (arg === '--permission-mode' && i + 1 < args.length) {
-          const mode = args[i + 1];
-          if (!allowedPermissionModes.includes(mode)) {
-            throw new Error(`Invalid permission mode: ${mode}`);
-          }
-        }
-      }
-    }
-
-    return args;
-  }
-}
 
 export class AICLIService extends EventEmitter {
   constructor() {
@@ -149,7 +12,7 @@ export class AICLIService extends EventEmitter {
     this.activeSessions = new Map();
     this.sessionMessageBuffers = new Map(); // Buffer messages per session for intelligent filtering
     // Try to find aicli in common locations
-    this.aicliCommand = this.findAICLICommand();
+    this.aicliCommand = AICLIConfig.findAICLICommand();
     this.defaultWorkingDirectory = process.cwd();
     this.safeRootDirectory = null; // Will be set from server config
     this.maxSessions = 10;
@@ -285,55 +148,6 @@ export class AICLIService extends EventEmitter {
         timestamp: new Date().toISOString(),
       });
     }
-  }
-
-  findAICLICommand() {
-    // First check if CLAUDE_CLI_PATH env variable is set
-    if (process.env.CLAUDE_CLI_PATH) {
-      console.log(`Using AICLI CLI path from CLAUDE_CLI_PATH: ${process.env.CLAUDE_CLI_PATH}`);
-      return process.env.CLAUDE_CLI_PATH;
-    }
-
-    // Try to use 'which' command to find claude
-    try {
-      const path = execSync('which claude', { encoding: 'utf8' }).trim();
-      if (path) {
-        console.log(`Found AICLI CLI at: ${path}`);
-        return path;
-      }
-    } catch (error) {
-      // 'which' failed, try common locations
-    }
-
-    // Common installation paths to check
-    const commonPaths = [
-      '/Users/michaelfuscoletti/.nvm/versions/node/v20.19.1/bin/claude',
-      '/usr/local/bin/claude',
-      '/opt/homebrew/bin/claude',
-      `${process.env.HOME}/.local/bin/claude`,
-      `${process.env.HOME}/.npm/bin/claude`,
-      `${process.env.HOME}/.yarn/bin/claude`,
-    ];
-
-    // Also check NVM paths dynamically
-    if (process.env.NVM_BIN) {
-      commonPaths.unshift(`${process.env.NVM_BIN}/claude`);
-    }
-
-    for (const path of commonPaths) {
-      try {
-        if (existsSync(path)) {
-          console.log(`Found AICLI CLI at: ${path}`);
-          return path;
-        }
-      } catch (error) {
-        // Path doesn't exist, continue
-      }
-    }
-
-    // If not found, fall back to 'claude' and hope it's in PATH
-    console.warn('AICLI CLI not found in common locations, falling back to PATH lookup');
-    return 'claude';
   }
 
   async checkAvailability() {
@@ -797,7 +611,7 @@ export class AICLIService extends EventEmitter {
     console.log(`   Conversation started: ${conversationStarted}`);
 
     // Calculate dynamic timeout based on command complexity
-    const timeoutMs = this.calculateTimeoutForCommand(prompt);
+    const timeoutMs = AICLIConfig.calculateTimeoutForCommand(prompt);
 
     // Check if this is a long-running operation (> 5 minutes)
     if (timeoutMs > 300000) {
@@ -1162,7 +976,7 @@ export class AICLIService extends EventEmitter {
           }
 
           // Parse stream-json format - newline-delimited JSON objects
-          const responses = this.parseStreamJsonOutput(trimmedOutput);
+          const responses = MessageProcessor.parseStreamJsonOutput(trimmedOutput);
           console.log(`✅ AICLI CLI command completed successfully`);
           console.log(`   Parsed ${responses.length} response objects from stream-json`);
 
@@ -1396,7 +1210,7 @@ export class AICLIService extends EventEmitter {
       } catch (error) {
         console.log(`⚠️  Failed to parse line ${i + 1} as JSON:`, line.substring(0, 100));
         // Try to extract any complete JSON objects from this line
-        const extracted = this.extractCompleteObjectsFromLine(line);
+        const extracted = MessageProcessor.extractCompleteObjectsFromLine(line);
         responses.push(...extracted);
       }
     }
@@ -2299,84 +2113,6 @@ export class AICLIService extends EventEmitter {
   }
 
   // Calculate timeout based on command complexity
-  calculateTimeoutForCommand(command) {
-    if (!command || typeof command !== 'string') {
-      return 60000; // 1 minute default
-    }
-
-    const length = command.length;
-    const lowerCommand = command.toLowerCase();
-
-    // Keywords that indicate complex operations
-    const complexKeywords = [
-      'review',
-      'analyze',
-      'audit',
-      'assess',
-      'evaluate',
-      'examine',
-      'refactor',
-      'optimize',
-      'improve',
-      'redesign',
-      'restructure',
-      'debug',
-      'troubleshoot',
-      'investigate',
-      'diagnose',
-      'document',
-      'explain',
-      'summarize',
-      'overview',
-      'test',
-      'benchmark',
-      'profile',
-      'performance',
-    ];
-
-    const veryComplexKeywords = [
-      'expert',
-      'comprehensive',
-      'thorough',
-      'complete',
-      'full',
-      'entire project',
-      'whole codebase',
-      'all files',
-    ];
-
-    // Check for very complex operations
-    const hasVeryComplexKeywords = veryComplexKeywords.some((keyword) =>
-      lowerCommand.includes(keyword)
-    );
-
-    // Check for complex operations
-    const hasComplexKeywords = complexKeywords.some((keyword) => lowerCommand.includes(keyword));
-
-    // Calculate base timeout
-    let timeoutMs;
-
-    if (hasVeryComplexKeywords) {
-      timeoutMs = 600000; // 10 minutes for very complex operations
-    } else if (hasComplexKeywords) {
-      timeoutMs = 300000; // 5 minutes for complex operations
-    } else if (length > 200) {
-      timeoutMs = 300000; // 5 minutes for long commands
-    } else if (length > 50) {
-      timeoutMs = 180000; // 3 minutes for medium commands
-    } else {
-      timeoutMs = 120000; // 2 minutes for simple commands
-    }
-
-    console.log(
-      `🕐 Calculated timeout for command: ${timeoutMs}ms (${Math.round(timeoutMs / 1000)}s)`
-    );
-    console.log(`   Command length: ${length} chars`);
-    console.log(`   Has complex keywords: ${hasComplexKeywords}`);
-    console.log(`   Has very complex keywords: ${hasVeryComplexKeywords}`);
-
-    return timeoutMs;
-  }
 
   // Classify different types of AICLI Code messages
   classifyAICLIMessage(message) {
@@ -2561,5 +2297,14 @@ export class AICLIService extends EventEmitter {
     }
 
     return null;
+  }
+
+  // Proxy methods for backward compatibility with tests
+  findAICLICommand() {
+    return AICLIConfig.findAICLICommand();
+  }
+
+  calculateTimeoutForCommand(command) {
+    return AICLIConfig.calculateTimeoutForCommand(command);
   }
 }

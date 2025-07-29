@@ -1,7 +1,7 @@
 {
-  "name": "claude-companion-server",
+  "name": "aicli-companion-server",
   "version": "1.0.0",
-  "description": "Companion server for Claude Code mobile app",
+  "description": "Companion server for AICLI Code mobile app",
   "main": "src/index.js",
   "type": "module",
   "scripts": {
@@ -24,7 +24,7 @@
     "hostapp:install": "cd hostapp && npm install"
   },
   "keywords": [
-    "claude-code",
+    "aicli-code",
     "ai",
     "mobile",
     "companion",
@@ -59,6 +59,6 @@
     "node": ">=18.0.0"
   },
   "bin": {
-    "claude-companion-server": "src/index.js"
+    "aicli-companion-server": "src/index.js"
   }
 }

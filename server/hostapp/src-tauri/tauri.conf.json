@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "identifier": "com.claude-companion.hostapp",
+  "identifier": "com.aicli-companion.hostapp",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
     "targets": "all",
     "icon": ["icons/icon.png"]
   },
-  "productName": "Claude Companion",
+  "productName": "AICLI Companion",
   "version": "0.1.0",
   "app": {
     "windows": [
@@ -20,7 +20,7 @@
         "label": "main",
         "fullscreen": false,
         "resizable": true,
-        "title": "Claude Companion Server Manager",
+        "title": "AICLI Companion Server Manager",
         "width": 600,
         "height": 800
       }

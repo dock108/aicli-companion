@@ -1,9 +1,22 @@
 // Core application logic separated for testing
 import { invoke } from '@tauri-apps/api/core';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
-import { appDataDir } from '@tauri-apps/api/path';
+import { appDataDir, desktopDir } from '@tauri-apps/api/path';
 import { listen } from '@tauri-apps/api/event';
 import QRCode from 'qrcode';
+
+// Debounce utility function
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
 
 // State
 const state = {
@@ -20,9 +33,17 @@ const state = {
   logs: [],
   logsUnlisten: null,
   currentTab: 'server',
-  claudeStatus: null,
-  claudeLogs: [],
-  claudeLogsUnlisten: null,
+  aicliStatus: null,
+  aicliLogs: [],
+  aicliLogsUnlisten: null,
+  // Performance optimization state
+  lastRenderedLogIndex: 0,
+  lastRenderedAICLILogIndex: 0,
+  renderPending: false,
+  aicliRenderPending: false,
+  // Session persistence state
+  activeSessions: new Map(),
+  sessionHistory: [],
 };
 
 // Export getters and setters for testing
@@ -48,7 +69,7 @@ export const setElements = (els) => {
 // Config Management
 export async function loadConfig() {
   try {
-    const savedConfig = localStorage.getItem('claude-companion-config');
+    const savedConfig = localStorage.getItem('aicli-companion-config');
     if (savedConfig) {
       const config = JSON.parse(savedConfig);
       setConfigPath(config.configPath || (await getDefaultPath()));
@@ -61,13 +82,147 @@ export async function loadConfig() {
     if (state.elements.portInput) state.elements.portInput.value = state.serverStatus.port;
 
     // Load auth token
-    const authToken = localStorage.getItem('claude-companion-auth-token');
+    const authToken = localStorage.getItem('aicli-companion-auth-token');
     if (authToken && state.elements.authTokenInput) {
       state.elements.authTokenInput.value = authToken;
     }
+
+    // Load session history
+    loadSessionHistory();
   } catch (error) {
     console.error('Failed to load config:', error);
   }
+}
+
+// Session persistence functions
+export function loadSessionHistory() {
+  try {
+    const savedSessions = localStorage.getItem('aicli-companion-sessions');
+    if (savedSessions) {
+      const sessions = JSON.parse(savedSessions);
+      state.sessionHistory = sessions;
+      
+      // Restore active sessions map
+      sessions.forEach(session => {
+        if (session.status === 'active') {
+          state.activeSessions.set(session.sessionId, session);
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Failed to load session history:', error);
+  }
+}
+
+export function saveSessionHistory() {
+  try {
+    const sessions = Array.from(state.activeSessions.values());
+    // Also include recent inactive sessions from history
+    const recentInactive = state.sessionHistory
+      .filter(s => s.status !== 'active')
+      .slice(0, 20); // Keep last 20 inactive sessions
+    
+    const allSessions = [...sessions, ...recentInactive];
+    localStorage.setItem('aicli-companion-sessions', JSON.stringify(allSessions));
+  } catch (error) {
+    console.error('Failed to save session history:', error);
+  }
+}
+
+export function addSession(sessionInfo) {
+  const session = {
+    ...sessionInfo,
+    createdAt: new Date().toISOString(),
+    lastActivity: new Date().toISOString(),
+  };
+  
+  state.activeSessions.set(session.sessionId, session);
+  saveSessionHistory();
+  updateSessionUI();
+}
+
+export function updateSession(sessionId, updates) {
+  const session = state.activeSessions.get(sessionId);
+  if (session) {
+    Object.assign(session, updates, {
+      lastActivity: new Date().toISOString(),
+    });
+    saveSessionHistory();
+    updateSessionUI();
+  }
+}
+
+export function removeSession(sessionId) {
+  const session = state.activeSessions.get(sessionId);
+  if (session) {
+    session.status = 'stopped';
+    session.stoppedAt = new Date().toISOString();
+    state.activeSessions.delete(sessionId);
+    state.sessionHistory.unshift(session); // Add to history
+    saveSessionHistory();
+    updateSessionUI();
+  }
+}
+
+function updateSessionUI() {
+  // Update session count in UI
+  const activeCount = state.activeSessions.size;
+  
+  // Update session count
+  if (state.elements.sessionCount) {
+    state.elements.sessionCount.textContent = activeCount;
+  }
+  
+  // Update session list
+  if (state.elements.activeSessionsList) {
+    if (activeCount === 0) {
+      state.elements.activeSessionsList.innerHTML = '<div class="log-empty-state">No active sessions</div>';
+    } else {
+      const fragment = document.createDocumentFragment();
+      state.activeSessions.forEach((session) => {
+        const sessionEl = document.createElement('div');
+        sessionEl.className = 'session-item';
+        
+        const timeSinceStart = getTimeSince(session.createdAt);
+        const timeSinceActivity = getTimeSince(session.lastActivity);
+        
+        sessionEl.innerHTML = `
+          <div class="session-header">
+            <span class="session-id">${session.sessionId}</span>
+            <span class="session-status active">Active</span>
+          </div>
+          <div class="session-details">
+            <div><strong>Project:</strong> ${session.projectName || 'Unknown'}</div>
+            <div><strong>Started:</strong> ${timeSinceStart} ago</div>
+            <div><strong>Last Activity:</strong> ${timeSinceActivity} ago</div>
+          </div>
+        `;
+        fragment.appendChild(sessionEl);
+      });
+      state.elements.activeSessionsList.innerHTML = '';
+      state.elements.activeSessionsList.appendChild(fragment);
+    }
+  }
+  
+  // Show/hide session section based on server status
+  if (state.elements.sessionSection) {
+    state.elements.sessionSection.style.display = state.serverStatus.running ? 'block' : 'none';
+  }
+}
+
+// Helper function to get relative time
+function getTimeSince(dateString) {
+  const date = new Date(dateString);
+  const now = new Date();
+  const seconds = Math.floor((now - date) / 1000);
+  
+  if (seconds < 60) return `${seconds} seconds`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} minute${minutes > 1 ? 's' : ''}`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''}`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days > 1 ? 's' : ''}`;
 }
 
 export async function saveConfig() {
@@ -75,15 +230,15 @@ export async function saveConfig() {
     configPath: state.configPath,
     port: parseInt(state.elements.portInput.value),
   };
-  localStorage.setItem('claude-companion-config', JSON.stringify(config));
+  localStorage.setItem('aicli-companion-config', JSON.stringify(config));
 }
 
 export async function getDefaultPath() {
   try {
-    const dataDir = await appDataDir();
-    return `${dataDir}/claude-companion`;
+    const desktop = await desktopDir();
+    return desktop;
   } catch {
-    return '~/claude-companion-data';
+    return '~/Desktop';
   }
 }
 
@@ -101,7 +256,7 @@ export async function selectConfigPath() {
       multiple: false,
     };
 
-    if (state.configPath && state.configPath !== '~/claude-companion-data') {
+    if (state.configPath && state.configPath !== '~/aicli-companion-data') {
       dialogOptions.defaultPath = state.configPath;
     }
 
@@ -129,7 +284,7 @@ export function generateAuthToken() {
   const token = Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('');
 
   // Save to localStorage
-  localStorage.setItem('claude-companion-auth-token', token);
+  localStorage.setItem('aicli-companion-auth-token', token);
 
   // Update UI
   if (state.elements.authTokenInput) {
@@ -160,7 +315,7 @@ export async function startServer() {
     console.log('Invoking start_server...');
 
     // Get auth token and config path for server
-    const authToken = localStorage.getItem('claude-companion-auth-token');
+    const authToken = localStorage.getItem('aicli-companion-auth-token');
     const configPath = state.configPath;
 
     const status = await invoke('start_server', {
@@ -288,6 +443,9 @@ export async function updateUI() {
     if (state.elements.qrSection.style.display === 'block' && !state.elements.qrCanvas.innerHTML) {
       await generateQRCode();
     }
+
+    // Update session UI
+    updateSessionUI();
   } else {
     state.elements.statusDot.classList.remove('running');
     state.elements.statusText.textContent = 'Not Running';
@@ -305,7 +463,7 @@ export async function generateQRCode() {
   const url = `http://${state.localIp}:${state.serverStatus.port}`;
   const params = new URLSearchParams();
 
-  const authToken = localStorage.getItem('claude-companion-auth-token');
+  const authToken = localStorage.getItem('aicli-companion-auth-token');
   if (authToken) {
     params.append('token', authToken);
   }
@@ -334,7 +492,8 @@ export async function loadLogs() {
   try {
     const logs = await invoke('get_logs');
     state.logs = logs;
-    renderLogs();
+    state.lastRenderedLogIndex = 0; // Reset render index
+    renderLogs(true); // Full render when loading
   } catch (error) {
     console.error('Failed to load logs:', error);
   }
@@ -344,70 +503,102 @@ export async function clearLogs() {
   try {
     await invoke('clear_logs');
     state.logs = [];
-    renderLogs();
+    state.lastRenderedLogIndex = 0; // Reset render index
+    renderLogs(true); // Full render after clearing
   } catch (error) {
     console.error('Failed to clear logs:', error);
   }
 }
 
-export function renderLogs() {
+export function renderLogs(fullRender = false) {
   const logsDisplay = state.elements.logsDisplay;
   if (!logsDisplay) return;
 
-  // Get filter values
-  const searchTerm = state.elements.logSearch?.value.toLowerCase() || '';
-  const levelFilter = state.elements.logLevelFilter?.value || 'all';
+  // Prevent multiple renders in same frame
+  if (state.renderPending) return;
+  state.renderPending = true;
 
-  // Filter logs
-  const filteredLogs = state.logs.filter((log) => {
-    const matchesSearch = !searchTerm || log.message.toLowerCase().includes(searchTerm);
-    const matchesLevel = levelFilter === 'all' || log.level === levelFilter;
-    return matchesSearch && matchesLevel;
+  requestAnimationFrame(() => {
+    state.renderPending = false;
+
+    // Get filter values
+    const searchTerm = state.elements.logSearch?.value.toLowerCase() || '';
+    const levelFilter = state.elements.logLevelFilter?.value || 'all';
+
+    // Check if filters changed (requires full render)
+    const filtersChanged = searchTerm || levelFilter !== 'all';
+    
+    if (fullRender || filtersChanged) {
+      // Full render for filtered view
+      const filteredLogs = state.logs.filter((log) => {
+        const matchesSearch = !searchTerm || log.message.toLowerCase().includes(searchTerm);
+        const matchesLevel = levelFilter === 'all' || log.level === levelFilter;
+        return matchesSearch && matchesLevel;
+      });
+
+      logsDisplay.innerHTML = '';
+      state.lastRenderedLogIndex = 0;
+
+      if (filteredLogs.length === 0) {
+        logsDisplay.innerHTML = '<div class="log-empty-state">No logs match the current filters.</div>';
+        return;
+      }
+
+      // Use DocumentFragment for better performance
+      const fragment = document.createDocumentFragment();
+      filteredLogs.forEach((log) => {
+        fragment.appendChild(createLogEntry(log));
+      });
+      logsDisplay.appendChild(fragment);
+      state.lastRenderedLogIndex = state.logs.length;
+    } else {
+      // Incremental render - only append new logs
+      if (state.lastRenderedLogIndex < state.logs.length) {
+        const fragment = document.createDocumentFragment();
+        for (let i = state.lastRenderedLogIndex; i < state.logs.length; i++) {
+          fragment.appendChild(createLogEntry(state.logs[i]));
+        }
+        logsDisplay.appendChild(fragment);
+        state.lastRenderedLogIndex = state.logs.length;
+      }
+    }
+
+    // Auto-scroll if enabled
+    if (state.elements.autoScroll?.checked) {
+      logsDisplay.scrollTop = logsDisplay.scrollHeight;
+    }
   });
+}
 
-  // Clear existing logs
-  logsDisplay.innerHTML = '';
+// Helper function to create log entry element
+function createLogEntry(log) {
+  const logEntry = document.createElement('div');
+  logEntry.className = 'log-entry';
 
-  if (filteredLogs.length === 0) {
-    logsDisplay.innerHTML = '<div class="log-empty-state">No logs match the current filters.</div>';
-    return;
-  }
+  const timestamp = document.createElement('span');
+  timestamp.className = 'log-timestamp';
+  timestamp.textContent = log.timestamp;
 
-  // Render each log entry
-  filteredLogs.forEach((log) => {
-    const logEntry = document.createElement('div');
-    logEntry.className = 'log-entry';
+  const level = document.createElement('span');
+  level.className = `log-level ${log.level}`;
+  level.textContent = log.level;
 
-    const timestamp = document.createElement('span');
-    timestamp.className = 'log-timestamp';
-    timestamp.textContent = log.timestamp;
+  const message = document.createElement('span');
+  message.className = 'log-message';
+  message.textContent = log.message;
 
-    const level = document.createElement('span');
-    level.className = `log-level ${log.level}`;
-    level.textContent = log.level;
+  logEntry.appendChild(timestamp);
+  logEntry.appendChild(level);
+  logEntry.appendChild(message);
 
-    const message = document.createElement('span');
-    message.className = 'log-message';
-    message.textContent = log.message;
-
-    logEntry.appendChild(timestamp);
-    logEntry.appendChild(level);
-    logEntry.appendChild(message);
-
-    logsDisplay.appendChild(logEntry);
-  });
-
-  // Auto-scroll if enabled
-  if (state.elements.autoScroll?.checked) {
-    logsDisplay.scrollTop = logsDisplay.scrollHeight;
-  }
+  return logEntry;
 }
 
 // Tab Navigation
 export function switchTab(tabName) {
-  // Prevent switching to hidden Claude tab
-  if (tabName === 'claude') {
-    console.log('Claude tab is currently hidden');
+  // Prevent switching to hidden AICLI tab
+  if (tabName === 'aicli') {
+    console.log('AICLI tab is currently hidden');
     return;
   }
 
@@ -427,46 +618,46 @@ export function switchTab(tabName) {
   if (tabName === 'logs') {
     loadLogs();
   }
-  // Claude tab functionality preserved but hidden
-  // else if (tabName === 'claude') {
-  //   loadClaudeStatus();
+  // AICLI tab functionality preserved but hidden
+  // else if (tabName === 'aicli') {
+  //   loadAICLIStatus();
   // }
 }
 
-// Claude CLI Management
-export async function loadClaudeStatus() {
+// AICLI CLI Management
+export async function loadAICLIStatus() {
   if (!state.serverStatus.running) {
-    updateClaudeStatusUI({
-      claude: { installed: false, version: null, path: null, available: false },
+    updateAICLIStatusUI({
+      aicli: { installed: false, version: null, path: null, available: false },
       sessions: { active: 0, max: 0, details: [] },
     });
     return;
   }
 
   try {
-    const response = await fetch(`http://localhost:${state.serverStatus.port}/api/claude/status`);
+    const response = await fetch(`http://localhost:${state.serverStatus.port}/api/aicli/status`);
     if (response.ok) {
       const status = await response.json();
-      state.claudeStatus = status;
-      updateClaudeStatusUI(status);
+      state.aicliStatus = status;
+      updateAICLIStatusUI(status);
     }
   } catch (error) {
-    console.error('Failed to load Claude status:', error);
+    console.error('Failed to load AICLI status:', error);
   }
 }
 
-export async function testClaude() {
+export async function testAICLI() {
   if (!state.serverStatus.running) {
-    alert('Server must be running to test Claude CLI');
+    alert('Server must be running to test AICLI CLI');
     return;
   }
 
-  const testBtn = state.elements.testClaudeBtn;
+  const testBtn = state.elements.testAICLIBtn;
   testBtn.disabled = true;
   testBtn.textContent = 'Testing...';
 
   try {
-    const response = await fetch(`http://localhost:${state.serverStatus.port}/api/claude/test`, {
+    const response = await fetch(`http://localhost:${state.serverStatus.port}/api/aicli/test`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt: 'Hello! Please respond with a brief greeting.' }),
@@ -475,49 +666,49 @@ export async function testClaude() {
     const result = await response.json();
 
     if (result.success) {
-      alert('Claude CLI test successful! Check the Claude logs for the response.');
-      addClaudeLog(
+      alert('AICLI CLI test successful! Check the AICLI logs for the response.');
+      addAICLILog(
         'test',
         `Test successful: ${JSON.stringify(result.response).substring(0, 200)}...`
       );
     } else {
-      alert(`Claude CLI test failed: ${result.message}`);
-      addClaudeLog('error', `Test failed: ${result.message}`);
+      alert(`AICLI CLI test failed: ${result.message}`);
+      addAICLILog('error', `Test failed: ${result.message}`);
     }
   } catch (error) {
-    alert(`Failed to test Claude CLI: ${error.message}`);
-    addClaudeLog('error', `Test error: ${error.message}`);
+    alert(`Failed to test AICLI CLI: ${error.message}`);
+    addAICLILog('error', `Test error: ${error.message}`);
   } finally {
     testBtn.disabled = false;
-    testBtn.textContent = 'Test Claude CLI';
+    testBtn.textContent = 'Test AICLI CLI';
   }
 }
 
-function updateClaudeStatusUI(status) {
+function updateAICLIStatusUI(status) {
   if (!status) return;
 
-  // Update Claude installation status
-  const installedEl = state.elements.claudeInstalled;
-  const versionEl = state.elements.claudeVersion;
-  const pathEl = state.elements.claudePath;
-  const availableEl = state.elements.claudeAvailable;
+  // Update AICLI installation status
+  const installedEl = state.elements.aicliInstalled;
+  const versionEl = state.elements.aicliVersion;
+  const pathEl = state.elements.aicliPath;
+  const availableEl = state.elements.aicliAvailable;
 
   if (installedEl) {
-    installedEl.textContent = status.claude.installed ? 'Installed' : 'Not Installed';
-    installedEl.className = status.claude.installed ? 'status-value success' : 'status-value error';
+    installedEl.textContent = status.aicli.installed ? 'Installed' : 'Not Installed';
+    installedEl.className = status.aicli.installed ? 'status-value success' : 'status-value error';
   }
 
   if (versionEl) {
-    versionEl.textContent = status.claude.version || '-';
+    versionEl.textContent = status.aicli.version || '-';
   }
 
   if (pathEl) {
-    pathEl.textContent = status.claude.path || '-';
+    pathEl.textContent = status.aicli.path || '-';
   }
 
   if (availableEl) {
-    availableEl.textContent = status.claude.available ? 'Yes' : 'No';
-    availableEl.className = status.claude.available ? 'status-value success' : 'status-value error';
+    availableEl.textContent = status.aicli.available ? 'Yes' : 'No';
+    availableEl.className = status.aicli.available ? 'status-value success' : 'status-value error';
   }
 
   // Update session info
@@ -535,7 +726,7 @@ function updateClaudeStatusUI(status) {
     sessionsList.innerHTML = '';
 
     if (status.sessions.details.length === 0) {
-      sessionsList.innerHTML = '<div class="log-empty-state">No active Claude CLI sessions</div>';
+      sessionsList.innerHTML = '<div class="log-empty-state">No active AICLI CLI sessions</div>';
     } else {
       status.sessions.details.forEach((session) => {
         const sessionEl = document.createElement('div');
@@ -557,66 +748,99 @@ function updateClaudeStatusUI(status) {
   }
 }
 
-function addClaudeLog(type, content) {
+function addAICLILog(type, content) {
   const log = {
     type,
     content,
     timestamp: new Date().toISOString(),
   };
 
-  state.claudeLogs.push(log);
-  if (state.claudeLogs.length > 1000) {
-    state.claudeLogs = state.claudeLogs.slice(-1000);
+  state.aicliLogs.push(log);
+  if (state.aicliLogs.length > 500) {
+    state.aicliLogs = state.aicliLogs.slice(-500); // Reduced for better performance
   }
 
-  renderClaudeLogs();
+  renderAICLILogs();
 }
 
-export function renderClaudeLogs() {
-  const logsDisplay = state.elements.claudeLogsDisplay;
+export function renderAICLILogs(fullRender = false) {
+  const logsDisplay = state.elements.aicliLogsDisplay;
   if (!logsDisplay) return;
 
-  const filterValue = state.elements.claudeLogFilter?.value || 'all';
+  // Prevent multiple renders in same frame
+  if (state.aicliRenderPending) return;
+  state.aicliRenderPending = true;
 
-  const filteredLogs = state.claudeLogs.filter((log) => {
-    if (filterValue === 'all') return true;
-    return log.type === filterValue;
+  requestAnimationFrame(() => {
+    state.aicliRenderPending = false;
+
+    const filterValue = state.elements.aicliLogFilter?.value || 'all';
+    const filtersChanged = filterValue !== 'all';
+
+    if (fullRender || filtersChanged) {
+      // Full render for filtered view
+      const filteredLogs = state.aicliLogs.filter((log) => {
+        if (filterValue === 'all') return true;
+        return log.type === filterValue;
+      });
+
+      logsDisplay.innerHTML = '';
+      state.lastRenderedAICLILogIndex = 0;
+
+      if (filteredLogs.length === 0) {
+        logsDisplay.innerHTML =
+          '<div class="log-empty-state">No AICLI CLI logs match the filter.</div>';
+        return;
+      }
+
+      // Use DocumentFragment for better performance
+      const fragment = document.createDocumentFragment();
+      filteredLogs.forEach((log) => {
+        fragment.appendChild(createAICLILogEntry(log));
+      });
+      logsDisplay.appendChild(fragment);
+      state.lastRenderedAICLILogIndex = state.aicliLogs.length;
+    } else {
+      // Incremental render - only append new logs
+      if (state.lastRenderedAICLILogIndex < state.aicliLogs.length) {
+        const fragment = document.createDocumentFragment();
+        for (let i = state.lastRenderedAICLILogIndex; i < state.aicliLogs.length; i++) {
+          fragment.appendChild(createAICLILogEntry(state.aicliLogs[i]));
+        }
+        logsDisplay.appendChild(fragment);
+        state.lastRenderedAICLILogIndex = state.aicliLogs.length;
+      }
+    }
+
+    if (state.elements.aicliAutoScroll?.checked) {
+      logsDisplay.scrollTop = logsDisplay.scrollHeight;
+    }
   });
-
-  logsDisplay.innerHTML = '';
-
-  if (filteredLogs.length === 0) {
-    logsDisplay.innerHTML =
-      '<div class="log-empty-state">No Claude CLI logs match the filter.</div>';
-    return;
-  }
-
-  filteredLogs.forEach((log) => {
-    const logEntry = document.createElement('div');
-    logEntry.className = 'claude-log-entry';
-
-    const logType = document.createElement('span');
-    logType.className = `claude-log-type ${log.type}`;
-    logType.textContent = log.type;
-
-    const logContent = document.createElement('span');
-    logContent.className = 'claude-log-content';
-    logContent.textContent = log.content;
-
-    logEntry.appendChild(logType);
-    logEntry.appendChild(logContent);
-
-    logsDisplay.appendChild(logEntry);
-  });
-
-  if (state.elements.claudeAutoScroll?.checked) {
-    logsDisplay.scrollTop = logsDisplay.scrollHeight;
-  }
 }
 
-export function clearClaudeLogs() {
-  state.claudeLogs = [];
-  renderClaudeLogs();
+// Helper function to create AICLI log entry element
+function createAICLILogEntry(log) {
+  const logEntry = document.createElement('div');
+  logEntry.className = 'aicli-log-entry';
+
+  const logType = document.createElement('span');
+  logType.className = `aicli-log-type ${log.type}`;
+  logType.textContent = log.type;
+
+  const logContent = document.createElement('span');
+  logContent.className = 'aicli-log-content';
+  logContent.textContent = log.content;
+
+  logEntry.appendChild(logType);
+  logEntry.appendChild(logContent);
+
+  return logEntry;
+}
+
+export function clearAICLILogs() {
+  state.aicliLogs = [];
+  state.lastRenderedAICLILogIndex = 0; // Reset render index
+  renderAICLILogs(true); // Full render after clearing
 }
 
 // Initialize
@@ -650,20 +874,24 @@ export async function init() {
     logLevelFilter: document.getElementById('log-level-filter'),
     clearLogsBtn: document.getElementById('clear-logs-btn'),
     autoScroll: document.getElementById('auto-scroll'),
-    // Claude elements
-    claudeInstalled: document.getElementById('claude-installed'),
-    claudeVersion: document.getElementById('claude-version'),
-    claudePath: document.getElementById('claude-path'),
-    claudeAvailable: document.getElementById('claude-available'),
-    refreshClaudeBtn: document.getElementById('refresh-claude-btn'),
-    testClaudeBtn: document.getElementById('test-claude-btn'),
+    // Session elements
+    sessionSection: document.getElementById('session-section'),
+    sessionCount: document.getElementById('session-count'),
+    activeSessionsList: document.getElementById('active-sessions-list'),
+    // AICLI elements
+    aicliInstalled: document.getElementById('aicli-installed'),
+    aicliVersion: document.getElementById('aicli-version'),
+    aicliPath: document.getElementById('aicli-path'),
+    aicliAvailable: document.getElementById('aicli-available'),
+    refreshAICLIBtn: document.getElementById('refresh-aicli-btn'),
+    testAICLIBtn: document.getElementById('test-aicli-btn'),
     activeSessionsCount: document.getElementById('active-sessions-count'),
     maxSessions: document.getElementById('max-sessions'),
     sessionsList: document.getElementById('sessions-list'),
-    claudeLogsDisplay: document.getElementById('claude-logs-display'),
-    claudeLogFilter: document.getElementById('claude-log-filter'),
-    clearClaudeLogsBtn: document.getElementById('clear-claude-logs-btn'),
-    claudeAutoScroll: document.getElementById('claude-auto-scroll'),
+    aicliLogsDisplay: document.getElementById('aicli-logs-display'),
+    aicliLogFilter: document.getElementById('aicli-log-filter'),
+    clearAICLILogsBtn: document.getElementById('clear-aicli-logs-btn'),
+    aicliAutoScroll: document.getElementById('aicli-auto-scroll'),
   });
 
   console.log('DOM elements found:', {
@@ -759,58 +987,83 @@ export async function init() {
 
   // Logs event listeners
   if (state.elements.logSearch) {
-    state.elements.logSearch.addEventListener('input', renderLogs);
+    const debouncedSearch = debounce(() => renderLogs(true), 300);
+    state.elements.logSearch.addEventListener('input', debouncedSearch);
   }
 
   if (state.elements.logLevelFilter) {
-    state.elements.logLevelFilter.addEventListener('change', renderLogs);
+    state.elements.logLevelFilter.addEventListener('change', () => renderLogs(true));
   }
 
   if (state.elements.clearLogsBtn) {
     state.elements.clearLogsBtn.addEventListener('click', clearLogs);
   }
 
-  // Claude event listeners
-  if (state.elements.refreshClaudeBtn) {
-    state.elements.refreshClaudeBtn.addEventListener('click', loadClaudeStatus);
+  // AICLI event listeners
+  if (state.elements.refreshAICLIBtn) {
+    state.elements.refreshAICLIBtn.addEventListener('click', loadAICLIStatus);
   }
 
-  if (state.elements.testClaudeBtn) {
-    state.elements.testClaudeBtn.addEventListener('click', testClaude);
+  if (state.elements.testAICLIBtn) {
+    state.elements.testAICLIBtn.addEventListener('click', testAICLI);
   }
 
-  if (state.elements.claudeLogFilter) {
-    state.elements.claudeLogFilter.addEventListener('change', renderClaudeLogs);
+  if (state.elements.aicliLogFilter) {
+    state.elements.aicliLogFilter.addEventListener('change', () => renderAICLILogs(true));
   }
 
-  if (state.elements.clearClaudeLogsBtn) {
-    state.elements.clearClaudeLogsBtn.addEventListener('click', clearClaudeLogs);
+  if (state.elements.clearAICLILogsBtn) {
+    state.elements.clearAICLILogsBtn.addEventListener('click', clearAICLILogs);
   }
 
   // Listen for real-time log updates
   state.logsUnlisten = await listen('log-entry', (event) => {
     const log = event.payload;
     state.logs.push(log);
-    // Keep only last 10000 logs in UI
-    if (state.logs.length > 10000) {
-      state.logs = state.logs.slice(-10000);
+    // Keep only last 5000 logs in UI (matching backend limit)
+    if (state.logs.length > 5000) {
+      state.logs = state.logs.slice(-5000);
     }
     renderLogs();
 
-    // Parse Claude-specific logs
+    // Parse AICLI-specific logs
     if (log.message) {
       if (log.message.includes('[CLAUDE_PROCESS_START]')) {
-        addClaudeLog('start', log.message.replace('[CLAUDE_PROCESS_START]', '').trim());
+        addAICLILog('start', log.message.replace('[CLAUDE_PROCESS_START]', '').trim());
+        
+        // Extract session info from start message
+        const sessionMatch = log.message.match(/Session ID: (project_[^\s]+)/);
+        const projectMatch = log.message.match(/Project: ([^\s]+)/);
+        if (sessionMatch && projectMatch) {
+          addSession({
+            sessionId: sessionMatch[1],
+            projectName: projectMatch[1],
+            status: 'active',
+            type: 'aicli-cli',
+          });
+        }
       } else if (log.message.includes('[CLAUDE_STDOUT]')) {
-        addClaudeLog('stdout', log.message.replace('[CLAUDE_STDOUT]', '').trim());
+        addAICLILog('stdout', log.message.replace('[CLAUDE_STDOUT]', '').trim());
       } else if (log.message.includes('[CLAUDE_STDERR]')) {
-        addClaudeLog('stderr', log.message.replace('[CLAUDE_STDERR]', '').trim());
+        addAICLILog('stderr', log.message.replace('[CLAUDE_STDERR]', '').trim());
       } else if (log.message.includes('[CLAUDE_PROCESS_EXIT]')) {
-        addClaudeLog('exit', log.message.replace('[CLAUDE_PROCESS_EXIT]', '').trim());
+        addAICLILog('exit', log.message.replace('[CLAUDE_PROCESS_EXIT]', '').trim());
+        
+        // Extract session ID and mark as stopped
+        const sessionMatch = log.message.match(/Session (project_[^\s]+)/);
+        if (sessionMatch) {
+          removeSession(sessionMatch[1]);
+        }
       } else if (log.message.includes('[CLAUDE_PROCESS_ERROR]')) {
-        addClaudeLog('error', log.message.replace('[CLAUDE_PROCESS_ERROR]', '').trim());
+        addAICLILog('error', log.message.replace('[CLAUDE_PROCESS_ERROR]', '').trim());
       } else if (log.message.includes('[CLAUDE_COMMAND]')) {
-        addClaudeLog('command', log.message.replace('[CLAUDE_COMMAND]', '').trim());
+        addAICLILog('command', log.message.replace('[CLAUDE_COMMAND]', '').trim());
+        
+        // Update session activity
+        const sessionMatch = log.message.match(/Session (project_[^\s]+)/);
+        if (sessionMatch) {
+          updateSession(sessionMatch[1], { lastCommand: new Date().toISOString() });
+        }
       }
     }
   });

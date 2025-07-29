@@ -1,155 +1,19 @@
-import { spawn, exec, execSync } from 'child_process';
+import { spawn, exec } from 'child_process';
 import { promisify } from 'util';
 import { EventEmitter } from 'events';
-import { resolve } from 'path';
-import { access, constants } from 'fs/promises';
-import { existsSync } from 'fs';
 import { processMonitor } from '../utils/process-monitor.js';
+import { InputValidator, MessageProcessor, AICLIConfig } from './aicli-utils.js';
+import { AICLIMessageHandler } from './aicli-message-handler.js';
 
 const execAsync = promisify(exec);
 
-// Input validation and sanitization utilities
-class InputValidator {
-  static sanitizePrompt(prompt) {
-    if (typeof prompt !== 'string') {
-      throw new Error('Prompt must be a string');
-    }
-
-    // Remove null bytes and limit length
-    const sanitized = prompt.replace(/\0/g, '').substring(0, 50000);
-
-    if (sanitized.length === 0) {
-      throw new Error('Prompt cannot be empty');
-    }
-
-    return sanitized;
-  }
-
-  static validateFormat(format) {
-    const allowedFormats = ['json', 'text', 'markdown'];
-
-    if (!format || typeof format !== 'string') {
-      return 'json'; // default
-    }
-
-    const cleanFormat = format.toLowerCase().trim();
-
-    if (!allowedFormats.includes(cleanFormat)) {
-      throw new Error(`Invalid format. Must be one of: ${allowedFormats.join(', ')}`);
-    }
-
-    return cleanFormat;
-  }
-
-  static async validateWorkingDirectory(workingDir, safeRoot = null) {
-    if (!workingDir || typeof workingDir !== 'string') {
-      // If no working directory provided, use safe root or current directory
-      return safeRoot || process.cwd();
-    }
-
-    // Resolve to absolute path
-    const resolvedPath = resolve(workingDir);
-
-    // If a safe root is provided, ensure the resolved path is within it
-    if (safeRoot) {
-      const resolvedSafeRoot = resolve(safeRoot);
-      if (!resolvedPath.startsWith(resolvedSafeRoot)) {
-        throw new Error(`Working directory must be within the configured project directory`);
-      }
-    }
-
-    try {
-      // Check if directory exists and is accessible
-      await access(resolvedPath, constants.F_OK | constants.R_OK);
-      return resolvedPath;
-    } catch (error) {
-      throw new Error(`Working directory is not accessible: ${resolvedPath}`);
-    }
-  }
-
-  static sanitizeSessionId(sessionId) {
-    if (!sessionId || typeof sessionId !== 'string') {
-      return null;
-    }
-
-    // Only allow alphanumeric characters, hyphens, and underscores
-    const sanitized = sessionId.replace(/[^a-zA-Z0-9_-]/g, '').substring(0, 64);
-
-    if (sanitized.length === 0) {
-      return null;
-    }
-
-    return sanitized;
-  }
-
-  static validateClaudeArgs(args) {
-    if (!Array.isArray(args)) {
-      throw new Error('Arguments must be an array');
-    }
-
-    const allowedArgs = [
-      '--print',
-      '--output-format',
-      '--verbose',
-      '--help',
-      '--version',
-      '--continue',
-      '--dangerously-skip-permissions',
-      '--permission-mode',
-      '--allowedTools',
-      '--disallowedTools',
-    ];
-
-    const allowedFormats = ['json', 'text', 'markdown', 'stream-json'];
-    const allowedPermissionModes = ['default', 'acceptEdits', 'bypassPermissions', 'plan'];
-
-    for (let i = 0; i < args.length; i++) {
-      const arg = args[i];
-
-      if (typeof arg !== 'string') {
-        throw new Error('All arguments must be strings');
-      }
-
-      // Check for suspicious characters
-      if (/[;&|`$(){}[\]<>]/.test(arg)) {
-        throw new Error(`Argument contains suspicious characters: ${arg}`);
-      }
-
-      // Validate known flags
-      if (arg.startsWith('--')) {
-        if (!allowedArgs.includes(arg)) {
-          throw new Error(`Disallowed argument: ${arg}`);
-        }
-
-        // Validate format values
-        if (arg === '--output-format' && i + 1 < args.length) {
-          const format = args[i + 1];
-          if (!allowedFormats.includes(format)) {
-            throw new Error(`Invalid format: ${format}`);
-          }
-        }
-
-        // Validate permission mode values
-        if (arg === '--permission-mode' && i + 1 < args.length) {
-          const mode = args[i + 1];
-          if (!allowedPermissionModes.includes(mode)) {
-            throw new Error(`Invalid permission mode: ${mode}`);
-          }
-        }
-      }
-    }
-
-    return args;
-  }
-}
-
-export class ClaudeCodeService extends EventEmitter {
+export class AICLIService extends EventEmitter {
   constructor() {
     super();
     this.activeSessions = new Map();
     this.sessionMessageBuffers = new Map(); // Buffer messages per session for intelligent filtering
-    // Try to find claude in common locations
-    this.claudeCommand = this.findClaudeCommand();
+    // Try to find aicli in common locations
+    this.aicliCommand = AICLIConfig.findAICLICommand();
     this.defaultWorkingDirectory = process.cwd();
     this.safeRootDirectory = null; // Will be set from server config
     this.maxSessions = 10;
@@ -223,7 +87,7 @@ export class ClaudeCodeService extends EventEmitter {
     }
   }
 
-  // Check health of all active Claude processes
+  // Check health of all active AICLI processes
   async checkAllProcessHealth() {
     const activePids = [];
 
@@ -287,69 +151,20 @@ export class ClaudeCodeService extends EventEmitter {
     }
   }
 
-  findClaudeCommand() {
-    // First check if CLAUDE_CLI_PATH env variable is set
-    if (process.env.CLAUDE_CLI_PATH) {
-      console.log(`Using Claude CLI path from CLAUDE_CLI_PATH: ${process.env.CLAUDE_CLI_PATH}`);
-      return process.env.CLAUDE_CLI_PATH;
-    }
-
-    // Try to use 'which' command to find claude
-    try {
-      const path = execSync('which claude', { encoding: 'utf8' }).trim();
-      if (path) {
-        console.log(`Found Claude CLI at: ${path}`);
-        return path;
-      }
-    } catch (error) {
-      // 'which' failed, try common locations
-    }
-
-    // Common installation paths to check
-    const commonPaths = [
-      '/Users/michaelfuscoletti/.nvm/versions/node/v20.19.1/bin/claude',
-      '/usr/local/bin/claude',
-      '/opt/homebrew/bin/claude',
-      `${process.env.HOME}/.local/bin/claude`,
-      `${process.env.HOME}/.npm/bin/claude`,
-      `${process.env.HOME}/.yarn/bin/claude`,
-    ];
-
-    // Also check NVM paths dynamically
-    if (process.env.NVM_BIN) {
-      commonPaths.unshift(`${process.env.NVM_BIN}/claude`);
-    }
-
-    for (const path of commonPaths) {
-      try {
-        if (existsSync(path)) {
-          console.log(`Found Claude CLI at: ${path}`);
-          return path;
-        }
-      } catch (error) {
-        // Path doesn't exist, continue
-      }
-    }
-
-    // If not found, fall back to 'claude' and hope it's in PATH
-    console.warn('Claude CLI not found in common locations, falling back to PATH lookup');
-    return 'claude';
-  }
-
   async checkAvailability() {
     try {
-      console.log(`Checking Claude CLI availability at: ${this.claudeCommand}`);
-      const { stdout, _stderr } = await execAsync(`${this.claudeCommand} --version`);
+      console.log(`Checking AICLI CLI availability at: ${this.aicliCommand}`);
+      const { stdout, _stderr } = await execAsync(`${this.aicliCommand} --version`);
       const version = stdout.trim();
-      console.log(`Claude Code version: ${version}`);
+      console.log(`AICLI Code version: ${version}`);
       return true;
     } catch (error) {
-      console.error('Claude Code not available:', error.message);
-      console.error(`Tried to execute: ${this.claudeCommand} --version`);
+      console.error('AICLI Code not available:', error.message);
+      console.error(`Tried to execute: ${this.aicliCommand} --version`);
       console.error('To fix this issue:');
-      console.error('1. Make sure Claude CLI is installed: npm install -g @anthropic-ai/claude');
-      console.error('2. Set CLAUDE_CLI_PATH environment variable to the full path');
-      console.error('3. Or ensure claude is in your PATH');
+      console.error('1. Make sure AICLI CLI is installed: npm install -g @anthropic-ai/aicli');
+      console.error('2. Set AICLI_CLI_PATH environment variable to the full path');
+      console.error('3. Or ensure aicli is in your PATH');
       return false;
     }
   }
@@ -389,8 +204,8 @@ export class ClaudeCodeService extends EventEmitter {
         });
       }
     } catch (error) {
-      console.error('Error sending prompt to Claude Code:', error);
-      throw new Error(`Claude Code execution failed: ${error.message}`);
+      console.error('Error sending prompt to AICLI Code:', error);
+      throw new Error(`AICLI Code execution failed: ${error.message}`);
     }
   }
 
@@ -439,9 +254,9 @@ export class ClaudeCodeService extends EventEmitter {
     args.push(sanitizedPrompt);
 
     // Validate arguments before spawning
-    InputValidator.validateClaudeArgs(args);
+    InputValidator.validateAICLIArgs(args);
 
-    console.log(`🚀 Starting Claude CLI with validated args:`, args.slice(0, -1)); // Log all args except prompt
+    console.log(`🚀 Starting AICLI CLI with validated args:`, args.slice(0, -1)); // Log all args except prompt
     console.log(
       `   Prompt: "${sanitizedPrompt.substring(0, 50)}${sanitizedPrompt.length > 50 ? '...' : ''}"`
     );
@@ -457,18 +272,18 @@ export class ClaudeCodeService extends EventEmitter {
     }
 
     return new Promise((resolvePromise, reject) => {
-      let claudeProcess;
+      let aicliProcess;
       try {
-        claudeProcess = spawn(this.claudeCommand, args, {
+        aicliProcess = spawn(this.aicliCommand, args, {
           cwd: workingDirectory,
           stdio: ['pipe', 'pipe', 'pipe'],
         });
       } catch (spawnError) {
-        console.error(`❌ Failed to spawn Claude CLI:`, spawnError);
+        console.error(`❌ Failed to spawn AICLI CLI:`, spawnError);
         const errorMsg =
           spawnError.code === 'ENOENT'
-            ? 'Claude CLI not found. Please ensure Claude CLI is installed and in your PATH.'
-            : `Failed to start Claude CLI: ${spawnError.message}`;
+            ? 'AICLI CLI not found. Please ensure AICLI CLI is installed and in your PATH.'
+            : `Failed to start AICLI CLI: ${spawnError.message}`;
 
         // Emit error event
         this.emit('processError', {
@@ -481,16 +296,16 @@ export class ClaudeCodeService extends EventEmitter {
       }
 
       // Close stdin immediately since we're not sending any input
-      claudeProcess.stdin.end();
+      aicliProcess.stdin.end();
 
       let stdout = '';
       let stderr = '';
 
-      console.log(`   Process started with PID: ${claudeProcess.pid}`);
+      console.log(`   Process started with PID: ${aicliProcess.pid}`);
 
       // Check if process actually started
-      if (!claudeProcess.pid) {
-        const errorMsg = 'Claude CLI process failed to start (no PID)';
+      if (!aicliProcess.pid) {
+        const errorMsg = 'AICLI CLI process failed to start (no PID)';
         console.error(`❌ ${errorMsg}`);
         this.emit('processError', {
           error: errorMsg,
@@ -502,47 +317,47 @@ export class ClaudeCodeService extends EventEmitter {
 
       // Emit process start event
       this.emit('processStart', {
-        pid: claudeProcess.pid,
-        command: this.claudeCommand,
+        pid: aicliProcess.pid,
+        command: this.aicliCommand,
         args: args.slice(0, 3), // Don't include full prompt
         workingDirectory,
         type: 'one-time',
       });
 
-      claudeProcess.stdout.on('data', (data) => {
+      aicliProcess.stdout.on('data', (data) => {
         const chunk = data.toString();
         console.log(`   STDOUT chunk: ${chunk.length} chars`);
         stdout += chunk;
 
         // Emit stdout data for logging
         this.emit('processStdout', {
-          pid: claudeProcess.pid,
+          pid: aicliProcess.pid,
           data: chunk,
           timestamp: new Date().toISOString(),
         });
       });
 
-      claudeProcess.stderr.on('data', (data) => {
+      aicliProcess.stderr.on('data', (data) => {
         const chunk = data.toString();
         console.log(`   STDERR chunk: ${chunk}`);
         stderr += chunk;
 
         // Emit stderr data for logging
         this.emit('processStderr', {
-          pid: claudeProcess.pid,
+          pid: aicliProcess.pid,
           data: chunk,
           timestamp: new Date().toISOString(),
         });
       });
 
-      claudeProcess.on('close', (code) => {
+      aicliProcess.on('close', (code) => {
         console.log(`   Process closed with code: ${code}`);
         console.log(`   STDOUT length: ${stdout.length}`);
         console.log(`   STDERR length: ${stderr.length}`);
 
         // Emit process exit event
         this.emit('processExit', {
-          pid: claudeProcess.pid,
+          pid: aicliProcess.pid,
           code,
           stdout: stdout.substring(0, 1000), // First 1000 chars for debugging
           stderr,
@@ -550,7 +365,7 @@ export class ClaudeCodeService extends EventEmitter {
         });
 
         if (code !== 0) {
-          reject(new Error(`Claude Code exited with code ${code}: ${stderr}`));
+          reject(new Error(`AICLI Code exited with code ${code}: ${stderr}`));
           return;
         }
 
@@ -565,23 +380,23 @@ export class ClaudeCodeService extends EventEmitter {
           }
         } catch (error) {
           console.log(`   ❌ JSON parse error: ${error.message}`);
-          reject(new Error(`Failed to parse Claude Code response: ${error.message}`));
+          reject(new Error(`Failed to parse AICLI Code response: ${error.message}`));
         }
       });
 
-      claudeProcess.on('error', (error) => {
+      aicliProcess.on('error', (error) => {
         console.log(`   ❌ Process error: ${error.message}`);
-        reject(new Error(`Failed to start Claude Code: ${error.message}`));
+        reject(new Error(`Failed to start AICLI Code: ${error.message}`));
       });
 
       // Add timeout protection
       const timeout = setTimeout(() => {
         console.log(`   ⏰ Process timeout, killing...`);
-        claudeProcess.kill('SIGTERM');
-        reject(new Error('Claude Code process timed out'));
+        aicliProcess.kill('SIGTERM');
+        reject(new Error('AICLI Code process timed out'));
       }, 30000);
 
-      claudeProcess.on('close', () => {
+      aicliProcess.on('close', () => {
         clearTimeout(timeout);
       });
     });
@@ -613,7 +428,7 @@ export class ClaudeCodeService extends EventEmitter {
     const sanitizedPrompt = InputValidator.sanitizePrompt(initialPrompt);
     const validatedWorkingDir = await InputValidator.validateWorkingDirectory(workingDirectory);
 
-    console.log(`🚀 Creating Claude CLI session (metadata-only)`);
+    console.log(`🚀 Creating AICLI CLI session (metadata-only)`);
     console.log(`   Session ID: ${sanitizedSessionId}`);
     console.log(`   Working directory: ${validatedWorkingDir}`);
     console.log(`   Initial prompt: "${sanitizedPrompt}"`);
@@ -632,15 +447,7 @@ export class ClaudeCodeService extends EventEmitter {
     this.activeSessions.set(sanitizedSessionId, session);
 
     // Initialize message buffer for this session
-    this.sessionMessageBuffers.set(sanitizedSessionId, {
-      assistantMessages: [],
-      systemInit: null,
-      toolUseInProgress: false,
-      permissionRequests: [],
-      deliverables: [],
-      pendingFinalResponse: null,
-      permissionRequestSent: false,
-    });
+    this.sessionMessageBuffers.set(sanitizedSessionId, AICLIMessageHandler.createSessionBuffer());
 
     // Set up session timeout
     setTimeout(() => {
@@ -650,7 +457,7 @@ export class ClaudeCodeService extends EventEmitter {
       }
     }, this.sessionTimeout);
 
-    console.log(`✅ Claude CLI session metadata created successfully`);
+    console.log(`✅ AICLI CLI session metadata created successfully`);
 
     return {
       sessionId: sanitizedSessionId,
@@ -679,7 +486,7 @@ export class ClaudeCodeService extends EventEmitter {
       session.lastActivity = Date.now();
 
       console.log(
-        `📝 Executing Claude CLI command for session ${sanitizedSessionId}: "${sanitizedPrompt}"`
+        `📝 Executing AICLI CLI command for session ${sanitizedSessionId}: "${sanitizedPrompt}"`
       );
       console.log(`   Session object:`, {
         sessionId: session.sessionId,
@@ -689,8 +496,8 @@ export class ClaudeCodeService extends EventEmitter {
         isActive: session.isActive,
       });
 
-      // Execute Claude CLI with continuation and print mode
-      const response = await this.executeClaudeCommand(session, sanitizedPrompt);
+      // Execute AICLI CLI with continuation and print mode
+      const response = await this.executeAICLICommand(session, sanitizedPrompt);
 
       // Emit command sent event
       this.emit('commandSent', {
@@ -711,8 +518,8 @@ export class ClaudeCodeService extends EventEmitter {
     }
   }
 
-  async testClaudeCommand(testType = 'version') {
-    console.log(`🧪 Testing Claude CLI command: ${testType}`);
+  async testAICLICommand(testType = 'version') {
+    console.log(`🧪 Testing AICLI CLI command: ${testType}`);
 
     let args = [];
     const prompt = null;
@@ -734,13 +541,13 @@ export class ClaudeCodeService extends EventEmitter {
         throw new Error(`Unknown test type: ${testType}`);
     }
 
-    return this.runClaudeProcess(args, prompt, process.cwd(), 'test-session', 30000);
+    return this.runAICLIProcess(args, prompt, process.cwd(), 'test-session', 30000);
   }
 
-  async executeClaudeCommand(session, prompt) {
+  async executeAICLICommand(session, prompt) {
     const { sessionId, workingDirectory, conversationStarted, initialPrompt } = session;
 
-    // Build Claude CLI arguments - use stream-json to avoid buffer limits
+    // Build AICLI CLI arguments - use stream-json to avoid buffer limits
     const args = ['--print', '--output-format', 'stream-json', '--verbose'];
 
     // Add continue flag if conversation has started
@@ -774,7 +581,7 @@ export class ClaudeCodeService extends EventEmitter {
     }
 
     // Validate arguments
-    InputValidator.validateClaudeArgs(args);
+    InputValidator.validateAICLIArgs(args);
 
     // Determine the prompt to send
     let finalPrompt = prompt;
@@ -786,7 +593,7 @@ export class ClaudeCodeService extends EventEmitter {
       session.conversationStarted = true;
     }
 
-    console.log(`🚀 Executing Claude CLI with args:`, args);
+    console.log(`🚀 Executing AICLI CLI with args:`, args);
     console.log(`   Working directory: ${workingDirectory}`);
     console.log(`   Original prompt: "${prompt?.substring(0, 50)}..."`);
     console.log(`   Initial prompt: "${initialPrompt?.substring(0, 50)}..."`);
@@ -797,7 +604,7 @@ export class ClaudeCodeService extends EventEmitter {
     console.log(`   Conversation started: ${conversationStarted}`);
 
     // Calculate dynamic timeout based on command complexity
-    const timeoutMs = this.calculateTimeoutForCommand(prompt);
+    const timeoutMs = AICLIConfig.calculateTimeoutForCommand(prompt);
 
     // Check if this is a long-running operation (> 5 minutes)
     if (timeoutMs > 300000) {
@@ -835,14 +642,14 @@ export class ClaudeCodeService extends EventEmitter {
       };
     }
 
-    console.log(`📤 Calling runClaudeProcess with:`);
+    console.log(`📤 Calling runAICLIProcess with:`);
     console.log(`   Args (${args.length}):`, args);
     console.log(
       `   Prompt: "${finalPrompt?.substring(0, 100)}${finalPrompt?.length > 100 ? '...' : ''}"`
     );
     console.log(`   SessionId: ${sessionId}`);
 
-    return this.runClaudeProcess(args, finalPrompt, workingDirectory, sessionId, timeoutMs);
+    return this.runAICLIProcess(args, finalPrompt, workingDirectory, sessionId, timeoutMs);
   }
 
   async runLongRunningProcess(
@@ -874,8 +681,8 @@ export class ClaudeCodeService extends EventEmitter {
     }, 120000); // Send update every 2 minutes
 
     try {
-      // Run the actual Claude process
-      const result = await this.runClaudeProcess(
+      // Run the actual AICLI process
+      const result = await this.runAICLIProcess(
         args,
         prompt,
         workingDirectory,
@@ -898,14 +705,7 @@ export class ClaudeCodeService extends EventEmitter {
       if (result && result.type === 'result' && result.result) {
         // Create a fresh buffer for the long-running completion
         if (!this.sessionMessageBuffers.has(sessionId)) {
-          this.sessionMessageBuffers.set(sessionId, {
-            assistantMessages: [],
-            systemInit: null,
-            toolUseInProgress: false,
-            permissionRequests: [],
-            deliverables: [],
-            permissionRequestSent: false,
-          });
+          this.sessionMessageBuffers.set(sessionId, AICLIMessageHandler.createSessionBuffer());
         }
 
         // Create an assistant message with the actual result content (removed unused variable)
@@ -960,9 +760,9 @@ export class ClaudeCodeService extends EventEmitter {
     }
   }
 
-  async runClaudeProcess(args, prompt, workingDirectory, sessionId, timeoutMs) {
-    console.log(`\n🔧 === runClaudeProcess CALLED ===`);
-    console.log(`🔧 Running Claude CLI process:`);
+  async runAICLIProcess(args, prompt, workingDirectory, sessionId, timeoutMs) {
+    console.log(`\n🔧 === runAICLIProcess CALLED ===`);
+    console.log(`🔧 Running AICLI CLI process:`);
     console.log(`   Args (${args.length}): ${JSON.stringify(args)}`);
     console.log(`   Prompt provided: ${!!prompt}`);
     console.log(`   Prompt length: ${prompt ? prompt.length : 0}`);
@@ -974,7 +774,7 @@ export class ClaudeCodeService extends EventEmitter {
     console.log(`   Timeout: ${timeoutMs}ms`);
 
     return new Promise((promiseResolve, reject) => {
-      let claudeProcess;
+      let aicliProcess;
 
       try {
         // Build the complete command arguments
@@ -982,8 +782,8 @@ export class ClaudeCodeService extends EventEmitter {
         const useStdin = prompt && args.includes('--print');
         const fullArgs = useStdin ? args : prompt ? [...args, prompt] : args;
 
-        console.log(`📝 Final args being passed to Claude CLI:`);
-        console.log(`   Command: ${this.claudeCommand}`);
+        console.log(`📝 Final args being passed to AICLI CLI:`);
+        console.log(`   Command: ${this.aicliCommand}`);
         console.log(
           `   Full args array (${fullArgs.length} items):`,
           fullArgs.map((arg, i) => `[${i}] ${arg.substring(0, 100)}`)
@@ -991,37 +791,37 @@ export class ClaudeCodeService extends EventEmitter {
         console.log(`   Has prompt: ${!!prompt}`);
         console.log(`   Using stdin for prompt: ${useStdin}`);
 
-        claudeProcess = spawn(this.claudeCommand, fullArgs, {
+        aicliProcess = spawn(this.aicliCommand, fullArgs, {
           cwd: workingDirectory,
           stdio: ['pipe', 'pipe', 'pipe'],
         });
       } catch (spawnError) {
-        console.error(`❌ Failed to spawn Claude CLI:`, spawnError);
+        console.error(`❌ Failed to spawn AICLI CLI:`, spawnError);
         const errorMsg =
           spawnError.code === 'ENOENT'
-            ? 'Claude CLI not found. Please ensure Claude CLI is installed and in your PATH.'
-            : `Failed to start Claude CLI: ${spawnError.message}`;
+            ? 'AICLI CLI not found. Please ensure AICLI CLI is installed and in your PATH.'
+            : `Failed to start AICLI CLI: ${spawnError.message}`;
         reject(new Error(errorMsg));
         return;
       }
 
-      console.log(`   Process started with PID: ${claudeProcess.pid}`);
+      console.log(`   Process started with PID: ${aicliProcess.pid}`);
 
-      // When using --print, Claude CLI might expect input from stdin
+      // When using --print, AICLI CLI might expect input from stdin
       // Try writing the prompt to stdin instead of passing as argument
       if (prompt && args.includes('--print')) {
         console.log(`   📝 Writing prompt to stdin instead of args`);
-        claudeProcess.stdin.write(prompt);
-        claudeProcess.stdin.end();
+        aicliProcess.stdin.write(prompt);
+        aicliProcess.stdin.end();
       } else {
         // Close stdin immediately if no prompt
-        claudeProcess.stdin.end();
+        aicliProcess.stdin.end();
       }
 
       // Start monitoring this process
-      if (claudeProcess.pid) {
+      if (aicliProcess.pid) {
         processMonitor
-          .monitorProcess(claudeProcess.pid)
+          .monitorProcess(aicliProcess.pid)
           .then((info) => {
             if (info) {
               console.log(
@@ -1037,8 +837,8 @@ export class ClaudeCodeService extends EventEmitter {
       // Emit process start event
       this.emit('processStart', {
         sessionId,
-        pid: claudeProcess.pid,
-        command: this.claudeCommand,
+        pid: aicliProcess.pid,
+        command: this.aicliCommand,
         args,
         workingDirectory,
         type: 'command',
@@ -1055,14 +855,14 @@ export class ClaudeCodeService extends EventEmitter {
       // eslint-disable-next-line prefer-const
       let resetActivityTimer;
 
-      claudeProcess.stdout.on('data', (data) => {
+      aicliProcess.stdout.on('data', (data) => {
         // Store raw buffer to prevent encoding truncation
         stdoutBuffers.push(data);
 
         const chunk = data.toString();
         stdout += chunk;
         console.log(
-          `📊 Claude CLI STDOUT (${chunk.length} chars, total: ${stdout.length}):`,
+          `📊 AICLI CLI STDOUT (${chunk.length} chars, total: ${stdout.length}):`,
           JSON.stringify(chunk.substring(0, 200))
         );
 
@@ -1071,20 +871,20 @@ export class ClaudeCodeService extends EventEmitter {
         // Emit partial data for progress tracking
         this.emit('commandProgress', {
           sessionId,
-          pid: claudeProcess.pid,
+          pid: aicliProcess.pid,
           data: chunk,
           timestamp: new Date().toISOString(),
         });
       });
 
-      claudeProcess.stderr.on('data', (data) => {
+      aicliProcess.stderr.on('data', (data) => {
         // Store raw buffer to prevent encoding truncation
         stderrBuffers.push(data);
 
         const chunk = data.toString();
         stderr += chunk;
         console.log(
-          `📛 Claude CLI STDERR (${chunk.length} chars, total: ${stderr.length}):`,
+          `📛 AICLI CLI STDERR (${chunk.length} chars, total: ${stderr.length}):`,
           JSON.stringify(chunk)
         );
 
@@ -1093,14 +893,14 @@ export class ClaudeCodeService extends EventEmitter {
         // Emit stderr for logging
         this.emit('processStderr', {
           sessionId,
-          pid: claudeProcess.pid,
+          pid: aicliProcess.pid,
           data: chunk,
           timestamp: new Date().toISOString(),
         });
       });
 
-      claudeProcess.on('close', (code) => {
-        console.log(`🔚 Claude CLI process closed with code: ${code}`);
+      aicliProcess.on('close', (code) => {
+        console.log(`🔚 AICLI CLI process closed with code: ${code}`);
 
         // Reconstruct complete output from buffers to prevent encoding issues
         let completeStdout = '';
@@ -1135,7 +935,7 @@ export class ClaudeCodeService extends EventEmitter {
         // Emit process exit event
         this.emit('processExit', {
           sessionId,
-          pid: claudeProcess.pid,
+          pid: aicliProcess.pid,
           code,
           stdout: completeStdout.substring(0, 1000),
           stderr: completeStderr,
@@ -1143,31 +943,31 @@ export class ClaudeCodeService extends EventEmitter {
         });
 
         if (code !== 0) {
-          reject(new Error(`Claude CLI exited with code ${code}: ${completeStderr}`));
+          reject(new Error(`AICLI CLI exited with code ${code}: ${completeStderr}`));
           return;
         }
 
         try {
           // Validate JSON before parsing
           if (!completeStdout || completeStdout.length === 0) {
-            reject(new Error('Claude CLI returned empty output'));
+            reject(new Error('AICLI CLI returned empty output'));
             return;
           }
 
           // For stream-json format, we don't need strict JSON validation since it's newline-delimited
           const trimmedOutput = completeStdout.trim();
           if (!trimmedOutput || trimmedOutput.length === 0) {
-            reject(new Error('Claude CLI returned empty output'));
+            reject(new Error('AICLI CLI returned empty output'));
             return;
           }
 
           // Parse stream-json format - newline-delimited JSON objects
-          const responses = this.parseStreamJsonOutput(trimmedOutput);
-          console.log(`✅ Claude CLI command completed successfully`);
+          const responses = MessageProcessor.parseStreamJsonOutput(trimmedOutput);
+          console.log(`✅ AICLI CLI command completed successfully`);
           console.log(`   Parsed ${responses.length} response objects from stream-json`);
 
           if (responses.length === 0) {
-            reject(new Error('No valid JSON objects found in Claude CLI output'));
+            reject(new Error('No valid JSON objects found in AICLI CLI output'));
             return;
           }
 
@@ -1177,14 +977,7 @@ export class ClaudeCodeService extends EventEmitter {
 
           // Ensure message buffer exists for this session
           if (!this.sessionMessageBuffers.has(sessionId)) {
-            this.sessionMessageBuffers.set(sessionId, {
-              assistantMessages: [],
-              systemInit: null,
-              toolUseInProgress: false,
-              permissionRequests: [],
-              deliverables: [],
-              permissionRequestSent: false,
-            });
+            this.sessionMessageBuffers.set(sessionId, AICLIMessageHandler.createSessionBuffer());
             console.log(`🔧 Created missing message buffer for session ${sessionId}`);
           }
 
@@ -1193,12 +986,12 @@ export class ClaudeCodeService extends EventEmitter {
             console.log(
               `   Response ${index + 1}: type=${response.type}, subtype=${response.subtype || 'none'}`
             );
-            this.emitClaudeResponse(sessionId, response, index === responses.length - 1);
+            this.emitAICLIResponse(sessionId, response, index === responses.length - 1);
           });
 
           promiseResolve(finalResult);
         } catch (error) {
-          console.error(`❌ Failed to parse Claude CLI response:`, error);
+          console.error(`❌ Failed to parse AICLI CLI response:`, error);
           console.error(`   Raw stdout length:`, completeStdout.length);
           console.error(`   First 200 chars:`, completeStdout.substring(0, 200));
           console.error(
@@ -1208,18 +1001,18 @@ export class ClaudeCodeService extends EventEmitter {
 
           // Try to provide more helpful error information
           if (error.message.includes('Unterminated string')) {
-            reject(new Error('Claude CLI response was truncated - output is incomplete'));
+            reject(new Error('AICLI CLI response was truncated - output is incomplete'));
           } else if (error.message.includes('Unexpected end')) {
-            reject(new Error('Claude CLI response ended unexpectedly - possible truncation'));
+            reject(new Error('AICLI CLI response ended unexpectedly - possible truncation'));
           } else {
-            reject(new Error(`Failed to parse Claude CLI response: ${error.message}`));
+            reject(new Error(`Failed to parse AICLI CLI response: ${error.message}`));
           }
         }
       });
 
-      claudeProcess.on('error', (error) => {
-        console.error(`❌ Claude CLI process error:`, error);
-        reject(new Error(`Claude CLI process error: ${error.message}`));
+      aicliProcess.on('error', (error) => {
+        console.error(`❌ AICLI CLI process error:`, error);
+        reject(new Error(`AICLI CLI process error: ${error.message}`));
       });
 
       // Implement intelligent timeout with heartbeat detection
@@ -1244,20 +1037,20 @@ export class ClaudeCodeService extends EventEmitter {
 
           if (hasReceivedOutput) {
             console.log(
-              `⏰ Claude CLI process silent timeout (${Math.round(timeSinceActivity / 1000)}s since last activity), killing PID ${claudeProcess.pid}...`
+              `⏰ AICLI CLI process silent timeout (${Math.round(timeSinceActivity / 1000)}s since last activity), killing PID ${aicliProcess.pid}...`
             );
             reject(
               new Error(
-                `Claude CLI process timed out after ${Math.round(timeSinceActivity / 1000)}s of silence`
+                `AICLI CLI process timed out after ${Math.round(timeSinceActivity / 1000)}s of silence`
               )
             );
           } else {
             console.log(
-              `⏰ Claude CLI process initial timeout (${Math.round(totalRuntime / 1000)}s total), killing PID ${claudeProcess.pid}...`
+              `⏰ AICLI CLI process initial timeout (${Math.round(totalRuntime / 1000)}s total), killing PID ${aicliProcess.pid}...`
             );
-            reject(new Error('Claude CLI process timed out'));
+            reject(new Error('AICLI CLI process timed out'));
           }
-          claudeProcess.kill('SIGTERM');
+          aicliProcess.kill('SIGTERM');
         }, timeoutToUse);
       };
 
@@ -1267,7 +1060,7 @@ export class ClaudeCodeService extends EventEmitter {
         const wasFirstOutput = !hasReceivedOutput;
         hasReceivedOutput = true;
         console.log(
-          `💓 Claude CLI activity detected${wasFirstOutput ? ' (first output)' : ''}, resetting timeout timer`
+          `💓 AICLI CLI activity detected${wasFirstOutput ? ' (first output)' : ''}, resetting timeout timer`
         );
         updateTimeout();
       };
@@ -1278,16 +1071,16 @@ export class ClaudeCodeService extends EventEmitter {
       // Add periodic status logging
       const statusInterval = setInterval(
         () => {
-          if (claudeProcess && claudeProcess.pid) {
+          if (aicliProcess && aicliProcess.pid) {
             console.log(
-              `📊 Claude CLI PID ${claudeProcess.pid} still running... (stdout: ${stdout.length} chars, stderr: ${stderr.length} chars)`
+              `📊 AICLI CLI PID ${aicliProcess.pid} still running... (stdout: ${stdout.length} chars, stderr: ${stderr.length} chars)`
             );
           }
         },
         Math.min(timeoutMs / 4, 10000)
       ); // Status every 1/4 of timeout or 10s max
 
-      claudeProcess.on('close', () => {
+      aicliProcess.on('close', () => {
         if (timeoutHandle) {
           clearTimeout(timeoutHandle);
         }
@@ -1396,7 +1189,7 @@ export class ClaudeCodeService extends EventEmitter {
       } catch (error) {
         console.log(`⚠️  Failed to parse line ${i + 1} as JSON:`, line.substring(0, 100));
         // Try to extract any complete JSON objects from this line
-        const extracted = this.extractCompleteObjectsFromLine(line);
+        const extracted = MessageProcessor.extractCompleteObjectsFromLine(line);
         responses.push(...extracted);
       }
     }
@@ -1602,516 +1395,188 @@ export class ClaudeCodeService extends EventEmitter {
     return objects;
   }
 
-  emitClaudeResponse(sessionId, response, _isComplete = false, options = {}) {
+  emitAICLIResponse(sessionId, response, _isComplete = false, options = {}) {
     const buffer = this.sessionMessageBuffers.get(sessionId);
     if (!buffer) {
       console.warn(`No message buffer found for session ${sessionId}`);
       return;
     }
 
-    // Process different types of Claude CLI responses
-    switch (response.type) {
-      case 'system':
-        this.handleSystemResponse(sessionId, response, buffer);
+    // Use extracted message handler for pure business logic
+    const result = AICLIMessageHandler.processResponse(response, buffer, options);
+
+    // Handle the processing result and emit appropriate events
+    switch (result.action) {
+      case 'permission_request':
+        console.log(`🔐 Sending permission request immediately for session ${sessionId}`);
+        this.emit('permissionRequired', {
+          sessionId,
+          prompt: result.data.prompt,
+          options: result.data.options,
+          default: result.data.default,
+        });
+        this.emit('assistantMessage', {
+          sessionId,
+          data: {
+            type: 'permission_request',
+            messageId: result.data.messageId,
+            content: result.data.content,
+            model: result.data.model,
+            usage: result.data.usage,
+            timestamp: new Date().toISOString(),
+          },
+        });
         break;
 
-      case 'assistant':
-        this.handleAssistantResponse(sessionId, response, buffer);
+      case 'tool_use':
+        console.log(`🔧 Tool use in progress for session ${sessionId}`);
+        this.emit('assistantMessage', {
+          sessionId,
+          data: {
+            type: 'tool_use',
+            messageId: result.data.messageId,
+            content: result.data.content,
+            model: result.data.model,
+            usage: result.data.usage,
+            timestamp: new Date().toISOString(),
+          },
+        });
         break;
 
-      case 'user':
-        // User messages are tool results - don't send to iOS
-        console.log(`📝 Buffering user/tool result for session ${sessionId}`);
+      case 'final_result':
+        this.handleFinalResultEmission(sessionId, result.data, options);
         break;
 
-      case 'result':
-        this.handleFinalResult(sessionId, response, buffer, options);
+      case 'buffer':
+        console.log(`📝 ${result.reason} for session ${sessionId}`);
+        break;
+
+      case 'skip':
+        console.log(`🤷 ${result.reason}, skipping`);
+        break;
+
+      case 'error':
+        console.error(`❌ Error processing response for session ${sessionId}: ${result.reason}`);
         break;
 
       default:
-        console.log(`🤷 Unknown message type: ${response.type}, skipping`);
+        console.log(`🤷 Unknown processing result: ${result.action}, skipping`);
         break;
     }
   }
 
-  handleSystemResponse(sessionId, response, buffer) {
-    if (response.subtype === 'init') {
-      // Store system init but don't send to iOS immediately
-      buffer.systemInit = response;
-      console.log(`📋 Buffered system init for session ${sessionId}`);
-    }
-  }
+  handleFinalResultEmission(sessionId, resultData, _options = {}) {
+    const { response, buffer, aggregatedContent, sendAggregated, embeddedPermission } = resultData;
 
-  handleAssistantResponse(sessionId, response, buffer) {
-    if (!response.message || !response.message.content) {
-      return;
-    }
-
-    console.log(`🎯 Processing assistant message for session ${sessionId}`);
-    console.log(`   Message ID: ${response.message.id}`);
-    console.log(`   Content blocks: ${response.message.content.length}`);
-
-    // Check if this contains permission requests or immediate action items
-    const hasPermissionRequest = this.containsPermissionRequest(response.message.content);
-    const hasToolUse = this.containsToolUse(response.message.content);
-    const codeBlocks = this.extractCodeBlocks(response.message.content);
-
-    if (hasPermissionRequest) {
-      // Send permission requests immediately
-      console.log(`🔐 Sending permission request immediately for session ${sessionId}`);
-
-      // Mark that we've sent a permission request to avoid duplicates
-      buffer.permissionRequestSent = true;
-
-      // Extract the permission prompt text
-      const permissionPrompt = this.extractPermissionPrompt(
-        response.message.content.map((c) => c.text || '').join(' ')
-      );
-
-      // Emit the permissionRequired event that WebSocket expects
-      this.emit('permissionRequired', {
-        sessionId,
-        prompt: permissionPrompt,
-        options: ['y', 'n'],
-        default: 'n',
-      });
-
-      // Also emit as assistantMessage for UI display
+    if (sendAggregated && aggregatedContent) {
+      // Send aggregated response
+      console.log(`📱 Sending aggregated response to iOS for session ${sessionId}`);
       this.emit('assistantMessage', {
         sessionId,
         data: {
-          type: 'permission_request',
-          messageId: response.message.id,
-          content: response.message.content,
+          type: 'assistant_response',
+          content: aggregatedContent,
+          deliverables: buffer.deliverables || [],
+          aggregated: true,
+          messageCount: buffer.assistantMessages.length,
           timestamp: new Date().toISOString(),
         },
-        isComplete: false,
+        isComplete: true,
       });
-
-      // Don't buffer permission requests since they're sent immediately
-      return;
     }
 
-    if (codeBlocks.length > 0) {
-      // Send completed code blocks as deliverables
-      console.log(`💻 Found ${codeBlocks.length} code blocks, adding to deliverables`);
-      buffer.deliverables.push(...codeBlocks);
-    }
-
-    if (hasToolUse) {
-      buffer.toolUseInProgress = true;
-    }
-
-    // Buffer all other assistant messages for aggregation
-    buffer.assistantMessages.push({
-      messageId: response.message.id,
-      content: response.message.content,
-      model: response.message.model,
-      usage: response.message.usage,
-      timestamp: new Date().toISOString(),
-    });
-
-    console.log(`📦 Buffered assistant message (total: ${buffer.assistantMessages.length})`);
-  }
-
-  handleFinalResult(sessionId, response, buffer, options = {}) {
-    console.log(`🏁 Processing final result for session ${sessionId}`);
-    console.log(`   Buffered messages: ${buffer.assistantMessages.length}`);
-    console.log(`   Deliverables: ${buffer.deliverables.length}`);
-    console.log(`   Options:`, options);
-
-    // For long-running completions, always send the results immediately
-    if (options.isLongRunningCompletion) {
-      console.log(`🚀 Long-running completion detected, sending results immediately`);
-      this.sendFinalAggregatedResponse(sessionId, response, buffer);
-      return;
-    }
-
-    // If we already sent a permission request from the assistant messages,
-    // don't check again in the final result to avoid duplicates
-    if (buffer.permissionRequestSent) {
-      console.log(`⏭️  Permission request already sent, skipping final result permission check`);
-
-      // Store the pending response in buffer for later when permission is granted
-      buffer.pendingFinalResponse = {
-        aggregatedContent: this.aggregateBufferedContent(buffer),
-        finalResult: response.result,
-        conversationResult: {
+    if (embeddedPermission) {
+      // Handle embedded permission in result
+      console.log(`🔐 Found embedded permission in result for session ${sessionId}`);
+      this.emit('permissionRequired', {
+        sessionId,
+        prompt: embeddedPermission.prompt,
+        options: embeddedPermission.options,
+        default: embeddedPermission.default,
+      });
+    } else {
+      // Send regular conversation result
+      this.emit('conversationResult', {
+        sessionId,
+        data: {
           type: 'final_result',
           success: !response.is_error,
-          // result field intentionally omitted to prevent duplicate display
-          sessionId,
+          sessionId: response.session_id,
           duration: response.duration_ms,
           cost: response.total_cost_usd,
           usage: response.usage,
           timestamp: new Date().toISOString(),
         },
-      };
-      return;
-    }
-
-    // Check if the final result contains an embedded permission request
-    const finalResultContent = response.result
-      ? [
-          {
-            type: 'text',
-            text: response.result,
-          },
-        ]
-      : [];
-
-    const hasEmbeddedPermission = this.containsPermissionRequest(finalResultContent);
-
-    if (hasEmbeddedPermission) {
-      console.log(`🔐 Found embedded permission request in final result for session ${sessionId}`);
-
-      // Extract the permission request and send it as a structured prompt
-      const permissionPrompt = this.extractPermissionPrompt(response.result);
-
-      // Emit the permissionRequired event that WebSocket expects
-      this.emit('permissionRequired', {
-        sessionId,
-        prompt: permissionPrompt,
-        options: ['y', 'n'],
-        default: 'n',
       });
-
-      // Send permission request immediately
-      this.emit('assistantMessage', {
-        sessionId,
-        data: {
-          type: 'permission_request',
-          content: finalResultContent,
-          permissionPrompt,
-          requiresApproval: true,
-          timestamp: new Date().toISOString(),
-        },
-        isComplete: false,
-      });
-
-      // Don't send aggregated response yet - wait for approval
-      console.log(`⏸️  Waiting for user approval before sending aggregated response`);
-
-      // Store the pending response in buffer for later
-      buffer.pendingFinalResponse = {
-        aggregatedContent: this.aggregateBufferedContent(buffer),
-        finalResult: response.result,
-        conversationResult: {
-          type: 'final_result',
-          success: !response.is_error,
-          // result field removed to prevent duplicate display
-          sessionId,
-          duration: response.duration_ms,
-          cost: response.total_cost_usd,
-          usage: response.usage,
-          timestamp: new Date().toISOString(),
-        },
-      };
-
-      return; // Don't proceed with normal flow
     }
-
-    // Normal flow - no permission needed
-    this.sendFinalAggregatedResponse(sessionId, response, buffer);
-  }
-
-  sendFinalAggregatedResponse(sessionId, response, buffer) {
-    // Aggregate all buffered content into a single response
-    const aggregatedContent = this.aggregateBufferedContent(buffer);
-
-    // Note: response.result is already included in the aggregated content from buffered messages
-    // so we don't need to add it again to avoid duplication
-
-    // Send the complete aggregated response to iOS
-    console.log(`📱 Sending aggregated response to iOS for session ${sessionId}`);
-    this.emit('assistantMessage', {
-      sessionId,
-      data: {
-        type: 'assistant_response',
-        content: aggregatedContent,
-        deliverables: buffer.deliverables,
-        aggregated: true,
-        messageCount: buffer.assistantMessages.length,
-        timestamp: new Date().toISOString(),
-      },
-      isComplete: true,
-    });
-
-    // Send conversation result for completion tracking
-    // Note: Don't include the result text here as it's already sent in assistantMessage
-    this.emit('conversationResult', {
-      sessionId,
-      data: {
-        type: 'final_result',
-        success: !response.is_error,
-        // result field removed to prevent duplicate display in iOS
-        sessionId,
-        duration: response.duration_ms,
-        cost: response.total_cost_usd,
-        usage: response.usage,
-        timestamp: new Date().toISOString(),
-      },
-    });
 
     // Clear the buffer for next command
-    this.clearSessionBuffer(sessionId);
+    AICLIMessageHandler.clearSessionBuffer(buffer);
   }
 
-  extractPermissionPrompt(resultText) {
-    if (!resultText) return null;
+  // Old handler methods removed - message processing now handled by AICLIMessageHandler via emitAICLIResponse
 
-    // Look for the specific permission question in the text
-    const lines = resultText.split('\n');
-
-    // Find lines that contain permission-related questions
-    const permissionLines = lines.filter((line) => {
-      const lowerLine = line.toLowerCase();
-      return (
-        lowerLine.includes('would you like') ||
-        lowerLine.includes('should i') ||
-        lowerLine.includes('need permission') ||
-        lowerLine.includes('need write') ||
-        lowerLine.includes('proceed') ||
-        line.endsWith('?')
-      );
-    });
-
-    if (permissionLines.length > 0) {
-      return permissionLines.join(' ').trim();
-    }
-
-    // Fallback - return last paragraph if it seems like a question
-    const lastParagraph = resultText.split('\n\n').pop();
-    if (lastParagraph && lastParagraph.includes('?')) {
-      return lastParagraph.trim();
-    }
-
-    return 'Permission required to proceed';
-  }
-
-  containsPermissionRequest(content) {
-    if (!Array.isArray(content)) return false;
-
-    return content.some((block) => {
-      if (block.type === 'text' && block.text) {
-        const text = block.text.toLowerCase();
-
-        // Traditional permission patterns
-        if (
-          text.includes('permission') ||
-          text.includes('approve') ||
-          text.includes('(y/n)') ||
-          text.includes('[y/n]') ||
-          text.includes('confirm')
-        ) {
-          return true;
-        }
-
-        // Conversational permission patterns
-        const conversationalPatterns = [
-          'would you like me to proceed',
-          'should i proceed',
-          'should i continue',
-          'would you like me to continue',
-          'shall i proceed',
-          'shall i continue',
-          'may i proceed',
-          'can i proceed',
-          'do you want me to',
-          'i need write permissions',
-          'i need permissions',
-          'need write access',
-          'require write permissions',
-          'would you like me to create',
-          'should i create',
-          'shall i create',
-          'would you like me to execute',
-          'should i execute',
-          'would you like me to implement',
-          'should i implement',
-        ];
-
-        const hasConversationalPattern = conversationalPatterns.some((pattern) =>
-          text.includes(pattern)
-        );
-
-        if (hasConversationalPattern) {
-          console.log(
-            `🔍 Detected conversational permission request: "${text.substring(0, 100)}..."`
-          );
-          return true;
-        }
-
-        // Questions ending with "?" that might need approval
-        const questionPatterns = [
-          /would you like.*\?/,
-          /should i.*\?/,
-          /shall i.*\?/,
-          /do you want.*\?/,
-          /can i.*\?/,
-          /may i.*\?/,
-        ];
-
-        const hasQuestionPattern = questionPatterns.some((pattern) => pattern.test(text));
-
-        if (hasQuestionPattern) {
-          console.log(
-            `❓ Detected question-based permission request: "${text.substring(0, 100)}..."`
-          );
-          return true;
-        }
-      }
-      return false;
-    });
-  }
-
-  containsToolUse(content) {
-    if (!Array.isArray(content)) return false;
-    return content.some((block) => block.type === 'tool_use');
-  }
-
-  containsApprovalResponse(text) {
-    if (!text || typeof text !== 'string') return false;
-
-    const normalizedText = text.toLowerCase().trim();
-
-    // Direct approval phrases
-    const directApprovals = [
-      'yes',
-      'y',
-      'yep',
-      'yeah',
-      'yup',
-      'approved',
-      'approve',
-      'approval',
-      'ok',
-      'okay',
-      'k',
-      'sure',
-      'fine',
-      'good',
-      'proceed',
-      'continue',
-      'go ahead',
-      'go for it',
-      'do it',
-      'execute',
-      'run it',
-      'confirm',
-      'confirmed',
-      'allow',
-      'permit',
-      'authorized',
-    ];
-
-    // Check for exact matches or phrases that start with approval
-    const hasDirectApproval = directApprovals.some(
-      (approval) =>
-        normalizedText === approval ||
-        normalizedText.startsWith(`${approval} `) ||
-        normalizedText.startsWith(`${approval},`) ||
-        normalizedText.startsWith(`${approval}.`)
-    );
-
-    if (hasDirectApproval) {
-      console.log(`✅ Detected approval response: "${text}"`);
-      return true;
-    }
-
-    // Longer approval phrases
-    const phraseApprovals = [
-      'go ahead',
-      'go for it',
-      'sounds good',
-      'looks good',
-      'that works',
-      'do it',
-      'make it so',
-      "let's do it",
-      'i approve',
-      'you have permission',
-      'you can proceed',
-      'please proceed',
-      'please continue',
-      'yes please',
-      'sure thing',
-      'absolutely',
-      'definitely',
-    ];
-
-    const hasPhraseApproval = phraseApprovals.some((phrase) => normalizedText.includes(phrase));
-
-    if (hasPhraseApproval) {
-      console.log(`✅ Detected phrase-based approval: "${text}"`);
-      return true;
-    }
-
-    return false;
-  }
-
-  extractCodeBlocks(content) {
-    if (!Array.isArray(content)) return [];
-
-    const codeBlocks = [];
-    content.forEach((block) => {
-      if (block.type === 'text' && block.text) {
-        // Look for code blocks in text (```language...```)
-        const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
-        let match;
-        while ((match = codeBlockRegex.exec(block.text)) !== null) {
-          codeBlocks.push({
-            type: 'code_block',
-            language: match[1] || 'text',
-            code: match[2].trim(),
-          });
-        }
-      }
-    });
-
-    return codeBlocks;
-  }
-
-  aggregateBufferedContent(buffer) {
-    const aggregatedContent = [];
-
-    // Combine all text content from assistant messages
-    const textBlocks = [];
-
-    buffer.assistantMessages.forEach((message) => {
-      message.content.forEach((block) => {
-        if (block.type === 'text' && block.text) {
-          textBlocks.push(block.text);
-        }
-      });
-    });
-
-    // Combine text blocks, removing duplicates and tool usage details
-    const combinedText = textBlocks
-      .filter((text) => text.trim().length > 0)
-      .filter((text, index, array) => array.indexOf(text) === index) // Remove duplicates
-      .join('\n\n');
-
-    if (combinedText) {
-      aggregatedContent.push({
-        type: 'text',
-        text: combinedText,
-      });
-    }
-
-    return aggregatedContent;
-  }
+  // Message handling methods moved to AICLIMessageHandler - using proxy methods below for backward compatibility
 
   clearSessionBuffer(sessionId) {
     const buffer = this.sessionMessageBuffers.get(sessionId);
     if (buffer) {
-      buffer.assistantMessages = [];
-      buffer.toolUseInProgress = false;
-      buffer.permissionRequests = [];
-      buffer.deliverables = [];
-      buffer.permissionRequestSent = false;
+      AICLIMessageHandler.clearSessionBuffer(buffer);
       console.log(`🧹 Cleared message buffer for session ${sessionId}`);
     }
+  }
+
+  // Proxy methods for message handler functionality (for backward compatibility and testing)
+  containsPermissionRequest(content) {
+    return AICLIMessageHandler.containsPermissionRequest(content);
+  }
+
+  containsToolUse(content) {
+    return AICLIMessageHandler.containsToolUse(content);
+  }
+
+  containsApprovalResponse(text) {
+    return AICLIMessageHandler.containsApprovalResponse(text);
+  }
+
+  extractCodeBlocks(content) {
+    return AICLIMessageHandler.extractCodeBlocks(content);
+  }
+
+  aggregateBufferedContent(buffer) {
+    return AICLIMessageHandler.aggregateBufferedContent(buffer);
+  }
+
+  extractPermissionPrompt(text) {
+    return AICLIMessageHandler.extractPermissionPrompt(text);
+  }
+
+  extractPermissionPromptFromMessage(message) {
+    const text = this.extractTextFromMessage(message);
+    if (!text) return 'Permission required';
+
+    // Clean up the prompt text
+    return text.replace(/\s*\([yn]\/[yn]\)\s*$/i, '').trim();
+  }
+
+  extractTextFromMessage(message) {
+    if (typeof message === 'string') return message;
+
+    if (message.result) return message.result;
+    if (message.text) return message.text;
+    if (message.message && message.message.content) {
+      const content = message.message.content;
+      if (typeof content === 'string') return content;
+      if (Array.isArray(content)) {
+        for (const block of content) {
+          if (block.type === 'text' && block.text) {
+            return block.text;
+          }
+        }
+      }
+    }
+
+    return null;
   }
 
   async closeSession(sessionId) {
@@ -2122,7 +1587,7 @@ export class ClaudeCodeService extends EventEmitter {
       return { success: false, message: 'Session not found' };
     }
 
-    console.log(`🔚 Closing Claude CLI session: ${sessionId}`);
+    console.log(`🔚 Closing AICLI CLI session: ${sessionId}`);
     console.log(`   Session type: metadata-only (no long-running process)`);
 
     try {
@@ -2149,7 +1614,7 @@ export class ClaudeCodeService extends EventEmitter {
 
   getActiveSessions() {
     const sessions = Array.from(this.activeSessions.keys());
-    console.log(`📊 Active Claude CLI sessions: ${sessions.length}`);
+    console.log(`📊 Active AICLI CLI sessions: ${sessions.length}`);
     sessions.forEach((sessionId, index) => {
       const session = this.activeSessions.get(sessionId);
       const age = Math.round((Date.now() - session.createdAt) / 1000);
@@ -2162,7 +1627,7 @@ export class ClaudeCodeService extends EventEmitter {
 
   // Cleanup method for graceful shutdown
   shutdown() {
-    console.log('🔄 Shutting down Claude Code Service...');
+    console.log('🔄 Shutting down AICLI Code Service...');
 
     // Stop health monitoring
     this.stopProcessHealthMonitoring();
@@ -2182,7 +1647,7 @@ export class ClaudeCodeService extends EventEmitter {
     // Clear all data structures
     this.activeSessions.clear();
 
-    console.log('✅ Claude Code Service shut down complete');
+    console.log('✅ AICLI Code Service shut down complete');
   }
 
   async healthCheck() {
@@ -2208,7 +1673,7 @@ export class ClaudeCodeService extends EventEmitter {
 
       return {
         status: isAvailable ? 'healthy' : 'degraded',
-        claudeCodeAvailable: isAvailable,
+        aicliCodeAvailable: isAvailable,
         activeSessions: this.activeSessions.size,
         resources: {
           system: systemResources,
@@ -2299,87 +1764,9 @@ export class ClaudeCodeService extends EventEmitter {
   }
 
   // Calculate timeout based on command complexity
-  calculateTimeoutForCommand(command) {
-    if (!command || typeof command !== 'string') {
-      return 60000; // 1 minute default
-    }
 
-    const length = command.length;
-    const lowerCommand = command.toLowerCase();
-
-    // Keywords that indicate complex operations
-    const complexKeywords = [
-      'review',
-      'analyze',
-      'audit',
-      'assess',
-      'evaluate',
-      'examine',
-      'refactor',
-      'optimize',
-      'improve',
-      'redesign',
-      'restructure',
-      'debug',
-      'troubleshoot',
-      'investigate',
-      'diagnose',
-      'document',
-      'explain',
-      'summarize',
-      'overview',
-      'test',
-      'benchmark',
-      'profile',
-      'performance',
-    ];
-
-    const veryComplexKeywords = [
-      'expert',
-      'comprehensive',
-      'thorough',
-      'complete',
-      'full',
-      'entire project',
-      'whole codebase',
-      'all files',
-    ];
-
-    // Check for very complex operations
-    const hasVeryComplexKeywords = veryComplexKeywords.some((keyword) =>
-      lowerCommand.includes(keyword)
-    );
-
-    // Check for complex operations
-    const hasComplexKeywords = complexKeywords.some((keyword) => lowerCommand.includes(keyword));
-
-    // Calculate base timeout
-    let timeoutMs;
-
-    if (hasVeryComplexKeywords) {
-      timeoutMs = 600000; // 10 minutes for very complex operations
-    } else if (hasComplexKeywords) {
-      timeoutMs = 300000; // 5 minutes for complex operations
-    } else if (length > 200) {
-      timeoutMs = 300000; // 5 minutes for long commands
-    } else if (length > 50) {
-      timeoutMs = 180000; // 3 minutes for medium commands
-    } else {
-      timeoutMs = 120000; // 2 minutes for simple commands
-    }
-
-    console.log(
-      `🕐 Calculated timeout for command: ${timeoutMs}ms (${Math.round(timeoutMs / 1000)}s)`
-    );
-    console.log(`   Command length: ${length} chars`);
-    console.log(`   Has complex keywords: ${hasComplexKeywords}`);
-    console.log(`   Has very complex keywords: ${hasVeryComplexKeywords}`);
-
-    return timeoutMs;
-  }
-
-  // Classify different types of Claude Code messages
-  classifyClaudeMessage(message) {
+  // Classify different types of AICLI Code messages
+  classifyAICLIMessage(message) {
     if (!message || typeof message !== 'object') {
       return { eventType: 'streamData', data: message };
     }
@@ -2440,7 +1827,7 @@ export class ClaudeCodeService extends EventEmitter {
   }
 
   handleAssistantMessage(message) {
-    // Claude's response messages
+    // AICLI's response messages
     const content = message.message?.content;
 
     if (Array.isArray(content)) {
@@ -2515,51 +1902,18 @@ export class ClaudeCodeService extends EventEmitter {
     };
   }
 
-  // Permission prompt detection
+  // Duplicate methods removed - using the proxy methods above for backward compatibility
+
+  // Proxy methods for backward compatibility with tests
+  findAICLICommand() {
+    return AICLIConfig.findAICLICommand();
+  }
+
+  calculateTimeoutForCommand(command) {
+    return AICLIConfig.calculateTimeoutForCommand(command);
+  }
+
   isPermissionPrompt(message) {
-    if (!message || typeof message !== 'object') return false;
-
-    // Check for common permission prompt patterns
-    const text = this.extractTextFromMessage(message);
-    if (!text) return false;
-
-    const permissionPatterns = [
-      /\(y\/n\)/i,
-      /allow.*\?/i,
-      /proceed.*\?/i,
-      /continue.*\?/i,
-      /\[Y\/n\]/i,
-      /\[y\/N\]/i,
-    ];
-
-    return permissionPatterns.some((pattern) => pattern.test(text));
-  }
-
-  extractPermissionPromptFromMessage(message) {
-    const text = this.extractTextFromMessage(message);
-    if (!text) return 'Permission required';
-
-    // Clean up the prompt text
-    return text.replace(/\s*\([yn]\/[yn]\)\s*$/i, '').trim();
-  }
-
-  extractTextFromMessage(message) {
-    if (typeof message === 'string') return message;
-
-    if (message.result) return message.result;
-    if (message.text) return message.text;
-    if (message.message && message.message.content) {
-      const content = message.message.content;
-      if (typeof content === 'string') return content;
-      if (Array.isArray(content)) {
-        for (const block of content) {
-          if (block.type === 'text' && block.text) {
-            return block.text;
-          }
-        }
-      }
-    }
-
-    return null;
+    return MessageProcessor.isPermissionPrompt(message);
   }
 }

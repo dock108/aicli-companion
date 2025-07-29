@@ -6,12 +6,12 @@ struct Message: Identifiable, Codable {
     let sender: MessageSender
     let timestamp: Date
     let type: MessageType
-    var metadata: ClaudeMessageMetadata?
+    var metadata: AICLIMessageMetadata?
     var streamingState: StreamingState?
     let requestId: String?
     let richContent: RichContent?
 
-    init(id: UUID = UUID(), content: String, sender: MessageSender, timestamp: Date = Date(), type: MessageType = .text, metadata: ClaudeMessageMetadata? = nil, streamingState: StreamingState? = nil, requestId: String? = nil, richContent: RichContent? = nil) {
+    init(id: UUID = UUID(), content: String, sender: MessageSender, timestamp: Date = Date(), type: MessageType = .text, metadata: AICLIMessageMetadata? = nil, streamingState: StreamingState? = nil, requestId: String? = nil, richContent: RichContent? = nil) {
         self.id = id
         self.content = content
         self.sender = sender
@@ -94,7 +94,7 @@ enum MarkdownRenderMode: String, Codable {
 
 enum MessageSender: String, Codable, CaseIterable {
     case user = "user"
-    case claude = "claude"
+    case assistant = "assistant"
     case system = "system"
 }
 
@@ -118,7 +118,7 @@ enum StreamingState: String, Codable, CaseIterable {
     case failed = "failed"
 }
 
-struct ClaudeMessageMetadata: Codable {
+struct AICLIMessageMetadata: Codable {
     let sessionId: String
     let duration: TimeInterval
     let cost: Double?
@@ -132,9 +132,9 @@ struct ClaudeMessageMetadata: Codable {
     }
 }
 
-// MARK: - Claude Code API Response Models
+// MARK: - AICLI API Response Models
 
-struct ClaudeCodeResponse: Codable {
+struct AICLIResponse: Codable {
     let type: String
     let subtype: String
     let isError: Bool
@@ -256,7 +256,7 @@ struct WebSocketMessage: Codable {
         case ping(PingRequest)
         case subscribe(SubscribeRequest)
         case setWorkingDirectory(SetWorkingDirectoryRequest)
-        case claudeCommand(ClaudeCommandRequest)
+        case aicliCommand(AICLICommandRequest)
         case welcome(WelcomeResponse)
         case askResponse(AskResponseData)
         case streamStarted(StreamStartedResponse)
@@ -267,7 +267,7 @@ struct WebSocketMessage: Codable {
         case error(ErrorResponse)
         case sessionStatus(SessionStatusResponse)
         case pong(PongResponse)
-        case claudeResponse(ClaudeCommandResponse)
+        case aicliResponse(AICLICommandResponse)
 
         // New rich message types
         case systemInit(SystemInitResponse)
@@ -325,8 +325,8 @@ struct WebSocketMessage: Codable {
             self.data = .workingDirectorySet(try WorkingDirectorySetResponse(from: dataDecoder))
         case .progress:
             self.data = .progress(try ProgressResponse(from: dataDecoder))
-        case .claudeResponse:
-            self.data = .claudeResponse(try ClaudeCommandResponse(from: dataDecoder))
+        case .aicliResponse:
+            self.data = .aicliResponse(try AICLICommandResponse(from: dataDecoder))
         default:
             throw DecodingError.dataCorruptedError(forKey: .data, in: container, debugDescription: "Unsupported message type for decoding: \(type)")
         }
@@ -334,6 +334,72 @@ struct WebSocketMessage: Codable {
     
     enum CodingKeys: String, CodingKey {
         case type, requestId, timestamp, data
+    }
+    
+    // Custom encoding
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(type, forKey: .type)
+        try container.encodeIfPresent(requestId, forKey: .requestId)
+        try container.encode(timestamp, forKey: .timestamp)
+        
+        // Encode data based on its case
+        switch data {
+        case .ask(let request):
+            try container.encode(request, forKey: .data)
+        case .streamStart(let request):
+            try container.encode(request, forKey: .data)
+        case .streamSend(let request):
+            try container.encode(request, forKey: .data)
+        case .permission(let response):
+            try container.encode(response, forKey: .data)
+        case .streamClose(let request):
+            try container.encode(request, forKey: .data)
+        case .ping(let request):
+            try container.encode(request, forKey: .data)
+        case .subscribe(let request):
+            try container.encode(request, forKey: .data)
+        case .setWorkingDirectory(let request):
+            try container.encode(request, forKey: .data)
+        case .aicliCommand(let request):
+            try container.encode(request, forKey: .data)
+        case .welcome(let response):
+            try container.encode(response, forKey: .data)
+        case .askResponse(let data):
+            try container.encode(data, forKey: .data)
+        case .streamStarted(let response):
+            try container.encode(response, forKey: .data)
+        case .streamData(let response):
+            try container.encode(response, forKey: .data)
+        case .streamToolUse(let response):
+            try container.encode(response, forKey: .data)
+        case .permissionRequest(let data):
+            try container.encode(data, forKey: .data)
+        case .streamComplete(let response):
+            try container.encode(response, forKey: .data)
+        case .error(let response):
+            try container.encode(response, forKey: .data)
+        case .sessionStatus(let response):
+            try container.encode(response, forKey: .data)
+        case .pong(let response):
+            try container.encode(response, forKey: .data)
+        case .aicliResponse(let response):
+            try container.encode(response, forKey: .data)
+        case .systemInit(let response):
+            try container.encode(response, forKey: .data)
+        case .assistantMessage(let response):
+            try container.encode(response, forKey: .data)
+        case .toolUse(let response):
+            try container.encode(response, forKey: .data)
+        case .toolResult(let response):
+            try container.encode(response, forKey: .data)
+        case .conversationResult(let response):
+            try container.encode(response, forKey: .data)
+        case .workingDirectorySet(let response):
+            try container.encode(response, forKey: .data)
+        case .progress(let response):
+            try container.encode(response, forKey: .data)
+        }
     }
 }
 
@@ -347,7 +413,7 @@ enum WebSocketMessageType: String, Codable {
     case ping = "ping"
     case subscribe = "subscribe"
     case setWorkingDirectory = "setWorkingDirectory"
-    case claudeCommand = "claudeCommand"
+    case aicliCommand = "aicliCommand"
 
     // Server → Client
     case welcome = "welcome"
@@ -360,7 +426,7 @@ enum WebSocketMessageType: String, Codable {
     case error = "error"
     case sessionStatus = "sessionStatus"
     case pong = "pong"
-    case claudeResponse = "claudeResponse"
+    case aicliResponse = "aicliResponse"
 
     // New rich message types from enhanced server
     case systemInit = "systemInit"
@@ -425,7 +491,7 @@ struct SetWorkingDirectoryRequest: Codable {
     let workingDirectory: String
 }
 
-struct ClaudeCommandRequest: Codable {
+struct AICLICommandRequest: Codable {
     let command: String
     let projectPath: String
     let sessionId: String?
@@ -443,7 +509,7 @@ struct WelcomeResponse: Codable {
 
 struct AskResponseData: Codable {
     let success: Bool
-    let response: ClaudeCodeResponse?
+    let response: AICLIResponse?
     let error: String?
 }
 
@@ -577,7 +643,7 @@ struct WorkingDirectorySetResponse: Codable {
     let success: Bool
 }
 
-struct ClaudeCommandResponse: Codable {
+struct AICLICommandResponse: Codable {
     let content: String
     let success: Bool
     let sessionId: String?
@@ -643,7 +709,7 @@ struct AnyCodable: Codable {
     }
 }
 
-enum ClaudeCompanionError: LocalizedError {
+enum AICLICompanionError: LocalizedError {
     case connectionFailed(String)
     case authenticationFailed
     case serverNotFound

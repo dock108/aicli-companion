@@ -564,12 +564,12 @@ class ConversationPersistenceService: ObservableObject {
                 .message-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
                 .sender { font-weight: 600; color: #495057; }
                 .sender.user { color: #007bff; }
-                .sender.claude { color: #28a745; }
+                .sender.assistant { color: #28a745; }
                 .sender.system { color: #ffc107; }
                 .timestamp { color: #6c757d; font-size: 0.85em; }
                 .message-content { background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #e9ecef; }
                 .user .message-content { background: #e3f2fd; border-left-color: #2196f3; }
-                .claude .message-content { background: #f1f8e9; border-left-color: #4caf50; }
+                .assistant .message-content { background: #f1f8e9; border-left-color: #4caf50; }
                 .system .message-content { background: #fff3cd; border-left-color: #ffc107; }
                 pre { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 15px; overflow-x: auto; margin: 10px 0; }
                 code { background: #f8f9fa; padding: 2px 6px; border-radius: 4px; font-family: 'Monaco', 'Menlo', monospace; }
@@ -798,7 +798,7 @@ class ConversationPersistenceService: ObservableObject {
                 .conversation-content { padding: 15px; }
                 .message { margin-bottom: 15px; padding: 10px; border-radius: 6px; }
                 .user { background: #e3f2fd; }
-                .claude { background: #f1f8e9; }
+                .assistant { background: #f1f8e9; }
                 .system { background: #fff3cd; }
             </style>
         </head>

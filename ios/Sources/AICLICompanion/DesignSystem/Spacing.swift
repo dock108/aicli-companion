@@ -58,22 +58,22 @@ public struct Shadows {
     public static let small = Shadow(
         color: Color.black.opacity(0.04),
         radius: 2,
-        x: 0,
-        y: 1
+        xOffset: 0,
+        yOffset: 1
     )
     
     public static let medium = Shadow(
         color: Color.black.opacity(0.06),
         radius: 4,
-        x: 0,
-        y: 2
+        xOffset: 0,
+        yOffset: 2
     )
     
     public static let large = Shadow(
         color: Color.black.opacity(0.08),
         radius: 8,
-        x: 0,
-        y: 4
+        xOffset: 0,
+        yOffset: 4
     )
     
     public struct Shadow {
@@ -104,8 +104,8 @@ extension View {
         self.shadow(
             color: shadow.color,
             radius: shadow.radius,
-            x: shadow.x,
-            y: shadow.y
+            x: shadow.xOffset,
+            y: shadow.yOffset
         )
     }
 }

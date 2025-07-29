@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 
-export function setupWebSocket(wss, claudeService, authToken) {
+export function setupWebSocket(wss, aicliService, authToken) {
   const clients = new Map();
 
   wss.on('connection', (ws, request) => {
@@ -46,8 +46,8 @@ export function setupWebSocket(wss, claudeService, authToken) {
     });
 
     // Send welcome message
-    getClaudeCodeVersion()
-      .then((claudeCodeVersion) => {
+    getAICLICodeVersion()
+      .then((aicliCodeVersion) => {
         sendMessage(
           clientId,
           {
@@ -57,7 +57,7 @@ export function setupWebSocket(wss, claudeService, authToken) {
             data: {
               clientId,
               serverVersion: '1.0.0',
-              claudeCodeVersion,
+              aicliCodeVersion,
               capabilities: ['streaming', 'permissions', 'multiSession'],
               maxSessions: 5,
             },
@@ -66,7 +66,7 @@ export function setupWebSocket(wss, claudeService, authToken) {
         );
       })
       .catch((error) => {
-        console.warn('Failed to get Claude Code version:', error);
+        console.warn('Failed to get AICLI Code version:', error);
         sendMessage(
           clientId,
           {
@@ -76,7 +76,7 @@ export function setupWebSocket(wss, claudeService, authToken) {
             data: {
               clientId,
               serverVersion: '1.0.0',
-              claudeCodeVersion: null,
+              aicliCodeVersion: null,
               capabilities: ['streaming', 'permissions', 'multiSession'],
               maxSessions: 5,
             },
@@ -105,7 +105,7 @@ export function setupWebSocket(wss, claudeService, authToken) {
           throw new Error('Message missing required field: type');
         }
 
-        await handleWebSocketMessage(clientId, message, claudeService, clients);
+        await handleWebSocketMessage(clientId, message, aicliService, clients);
       } catch (error) {
         console.error('WebSocket message error:', error);
         console.error('Failed to parse message:', data.toString());
@@ -125,8 +125,8 @@ export function setupWebSocket(wss, claudeService, authToken) {
       // Clean up any active sessions for this client
       if (client) {
         client.sessionIds.forEach((sessionId) => {
-          console.log(`   Closing Claude session: ${sessionId}`);
-          claudeService.closeSession(sessionId);
+          console.log(`   Closing AICLI session: ${sessionId}`);
+          aicliService.closeSession(sessionId);
         });
       }
 
@@ -139,8 +139,8 @@ export function setupWebSocket(wss, claudeService, authToken) {
     });
   });
 
-  // Set up Claude Code event listeners for rich message types
-  claudeService.on('streamData', (data) => {
+  // Set up AICLI Code event listeners for rich message types
+  aicliService.on('streamData', (data) => {
     broadcastToSessionClients(
       data.sessionId,
       {
@@ -160,7 +160,7 @@ export function setupWebSocket(wss, claudeService, authToken) {
   });
 
   // Handle system initialization messages
-  claudeService.on('systemInit', (data) => {
+  aicliService.on('systemInit', (data) => {
     broadcastToSessionClients(
       data.sessionId,
       {
@@ -174,7 +174,7 @@ export function setupWebSocket(wss, claudeService, authToken) {
   });
 
   // Handle assistant responses with rich content
-  claudeService.on('assistantMessage', (data) => {
+  aicliService.on('assistantMessage', (data) => {
     console.log(`📢 Broadcasting assistantMessage for session ${data.sessionId}`);
     broadcastToSessionClients(
       data.sessionId,
@@ -189,7 +189,7 @@ export function setupWebSocket(wss, claudeService, authToken) {
   });
 
   // Handle tool usage notifications
-  claudeService.on('toolUse', (data) => {
+  aicliService.on('toolUse', (data) => {
     broadcastToSessionClients(
       data.sessionId,
       {
@@ -203,7 +203,7 @@ export function setupWebSocket(wss, claudeService, authToken) {
   });
 
   // Handle tool results
-  claudeService.on('toolResult', (data) => {
+  aicliService.on('toolResult', (data) => {
     broadcastToSessionClients(
       data.sessionId,
       {
@@ -217,7 +217,7 @@ export function setupWebSocket(wss, claudeService, authToken) {
   });
 
   // Handle conversation results
-  claudeService.on('conversationResult', (data) => {
+  aicliService.on('conversationResult', (data) => {
     broadcastToSessionClients(
       data.sessionId,
       {
@@ -230,7 +230,7 @@ export function setupWebSocket(wss, claudeService, authToken) {
     );
   });
 
-  claudeService.on('streamError', (data) => {
+  aicliService.on('streamError', (data) => {
     broadcastToSessionClients(
       data.sessionId,
       {
@@ -247,7 +247,7 @@ export function setupWebSocket(wss, claudeService, authToken) {
     );
   });
 
-  claudeService.on('sessionClosed', (data) => {
+  aicliService.on('sessionClosed', (data) => {
     broadcastToSessionClients(
       data.sessionId,
       {
@@ -266,7 +266,7 @@ export function setupWebSocket(wss, claudeService, authToken) {
     );
   });
 
-  claudeService.on('permissionRequired', (data) => {
+  aicliService.on('permissionRequired', (data) => {
     broadcastToSessionClients(
       data.sessionId,
       {
@@ -286,7 +286,7 @@ export function setupWebSocket(wss, claudeService, authToken) {
   });
 
   // Handle command progress for real-time updates
-  claudeService.on('commandProgress', (data) => {
+  aicliService.on('commandProgress', (data) => {
     const progressInfo = parseProgressFromOutput(data.data);
 
     if (progressInfo) {
@@ -339,29 +339,29 @@ export function setupWebSocket(wss, claudeService, authToken) {
   });
 }
 
-async function handleWebSocketMessage(clientId, message, claudeService, clients) {
+async function handleWebSocketMessage(clientId, message, aicliService, clients) {
   const { type, requestId, data } = message;
 
   try {
     switch (type) {
       case 'ask':
-        await handleAskMessage(clientId, requestId, data, claudeService, clients);
+        await handleAskMessage(clientId, requestId, data, aicliService, clients);
         break;
 
       case 'streamStart':
-        await handleStreamStartMessage(clientId, requestId, data, claudeService, clients);
+        await handleStreamStartMessage(clientId, requestId, data, aicliService, clients);
         break;
 
       case 'streamSend':
-        await handleStreamSendMessage(clientId, requestId, data, claudeService, clients);
+        await handleStreamSendMessage(clientId, requestId, data, aicliService, clients);
         break;
 
       case 'streamClose':
-        await handleStreamCloseMessage(clientId, requestId, data, claudeService, clients);
+        await handleStreamCloseMessage(clientId, requestId, data, aicliService, clients);
         break;
 
       case 'permission':
-        await handlePermissionMessage(clientId, requestId, data, claudeService, clients);
+        await handlePermissionMessage(clientId, requestId, data, aicliService, clients);
         break;
 
       case 'ping':
@@ -373,11 +373,11 @@ async function handleWebSocketMessage(clientId, message, claudeService, clients)
         break;
 
       case 'setWorkingDirectory':
-        await handleSetWorkingDirectoryMessage(clientId, requestId, data, claudeService, clients);
+        await handleSetWorkingDirectoryMessage(clientId, requestId, data, aicliService, clients);
         break;
 
-      case 'claudeCommand':
-        await handleClaudeCommandMessage(clientId, requestId, data, claudeService, clients);
+      case 'aicliCommand':
+        await handleAICLICommandMessage(clientId, requestId, data, aicliService, clients);
         break;
 
       default:
@@ -395,7 +395,7 @@ async function handleWebSocketMessage(clientId, message, claudeService, clients)
   }
 }
 
-async function handleAskMessage(clientId, requestId, data, claudeService, clients) {
+async function handleAskMessage(clientId, requestId, data, aicliService, clients) {
   const { prompt, workingDirectory, options } = data;
 
   console.log(`🤖 Processing ask message for client ${clientId}`);
@@ -403,7 +403,7 @@ async function handleAskMessage(clientId, requestId, data, claudeService, client
   console.log(`   Working dir: ${workingDirectory || process.cwd()}`);
 
   try {
-    const response = await claudeService.sendPrompt(prompt, {
+    const response = await aicliService.sendPrompt(prompt, {
       format: options?.format || 'json',
       workingDirectory: workingDirectory || process.cwd(),
       timeout: options?.timeout || 60000,
@@ -445,21 +445,21 @@ async function handleAskMessage(clientId, requestId, data, claudeService, client
   }
 }
 
-async function handleStreamStartMessage(clientId, requestId, data, claudeService, clients) {
+async function handleStreamStartMessage(clientId, requestId, data, aicliService, clients) {
   const { prompt, workingDirectory, options } = data;
 
   try {
     const sessionId = uuidv4();
     const finalWorkingDirectory =
-      workingDirectory || claudeService.defaultWorkingDirectory || process.cwd();
+      workingDirectory || aicliService.defaultWorkingDirectory || process.cwd();
 
-    console.log(`🚀 Starting Claude conversation session ${sessionId}`);
+    console.log(`🚀 Starting AICLI conversation session ${sessionId}`);
     console.log(`   Working directory: ${finalWorkingDirectory}`);
     console.log(
       `   Initial prompt: "${prompt?.substring(0, 100)}${prompt?.length > 100 ? '...' : ''}"`
     );
 
-    const _response = await claudeService.sendStreamingPrompt(prompt, {
+    const _response = await aicliService.sendStreamingPrompt(prompt, {
       sessionId,
       workingDirectory: finalWorkingDirectory,
     });
@@ -489,11 +489,11 @@ async function handleStreamStartMessage(clientId, requestId, data, claudeService
   }
 }
 
-async function handleStreamSendMessage(clientId, requestId, data, claudeService, clients) {
+async function handleStreamSendMessage(clientId, requestId, data, aicliService, clients) {
   const { sessionId, prompt } = data;
 
   try {
-    await claudeService.sendToExistingSession(sessionId, prompt);
+    await aicliService.sendToExistingSession(sessionId, prompt);
 
     sendMessage(
       clientId,
@@ -513,11 +513,11 @@ async function handleStreamSendMessage(clientId, requestId, data, claudeService,
   }
 }
 
-async function handleStreamCloseMessage(clientId, requestId, data, claudeService, clients) {
+async function handleStreamCloseMessage(clientId, requestId, data, aicliService, clients) {
   const { sessionId, reason } = data;
 
   try {
-    await claudeService.closeSession(sessionId);
+    await aicliService.closeSession(sessionId);
 
     // Remove session from client
     const client = clients.get(clientId);
@@ -543,11 +543,11 @@ async function handleStreamCloseMessage(clientId, requestId, data, claudeService
   }
 }
 
-async function handlePermissionMessage(clientId, requestId, data, claudeService, clients) {
+async function handlePermissionMessage(clientId, requestId, data, aicliService, clients) {
   const { sessionId, response, _remember } = data;
 
   try {
-    await claudeService.handlePermissionPrompt(sessionId, response);
+    await aicliService.handlePermissionPrompt(sessionId, response);
 
     sendMessage(
       clientId,
@@ -609,7 +609,7 @@ function handleSubscribeMessage(clientId, requestId, data, clients) {
   }
 }
 
-async function handleSetWorkingDirectoryMessage(clientId, requestId, data, claudeService, clients) {
+async function handleSetWorkingDirectoryMessage(clientId, requestId, data, aicliService, clients) {
   const { workingDirectory } = data;
 
   try {
@@ -722,7 +722,7 @@ async function handleSetWorkingDirectoryMessage(clientId, requestId, data, claud
     }
 
     // Update the default working directory for future sessions
-    claudeService.defaultWorkingDirectory = normalizedPath;
+    aicliService.defaultWorkingDirectory = normalizedPath;
 
     sendMessage(
       clientId,
@@ -749,10 +749,10 @@ async function handleSetWorkingDirectoryMessage(clientId, requestId, data, claud
   }
 }
 
-async function handleClaudeCommandMessage(clientId, requestId, data, claudeService, clients) {
+async function handleAICLICommandMessage(clientId, requestId, data, aicliService, clients) {
   const { command, projectPath, sessionId } = data;
 
-  console.log(`📬 Received claudeCommand from client ${clientId}`);
+  console.log(`📬 Received aicliCommand from client ${clientId}`);
   console.log(`   Command: "${command}"`);
   console.log(`   Session ID: ${sessionId}`);
   console.log(`   Project Path: ${projectPath}`);
@@ -775,13 +775,11 @@ async function handleClaudeCommandMessage(clientId, requestId, data, claudeServi
       return;
     }
 
-    console.log(
-      `🤖 Sending command to Claude session ${sessionId}: ${command.substring(0, 50)}...`
-    );
+    console.log(`🤖 Sending command to AICLI session ${sessionId}: ${command.substring(0, 50)}...`);
 
     // Check if session exists first
-    if (!claudeService.hasSession(sessionId)) {
-      const errorMsg = `Session ${sessionId} does not exist. Please start a Claude CLI session first.`;
+    if (!aicliService.hasSession(sessionId)) {
+      const errorMsg = `Session ${sessionId} does not exist. Please start a AICLI CLI session first.`;
       console.error(`❌ ${errorMsg}`);
       sendErrorMessage(clientId, requestId, 'SESSION_NOT_FOUND', errorMsg, clients, { sessionId });
       return;
@@ -818,9 +816,9 @@ async function handleClaudeCommandMessage(clientId, requestId, data, claudeServi
     );
     console.log(`   Client is subscribed to target session: ${client.sessionIds.has(sessionId)}`);
 
-    // Send the command to the Claude CLI session
+    // Send the command to the AICLI CLI session
     try {
-      const result = await claudeService.sendToExistingSession(sessionId, command);
+      const result = await aicliService.sendToExistingSession(sessionId, command);
       console.log(`✅ Command sent successfully:`, result);
 
       // If this was a long-running operation that started in background,
@@ -831,29 +829,29 @@ async function handleClaudeCommandMessage(clientId, requestId, data, claudeServi
         // iOS app should exit loading state now
       }
     } catch (error) {
-      console.error(`❌ Failed to send command to Claude session ${sessionId}:`, error.message);
+      console.error(`❌ Failed to send command to AICLI session ${sessionId}:`, error.message);
       throw error;
     }
 
     // The actual response will come through the event listeners (assistantMessage, etc.)
   } catch (error) {
-    console.error('Error handling Claude command:', error);
+    console.error('Error handling AICLI command:', error);
 
     // Create user-friendly error messages based on error type
-    let userFriendlyMessage = error.message || 'Failed to send command to Claude';
+    let userFriendlyMessage = error.message || 'Failed to send command to AICLI';
     let suggestions = [];
 
     if (error.message.includes('timed out')) {
       if (error.message.includes('silence')) {
         userFriendlyMessage =
-          'Claude CLI stopped responding during processing. This can happen with very complex requests.';
+          'AICLI CLI stopped responding during processing. This can happen with very complex requests.';
         suggestions = [
           'Try breaking your request into smaller, more specific parts',
-          'Use simpler commands to test if Claude CLI is working',
+          'Use simpler commands to test if AICLI CLI is working',
           'Check if the request requires too many resources',
         ];
       } else {
-        userFriendlyMessage = 'Claude CLI took too long to complete your request.';
+        userFriendlyMessage = 'AICLI CLI took too long to complete your request.';
         suggestions = [
           'Try using a simpler or more specific command',
           'Break complex requests into smaller parts',
@@ -861,16 +859,16 @@ async function handleClaudeCommandMessage(clientId, requestId, data, claudeServi
         ];
       }
     } else if (error.message.includes('not found') || error.message.includes('SESSION_NOT_FOUND')) {
-      userFriendlyMessage = 'The Claude CLI session was not found or has expired.';
+      userFriendlyMessage = 'The AICLI CLI session was not found or has expired.';
       suggestions = [
         'Try refreshing the chat to create a new session',
         'Make sure the server is running properly',
       ];
     } else if (error.message.includes('permission') || error.message.includes('access')) {
-      userFriendlyMessage = 'Claude CLI does not have the necessary permissions.';
+      userFriendlyMessage = 'AICLI CLI does not have the necessary permissions.';
       suggestions = [
         'Check file and directory permissions',
-        'Make sure Claude CLI is properly installed',
+        'Make sure AICLI CLI is properly installed',
         'Try running the server with appropriate permissions',
       ];
     }
@@ -1042,7 +1040,7 @@ function formatStreamContent(data) {
   };
 }
 
-async function getClaudeCodeVersion() {
+async function getAICLICodeVersion() {
   try {
     const { exec } = await import('child_process');
     const { promisify } = await import('util');

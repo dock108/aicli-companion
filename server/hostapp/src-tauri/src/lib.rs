@@ -55,7 +55,7 @@ impl AppState {
             }),
             logs: Arc::new(Mutex::new(LogsState {
                 entries: Vec::new(),
-                max_entries: 10000,
+                max_entries: 5000, // Reduced from 10000 for better performance
             })),
         }
     }

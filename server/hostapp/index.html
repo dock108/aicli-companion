@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Claude Companion Server Manager</title>
+    <title>AICLI Companion Server Manager</title>
     <link rel="stylesheet" href="/src/styles.css">
 </head>
 <body>
@@ -17,14 +17,14 @@
                     <line x1="14" y1="16" x2="18" y2="16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                 </svg>
             </div>
-            <h1>Claude Companion Server</h1>
+            <h1>AICLI Companion Server</h1>
         </header>
 
         <!-- Tab Navigation -->
         <nav class="tab-nav">
             <button class="tab-button active" data-tab="server">Server</button>
-            <!-- Claude CLI tab hidden as we're no longer using interactive mode -->
-            <!-- <button class="tab-button" data-tab="claude">Claude CLI</button> -->
+            <!-- AICLI CLI tab hidden as we're no longer using interactive mode -->
+            <!-- <button class="tab-button" data-tab="aicli">AICLI CLI</button> -->
             <button class="tab-button" data-tab="logs">Logs</button>
         </nav>
 
@@ -38,7 +38,7 @@
                 <div class="form-group">
                     <label for="config-path">Config Path</label>
                     <div class="input-group">
-                        <input type="text" id="config-path" value="/Users/name/claude-data" readonly>
+                        <input type="text" id="config-path" value="/Users/name/aicli-data" readonly>
                         <button class="secondary-button" id="browse-btn">Browse</button>
                     </div>
                 </div>
@@ -96,40 +96,54 @@
                 <h2>Mobile Connection</h2>
                 <div class="qr-container">
                     <canvas id="qr-code"></canvas>
-                    <p class="qr-instructions">Scan with Claude Companion mobile app</p>
+                    <p class="qr-instructions">Scan with AICLI Companion mobile app</p>
                     <div class="connection-info">
                         <code id="connection-string">-</code>
                     </div>
                 </div>
             </section>
+
+            <!-- Session Management Section -->
+            <section class="card" id="session-section" style="display: none;">
+                <h2>Active Sessions</h2>
+                <div class="session-info">
+                    <div class="info-row">
+                        <span class="info-label">Active Sessions:</span>
+                        <span class="info-value" id="session-count">0</span>
+                    </div>
+                </div>
+                <div id="active-sessions-list" class="sessions-list">
+                    <div class="log-empty-state">No active sessions</div>
+                </div>
+            </section>
             </div>
 
-            <!-- Claude CLI Tab Panel -->
-            <div class="tab-panel" id="claude-tab">
-                <!-- Claude Status Section -->
+            <!-- AICLI CLI Tab Panel -->
+            <div class="tab-panel" id="aicli-tab">
+                <!-- AICLI Status Section -->
                 <section class="card">
-                    <h2>Claude CLI Status</h2>
-                    <div class="claude-status-container">
+                    <h2>AICLI CLI Status</h2>
+                    <div class="aicli-status-container">
                         <div class="status-row">
                             <span class="status-label">Installation:</span>
-                            <span class="status-value" id="claude-installed">Checking...</span>
+                            <span class="status-value" id="aicli-installed">Checking...</span>
                         </div>
                         <div class="status-row">
                             <span class="status-label">Version:</span>
-                            <span class="status-value" id="claude-version">-</span>
+                            <span class="status-value" id="aicli-version">-</span>
                         </div>
                         <div class="status-row">
                             <span class="status-label">Path:</span>
-                            <span class="status-value" id="claude-path">-</span>
+                            <span class="status-value" id="aicli-path">-</span>
                         </div>
                         <div class="status-row">
                             <span class="status-label">Available:</span>
-                            <span class="status-value" id="claude-available">-</span>
+                            <span class="status-value" id="aicli-available">-</span>
                         </div>
                     </div>
                     <div class="button-group">
-                        <button class="secondary-button" id="refresh-claude-btn">Refresh Status</button>
-                        <button class="secondary-button" id="test-claude-btn">Test Claude CLI</button>
+                        <button class="secondary-button" id="refresh-aicli-btn">Refresh Status</button>
+                        <button class="secondary-button" id="test-aicli-btn">Test AICLI CLI</button>
                     </div>
                 </section>
 
@@ -149,12 +163,12 @@
                     <div id="sessions-list" class="sessions-list"></div>
                 </section>
 
-                <!-- Claude Logs Section -->
+                <!-- AICLI Logs Section -->
                 <section class="card">
-                    <h2>Claude Process Logs</h2>
+                    <h2>AICLI Process Logs</h2>
                     <div class="logs-toolbar">
                         <div class="logs-controls">
-                            <select id="claude-log-filter" class="log-filter-select">
+                            <select id="aicli-log-filter" class="log-filter-select">
                                 <option value="all">All Events</option>
                                 <option value="start">Process Start</option>
                                 <option value="command">Commands</option>
@@ -162,16 +176,16 @@
                                 <option value="stderr">Stderr</option>
                                 <option value="exit">Process Exit</option>
                             </select>
-                            <button class="secondary-button small" id="clear-claude-logs-btn">Clear Logs</button>
+                            <button class="secondary-button small" id="clear-aicli-logs-btn">Clear Logs</button>
                             <label class="checkbox-label">
-                                <input type="checkbox" id="claude-auto-scroll" checked>
+                                <input type="checkbox" id="aicli-auto-scroll" checked>
                                 Auto-scroll
                             </label>
                         </div>
                     </div>
-                    <div class="claude-logs-container">
-                        <div id="claude-logs-display" class="logs-display">
-                            <div class="log-empty-state">No Claude CLI logs yet.</div>
+                    <div class="aicli-logs-container">
+                        <div id="aicli-logs-display" class="logs-display">
+                            <div class="log-empty-state">No AICLI CLI logs yet.</div>
                         </div>
                     </div>
                 </section>

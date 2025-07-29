@@ -305,7 +305,7 @@ describe('Project Routes', () => {
       mockStat.mock.restore();
     });
 
-    it('should handle Claude CLI not available', async () => {
+    it('should handle AICLI CLI not available', async () => {
       const mockStat = mock.method(fs, 'stat', async () => ({
         isDirectory: () => true,
       }));
@@ -321,7 +321,7 @@ describe('Project Routes', () => {
       await handlers['POST /projects/:name/start'](req, res);
 
       assert.strictEqual(res.status.mock.calls[0].arguments[0], 503);
-      assert.strictEqual(res.json.mock.calls[0].arguments[0].error, 'Claude CLI not available');
+      assert.strictEqual(res.json.mock.calls[0].arguments[0].error, 'AICLI CLI not available');
 
       mockStat.mock.restore();
     });
@@ -449,7 +449,7 @@ describe('Project Routes', () => {
       assert.strictEqual(res.status.mock.calls[0].arguments[0], 500);
       assert.strictEqual(
         res.json.mock.calls[0].arguments[0].error,
-        'Failed to start Claude CLI session'
+        'Failed to start AICLI CLI session'
       );
       assert.strictEqual(res.json.mock.calls[0].arguments[0].message, 'Unexpected system error');
 

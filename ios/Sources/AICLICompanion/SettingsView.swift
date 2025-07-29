@@ -150,7 +150,7 @@ struct SettingsView: View {
                             
                             SettingsDivider()
                             
-                            Link(destination: URL(string: "https://github.com/anthropics/claude-code")!) {
+                            Link(destination: URL(string: "https://github.com/aicli/aicli")!) {
                                 SettingsTile(title: "Setup Instructions") {
                                     Image(systemName: "arrow.up.right.square")
                                         .font(.caption)

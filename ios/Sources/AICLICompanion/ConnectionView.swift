@@ -40,7 +40,7 @@ struct ConnectionView: View {
                     .foregroundColor(Colors.textPrimary(for: colorScheme))
                     .multilineTextAlignment(.center)
                 
-                Text("Connect your mobile device to Claude Code on your desktop for seamless AI-powered development")
+                Text("Connect your mobile device to AICLI on your desktop for seamless AI-powered development")
                     .font(Typography.font(.body))
                     .foregroundColor(Colors.textSecondary(for: colorScheme))
                     .multilineTextAlignment(.center)
@@ -306,13 +306,13 @@ struct HelpSheet: View {
                         .foregroundColor(Colors.textPrimary(for: colorScheme))
                     
                     VStack(alignment: .leading, spacing: Spacing.md) {
-                        HelpStep(number: "1", text: "Install Claude Code on your desktop")
+                        HelpStep(number: "1", text: "Install AICLI on your desktop")
                         HelpStep(number: "2", text: "Start the companion server")
                         HelpStep(number: "3", text: "Scan the QR code or enter connection details")
                         HelpStep(number: "4", text: "Start coding with AI assistance!")
                     }
                     
-                    Link("View detailed setup guide", destination: URL(string: "https://github.com/anthropics/claude-code")!)
+                    Link("View detailed setup guide", destination: URL(string: "https://github.com/aicli/aicli")!)
                         .font(Typography.font(.body))
                         .foregroundColor(Colors.accentPrimaryEnd)
                         .padding(.top)

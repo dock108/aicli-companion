@@ -1,8 +1,8 @@
 [package]
-name = "claude-companion-hostapp"
+name = "aicli-companion-hostapp"
 version = "0.1.0"
-description = "Desktop UI for Claude Companion Server"
-authors = ["Claude Companion Team"]
+description = "Desktop UI for AICLI Companion Server"
+authors = ["AICLI Companion Team"]
 edition = "2021"
 
 [build-dependencies]

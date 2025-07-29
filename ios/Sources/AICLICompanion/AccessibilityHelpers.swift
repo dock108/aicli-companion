@@ -13,7 +13,7 @@ struct AccessibilityIdentifiers {
     // MARK: - Message Bubbles
     static let messageBubble = "message_bubble"
     static let userMessage = "user_message"
-    static let claudeMessage = "claude_message"
+    static let assistantMessage = "assistant_message"
     static let systemMessage = "system_message"
     static let toolMessage = "tool_message"
 

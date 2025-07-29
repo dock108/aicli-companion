@@ -6,8 +6,8 @@ export function setupBonjour(port, enableTLS = false) {
 
     // Advertise the service
     const service = bonjour.publish({
-      name: 'Claude Companion Server',
-      type: 'claudecode',
+      name: 'AICLI Companion Server',
+      type: 'aiclicode',
       port,
       txt: {
         version: '1.0.0',

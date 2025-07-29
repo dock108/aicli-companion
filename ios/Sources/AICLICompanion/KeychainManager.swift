@@ -2,7 +2,7 @@ import Foundation
 import Security
 
 class KeychainManager {
-    private let serviceName = "ClaudeCompanion"
+    private let serviceName = "AICLICompanion"
 
     func save(_ value: String, forKey key: String) {
         guard let data = value.data(using: .utf8) else { return }

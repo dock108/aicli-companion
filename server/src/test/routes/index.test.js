@@ -31,7 +31,7 @@ describe('API Routes', () => {
     claudeService = {
       healthCheck: mock.fn(async () => ({
         status: 'healthy',
-        claudeCodeAvailable: true,
+        aicliCodeAvailable: true,
         activeSessions: 2,
         timestamp: new Date().toISOString(),
       })),
@@ -518,9 +518,9 @@ describe('API Routes', () => {
 
       assert.strictEqual(res.json.mock.calls.length, 1);
       const response = res.json.mock.calls[0].arguments[0];
-      assert.strictEqual(response.name, 'Claude Companion Server');
+      assert.strictEqual(response.name, 'AICLI Companion Server');
       assert.strictEqual(response.version, '1.0.0');
-      assert.strictEqual(response.claudeCodeAvailable, true);
+      assert.strictEqual(response.aicliCodeAvailable, true);
       assert.ok(response.endpoints);
       assert.strictEqual(response.websocket, '/ws');
     });

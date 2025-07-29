@@ -2,14 +2,14 @@
 import PackageDescription
 
 let package = Package(
-    name: "ClaudeCompanion",
+    name: "AICLICompanion",
     platforms: [
         .iOS(.v17)
     ],
     products: [
         .library(
-            name: "ClaudeCompanion",
-            targets: ["ClaudeCompanion"])
+            name: "AICLICompanion",
+            targets: ["AICLICompanion"])
     ],
     dependencies: [
         .package(url: "https://github.com/daltoniam/Starscream.git", from: "4.0.0"),
@@ -19,7 +19,7 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "ClaudeCompanion",
+            name: "AICLICompanion",
             dependencies: [
                 "Starscream",
                 .product(name: "Markdown", package: "swift-markdown"),
@@ -30,7 +30,7 @@ let package = Package(
                 .process("Resources")
             ]),
         .testTarget(
-            name: "ClaudeCompanionTests",
-            dependencies: ["ClaudeCompanion"])
+            name: "AICLICompanionTests",
+            dependencies: ["AICLICompanion"])
     ]
 )

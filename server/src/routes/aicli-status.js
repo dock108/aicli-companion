@@ -1,5 +1,6 @@
 import express from 'express';
 import { exec } from 'child_process';
+import util from 'util';
 import { promisify } from 'util';
 
 const execAsync = promisify(exec);
@@ -170,7 +171,7 @@ export function setupAICLIStatusRoutes(app, aicliService) {
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
-      console.error(`AICLI CLI debug test (${req.params.testType}) failed:`, error);
+      console.error(util.format('AICLI CLI debug test (%s) failed:', req.params.testType), error);
       res.status(500).json({
         success: false,
         testType: req.params.testType,

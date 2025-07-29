@@ -11,7 +11,7 @@
     "src/index.js",
     "src/config/server-startup.js",
     "src/config/tls-config.js",
-    "src/services/claude-code.js",
+    "src/services/aicli.js",
     "src/services/websocket.js"
   ],
   "reporter": ["text", "lcov", "html"],

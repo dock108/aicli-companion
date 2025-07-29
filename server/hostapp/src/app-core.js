@@ -1,7 +1,7 @@
 // Core application logic separated for testing
 import { invoke } from '@tauri-apps/api/core';
-import { open as openDialog } from '@tauri-apps/plugin-dialog';
-import { appDataDir, desktopDir } from '@tauri-apps/api/path';
+import { open as openDialog, ask, message } from '@tauri-apps/plugin-dialog';
+import { desktopDir } from '@tauri-apps/api/path';
 import { listen } from '@tauri-apps/api/event';
 import QRCode from 'qrcode';
 
@@ -101,9 +101,9 @@ export function loadSessionHistory() {
     if (savedSessions) {
       const sessions = JSON.parse(savedSessions);
       state.sessionHistory = sessions;
-      
+
       // Restore active sessions map
-      sessions.forEach(session => {
+      sessions.forEach((session) => {
         if (session.status === 'active') {
           state.activeSessions.set(session.sessionId, session);
         }
@@ -118,10 +118,8 @@ export function saveSessionHistory() {
   try {
     const sessions = Array.from(state.activeSessions.values());
     // Also include recent inactive sessions from history
-    const recentInactive = state.sessionHistory
-      .filter(s => s.status !== 'active')
-      .slice(0, 20); // Keep last 20 inactive sessions
-    
+    const recentInactive = state.sessionHistory.filter((s) => s.status !== 'active').slice(0, 20); // Keep last 20 inactive sessions
+
     const allSessions = [...sessions, ...recentInactive];
     localStorage.setItem('aicli-companion-sessions', JSON.stringify(allSessions));
   } catch (error) {
@@ -135,7 +133,7 @@ export function addSession(sessionInfo) {
     createdAt: new Date().toISOString(),
     lastActivity: new Date().toISOString(),
   };
-  
+
   state.activeSessions.set(session.sessionId, session);
   saveSessionHistory();
   updateSessionUI();
@@ -167,25 +165,26 @@ export function removeSession(sessionId) {
 function updateSessionUI() {
   // Update session count in UI
   const activeCount = state.activeSessions.size;
-  
+
   // Update session count
   if (state.elements.sessionCount) {
     state.elements.sessionCount.textContent = activeCount;
   }
-  
+
   // Update session list
   if (state.elements.activeSessionsList) {
     if (activeCount === 0) {
-      state.elements.activeSessionsList.innerHTML = '<div class="log-empty-state">No active sessions</div>';
+      state.elements.activeSessionsList.innerHTML =
+        '<div class="log-empty-state">No active sessions</div>';
     } else {
       const fragment = document.createDocumentFragment();
       state.activeSessions.forEach((session) => {
         const sessionEl = document.createElement('div');
         sessionEl.className = 'session-item';
-        
+
         const timeSinceStart = getTimeSince(session.createdAt);
         const timeSinceActivity = getTimeSince(session.lastActivity);
-        
+
         sessionEl.innerHTML = `
           <div class="session-header">
             <span class="session-id">${session.sessionId}</span>
@@ -203,7 +202,7 @@ function updateSessionUI() {
       state.elements.activeSessionsList.appendChild(fragment);
     }
   }
-  
+
   // Show/hide session section based on server status
   if (state.elements.sessionSection) {
     state.elements.sessionSection.style.display = state.serverStatus.running ? 'block' : 'none';
@@ -215,7 +214,7 @@ function getTimeSince(dateString) {
   const date = new Date(dateString);
   const now = new Date();
   const seconds = Math.floor((now - date) / 1000);
-  
+
   if (seconds < 60) return `${seconds} seconds`;
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes} minute${minutes > 1 ? 's' : ''}`;
@@ -336,7 +335,10 @@ export async function startServer() {
     }, 2000);
   } catch (error) {
     console.error('Failed to start server:', error);
-    alert(`Failed to start server: ${error}`);
+    await message(`Failed to start server: ${error}`, {
+      title: 'Error',
+      kind: 'error',
+    });
   } finally {
     state.elements.startBtn.disabled = false;
     state.elements.startBtn.classList.remove('loading');
@@ -356,10 +358,14 @@ export async function stopServer() {
     console.error('Failed to stop server:', error);
 
     if (error.toString().includes('not started by this app')) {
-      const confirmed = confirm(
+      const confirmed = await ask(
         `This server was not started by the desktop app.\n\n` +
           `Do you want to force stop it anyway?\n\n` +
-          `Warning: This will kill any process listening on port ${state.serverStatus.port}`
+          `Warning: This will kill any process listening on port ${state.serverStatus.port}`,
+        {
+          title: 'Confirm Force Stop',
+          kind: 'warning',
+        }
       );
 
       if (confirmed) {
@@ -371,11 +377,17 @@ export async function stopServer() {
           await updateUI();
         } catch (forceError) {
           console.error('Failed to force stop server:', forceError);
-          alert(`Failed to stop server: ${forceError}`);
+          await message(`Failed to stop server: ${forceError}`, {
+            title: 'Error',
+            kind: 'error',
+          });
         }
       }
     } else {
-      alert(`Failed to stop server: ${error}`);
+      await message(`Failed to stop server: ${error}`, {
+        title: 'Error',
+        kind: 'error',
+      });
     }
   } finally {
     state.elements.stopBtn.disabled = false;
@@ -527,7 +539,7 @@ export function renderLogs(fullRender = false) {
 
     // Check if filters changed (requires full render)
     const filtersChanged = searchTerm || levelFilter !== 'all';
-    
+
     if (fullRender || filtersChanged) {
       // Full render for filtered view
       const filteredLogs = state.logs.filter((log) => {
@@ -540,7 +552,8 @@ export function renderLogs(fullRender = false) {
       state.lastRenderedLogIndex = 0;
 
       if (filteredLogs.length === 0) {
-        logsDisplay.innerHTML = '<div class="log-empty-state">No logs match the current filters.</div>';
+        logsDisplay.innerHTML =
+          '<div class="log-empty-state">No logs match the current filters.</div>';
         return;
       }
 
@@ -583,13 +596,13 @@ function createLogEntry(log) {
   level.className = `log-level ${log.level}`;
   level.textContent = log.level;
 
-  const message = document.createElement('span');
-  message.className = 'log-message';
-  message.textContent = log.message;
+  const messageElement = document.createElement('span');
+  messageElement.className = 'log-message';
+  messageElement.textContent = log.message;
 
   logEntry.appendChild(timestamp);
   logEntry.appendChild(level);
-  logEntry.appendChild(message);
+  logEntry.appendChild(messageElement);
 
   return logEntry;
 }
@@ -1030,7 +1043,7 @@ export async function init() {
     if (log.message) {
       if (log.message.includes('[CLAUDE_PROCESS_START]')) {
         addAICLILog('start', log.message.replace('[CLAUDE_PROCESS_START]', '').trim());
-        
+
         // Extract session info from start message
         const sessionMatch = log.message.match(/Session ID: (project_[^\s]+)/);
         const projectMatch = log.message.match(/Project: ([^\s]+)/);
@@ -1048,7 +1061,7 @@ export async function init() {
         addAICLILog('stderr', log.message.replace('[CLAUDE_STDERR]', '').trim());
       } else if (log.message.includes('[CLAUDE_PROCESS_EXIT]')) {
         addAICLILog('exit', log.message.replace('[CLAUDE_PROCESS_EXIT]', '').trim());
-        
+
         // Extract session ID and mark as stopped
         const sessionMatch = log.message.match(/Session (project_[^\s]+)/);
         if (sessionMatch) {
@@ -1058,7 +1071,7 @@ export async function init() {
         addAICLILog('error', log.message.replace('[CLAUDE_PROCESS_ERROR]', '').trim());
       } else if (log.message.includes('[CLAUDE_COMMAND]')) {
         addAICLILog('command', log.message.replace('[CLAUDE_COMMAND]', '').trim());
-        
+
         // Update session activity
         const sessionMatch = log.message.match(/Session (project_[^\s]+)/);
         if (sessionMatch) {

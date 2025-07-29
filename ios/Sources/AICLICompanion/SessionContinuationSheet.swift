@@ -84,8 +84,9 @@ struct SessionContinuationSheet: View {
                 VStack(spacing: 12) {
                     // Continue Button
                     Button(action: {
+                        print("🟣 SessionContinuationSheet: Continue button pressed")
                         onContinue()
-                        dismiss()
+                        // Don't dismiss here - let the parent handle it after navigation state is updated
                     }) {
                         HStack {
                             Image(systemName: "arrow.right.circle.fill")
@@ -107,8 +108,9 @@ struct SessionContinuationSheet: View {
                     
                     // Start Fresh Button
                     Button(action: {
+                        print("🟣 SessionContinuationSheet: Start Fresh button pressed")
                         onStartFresh()
-                        dismiss()
+                        // Don't dismiss here - let the parent handle it after navigation state is updated
                     }) {
                         HStack {
                             Image(systemName: "plus.circle")
@@ -151,6 +153,7 @@ struct SessionContinuationSheet: View {
             }
         }
         .onAppear {
+            print("🎭 SessionContinuationSheet: Sheet appeared for project '\(project.name)'")
             loadPreviewMessages()
         }
     }

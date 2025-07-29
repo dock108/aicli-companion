@@ -30,7 +30,7 @@ public struct ContentView: View {
                                     insertion: .move(edge: .leading).combined(with: .opacity),
                                     removal: .move(edge: .trailing).combined(with: .opacity)
                                 ))
-                        } else if !isProjectSelected {
+                        } else if !isProjectSelected || selectedProject == nil {
                             // Step 2: Project selection screen
                             ProjectSelectionView(
                                 selectedProject: $selectedProject,
@@ -44,10 +44,10 @@ public struct ContentView: View {
                                 insertion: .move(edge: .trailing).combined(with: .opacity),
                                 removal: .move(edge: .leading).combined(with: .opacity)
                             ))
-                        } else {
+                        } else if let project = selectedProject {
                             // Step 3: Chat screen with selected project
                             ChatView(
-                                selectedProject: selectedProject,
+                                selectedProject: project,
                                 session: currentSession,
                                 onSwitchProject: switchProject
                             )
@@ -73,6 +73,19 @@ public struct ContentView: View {
                 // Reset project selection when disconnected
                 selectedProject = nil
                 isProjectSelected = false
+            }
+        }
+        .onChange(of: isProjectSelected) { _, selected in
+            print("🎯 ContentView: isProjectSelected changed to: \(selected)")
+            if selected, let project = selectedProject {
+                print("🎯 ContentView: Navigation should show ChatView for project: \(project.name)")
+            }
+        }
+        .onChange(of: selectedProject) { _, project in
+            if let project = project {
+                print("🎯 ContentView: selectedProject changed to: \(project.name)")
+            } else {
+                print("🎯 ContentView: selectedProject changed to: nil")
             }
         }
     }

@@ -3,14 +3,18 @@ import Combine
 
 // MARK: - Project Models for Server API
 
-struct Project: Identifiable, Codable {
-    let id = UUID()
+struct Project: Identifiable, Codable, Equatable {
+    var id: String { path } // Use path as stable identifier
     let name: String
     let path: String
     let type: String
     
     private enum CodingKeys: String, CodingKey {
         case name, path, type
+    }
+    
+    static func == (lhs: Project, rhs: Project) -> Bool {
+        return lhs.name == rhs.name && lhs.path == rhs.path && lhs.type == rhs.type
     }
 }
 
@@ -48,6 +52,7 @@ struct ProjectSelectionView: View {
     @State private var showingContinuationSheet = false
     @State private var pendingProject: Project?
     @State private var cancellables = Set<AnyCancellable>()
+    @State private var lastSelectionTime: Date = .distantPast
     
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject var settings: SettingsManager
@@ -151,9 +156,8 @@ struct ProjectSelectionView: View {
         .background(Colors.bgBase(for: colorScheme))
         .onAppear {
             loadProjects()
-            persistenceService.objectWillChange.sink { _ in
-                // Force UI update when persistence service changes
-            }.store(in: &cancellables)
+            // No need to observe persistence service changes here as we manually
+            // check session state when needed via hasSession() and getSessionMetadata()
         }
         .disabled(isStartingProject)
         .overlay(
@@ -182,21 +186,41 @@ struct ProjectSelectionView: View {
                 }
             }
         )
-        .sheet(isPresented: $showingContinuationSheet) {
+        .sheet(isPresented: $showingContinuationSheet, onDismiss: {
+            // Clear pending project if sheet is dismissed without action
+            if pendingProject != nil {
+                print("🔵 ProjectSelection: Continuation sheet dismissed, clearing pending project")
+                pendingProject = nil
+            }
+        }) {
             if let project = pendingProject,
                let metadata = persistenceService.getSessionMetadata(for: project.path) {
                 SessionContinuationSheet(
                     project: project,
                     sessionMetadata: metadata,
                     onContinue: {
-                        continueExistingSession(project, metadata: metadata)
+                        print("🟢 ProjectSelection: Sheet onContinue called for '\(project.name)'")
+                        // Dismiss sheet first, then start session after a small delay
+                        showingContinuationSheet = false
+                        pendingProject = nil // Clear pending project
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            continueExistingSession(project, metadata: metadata)
+                        }
                     },
                     onStartFresh: {
-                        startFreshSession(project)
+                        print("🟢 ProjectSelection: Sheet onStartFresh called for '\(project.name)'")
+                        // Dismiss sheet first, then start session after a small delay
+                        showingContinuationSheet = false
+                        pendingProject = nil // Clear pending project
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            startFreshSession(project)
+                        }
                     },
                     onViewHistory: {
                         // TODO: Implement history view
                         print("View history for \(project.name)")
+                        showingContinuationSheet = false
+                        pendingProject = nil // Clear pending project
                     }
                 )
             }
@@ -274,11 +298,41 @@ struct ProjectSelectionView: View {
     }
     
     private func selectProject(_ project: Project) {
+        print("🔵 ProjectSelection: Selecting project '\(project.name)' at path: \(project.path)")
+        
+        // Debounce rapid selections (500ms)
+        let now = Date()
+        let timeSinceLastSelection = now.timeIntervalSince(lastSelectionTime)
+        if timeSinceLastSelection < 0.5 {
+            print("⚠️ ProjectSelection: Ignoring rapid selection for '\(project.name)' (only \(Int(timeSinceLastSelection * 1000))ms since last selection)")
+            return
+        }
+        lastSelectionTime = now
+        
         // Check if there's an existing session for this project
-        if persistenceService.hasSession(for: project.path) {
+        let hasSession = persistenceService.hasSession(for: project.path)
+        print("🔵 ProjectSelection: Project '\(project.name)' hasSession: \(hasSession)")
+        
+        if hasSession {
+            if let metadata = persistenceService.getSessionMetadata(for: project.path) {
+                print("🔵 ProjectSelection: Session metadata for '\(project.name)':")
+                print("   - Session ID: \(metadata.sessionId)")
+                print("   - AICLI Session ID: \(metadata.aicliSessionId ?? "nil")")
+                print("   - Message Count: \(metadata.messageCount)")
+                print("   - Last Used: \(metadata.formattedLastUsed)")
+            } else {
+                print("⚠️ ProjectSelection: No metadata found for '\(project.name)' despite hasSession = true")
+            }
+            
+            // IMPORTANT: Do not set selectedProject here - only pendingProject
             pendingProject = project
-            showingContinuationSheet = true
+            print("🟢 ProjectSelection: Showing continuation sheet for '\(project.name)'")
+            // Ensure UI updates before showing sheet
+            DispatchQueue.main.async {
+                self.showingContinuationSheet = true
+            }
         } else {
+            print("🔵 ProjectSelection: Starting fresh session for '\(project.name)'")
             startProjectSession(project, continueExisting: false)
         }
     }
@@ -330,7 +384,13 @@ struct ProjectSelectionView: View {
                 
                 do {
                     let response = try JSONDecoder().decode(ProjectStartResponse.self, from: data)
+                    print("🟢 ProjectSelection: Server response for '\(project.name)': success=\(response.success)")
+                    
                     if response.success {
+                        print("🟢 ProjectSelection: Successfully started session for '\(project.name)'")
+                        print("   - Session ID: \(response.session.sessionId)")
+                        print("   - Status: \(response.session.status)")
+                        
                         // Success! Store the selected project and session info
                         selectedProject = project
                         
@@ -339,8 +399,14 @@ struct ProjectSelectionView: View {
                             onSessionStarted(response.session)
                         }
                         
-                        isProjectSelected = true
+                        print("🟢 ProjectSelection: Transitioning to chat view for '\(project.name)'")
+                        // Add a small delay to ensure state propagates properly
+                        DispatchQueue.main.async {
+                            print("🟢 ProjectSelection: Setting isProjectSelected = true for '\(project.name)'")
+                            isProjectSelected = true
+                        }
                     } else {
+                        print("❌ ProjectSelection: Server failed to start project '\(project.name)': \(response.message)")
                         errorMessage = "Failed to start project: \(response.message)"
                     }
                 } catch {
@@ -358,6 +424,11 @@ struct ProjectSelectionView: View {
     }
     
     private func continueExistingSession(_ project: Project, metadata: SessionMetadata) {
+        print("🟢 ProjectSelection: Continuing existing session for '\(project.name)'")
+        print("   - Session ID: \(metadata.sessionId)")
+        print("   - AICLI Session ID: \(metadata.aicliSessionId ?? "nil")")
+        print("   - Project Path: \(project.path)")
+        
         // TODO: Add server endpoint to continue with existing session ID
         startProjectSession(project, continueExisting: true)
     }
@@ -390,9 +461,18 @@ struct ProjectRowView: View {
     let onTap: () -> Void
     
     @Environment(\.colorScheme) var colorScheme
+    @State private var isProcessing = false
     
     var body: some View {
-        Button(action: onTap) {
+        Button(action: {
+            guard !isProcessing else { return }
+            isProcessing = true
+            onTap()
+            // Reset after a delay to allow for the view transition
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                isProcessing = false
+            }
+        }) {
             HStack(spacing: Spacing.md) {
                 // Project icon with session indicator
                 ZStack(alignment: .topTrailing) {
@@ -464,6 +544,9 @@ struct ProjectRowView: View {
             )
         }
         .buttonStyle(PlainButtonStyle())
+        .opacity(isProcessing ? 0.6 : 1.0)
+        .disabled(isProcessing)
+        .animation(.easeInOut(duration: 0.2), value: isProcessing)
     }
 }
 

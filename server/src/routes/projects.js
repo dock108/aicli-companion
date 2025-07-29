@@ -3,7 +3,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { ServerConfig } from '../config/server-config.js';
 import rateLimit from 'express-rate-limit';
-
+import crypto from 'crypto';
 export function setupProjectRoutes(app, aicliService) {
   const router = express.Router();
   const config = new ServerConfig();
@@ -153,7 +153,7 @@ export function setupProjectRoutes(app, aicliService) {
       const sessionId =
         continueSession && existingSessionId
           ? existingSessionId
-          : `project_${name}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          : `project_${name}_${Date.now()}_${crypto.randomBytes(9).toString('hex')}`;
 
       console.log(
         `${continueSession ? 'Continuing' : 'Starting'} AICLI CLI session for project: ${name}`

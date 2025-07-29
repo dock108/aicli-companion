@@ -94,7 +94,7 @@ test('PushNotificationService', async (t) => {
 
       // Mock the Provider constructor
       const mockProvider = { shutdown: () => {} };
-      const providerMock = mock.method(apn, 'Provider', () => {
+      const providerMock = mock.method(apn, 'Provider', function() {
         return mockProvider;
       });
 
@@ -124,7 +124,7 @@ test('PushNotificationService', async (t) => {
       const existsSyncMock = mock.method(fs, 'existsSync', () => true);
 
       // Mock Provider to throw error
-      const providerMock = mock.method(apn, 'Provider', () => {
+      const providerMock = mock.method(apn, 'Provider', function() {
         throw new Error('Provider error');
       });
 

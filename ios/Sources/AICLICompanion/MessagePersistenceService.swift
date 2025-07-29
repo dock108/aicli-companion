@@ -121,16 +121,94 @@ class MessagePersistenceService: ObservableObject {
         let projectDir = sessionsDirectory.appendingPathComponent(sanitizeFilename(projectId))
         let messagesFile = projectDir.appendingPathComponent("\(sessionId)_messages.json")
         
-        guard let data = try? Data(contentsOf: messagesFile),
-              let persistedMessages = try? decoder.decode([PersistedMessage].self, from: data) else {
+        print("🗂️ MessagePersistence: Loading messages for project '\(projectId)', session '\(sessionId)'")
+        print("   - Messages file path: \(messagesFile.path)")
+        print("   - File exists: \(fileManager.fileExists(atPath: messagesFile.path))")
+        
+        guard fileManager.fileExists(atPath: messagesFile.path) else {
+            print("❌ MessagePersistence: Messages file not found for project '\(projectId)'")
             return []
         }
         
-        return persistedMessages.map { $0.toMessage() }
+        do {
+            let data = try Data(contentsOf: messagesFile)
+            print("🗂️ MessagePersistence: Read \(data.count) bytes from messages file for '\(projectId)'")
+            
+            let persistedMessages = try decoder.decode([PersistedMessage].self, from: data)
+            print("🗂️ MessagePersistence: Successfully decoded \(persistedMessages.count) messages for '\(projectId)'")
+            
+            let messages = persistedMessages.map { $0.toMessage() }
+            print("🗂️ MessagePersistence: Converted to \(messages.count) Message objects for '\(projectId)'")
+            
+            return messages
+        } catch {
+            print("❌ MessagePersistence: Failed to load messages for project '\(projectId)': \(error)")
+            print("❌ MessagePersistence: Error details: \(error.localizedDescription)")
+            
+            // Try to move corrupted file to backup location
+            let backupFile = messagesFile.appendingPathExtension("corrupted.\(Date().timeIntervalSince1970)")
+            try? fileManager.moveItem(at: messagesFile, to: backupFile)
+            print("🗂️ MessagePersistence: Moved corrupted file to: \(backupFile.path)")
+            
+            return []
+        }
     }
     
     func getSessionMetadata(for projectId: String) -> SessionMetadata? {
-        return savedSessions[projectId]
+        guard let metadata = savedSessions[projectId] else {
+            print("🗂️ MessagePersistence: No session metadata found for project '\(projectId)'")
+            return nil
+        }
+        
+        // Validate session metadata integrity
+        if !isValidSessionMetadata(metadata, for: projectId) {
+            print("❌ MessagePersistence: Invalid session metadata for project '\(projectId)', removing from cache")
+            savedSessions.removeValue(forKey: projectId)
+            return nil
+        }
+        
+        return metadata
+    }
+    
+    private func isValidSessionMetadata(_ metadata: SessionMetadata, for projectId: String) -> Bool {
+        print("🗂️ MessagePersistence: Validating session metadata for '\(projectId)'")
+        
+        // Check basic metadata fields
+        guard !metadata.sessionId.isEmpty else {
+            print("❌ MessagePersistence: Empty session ID for '\(projectId)'")
+            return false
+        }
+        
+        guard !metadata.projectName.isEmpty else {
+            print("❌ MessagePersistence: Empty project name for '\(projectId)'")
+            return false
+        }
+        
+        guard !metadata.projectPath.isEmpty else {
+            print("❌ MessagePersistence: Empty project path for '\(projectId)'")
+            return false
+        }
+        
+        // Check if metadata file exists
+        let projectDir = sessionsDirectory.appendingPathComponent(sanitizeFilename(projectId))
+        let metadataFile = projectDir.appendingPathComponent("metadata.json")
+        
+        guard fileManager.fileExists(atPath: metadataFile.path) else {
+            print("❌ MessagePersistence: Metadata file missing for '\(projectId)' at: \(metadataFile.path)")
+            return false
+        }
+        
+        // If aicliSessionId exists, check if messages file exists
+        if let aicliSessionId = metadata.aicliSessionId {
+            let messagesFile = projectDir.appendingPathComponent("\(aicliSessionId)_messages.json")
+            if !fileManager.fileExists(atPath: messagesFile.path) {
+                print("❌ MessagePersistence: Messages file missing for '\(projectId)' session '\(aicliSessionId)' at: \(messagesFile.path)")
+                return false
+            }
+        }
+        
+        print("✅ MessagePersistence: Session metadata validation passed for '\(projectId)'")
+        return true
     }
     
     func clearMessages(for projectId: String) {

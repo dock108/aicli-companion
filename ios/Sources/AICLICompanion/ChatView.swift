@@ -26,6 +26,15 @@ struct ChatView: View {
     @State private var connectionStateTimer: Timer?
     @State private var autoSaveTimer: Timer?
     @State private var isRestoring = false
+    @State private var isStartingSession = false
+    
+    // Smart scroll tracking
+    @State private var isNearBottom: Bool = true
+    @State private var lastScrollPosition: CGFloat = 0
+    @State private var scrollViewHeight: CGFloat = 0
+    @State private var contentHeight: CGFloat = 0
+    @State private var shouldAutoScroll: Bool = true
+    
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     @Environment(\.verticalSizeClass) var verticalSizeClass
@@ -57,33 +66,67 @@ struct ChatView: View {
                         .padding(.vertical, 12)
                 }
                 
-                // Messages list
+                // Messages list with smart scroll tracking
                 ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 8) {
-                            ForEach(messages) { message in
-                                MessageBubble(message: message)
-                                    .id(message.id)
-                                    .transition(.asymmetric(
-                                        insertion: .opacity.combined(with: .offset(y: 8)),
-                                        removal: .opacity
-                                    ))
-                                    .animation(.easeOut(duration: 0.12), value: messages.count)
+                    GeometryReader { geometry in
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: 8) {
+                                ForEach(messages) { message in
+                                    MessageBubble(message: message)
+                                        .id(message.id)
+                                        .transition(.asymmetric(
+                                            insertion: .opacity.combined(with: .offset(y: 8)),
+                                            removal: .opacity
+                                        ))
+                                        .animation(.easeOut(duration: 0.12), value: messages.count)
+                                }
+                                
+                                if isLoading {
+                                    LoadingIndicator(progressInfo: progressInfo, colorScheme: colorScheme)
+                                        .id("loading-indicator")
+                                }
                             }
-                            
-                            if isLoading {
-                                LoadingIndicator(progressInfo: progressInfo, colorScheme: colorScheme)
-                            }
+                            .padding(.horizontal, isIPad && horizontalSizeClass == .regular ? 40 : 16)
+                            .padding(.vertical, 16)
+                            .background(
+                                GeometryReader { contentGeometry in
+                                    Color.clear
+                                        .preference(key: ContentHeightPreferenceKey.self, value: contentGeometry.size.height)
+                                }
+                            )
                         }
-                        .padding(.horizontal, isIPad && horizontalSizeClass == .regular ? 40 : 16)
-                        .padding(.vertical, 16)
+                        .coordinateSpace(name: "scroll")
+                        .onPreferenceChange(ContentHeightPreferenceKey.self) { height in
+                            contentHeight = height
+                            checkIfNearBottom()
+                        }
+                        .onAppear {
+                            scrollViewHeight = geometry.size.height
+                        }
+                        .onChange(of: geometry.size.height) { _, newHeight in
+                            scrollViewHeight = newHeight
+                            checkIfNearBottom()
+                        }
+                        .simultaneousGesture(
+                            DragGesture()
+                                .onChanged { _ in
+                                    // User is actively scrolling, don't auto-scroll
+                                    shouldAutoScroll = false
+                                }
+                                .onEnded { _ in
+                                    // Re-enable auto-scroll after a delay
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                                        shouldAutoScroll = true
+                                        checkIfNearBottom()
+                                    }
+                                }
+                        )
                     }
-                    .onChange(of: messages.count) { _, _ in
-                        if let lastMessage = messages.last {
-                            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                                proxy.scrollTo(lastMessage.id, anchor: .bottom)
-                            }
-                        }
+                    .onChange(of: messages.count) { oldCount, newCount in
+                        handleMessageCountChange(oldCount: oldCount, newCount: newCount, proxy: proxy)
+                    }
+                    .onChange(of: isLoading) { oldLoading, newLoading in
+                        handleLoadingStateChange(oldLoading: oldLoading, newLoading: newLoading, proxy: proxy)
                     }
                 }
 
@@ -143,12 +186,25 @@ struct ChatView: View {
             }
         }
         .onAppear {
-            loadProjectSession()
-            connectWebSocket()
-            setupKeyboardObservers()
-            setupWebSocketListeners()
-            restoreSessionIfNeeded()
-            startAutoSave()
+            if let project = selectedProject {
+                print("🔷 ChatView: onAppear for project '\(project.name)' at path: \(project.path)")
+                
+                // Clear any stale state before loading
+                if isRestoring {
+                    print("⚠️ ChatView: Already restoring, skipping duplicate onAppear")
+                    return
+                }
+                
+                loadProjectSession()
+                connectWebSocket()
+                setupKeyboardObservers()
+                setupWebSocketListeners()
+                restoreSessionIfNeeded()
+                startAutoSave()
+            } else {
+                print("❌ ChatView: onAppear with no selected project - this should not happen")
+                sessionError = "No project selected"
+            }
         }
         .onDisappear {
             // Only cleanup timers, don't disconnect WebSocket
@@ -183,12 +239,24 @@ struct ChatView: View {
     }
     
     private func startClaudeSession() {
-        guard let project = selectedProject else { return }
+        guard let project = selectedProject else {
+            print("❌ ChatView: startClaudeSession called with no selected project")
+            return
+        }
         guard let connection = settings.currentConnection else {
+            print("❌ ChatView: No server connection configured for '\(project.name)'")
             sessionError = "No server connection configured"
             return
         }
         
+        // Prevent starting multiple sessions simultaneously
+        guard !isStartingSession else {
+            print("⚠️ ChatView: Session already starting for '\(project.name)', ignoring duplicate request")
+            return
+        }
+        
+        print("🔷 ChatView: Starting Claude session for '\(project.name)'")
+        isStartingSession = true
         addWelcomeMessage()
         isLoading = true
         
@@ -196,6 +264,7 @@ struct ChatView: View {
         aicliService.startProjectSession(project: project, connection: connection) { result in
             DispatchQueue.main.async {
                 self.isLoading = false
+                self.isStartingSession = false
                 self.progressInfo = nil
                 
                 switch result {
@@ -518,34 +587,128 @@ struct ChatView: View {
     // MARK: - Session Persistence
     
     private func restoreSessionIfNeeded() {
-        guard let project = selectedProject else { return }
+        guard let project = selectedProject else {
+            print("❌ ChatView: restoreSessionIfNeeded called with no selected project")
+            handleSessionRestorationFailure(project: nil, reason: "No selected project")
+            return
+        }
+        
+        print("🔷 ChatView: Attempting to restore session for '\(project.name)'")
+        
+        do {
+            try attemptSessionRestoration(for: project)
+        } catch {
+            print("❌ ChatView: Session restoration failed for '\(project.name)': \(error)")
+            handleSessionRestorationFailure(project: project, reason: error.localizedDescription)
+        }
+    }
+    
+    private func attemptSessionRestoration(for project: Project) throws {
+        // Validate project data
+        guard !project.path.isEmpty && !project.name.isEmpty else {
+            throw ChatViewError.sessionValidationFailed("Invalid project data")
+        }
         
         // Check if we should restore from a previous session
-        if let metadata = persistenceService.getSessionMetadata(for: project.path),
-           let sessionId = metadata.aicliSessionId {
-            isRestoring = true
+        guard let metadata = persistenceService.getSessionMetadata(for: project.path) else {
+            print("🔷 ChatView: No existing session found for '\(project.name)', starting fresh")
+            startClaudeSession()
+            return
+        }
+        
+        guard let sessionId = metadata.aicliSessionId else {
+            print("⚠️ ChatView: Session metadata exists but no AICLI session ID for '\(project.name)', starting fresh")
+            startClaudeSession()
+            return
+        }
+        
+        print("🔷 ChatView: Found existing session for '\(project.name)'")
+        print("   - Session ID: \(sessionId)")
+        print("   - Metadata message count: \(metadata.messageCount)")
+        
+        isRestoring = true
+        
+        // Load previous messages with error handling
+        print("🔷 ChatView: Loading messages for '\(project.name)' with session ID: \(sessionId)")
+        let restoredMessages = persistenceService.loadMessages(for: project.path, sessionId: sessionId)
+        print("🔷 ChatView: Loaded \(restoredMessages.count) messages for '\(project.name)'")
+        
+        // Validate that we got reasonable data
+        if metadata.messageCount > 0 && restoredMessages.isEmpty {
+            throw ChatViewError.messageLoadingFailed("Expected \(metadata.messageCount) messages but loaded 0")
+        }
+        
+        if !restoredMessages.isEmpty {
+            messages = restoredMessages
+            print("🔷 ChatView: Set \(messages.count) messages for '\(project.name)'")
             
-            // Load previous messages
-            let restoredMessages = persistenceService.loadMessages(for: project.path, sessionId: sessionId)
-            if !restoredMessages.isEmpty {
-                messages = restoredMessages
-                
-                // Add restoration notice
-                let restorationNotice = Message(
-                    content: "📂 Restored \(restoredMessages.count) messages from previous session",
-                    sender: .assistant,
-                    type: .text
-                )
-                messages.append(restorationNotice)
-            }
-            
-            // Set the session ID in WebSocket service
-            webSocketService.setActiveSession(sessionId)
-            
-            isRestoring = false
+            // Add restoration notice
+            let restorationNotice = Message(
+                content: "📂 Restored \(restoredMessages.count) messages from previous session",
+                sender: .assistant,
+                type: .text
+            )
+            messages.append(restorationNotice)
+            print("🔷 ChatView: Added restoration notice for '\(project.name)'")
         } else {
+            print("ℹ️ ChatView: No messages to restore for '\(project.name)', session exists but is empty")
+        }
+        
+        // Set the session ID in WebSocket service
+        webSocketService.setActiveSession(sessionId)
+        print("🔷 ChatView: Set active session ID in WebSocket service for '\(project.name)'")
+        
+        isRestoring = false
+        print("🔷 ChatView: Session restoration completed for '\(project.name)'")
+    }
+    
+    private func handleSessionRestorationFailure(project: Project?, reason: String) {
+        print("🔴 ChatView: Handling session restoration failure")
+        print("   - Project: \(project?.name ?? "unknown")")
+        print("   - Reason: \(reason)")
+        
+        isRestoring = false
+        isLoading = false
+        
+        // Clear any partially loaded state
+        messages.removeAll()
+        activeSession = nil
+        sessionError = nil
+        
+        // If we have a project, try to start fresh session
+        if let project = project {
+            print("🔴 ChatView: Attempting to start fresh session for '\(project.name)' after restoration failure")
+            
+            // Clear corrupted session data
+            persistenceService.clearMessages(for: project.path)
+            
+            // Add error message to inform user
+            let errorMessage = Message(
+                content: "⚠️ Previous session could not be restored. Starting fresh session.\n\nReason: \(reason)",
+                sender: .assistant,
+                type: .text
+            )
+            messages.append(errorMessage)
+            
             // Start fresh session
             startClaudeSession()
+        } else {
+            // No project available, set error state
+            sessionError = "Failed to restore session: \(reason)"
+        }
+    }
+    
+    enum ChatViewError: LocalizedError {
+        case messageLoadingFailed(String)
+        case sessionValidationFailed(String)
+        
+        var errorDescription: String? {
+            switch self {
+            case .messageLoadingFailed(let message):
+                return "Message loading failed: \(message)"
+            case .sessionValidationFailed(let message):
+                return "Session validation failed: \(message)"
+            }
         }
     }
     
@@ -572,6 +735,71 @@ struct ChatView: View {
         )
         
         print("💾 Auto-saved \(messages.count) messages for project \(project.name)")
+    }
+    
+    // MARK: - Smart Scrolling Methods
+    
+    private func checkIfNearBottom() {
+        // Consider "near bottom" if we're within 100 points of the bottom
+        let threshold: CGFloat = 100
+        let maxScrollPosition = max(0, contentHeight - scrollViewHeight)
+        isNearBottom = (maxScrollPosition - lastScrollPosition) <= threshold
+    }
+    
+    private func handleMessageCountChange(oldCount: Int, newCount: Int, proxy: ScrollViewProxy) {
+        guard newCount > oldCount else { return }
+        
+        // Determine if we should auto-scroll
+        let shouldScroll: Bool
+        
+        if let lastMessage = messages.last {
+            // Always scroll for user messages (they just sent it)
+            if lastMessage.sender == .user {
+                shouldScroll = true
+            } else {
+                // For assistant messages, only scroll if user is near bottom and auto-scroll is enabled
+                shouldScroll = isNearBottom && shouldAutoScroll
+            }
+            
+            if shouldScroll {
+                scrollToMessage(lastMessage.id.uuidString, proxy: proxy, animated: lastMessage.sender == .assistant)
+            }
+        }
+    }
+    
+    private func handleLoadingStateChange(oldLoading: Bool, newLoading: Bool, proxy: ScrollViewProxy) {
+        // When loading starts (thinking indicator appears)
+        if !oldLoading && newLoading && isNearBottom && shouldAutoScroll {
+            scrollToLoadingIndicator(proxy: proxy)
+        }
+        
+        // When loading ends, if there's a new message, handleMessageCountChange will handle scrolling
+    }
+    
+    private func scrollToMessage(_ messageId: String, proxy: ScrollViewProxy, animated: Bool = true) {
+        if animated {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                proxy.scrollTo(messageId, anchor: .bottom)
+            }
+        } else {
+            proxy.scrollTo(messageId, anchor: .bottom)
+        }
+    }
+    
+    private func scrollToLoadingIndicator(proxy: ScrollViewProxy) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            proxy.scrollTo("loading-indicator", anchor: .bottom)
+        }
+    }
+}
+
+// MARK: - Supporting Types
+
+struct ContentHeightPreferenceKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
 

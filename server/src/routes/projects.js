@@ -253,7 +253,7 @@ export function setupProjectRoutes(app, aicliService) {
           message: `AICLI CLI session started for project '${name}'`,
         });
       } catch (error) {
-        console.error(`Failed to start AICLI CLI for project ${name}:`, error);
+        console.error('Failed to start AICLI CLI for project %s:', name, error);
 
         // Provide more specific error messages based on the error type
         let statusCode = 500;

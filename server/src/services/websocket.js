@@ -285,6 +285,35 @@ export function setupWebSocket(wss, aicliService, authToken) {
     );
   });
 
+  // Handle structured stream chunks
+  aicliService.on('streamChunk', (data) => {
+    const { sessionId, chunk, timestamp } = data;
+
+    broadcastToSessionClients(
+      sessionId,
+      {
+        type: 'streamChunk',
+        requestId: null,
+        timestamp: timestamp || new Date().toISOString(),
+        data: {
+          sessionId,
+          chunk: {
+            id: chunk.id,
+            type: chunk.type,
+            content: chunk.content,
+            isFinal: chunk.isFinal || false,
+            metadata: {
+              language: chunk.language,
+              level: chunk.level,
+              ...chunk,
+            },
+          },
+        },
+      },
+      clients
+    );
+  });
+
   // Handle command progress for real-time updates
   aicliService.on('commandProgress', (data) => {
     const progressInfo = parseProgressFromOutput(data.data);

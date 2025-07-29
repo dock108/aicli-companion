@@ -369,6 +369,10 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
             // Progress and status message types
             case .progress:
                 handleProgressMessage(message)
+            
+            // Stream chunk for sophisticated streaming
+            case .streamChunk:
+                handleStreamChunk(message)
 
             default:
                 break
@@ -530,6 +534,21 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
             print("Progress update: \(progress.stage) - \(progress.message)")
             if let progressValue = progress.progress {
                 print("  Progress: \(Int(progressValue * 100))%")
+            }
+        }
+        // This will be handled by registered handlers in the UI
+    }
+    
+    private func handleStreamChunk(_ message: WebSocketMessage) {
+        if case .streamChunk(let chunkResponse) = message.data {
+            print("📦 Stream chunk received: \(chunkResponse.chunk.type) - isFinal: \(chunkResponse.chunk.isFinal)")
+            
+            // Log chunk details for debugging
+            print("   Chunk ID: \(chunkResponse.chunk.id)")
+            print("   Content length: \(chunkResponse.chunk.content.count) chars")
+            if let metadata = chunkResponse.chunk.metadata {
+                print("   Language: \(metadata.language ?? "none")")
+                print("   Level: \(metadata.level ?? 0)")
             }
         }
         // This will be handled by registered handlers in the UI

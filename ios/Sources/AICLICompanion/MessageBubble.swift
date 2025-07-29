@@ -1,10 +1,11 @@
 import SwiftUI
 
-@available(iOS 14.0, macOS 11.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 struct MessageBubble: View {
     let message: Message
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    @StateObject private var clipboardManager = ClipboardManager.shared
     
     // Adaptive max width based on device
     private var maxBubbleWidth: CGFloat {
@@ -57,6 +58,7 @@ struct MessageBubble: View {
             .foregroundColor(.white)
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)
+            .textSelection(.enabled)
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
             .background(
@@ -69,6 +71,19 @@ struct MessageBubble: View {
                         )
                     )
             )
+            .contextMenu {
+                Button(action: {
+                    clipboardManager.copyToClipboard(message.content)
+                }) {
+                    Label("Copy", systemImage: "doc.on.doc")
+                }
+                
+                Button(action: {
+                    shareMessage()
+                }) {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                }
+            }
     }
     
     // MARK: - AI Bubble (Left card with terminal styling)
@@ -84,6 +99,7 @@ struct MessageBubble: View {
                     .foregroundColor(Colors.textPrimary(for: colorScheme))
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
             }
         }
         .padding(.horizontal, 16)
@@ -96,6 +112,33 @@ struct MessageBubble: View {
                         .stroke(Colors.strokeLight, lineWidth: 1)
                 )
         )
+        .contextMenu {
+            Button(action: {
+                clipboardManager.copyToClipboard(message.content)
+            }) {
+                Label("Copy", systemImage: "doc.on.doc")
+            }
+            
+            if hasCodeBlock {
+                Button(action: {
+                    clipboardManager.copyToClipboard(extractPlainText(from: message.content))
+                }) {
+                    Label("Copy as Plain Text", systemImage: "doc.plaintext")
+                }
+                
+                Button(action: {
+                    clipboardManager.copyToClipboard(message.content)
+                }) {
+                    Label("Copy as Markdown", systemImage: "doc.richtext")
+                }
+            }
+            
+            Button(action: {
+                shareMessage()
+            }) {
+                Label("Share", systemImage: "square.and.arrow.up")
+            }
+        }
     }
     
     // MARK: - Code Block Detection
@@ -117,6 +160,7 @@ struct MessageBubble: View {
                         .foregroundColor(Colors.textPrimary(for: colorScheme))
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
                     
                 case .codeBlock(let code, let language):
                     MessageCodeBlockView(code: code, language: language)
@@ -131,6 +175,7 @@ struct MessageBubble: View {
                             RoundedRectangle(cornerRadius: 4)
                                 .fill(Colors.bgBase(for: colorScheme))
                         )
+                        .textSelection(.enabled)
                 }
             }
         }
@@ -200,6 +245,65 @@ struct MessageBubble: View {
         }
         return nil
     }
+    
+    // MARK: - Helper Methods
+    
+    private func shareMessage() {
+        #if os(iOS)
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first,
+              let rootViewController = window.rootViewController else { return }
+        
+        let activityVC = UIActivityViewController(
+            activityItems: [message.content],
+            applicationActivities: nil
+        )
+        
+        // For iPad
+        if let popover = activityVC.popoverPresentationController {
+            popover.sourceView = window
+            popover.sourceRect = CGRect(x: window.bounds.midX, y: window.bounds.midY, width: 0, height: 0)
+            popover.permittedArrowDirections = []
+        }
+        
+        rootViewController.present(activityVC, animated: true)
+        #elseif os(macOS)
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(message.content, forType: .string)
+        #endif
+    }
+    
+    private func extractPlainText(from markdown: String) -> String {
+        var plainText = markdown
+        
+        // Remove code blocks
+        let codeBlockPattern = "```[\\s\\S]*?```"
+        if let regex = try? NSRegularExpression(pattern: codeBlockPattern) {
+            plainText = regex.stringByReplacingMatches(
+                in: plainText,
+                range: NSRange(location: 0, length: plainText.utf16.count),
+                withTemplate: ""
+            )
+        }
+        
+        // Remove inline code
+        let inlineCodePattern = "`[^`]+`"
+        if let regex = try? NSRegularExpression(pattern: inlineCodePattern) {
+            plainText = regex.stringByReplacingMatches(
+                in: plainText,
+                range: NSRange(location: 0, length: plainText.utf16.count),
+                withTemplate: ""
+            )
+        }
+        
+        // Clean up extra whitespace
+        plainText = plainText
+            .replacingOccurrences(of: "\n\n\n", with: "\n\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        return plainText
+    }
 }
 
 // MARK: - Content Part Enum
@@ -210,26 +314,48 @@ private enum ContentPart {
 }
 
 // MARK: - Code Block View
-@available(iOS 14.0, macOS 11.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 struct MessageCodeBlockView: View {
     let code: String
     let language: String?
     @Environment(\.colorScheme) var colorScheme
+    @StateObject private var clipboardManager = ClipboardManager.shared
+    @State private var showCopyButton = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Language label
-            if let lang = language {
-                HStack {
+            // Language label with copy button
+            HStack {
+                if let lang = language {
                     Text(lang.uppercased())
                         .font(Typography.font(.caption))
                         .foregroundColor(Colors.textSecondary(for: colorScheme))
-                    Spacer()
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Colors.bgBase(for: colorScheme).opacity(0.5))
+                
+                Spacer()
+                
+                Button(action: {
+                    clipboardManager.copyToClipboard(code)
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "doc.on.doc")
+                            .font(.caption2)
+                        Text("Copy")
+                            .font(Typography.font(.caption))
+                    }
+                    .foregroundColor(Colors.textSecondary(for: colorScheme))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(Colors.bgCard(for: colorScheme).opacity(0.8))
+                    )
+                }
+                .opacity(showCopyButton ? 1 : 0.6)
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Colors.bgBase(for: colorScheme).opacity(0.5))
             
             // Code content with syntax highlighting (simplified)
             ScrollView(.horizontal, showsIndicators: false) {
@@ -237,6 +363,7 @@ struct MessageCodeBlockView: View {
                     .font(Typography.font(.code))
                     .foregroundColor(Colors.accentWarning) // Terminal green
                     .padding(12)
+                    .textSelection(.enabled)
             }
             .background(Colors.bgBase(for: colorScheme))
         }
@@ -245,6 +372,22 @@ struct MessageCodeBlockView: View {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(Colors.strokeLight, lineWidth: 1)
         )
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showCopyButton = hovering
+            }
+        }
+        .onTapGesture {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showCopyButton.toggle()
+            }
+        }
+        .onAppear {
+            // Always show on touch devices
+            #if os(iOS)
+            showCopyButton = true
+            #endif
+        }
     }
 }
 

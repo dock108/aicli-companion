@@ -6,12 +6,21 @@ import AICLICompanion
 struct AppMain: App {
     @StateObject private var aicliService = AICLICompanion.AICLIService()
     @StateObject private var settingsManager = AICLICompanion.SettingsManager()
+    @StateObject private var pushNotificationService = AICLICompanion.PushNotificationService.shared
+    
+    init() {
+        // Request push notification authorization on app launch
+        Task {
+            await AICLICompanion.PushNotificationService.shared.requestAuthorization()
+        }
+    }
     
     var body: some Scene {
         WindowGroup {
             AICLICompanion.AdaptiveContentView()
                 .environmentObject(aicliService)
                 .environmentObject(settingsManager)
+                .environmentObject(pushNotificationService)
         }
     }
 }

@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 #if os(iOS)
 import UIKit
 #elseif os(macOS)
@@ -11,6 +12,7 @@ struct ChatView: View {
     @EnvironmentObject var settings: SettingsManager
     @StateObject private var webSocketService = WebSocketService()
     @StateObject private var persistenceService = MessagePersistenceService.shared
+    @StateObject private var responseStreamer = ClaudeResponseStreamer()
     @State private var messageText = ""
     @State private var messages: [Message] = []
     @State private var isLoading = false
@@ -27,6 +29,8 @@ struct ChatView: View {
     @State private var autoSaveTimer: Timer?
     @State private var isRestoring = false
     @State private var isStartingSession = false
+    
+    @State private var cancellables = Set<AnyCancellable>()
     
     // Smart scroll tracking
     @State private var isNearBottom: Bool = true
@@ -185,6 +189,7 @@ struct ChatView: View {
                 .offset(y: inputBarOffset)
             }
         }
+        .copyConfirmationOverlay()
         .onAppear {
             if let project = selectedProject {
                 print("🔷 ChatView: onAppear for project '\(project.name)' at path: \(project.path)")
@@ -199,6 +204,7 @@ struct ChatView: View {
                 connectWebSocket()
                 setupKeyboardObservers()
                 setupWebSocketListeners()
+                setupStreamingObservers()
                 restoreSessionIfNeeded()
                 startAutoSave()
             } else {
@@ -543,6 +549,22 @@ struct ChatView: View {
                     // Update progress info while keeping loading state
                     self.progressInfo = ProgressInfo(from: progressResponse)
                     
+                case .streamChunk(let chunkResponse):
+                    // Handle streaming chunks
+                    if self.responseStreamer.currentSessionId != chunkResponse.sessionId {
+                        // Start new streaming session if needed
+                        self.responseStreamer.startStreaming(sessionId: chunkResponse.sessionId)
+                        self.isLoading = false
+                        self.progressInfo = nil
+                    }
+                    
+                    // Post notification for the streamer to handle
+                    NotificationCenter.default.post(
+                        name: .streamChunkReceived,
+                        object: nil,
+                        userInfo: ["chunk": chunkResponse.chunk]
+                    )
+                    
                 default:
                     print("Global listener - unhandled message type: \(message.type)")
                 }
@@ -582,6 +604,55 @@ struct ChatView: View {
             }
         }
         #endif
+    }
+    
+    private func setupStreamingObservers() {
+        // Observe changes to the streaming message
+        responseStreamer.$currentMessage
+            .compactMap { $0 }
+            .removeDuplicates { $0.id == $1.id && $0.content == $1.content }
+            .receive(on: DispatchQueue.main)
+            .sink { streamingMessage in
+                
+                // Find if we already have this message in our array
+                if let index = self.messages.firstIndex(where: { $0.id == streamingMessage.id }) {
+                    // Update existing message
+                    self.messages[index] = streamingMessage
+                } else {
+                    // Add new streaming message
+                    self.messages.append(streamingMessage)
+                }
+            }
+            .store(in: &cancellables)
+        
+        // Listen for streaming completion
+        NotificationCenter.default.publisher(for: .streamingComplete)
+            .receive(on: DispatchQueue.main)
+            .sink { notification in
+                
+                if let userInfo = notification.userInfo,
+                   let sessionId = userInfo["sessionId"] as? String,
+                   let totalChunks = userInfo["totalChunks"] as? Int,
+                   sessionId == self.activeSession?.sessionId {
+                    
+                    print("✅ Streaming complete for session \(sessionId) with \(totalChunks) chunks")
+                    
+                    // Send push notification for completed response
+                    if let finalMessage = self.responseStreamer.currentMessage,
+                       let project = self.selectedProject {
+                        Task {
+                            await PushNotificationService.shared.sendResponseNotification(
+                                sessionId: sessionId,
+                                projectName: project.name,
+                                responsePreview: finalMessage.content,
+                                totalChunks: totalChunks,
+                                fullResponse: finalMessage.content
+                            )
+                        }
+                    }
+                }
+            }
+            .store(in: &cancellables)
     }
     
     // MARK: - Session Persistence

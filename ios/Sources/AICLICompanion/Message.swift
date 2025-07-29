@@ -277,6 +277,7 @@ struct WebSocketMessage: Codable {
         case conversationResult(ConversationResultResponse)
         case workingDirectorySet(WorkingDirectorySetResponse)
         case progress(ProgressResponse)
+        case streamChunk(StreamChunkResponse)
     }
     
     // Custom decoding to handle server message format
@@ -327,6 +328,8 @@ struct WebSocketMessage: Codable {
             self.data = .progress(try ProgressResponse(from: dataDecoder))
         case .aicliResponse:
             self.data = .aicliResponse(try AICLICommandResponse(from: dataDecoder))
+        case .streamChunk:
+            self.data = .streamChunk(try StreamChunkResponse(from: dataDecoder))
         default:
             throw DecodingError.dataCorruptedError(forKey: .data, in: container, debugDescription: "Unsupported message type for decoding: \(type)")
         }
@@ -399,6 +402,8 @@ struct WebSocketMessage: Codable {
             try container.encode(response, forKey: .data)
         case .progress(let response):
             try container.encode(response, forKey: .data)
+        case .streamChunk(let response):
+            try container.encode(response, forKey: .data)
         }
     }
 }
@@ -438,6 +443,9 @@ enum WebSocketMessageType: String, Codable {
     
     // Progress and status message types
     case progress = "progress"
+    
+    // Stream chunk for sophisticated streaming
+    case streamChunk = "streamChunk"
 }
 
 // MARK: - Client Request Models
@@ -537,6 +545,39 @@ struct StreamToolUseResponse: Codable {
     let toolName: String
     let toolInput: [String: AnyCodable]
     let status: String
+}
+
+struct StreamChunkResponse: Codable {
+    let sessionId: String
+    let chunk: StreamChunk
+}
+
+struct StreamChunk: Codable {
+    let id: String
+    let type: String
+    let content: String
+    let isFinal: Bool
+    let metadata: StreamChunkMetadata?
+}
+
+struct StreamChunkMetadata: Codable {
+    let language: String?
+    let level: Int?
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: DynamicCodingKeys.self)
+        self.language = try container.decodeIfPresent(String.self, forKey: DynamicCodingKeys(stringValue: "language"))
+        self.level = try container.decodeIfPresent(Int.self, forKey: DynamicCodingKeys(stringValue: "level"))
+    }
+    
+    struct DynamicCodingKeys: CodingKey {
+        var stringValue: String
+        init(stringValue: String) {
+            self.stringValue = stringValue
+        }
+        var intValue: Int? { nil }
+        init?(intValue: Int) { nil }
+    }
 }
 
 struct PermissionRequestData: Codable {

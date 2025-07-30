@@ -1,6 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use tauri::State;
+use tauri::{Manager, State};
 
 use aicli_companion_hostapp::{
     check_server_health_impl, detect_running_server_impl, get_local_ip as get_local_ip_impl,
@@ -76,6 +76,39 @@ fn main() {
             get_logs,
             clear_logs
         ])
+        .on_window_event(|window, event| match event {
+            tauri::WindowEvent::CloseRequested { .. } => {
+                // Clean up the dev server on port 1420 and any managed server
+                let app_handle = window.app_handle();
+                let state: State<AppState> = app_handle.state();
+                
+                // Stop managed server if running
+                let _ = tauri::async_runtime::block_on(async {
+                    stop_server_impl(&state, Some(true), None).await
+                });
+                
+                // Also kill anything on port 1420 (vite dev server)
+                #[cfg(unix)]
+                {
+                    std::process::Command::new("lsof")
+                        .args(["-ti:1420"])
+                        .output()
+                        .ok()
+                        .and_then(|output| {
+                            if output.status.success() {
+                                let pids = String::from_utf8_lossy(&output.stdout);
+                                for pid in pids.lines() {
+                                    let _ = std::process::Command::new("kill")
+                                        .args(["-9", pid.trim()])
+                                        .output();
+                                }
+                            }
+                            Some(())
+                        });
+                }
+            }
+            _ => {}
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

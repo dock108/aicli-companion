@@ -1,7 +1,7 @@
 // Message queue service for persisting messages to disconnected clients
 // This handles the case where long-running tasks complete after the client disconnects
 
-export class MessageQueueService {
+class MessageQueueService {
   constructor() {
     // In-memory storage for now, can be replaced with Redis later
     this.messageQueue = new Map(); // sessionId -> Array of queued messages
@@ -223,3 +223,6 @@ export class MessageQueueService {
 
 // Export singleton instance
 export const messageQueueService = new MessageQueueService();
+
+// Export class for testing
+export { MessageQueueService };

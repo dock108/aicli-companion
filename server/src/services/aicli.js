@@ -5,6 +5,7 @@ import { processMonitor } from '../utils/process-monitor.js';
 import { InputValidator, MessageProcessor, AICLIConfig } from './aicli-utils.js';
 import { AICLIMessageHandler } from './aicli-message-handler.js';
 import { ClaudeStreamParser } from './stream-parser.js';
+import { pushNotificationService } from './push-notification.js';
 
 const execAsync = promisify(exec);
 
@@ -731,6 +732,9 @@ export class AICLIService extends EventEmitter {
       }
 
       console.log(`✅ Long-running process completed for session ${sessionId}`);
+
+      // Send push notification for task completion
+      this.sendLongRunningCompletionNotification(sessionId, originalPrompt, false);
     } catch (error) {
       // Clear the status updates
       clearInterval(statusUpdateInterval);
@@ -758,7 +762,45 @@ export class AICLIService extends EventEmitter {
         sessionId,
         error: error.message,
       });
+
+      // Send push notification for task failure
+      this.sendLongRunningCompletionNotification(sessionId, originalPrompt, true, error.message);
     }
+  }
+
+  sendLongRunningCompletionNotification(sessionId, prompt, isError = false, errorMessage = null) {
+    // Extract project name from session ID (format: project_name_uuid)
+    const sessionParts = sessionId.split('_');
+    const projectName = sessionParts.slice(0, -1).join('_') || 'Project';
+
+    // Find all device tokens associated with this session
+    const deviceTokens = [];
+    if (global.webSocketClients) {
+      global.webSocketClients.forEach((client, clientId) => {
+        if (client.sessionIds && client.sessionIds.has(sessionId) && client.deviceToken) {
+          deviceTokens.push({ clientId, token: client.deviceToken });
+        }
+      });
+    }
+
+    // Send notification to each device
+    deviceTokens.forEach(({ clientId }) => {
+      const notificationData = {
+        sessionId,
+        projectName,
+        message: isError
+          ? `Task failed: ${prompt.substring(0, 50)}...\n${errorMessage || 'Unknown error'}`
+          : `Task completed: ${prompt.substring(0, 50)}...\nTap to view results`,
+        totalChunks: 1,
+        isLongRunningCompletion: true,
+      };
+
+      pushNotificationService.sendClaudeResponseNotification(clientId, notificationData);
+    });
+
+    console.log(
+      `🔔 Sent push notifications to ${deviceTokens.length} devices for long-running task completion`
+    );
   }
 
   async runAICLIProcess(args, prompt, workingDirectory, sessionId, timeoutMs) {

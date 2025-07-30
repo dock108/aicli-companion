@@ -1,8 +1,12 @@
 import { v4 as uuidv4 } from 'uuid';
 import { pushNotificationService } from './push-notification.js';
+import { messageQueueService } from './message-queue.js';
 
 export function setupWebSocket(wss, aicliService, authToken) {
   const clients = new Map();
+
+  // Make clients accessible globally for push notifications
+  global.webSocketClients = clients;
 
   wss.on('connection', (ws, request) => {
     const clientId = uuidv4();
@@ -46,6 +50,51 @@ export function setupWebSocket(wss, aicliService, authToken) {
       }
     });
 
+    // Check for queued messages when client connects
+    const checkQueuedMessages = () => {
+      console.log(`🔍 Checking for queued messages for client ${clientId}`);
+      const clientInfo = clients.get(clientId);
+      if (clientInfo && clientInfo.sessionIds.size > 0) {
+        clientInfo.sessionIds.forEach((sessionId) => {
+          const undeliveredMessages = messageQueueService.getUndeliveredMessages(
+            sessionId,
+            clientId
+          );
+          if (undeliveredMessages.length > 0) {
+            console.log(
+              `📬 Delivering ${undeliveredMessages.length} queued messages for session ${sessionId}`
+            );
+
+            // Send a notification about queued messages
+            sendMessage(
+              clientId,
+              {
+                type: 'queuedMessagesAvailable',
+                requestId: null,
+                timestamp: new Date().toISOString(),
+                data: {
+                  sessionId,
+                  messageCount: undeliveredMessages.length,
+                  oldestMessageAge: Date.now() - undeliveredMessages[0].timestamp.getTime(),
+                },
+              },
+              clients
+            );
+
+            // Deliver each queued message
+            const messageIds = [];
+            undeliveredMessages.forEach((queuedMsg) => {
+              sendMessage(clientId, queuedMsg.message, clients);
+              messageIds.push(queuedMsg.id);
+            });
+
+            // Mark as delivered
+            messageQueueService.markAsDelivered(messageIds, clientId);
+          }
+        });
+      }
+    };
+
     // Send welcome message
     getAICLICodeVersion()
       .then((aicliCodeVersion) => {
@@ -65,6 +114,9 @@ export function setupWebSocket(wss, aicliService, authToken) {
           },
           clients
         );
+
+        // Check for queued messages after welcome
+        setTimeout(checkQueuedMessages, 100);
       })
       .catch((error) => {
         console.warn('Failed to get AICLI Code version:', error);
@@ -84,6 +136,9 @@ export function setupWebSocket(wss, aicliService, authToken) {
           },
           clients
         );
+
+        // Check for queued messages after welcome
+        setTimeout(checkQueuedMessages, 100);
       });
 
     // Handle incoming messages
@@ -446,6 +501,7 @@ export function setupWebSocket(wss, aicliService, authToken) {
 
   wss.on('close', () => {
     clearInterval(pingInterval);
+    // Note: messageQueueService cleanup is handled by its own interval
   });
 }
 
@@ -586,6 +642,8 @@ async function handleStreamStartMessage(clientId, requestId, data, aicliService,
     const client = clients.get(clientId);
     if (client) {
       client.sessionIds.add(sessionId);
+      // Track this client-session association for message delivery
+      messageQueueService.trackSessionClient(sessionId, clientId);
     }
 
     sendMessage(
@@ -984,6 +1042,30 @@ async function handleAICLICommandMessage(clientId, requestId, data, aicliService
       console.log(`   Client sessions before: [${Array.from(client.sessionIds).join(', ')}]`);
       client.sessionIds.add(sessionId);
       console.log(`   Client sessions after: [${Array.from(client.sessionIds).join(', ')}]`);
+
+      // Track this client-session association
+      messageQueueService.trackSessionClient(sessionId, clientId);
+
+      // Check for any queued messages for this session
+      const undeliveredMessages = messageQueueService.getUndeliveredMessages(sessionId, clientId);
+      if (undeliveredMessages.length > 0) {
+        console.log(
+          `📬 Found ${undeliveredMessages.length} queued messages for newly associated session ${sessionId}`
+        );
+
+        // Deliver queued messages with a slight delay to ensure client is ready
+        setTimeout(() => {
+          const messageIds = [];
+          undeliveredMessages.forEach((queuedMsg) => {
+            console.log(
+              `📤 Delivering queued message ${queuedMsg.id} (type: ${queuedMsg.message.type})`
+            );
+            sendMessage(clientId, queuedMsg.message, clients);
+            messageIds.push(queuedMsg.id);
+          });
+          messageQueueService.markAsDelivered(messageIds, clientId);
+        }, 500);
+      }
     } else {
       console.error(
         `❌ Client ${clientId} not found when trying to associate with session ${sessionId}`
@@ -1170,6 +1252,22 @@ function broadcastToSessionClients(sessionId, message, clients) {
 
   if (clientsWithSession === 0) {
     console.warn(`⚠️  No clients subscribed to session ${sessionId}!`);
+
+    // Queue the message for later delivery
+    if (message.type !== 'ping' && message.type !== 'pong') {
+      console.log(`📥 Queueing message for session ${sessionId} (no clients connected)`);
+      messageQueueService.queueMessage(sessionId, message, {
+        ttl: 86400000, // 24 hours
+      });
+
+      // Check if this is a final message or important update that should trigger a push notification
+      if (message.type === 'streamChunk' && message.data?.chunk?.isFinal) {
+        console.log(`🔔 Final chunk received with no clients - should send push notification`);
+        // Push notification is already handled in the streamChunk event handler
+      } else if (message.type === 'assistantMessage' && message.data?.isComplete) {
+        console.log(`🔔 Complete assistant message with no clients - queueing for later delivery`);
+      }
+    }
   }
 
   if (failedCount > 0) {

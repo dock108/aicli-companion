@@ -5,7 +5,7 @@ import Starscream
 import UIKit
 #endif
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 class WebSocketService: ObservableObject, WebSocketDelegate {
     static let shared = WebSocketService()
     
@@ -27,6 +27,9 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
     // Message handlers
     private var messageHandlers: [WebSocketMessageType: (WebSocketMessage) -> Void] = [:]
     private var requestCallbacks: [String: (Result<WebSocketMessage, AICLICompanionError>) -> Void] = [:]
+    
+    // Track active sessions for resubscription
+    private var activeSessions: Set<String> = []
 
     // Connection info
     private var currentURL: URL?
@@ -286,10 +289,12 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
             options: StreamOptions(sessionName: sessionName, preserveContext: true)
         )
 
-        sendMessage(request, type: .streamStart) { result in
+        sendMessage(request, type: .streamStart) { [weak self] result in
             switch result {
             case .success(let message):
                 if case .streamStarted(let response) = message.data {
+                    // Track the new session
+                    self?.trackSession(response.sessionId)
                     completion(.success(response.sessionId))
                 } else {
                     completion(.failure(.invalidResponse))
@@ -317,6 +322,9 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
     func closeStream(sessionId: String, reason: String = "user_requested") {
         let request = StreamCloseRequest(sessionId: sessionId, reason: reason)
         sendMessage(request, type: .streamClose)
+        
+        // Untrack the session
+        untrackSession(sessionId)
     }
 
     func setWorkingDirectory(_ workingDirectory: String, completion: @escaping (Result<Bool, AICLICompanionError>) -> Void) {
@@ -332,6 +340,48 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
                 }
             case .failure(let error):
                 completion(.failure(error))
+            }
+        }
+    }
+    
+    // MARK: - Session Management
+    
+    func trackSession(_ sessionId: String) {
+        activeSessions.insert(sessionId)
+        print("📝 Tracking session: \(sessionId)")
+        print("   Active sessions: \(activeSessions.count)")
+    }
+    
+    func untrackSession(_ sessionId: String) {
+        activeSessions.remove(sessionId)
+        print("🗑️ Untracking session: \(sessionId)")
+        print("   Active sessions: \(activeSessions.count)")
+    }
+    
+    func subscribeToSessions(_ sessionIds: [String]? = nil) {
+        let sessionsToSubscribe = sessionIds ?? Array(activeSessions)
+        
+        guard !sessionsToSubscribe.isEmpty else {
+            print("⚠️ No sessions to subscribe to")
+            return
+        }
+        
+        print("📬 Subscribing to \(sessionsToSubscribe.count) session(s)")
+        
+        let request = SubscribeRequest(
+            events: ["streamData", "streamComplete", "toolUse", "toolResult", "assistantMessage"],
+            sessionIds: sessionsToSubscribe
+        )
+        
+        sendMessage(request, type: .subscribe) { result in
+            switch result {
+            case .success(let message):
+                print("✅ Successfully subscribed to sessions")
+                if case .subscribed(let response) = message.data {
+                    print("   Subscribed to \(response.sessionIds.count) sessions")
+                }
+            case .failure(let error):
+                print("❌ Failed to subscribe to sessions: \(error)")
             }
         }
     }
@@ -435,6 +485,15 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
                 sendDeviceToken(deviceToken)
             }
             #endif
+            
+            // Resubscribe to active sessions after reconnection
+            if !activeSessions.isEmpty {
+                print("🔄 Resubscribing to \(activeSessions.count) active session(s) after reconnection")
+                // Delay slightly to ensure server is ready
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                    self?.subscribeToSessions()
+                }
+            }
         }
     }
 

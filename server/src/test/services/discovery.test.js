@@ -69,6 +69,7 @@ describe('Discovery Service', () => {
 
   describe('setupBonjour', () => {
     it('should publish service with correct configuration', () => {
+      delete process.env.AUTH_TOKEN;
       const port = 8080;
       const service = setupBonjour(port, false);
 

@@ -766,7 +766,20 @@ function handleSubscribeMessage(clientId, requestId, data, clients) {
   const client = clients.get(clientId);
 
   if (client) {
-    events.forEach((event) => client.subscribedEvents.add(event));
+    // Subscribe to events
+    if (events && Array.isArray(events)) {
+      events.forEach((event) => client.subscribedEvents.add(event));
+    }
+
+    // Associate sessions with this client
+    if (sessionIds && Array.isArray(sessionIds)) {
+      sessionIds.forEach((sessionId) => {
+        client.sessionIds.add(sessionId);
+        // Track this client-session association for message delivery
+        messageQueueService.trackSessionClient(sessionId, clientId);
+        console.log(`✅ Client ${clientId} subscribed to session ${sessionId}`);
+      });
+    }
 
     sendMessage(
       clientId,
@@ -775,13 +788,56 @@ function handleSubscribeMessage(clientId, requestId, data, clients) {
         requestId,
         timestamp: new Date().toISOString(),
         data: {
-          events,
+          events: events || [],
           sessionIds: sessionIds || [],
           success: true,
         },
       },
       clients
     );
+
+    // Check for queued messages after subscription
+    if (sessionIds && sessionIds.length > 0) {
+      setTimeout(() => {
+        sessionIds.forEach((sessionId) => {
+          const undeliveredMessages = messageQueueService.getUndeliveredMessages(
+            sessionId,
+            clientId
+          );
+          if (undeliveredMessages.length > 0) {
+            console.log(
+              `📬 Delivering ${undeliveredMessages.length} queued messages for session ${sessionId}`
+            );
+
+            // Send a notification about queued messages
+            sendMessage(
+              clientId,
+              {
+                type: 'queuedMessagesAvailable',
+                requestId: null,
+                timestamp: new Date().toISOString(),
+                data: {
+                  sessionId,
+                  messageCount: undeliveredMessages.length,
+                  oldestMessageAge: Date.now() - undeliveredMessages[0].timestamp.getTime(),
+                },
+              },
+              clients
+            );
+
+            // Deliver each queued message
+            const messageIds = [];
+            undeliveredMessages.forEach((queuedMsg) => {
+              sendMessage(clientId, queuedMsg.message, clients);
+              messageIds.push(queuedMsg.id);
+            });
+
+            // Mark as delivered
+            messageQueueService.markAsDelivered(messageIds, clientId);
+          }
+        });
+      }, 100);
+    }
   }
 }
 

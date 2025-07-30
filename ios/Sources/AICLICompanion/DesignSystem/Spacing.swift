@@ -53,7 +53,7 @@ public struct CornerRadius {
 }
 
 /// Shadow definitions
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 public struct Shadows {
     public static let small = Shadow(
         color: Color.black.opacity(0.04),
@@ -85,7 +85,7 @@ public struct Shadows {
 }
 
 // MARK: - View Extensions
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 extension View {
     /// Apply standard screen padding
     public func screenPadding() -> some View {

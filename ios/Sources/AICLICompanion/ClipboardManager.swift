@@ -7,7 +7,7 @@ import AppKit
 #endif
 
 /// Centralized clipboard management with visual feedback
-@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 class ClipboardManager: ObservableObject {
     static let shared = ClipboardManager()
     
@@ -61,7 +61,7 @@ class ClipboardManager: ObservableObject {
 }
 
 /// View modifier for showing copy confirmation
-@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 struct CopyConfirmationModifier: ViewModifier {
     @ObservedObject var clipboardManager = ClipboardManager.shared
     @Environment(\.colorScheme) var colorScheme
@@ -82,7 +82,7 @@ struct CopyConfirmationModifier: ViewModifier {
 }
 
 /// Copy confirmation view
-@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 struct CopyConfirmationView: View {
     @Environment(\.colorScheme) var colorScheme
     
@@ -113,7 +113,7 @@ struct CopyConfirmationView: View {
 
 // MARK: - View Extension
 
-@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 extension View {
     func copyConfirmationOverlay() -> some View {
         self.modifier(CopyConfirmationModifier())

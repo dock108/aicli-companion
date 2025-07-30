@@ -5,7 +5,7 @@ import UIKit
 #endif
 
 /// Service that manages push notifications for Claude responses
-@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 public class PushNotificationService: NSObject, ObservableObject {
     public static let shared = PushNotificationService()
     
@@ -214,7 +214,7 @@ public class PushNotificationService: NSObject, ObservableObject {
 
 // MARK: - UNUserNotificationCenterDelegate
 
-@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 extension PushNotificationService: UNUserNotificationCenterDelegate {
     
     // Handle notification while app is in foreground

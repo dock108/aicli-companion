@@ -102,7 +102,7 @@ struct MultipleConversationsExport: Codable {
 
 // MARK: - Conversation Persistence Service
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 class ConversationPersistenceService: ObservableObject {
     @Published var conversations: [Conversation] = []
     @Published var currentConversation: Conversation?

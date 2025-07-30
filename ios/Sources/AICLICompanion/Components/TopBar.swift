@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Dark-Slate Terminal style top navigation bar
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 public struct TopBar: View {
     let title: String
     let leadingIcon: String
@@ -72,7 +72,7 @@ public struct TopBar: View {
 }
 
 // MARK: - TopBar with Navigation Support
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 public struct NavigationTopBar<Destination: View>: View {
     let title: String
     let leadingIcon: String
@@ -111,7 +111,7 @@ public struct NavigationTopBar<Destination: View>: View {
 }
 
 // MARK: - Preview
-@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 #Preview("TopBar") {
     VStack(spacing: 0) {
         TopBar(
@@ -127,7 +127,7 @@ public struct NavigationTopBar<Destination: View>: View {
     .preferredColorScheme(.dark)
 }
 
-@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 #Preview("NavigationTopBar") {
     NavigationStack {
         VStack(spacing: 0) {

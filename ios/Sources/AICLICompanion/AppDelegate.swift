@@ -1,6 +1,6 @@
 import UIKit
 
-@available(iOS 17.0, iPadOS 17.0, *)
+@available(iOS 17.0, *)
 public class AppDelegate: NSObject, UIApplicationDelegate {
     
     public func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {

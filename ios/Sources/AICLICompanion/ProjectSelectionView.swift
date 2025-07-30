@@ -47,7 +47,7 @@ struct PendingSessionState: Identifiable {
 
 // MARK: - Project Selection View
 
-@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 struct ProjectSelectionView: View {
     @Binding var selectedProject: Project?
     @Binding var isProjectSelected: Bool
@@ -465,7 +465,7 @@ struct ProjectSelectionView: View {
 
 // MARK: - Project Row View
 
-@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 struct ProjectRowView: View {
     let project: Project
     let hasSession: Bool
@@ -564,7 +564,7 @@ struct ProjectRowView: View {
 
 // MARK: - Preview
 
-@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 #Preview("Project Selection") {
     ProjectSelectionView(
         selectedProject: .constant(nil),
@@ -574,7 +574,7 @@ struct ProjectRowView: View {
     .preferredColorScheme(.dark)
 }
 
-@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 #Preview("Project Row") {
     ProjectRowView(
         project: Project(name: "my-awesome-app", path: "/path/to/project", type: "folder"),

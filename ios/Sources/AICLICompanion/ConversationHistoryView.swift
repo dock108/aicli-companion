@@ -23,7 +23,7 @@ enum ConversationFilter: String, CaseIterable {
     }
 }
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct ConversationHistoryView: View {
     @ObservedObject var persistenceService: ConversationPersistenceService
     @Environment(\.presentationMode) var presentationMode
@@ -305,7 +305,7 @@ struct ConversationHistoryView: View {
     }
 }
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct ConversationRow: View {
     let conversation: Conversation
     let isSelected: Bool
@@ -506,7 +506,7 @@ struct ConversationRow: View {
     }
 }
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct ConversationExportSheet: View {
     let conversation: Conversation
     let persistenceService: ConversationPersistenceService
@@ -611,7 +611,7 @@ struct ConversationExportSheet: View {
     }
 }
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct BulkExportSheet: View {
     let conversationIds: [UUID]
     let persistenceService: ConversationPersistenceService
@@ -719,7 +719,7 @@ struct BulkExportSheet: View {
     }
 }
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct ConversationStatisticsView: View {
     let persistenceService: ConversationPersistenceService
     @Environment(\.presentationMode) var presentationMode
@@ -826,7 +826,7 @@ struct ConversationStatisticsView: View {
     }
 }
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct StatisticRow: View {
     let title: String
     let value: String
@@ -848,7 +848,7 @@ struct StatisticRow: View {
     }
 }
 
-@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 #Preview {
     ConversationHistoryView(
         persistenceService: ConversationPersistenceService(),

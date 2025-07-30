@@ -2,7 +2,7 @@ import Foundation
 import Combine
 
 /// Service that manages streaming Claude responses by collecting chunks and building complete messages
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 class ClaudeResponseStreamer: ObservableObject {
     @Published var currentMessage: Message?
     @Published var streamingChunks: [StreamChunk] = []

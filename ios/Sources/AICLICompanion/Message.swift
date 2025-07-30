@@ -269,6 +269,7 @@ struct WebSocketMessage: Codable {
         case sessionStatus(SessionStatusResponse)
         case pong(PongResponse)
         case aicliResponse(AICLICommandResponse)
+        case subscribed(SubscribedResponse)
 
         // New rich message types
         case systemInit(SystemInitResponse)
@@ -330,6 +331,8 @@ struct WebSocketMessage: Codable {
             self.data = .progress(try ProgressResponse(from: dataDecoder))
         case .aicliResponse:
             self.data = .aicliResponse(try AICLICommandResponse(from: dataDecoder))
+        case .subscribed:
+            self.data = .subscribed(try SubscribedResponse(from: dataDecoder))
         case .streamChunk:
             self.data = .streamChunk(try StreamChunkResponse(from: dataDecoder))
         case .deviceRegistered:
@@ -394,6 +397,8 @@ struct WebSocketMessage: Codable {
             try container.encode(response, forKey: .data)
         case .aicliResponse(let response):
             try container.encode(response, forKey: .data)
+        case .subscribed(let response):
+            try container.encode(response, forKey: .data)
         case .systemInit(let response):
             try container.encode(response, forKey: .data)
         case .assistantMessage(let response):
@@ -441,6 +446,7 @@ enum WebSocketMessageType: String, Codable {
     case sessionStatus = "sessionStatus"
     case pong = "pong"
     case aicliResponse = "aicliResponse"
+    case subscribed = "subscribed"
 
     // New rich message types from enhanced server
     case systemInit = "systemInit"
@@ -629,6 +635,12 @@ struct SessionStatusResponse: Codable {
 
 struct PongResponse: Codable {
     let serverTime: Date
+}
+
+struct SubscribedResponse: Codable {
+    let events: [String]
+    let sessionIds: [String]
+    let success: Bool
 }
 
 // MARK: - Rich Message Response Models

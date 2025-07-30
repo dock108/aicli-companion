@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 public class SettingsManager: ObservableObject {
     @Published var theme: Theme = .system
     @Published var fontSize: FontSize = .medium

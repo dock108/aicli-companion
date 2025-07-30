@@ -4,7 +4,7 @@ import AVFoundation
 import UIKit
 
 /// QR Scanner bottom sheet based on Figma design
-@available(iOS 16.0, iPadOS 16.0, *)
+@available(iOS 16.0, *)
 struct QRScannerSheet: View {
     @Binding var isConnected: Bool
     let onResult: (Result<URL, Error>) -> Void
@@ -146,7 +146,7 @@ struct QRScannerSheet: View {
 }
 
 // MARK: - QR Scanner View (Camera)
-@available(iOS 16.0, iPadOS 16.0, *)
+@available(iOS 16.0, *)
 struct QRScannerView: UIViewControllerRepresentable {
     let onCodeScanned: (String) -> Void
     

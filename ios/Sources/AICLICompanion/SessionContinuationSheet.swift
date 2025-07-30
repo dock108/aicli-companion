@@ -1,6 +1,6 @@
 import SwiftUI
 
-@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 struct SessionContinuationSheet: View {
     let project: Project
     let sessionMetadata: SessionMetadata
@@ -229,7 +229,7 @@ struct SessionContinuationSheet: View {
 
 // MARK: - Supporting Views
 
-@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 struct SessionInfoCard: View {
     let icon: String
     let value: String
@@ -257,7 +257,7 @@ struct SessionInfoCard: View {
     }
 }
 
-@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 struct MessagePreviewRow: View {
     let message: Message
     @Environment(\.colorScheme) var colorScheme

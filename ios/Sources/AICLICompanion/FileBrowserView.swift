@@ -1,6 +1,6 @@
 import SwiftUI
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct FileBrowserView: View {
     @ObservedObject var fileManagementService: FileManagementService
     @Environment(\.dismiss) private var dismiss
@@ -272,7 +272,7 @@ struct FileBrowserView: View {
     }
 }
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct FileRow: View {
     let file: FileItem
     let onTap: () -> Void
@@ -374,7 +374,7 @@ struct FileRow: View {
     }
 }
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct RecentFilesView: View {
     @ObservedObject var fileManagementService: FileManagementService
     @Environment(\.dismiss) private var dismiss
@@ -436,7 +436,7 @@ struct RecentFilesView: View {
     }
 }
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct FileDetailsView: View {
     let file: FileItem
     @ObservedObject var fileManagementService: FileManagementService
@@ -555,7 +555,7 @@ struct FileDetailsView: View {
     }
 }
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct DetailRow: View {
     let label: String
     let value: String
@@ -587,7 +587,7 @@ enum FileAction {
     case details
 }
 
-@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 #Preview {
     FileBrowserView(
         fileManagementService: FileManagementService(),

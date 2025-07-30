@@ -6,7 +6,7 @@ import UIKit
 import AppKit
 #endif
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct ChatView: View {
     @EnvironmentObject var aicliService: AICLIService
     @EnvironmentObject var settings: SettingsManager
@@ -218,6 +218,12 @@ struct ChatView: View {
             messageTimeout?.invalidate()
             connectionStateTimer?.invalidate()
             autoSaveTimer?.invalidate()
+            
+            // Close the current session if it exists
+            if let session = activeSession {
+                webSocketService.closeStream(sessionId: session.sessionId)
+            }
+            
             // Save messages before leaving
             saveMessagesToStorage()
         }
@@ -277,6 +283,9 @@ struct ChatView: View {
                 case .success(let session):
                     self.activeSession = session
                     self.sessionError = nil
+                    
+                    // Track the session in WebSocketService
+                    self.webSocketService.trackSession(session.sessionId)
                     
                     // Update welcome message
                     if let lastMessage = self.messages.last, lastMessage.sender == .assistant {
@@ -762,9 +771,20 @@ struct ChatView: View {
             print("ℹ️ ChatView: No messages to restore for '\(project.name)', session exists but is empty")
         }
         
-        // Set the session ID in WebSocket service
-        webSocketService.setActiveSession(sessionId)
-        print("🔷 ChatView: Set active session ID in WebSocket service for '\(project.name)'")
+        // Track the session ID in WebSocket service for resubscription
+        webSocketService.trackSession(sessionId)
+        print("🔷 ChatView: Tracked session ID in WebSocket service for '\(project.name)'")
+        
+        // Create the active session object from metadata
+        let dateFormatter = ISO8601DateFormatter()
+        activeSession = ProjectSession(
+            sessionId: sessionId,
+            projectName: project.name,
+            projectPath: project.path,
+            status: "ready",
+            startedAt: dateFormatter.string(from: metadata.createdAt)
+        )
+        print("🔷 ChatView: Restored active session for '\(project.name)'")
         
         isRestoring = false
         print("🔷 ChatView: Session restoration completed for '\(project.name)'")
@@ -913,7 +933,7 @@ struct ContentHeightPreferenceKey: PreferenceKey {
 
 // MARK: - Preview
 
-@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 #Preview("Chat View - Light") {
     ChatView(
         selectedProject: Project(name: "sample-project", path: "/path/to/project", type: "folder"),
@@ -931,7 +951,7 @@ struct ContentHeightPreferenceKey: PreferenceKey {
     .preferredColorScheme(.light)
 }
 
-@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 #Preview("Chat View - Dark") {
     ChatView(
         selectedProject: Project(name: "sample-project", path: "/path/to/project", type: "folder"),
@@ -951,7 +971,7 @@ struct ContentHeightPreferenceKey: PreferenceKey {
 
 // MARK: - Project Context Header
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct ProjectContextHeader: View {
     let project: Project
     let session: ProjectSession?
@@ -1050,7 +1070,7 @@ struct ProjectContextHeader: View {
 }
 // MARK: - Loading Indicator
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct LoadingIndicator: View {
     let progressInfo: ProgressInfo?
     let colorScheme: ColorScheme

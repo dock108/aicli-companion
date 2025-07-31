@@ -20,19 +20,8 @@ export class AICLIValidationService {
       // Additional checks for completeness
       const trimmed = jsonString.trim();
 
-      // Check for truncation indicators
-      if (
-        !trimmed.endsWith('}') &&
-        !trimmed.endsWith(']') &&
-        !trimmed.endsWith('"') &&
-        !trimmed.endsWith('null') &&
-        !trimmed.endsWith('true') &&
-        !trimmed.endsWith('false') &&
-        !isNaN(trimmed.slice(-1))
-      ) {
-        console.log(`JSON validation: Does not end with valid JSON terminator`);
-        return false;
-      }
+      // For primitive JSON values, they are valid if they parse successfully
+      // No additional validation needed for strings, numbers, booleans, null
 
       // Successful parsing and validation
       console.log(`JSON validation: Valid complete JSON (${parsed ? 'object' : 'value'})`);
@@ -194,6 +183,10 @@ export class AICLIValidationService {
    * Extract complete objects from array-formatted text
    */
   static extractCompleteObjectsFromArray(arrayText) {
+    if (!arrayText || typeof arrayText !== 'string') {
+      return [];
+    }
+    
     const objects = [];
     let depth = 0;
     let currentObject = '';

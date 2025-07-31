@@ -464,9 +464,11 @@ describe('AICLIService Unit Tests', () => {
       assert.strictEqual(sessions.length, 0);
     });
 
-    it('should return array of active session IDs', () => {
-      service.activeSessions.set('session-1', { process: {} });
-      service.activeSessions.set('session-2', { process: {} });
+    it('should delegate to session manager', () => {
+      // Mock the session manager to return test sessions
+      const mockSessions = ['session-1', 'session-2'];
+      const originalGetActiveSessions = service.sessionManager.getActiveSessions;
+      service.sessionManager.getActiveSessions = () => mockSessions;
 
       const sessions = service.getActiveSessions();
 
@@ -475,8 +477,8 @@ describe('AICLIService Unit Tests', () => {
       assert.ok(sessions.includes('session-1'));
       assert.ok(sessions.includes('session-2'));
 
-      // Clean up
-      service.activeSessions.clear();
+      // Restore original method
+      service.sessionManager.getActiveSessions = originalGetActiveSessions;
     });
   });
 
@@ -594,7 +596,9 @@ describe('AICLIService Unit Tests', () => {
     it('should return healthy status when claude is available', async () => {
       // Mock checkAvailability to return true
       service.checkAvailability = mock.fn(async () => true);
-      service.activeSessions.set('test-session', { process: {} });
+      // Mock session manager to return 1 active session
+      const originalGetActiveSessions = service.sessionManager.getActiveSessions;
+      service.sessionManager.getActiveSessions = () => ['test-session'];
 
       const result = await service.healthCheck();
 
@@ -604,7 +608,7 @@ describe('AICLIService Unit Tests', () => {
       assert.ok(result.timestamp);
 
       // Clean up
-      service.activeSessions.clear();
+      service.sessionManager.getActiveSessions = originalGetActiveSessions;
     });
 
     it('should return degraded status when claude is not available', async () => {
@@ -632,35 +636,14 @@ describe('AICLIService Unit Tests', () => {
       assert.ok(result.timestamp);
     });
 
-    it('should collect process metrics for active sessions with PIDs', async () => {
+    it('should delegate health check to session manager and process runner', async () => {
       // Mock checkAvailability to return true
       service.checkAvailability = mock.fn(async () => true);
 
-      // Set up a session with a process that has a PID
-      service.activeSessions.set('session-with-pid', {
-        process: { pid: 12345 },
-      });
+      // Mock session manager to return a session with PID
+      const originalGetActiveSessions = service.sessionManager.getActiveSessions;
+      service.sessionManager.getActiveSessions = () => ['session-with-pid'];
 
-      // Mock the processMonitor module that's imported in aicli.js
-      const _originalRequire = globalThis.require;
-      const _mockProcessMonitor = {
-        getSystemResources: mock.fn(async () => ({
-          memory: { total: 1000, used: 500 },
-          cpu: { usage: 25 },
-        })),
-        getMetricsSummary: mock.fn((pid) => {
-          if (pid === 12345) {
-            return {
-              memory: { rss: 100, heapUsed: 50 },
-              cpu: { usage: 15 },
-            };
-          }
-          return null;
-        }),
-      };
-
-      // Replace the import - since aicli.js already imported processMonitor,
-      // we need to test what we can. For now, let's verify the method structure
       const result = await service.healthCheck();
 
       assert.strictEqual(result.status, 'healthy');
@@ -669,7 +652,7 @@ describe('AICLIService Unit Tests', () => {
       assert.ok(result.timestamp);
 
       // Clean up
-      service.activeSessions.clear();
+      service.sessionManager.getActiveSessions = originalGetActiveSessions;
     });
 
     it('should handle sessions without process PIDs in healthCheck', async () => {

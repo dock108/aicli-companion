@@ -22,8 +22,11 @@ describe('WebSocket Service', () => {
         handlePermissionPrompt: () => Promise.resolve({ accepted: true }),
         getActiveSessions: () => [],
         healthCheck: () => Promise.resolve({ status: 'healthy' }),
+        createInteractiveSession: () => Promise.resolve({ success: true, sessionId: 'test' }),
+        testAICLICommand: () => Promise.resolve({ version: 'test' }),
         defaultWorkingDirectory: '/test',
         on: () => {},
+        removeListener: () => {},
       };
       const authToken = 'test-token';
 

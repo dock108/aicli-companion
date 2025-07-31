@@ -11,6 +11,15 @@ export function setupProjectRoutes(app, aicliService) {
   // Session management for active AICLI CLI processes
   const activeSessions = new Map();
 
+  // Listen for session cleanup events from AICLIService to keep our tracking in sync
+  aicliService.on('sessionCleaned', ({ sessionId, reason }) => {
+    if (activeSessions.has(sessionId)) {
+      activeSessions.delete(sessionId);
+      console.log(`🧹 Cleaned up session ${sessionId} from projects.js tracking (reason: ${reason})`);
+      console.log(`📊 Remaining project sessions: ${activeSessions.size}`);
+    }
+  });
+
   // Get the configured project directory from config
   const getProjectsDir = () => {
     return config.configPath;
@@ -382,10 +391,15 @@ export function setupProjectRoutes(app, aicliService) {
       // Close the session using AICLIService
       try {
         await aicliService.closeSession(sessionId, 'user_requested');
-        session.status = 'stopped';
-        session.stoppedAt = new Date().toISOString();
+        
+        // Remove the session from our tracking map
+        activeSessions.delete(sessionId);
+        console.log(`✅ Removed session ${sessionId} from projects.js activeSessions`);
+        console.log(`📊 Remaining project sessions: ${activeSessions.size}`);
       } catch (error) {
         console.error(`Error closing session: ${error.message}`);
+        // Still remove from our tracking even if aicli service cleanup failed
+        activeSessions.delete(sessionId);
       }
 
       res.json({

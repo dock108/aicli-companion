@@ -10,15 +10,15 @@ describe('AICLIService Unit Tests', () => {
   describe('constructor', () => {
     it('should initialize with correct defaults', () => {
       const newService = new AICLIService();
-      assert.strictEqual(newService.activeSessions.size, 0);
+      // Test that session manager was initialized and has no active sessions
+      assert.strictEqual(newService.getActiveSessions().length, 0);
       // Check that aicliCommand contains 'claude' (can be full path)
       assert.ok(
         newService.aicliCommand.includes('claude'),
         `Expected aicliCommand to include 'claude', got: ${newService.aicliCommand}`
       );
       assert.ok(newService.defaultWorkingDirectory);
-      assert.strictEqual(newService.maxSessions, 10);
-      assert.strictEqual(newService.sessionTimeout, 30 * 60 * 1000);
+      // These properties are now delegated to modules
       assert.strictEqual(newService.permissionMode, 'default');
       assert.deepStrictEqual(newService.allowedTools, ['Read', 'Write', 'Edit']);
       assert.deepStrictEqual(newService.disallowedTools, []);

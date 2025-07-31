@@ -113,6 +113,9 @@ public struct ContentView: View {
     }
     
     private func switchProject() {
+        // Clear WebSocket active session
+        WebSocketService.shared.setActiveSession(nil)
+        
         // Reset to project selection screen
         withAnimation(.easeInOut(duration: 0.3)) {
             selectedProject = nil

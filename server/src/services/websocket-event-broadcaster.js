@@ -86,7 +86,7 @@ export class WebSocketEventBroadcaster extends EventEmitter {
    */
   addEventHandler(aicliService, eventName, handler) {
     aicliService.on(eventName, handler);
-    
+
     // Store reference for cleanup
     if (!this.eventListeners.has(aicliService)) {
       this.eventListeners.set(aicliService, new Map());
@@ -139,7 +139,7 @@ export class WebSocketEventBroadcaster extends EventEmitter {
     if (!this.validateEventData(data, 'assistantMessage')) return;
 
     console.log(`📢 Broadcasting assistantMessage for session ${data.sessionId}`);
-    
+
     const message = {
       type: 'assistantMessage',
       requestId: null,
@@ -205,7 +205,7 @@ export class WebSocketEventBroadcaster extends EventEmitter {
     if (!this.validateEventData(data, 'permissionRequired')) return;
 
     console.log(`🔐 Broadcasting permission request for session ${data.sessionId}`);
-    
+
     const message = {
       type: 'permissionRequired',
       requestId: null,
@@ -312,7 +312,7 @@ export class WebSocketEventBroadcaster extends EventEmitter {
     if (!this.validateEventData(data, 'commandProgress')) return;
 
     const progressInfo = WebSocketUtilities.parseProgressFromOutput(data.data);
-    
+
     const message = {
       type: 'commandProgress',
       requestId: null,
@@ -335,7 +335,7 @@ export class WebSocketEventBroadcaster extends EventEmitter {
     if (!this.validateEventData(data, 'streamError')) return;
 
     console.error(`🚨 Broadcasting stream error for session ${data.sessionId}: ${data.error}`);
-    
+
     const message = {
       type: 'streamError',
       requestId: null,
@@ -394,7 +394,7 @@ export class WebSocketEventBroadcaster extends EventEmitter {
     });
 
     console.log(`📡 System broadcast sent to ${successCount}/${clients.size} clients`);
-    
+
     this.emit('systemBroadcast', {
       messageType: message.type,
       timestamp: message.timestamp,
@@ -419,7 +419,7 @@ export class WebSocketEventBroadcaster extends EventEmitter {
     });
 
     console.log(`📡 Event broadcast (${eventType}) sent to ${successCount} subscribed clients`);
-    
+
     this.emit('eventBroadcast', {
       eventType,
       messageType: message.type,
@@ -450,10 +450,10 @@ export class WebSocketEventBroadcaster extends EventEmitter {
     let totalSubscriptions = 0;
     const eventSubscriptions = new Map();
 
-    clients.forEach(client => {
+    clients.forEach((client) => {
       if (client.subscribedEvents) {
         totalSubscriptions += client.subscribedEvents.size;
-        client.subscribedEvents.forEach(event => {
+        client.subscribedEvents.forEach((event) => {
           eventSubscriptions.set(event, (eventSubscriptions.get(event) || 0) + 1);
         });
       }
@@ -472,7 +472,7 @@ export class WebSocketEventBroadcaster extends EventEmitter {
    */
   shutdown() {
     console.log('🔄 Shutting down WebSocket Event Broadcaster...');
-    
+
     // Remove all event listeners
     this.eventListeners.forEach((serviceListeners, aicliService) => {
       this.removeEventListeners(aicliService);

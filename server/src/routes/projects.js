@@ -15,7 +15,9 @@ export function setupProjectRoutes(app, aicliService) {
   aicliService.on('sessionCleaned', ({ sessionId, reason }) => {
     if (activeSessions.has(sessionId)) {
       activeSessions.delete(sessionId);
-      console.log(`🧹 Cleaned up session ${sessionId} from projects.js tracking (reason: ${reason})`);
+      console.log(
+        `🧹 Cleaned up session ${sessionId} from projects.js tracking (reason: ${reason})`
+      );
       console.log(`📊 Remaining project sessions: ${activeSessions.size}`);
     }
   });
@@ -391,7 +393,7 @@ export function setupProjectRoutes(app, aicliService) {
       // Close the session using AICLIService
       try {
         await aicliService.closeSession(sessionId, 'user_requested');
-        
+
         // Remove the session from our tracking map
         activeSessions.delete(sessionId);
         console.log(`✅ Removed session ${sessionId} from projects.js activeSessions`);

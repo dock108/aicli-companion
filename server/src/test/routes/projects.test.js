@@ -34,8 +34,11 @@ describe('Project Routes', () => {
     // Override express.Router
     express.Router = () => mockRouter;
 
-    // Mock claude service
+    // Mock claude service with EventEmitter methods
     claudeService = {
+      on: mock.fn(),
+      emit: mock.fn(),
+      removeListener: mock.fn(),
       checkAvailability: mock.fn(async () => true),
       createInteractiveSession: mock.fn(async (sessionId, prompt, workingDir) => ({
         sessionId,

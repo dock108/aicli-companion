@@ -4,8 +4,8 @@ import { EventEmitter } from 'events';
 import { processMonitor } from '../utils/process-monitor.js';
 import { InputValidator, MessageProcessor, AICLIConfig } from './aicli-utils.js';
 import { AICLIMessageHandler } from './aicli-message-handler.js';
-import { ClaudeStreamParser } from './stream-parser.js';
-import { pushNotificationService } from './push-notification.js';
+// import { ClaudeStreamParser } from './stream-parser.js';
+// import { pushNotificationService } from './push-notification.js';
 import { AICLISessionManager } from './aicli-session-manager.js';
 import { AICLIProcessRunner } from './aicli-process-runner.js';
 import { AICLILongRunningTaskManager } from './aicli-long-running-task-manager.js';
@@ -14,58 +14,62 @@ import { AICLIValidationService } from './aicli-validation-service.js';
 const execAsync = promisify(exec);
 
 export class AICLIService extends EventEmitter {
-  constructor() {
+  constructor(options = {}) {
     super();
-    
+
     // Initialize session manager
-    this.sessionManager = new AICLISessionManager({
-      maxSessions: 10,
-      sessionTimeout: 30 * 60 * 1000, // 30 minutes
-    });
-    
-    // Initialize process runner
-    this.processRunner = new AICLIProcessRunner();
-    
+    this.sessionManager =
+      options.sessionManager ||
+      new AICLISessionManager({
+        maxSessions: 10,
+        sessionTimeout: 30 * 60 * 1000, // 30 minutes
+      });
+
+    // Initialize process runner with dependency injection support
+    this.processRunner =
+      options.processRunner || new AICLIProcessRunner(options.processRunnerOptions);
+
     // Initialize long-running task manager
-    this.longRunningTaskManager = new AICLILongRunningTaskManager();
-    
+    this.longRunningTaskManager =
+      options.longRunningTaskManager || new AICLILongRunningTaskManager();
+
     // Forward events from all managers
     this.sessionManager.on('sessionCleaned', (data) => {
       this.emit('sessionCleaned', data);
     });
-    
+
     this.processRunner.on('streamChunk', (data) => {
       this.emit('streamChunk', data);
     });
-    
+
     this.processRunner.on('commandProgress', (data) => {
       this.emit('commandProgress', data);
     });
-    
+
     this.processRunner.on('processStart', (data) => {
       this.emit('processStart', data);
     });
-    
+
     this.processRunner.on('processExit', (data) => {
       this.emit('processExit', data);
     });
-    
+
     this.processRunner.on('processStderr', (data) => {
       this.emit('processStderr', data);
     });
-    
+
     this.processRunner.on('aicliResponse', (data) => {
       this.emitAICLIResponse(data.sessionId, data.response, data.isLast);
     });
-    
+
     this.longRunningTaskManager.on('assistantMessage', (data) => {
       this.emit('assistantMessage', data);
     });
-    
+
     this.longRunningTaskManager.on('streamError', (data) => {
       this.emit('streamError', data);
     });
-    
+
     // Configuration (will be delegated to appropriate managers)
     this.aicliCommand = this.processRunner.aicliCommand;
     this.defaultWorkingDirectory = process.cwd();
@@ -132,7 +136,7 @@ export class AICLIService extends EventEmitter {
   async checkAllProcessHealth() {
     const activePids = [];
 
-    for (const [sessionId, session] of this.activeSessions) {
+    for (const [sessionId, session] of this.sessionManager.activeSessions) {
       if (session.process && session.process.pid) {
         activePids.push(session.process.pid);
 
@@ -518,12 +522,10 @@ export class AICLIService extends EventEmitter {
     if (!session.conversationStarted) {
       this.sessionManager.markConversationStarted(session.sessionId);
     }
-    
+
     // Delegate to process runner with long-running task manager
     return this.processRunner.executeAICLICommand(session, prompt, this.longRunningTaskManager);
   }
-
-
 
   // Delegate validation methods to AICLIValidationService
   isValidCompleteJSON(jsonString) {
@@ -762,28 +764,18 @@ export class AICLIService extends EventEmitter {
       // Get system resources
       const systemResources = await processMonitor.getSystemResources();
 
-      // Get process metrics for active sessions
-      const sessionMetrics = [];
-      const activeSessions = this.sessionManager.activeSessions;
-      for (const [sessionId, session] of activeSessions) {
-        if (session.process && session.process.pid) {
-          const metrics = processMonitor.getMetricsSummary(session.process.pid);
-          if (metrics) {
-            sessionMetrics.push({
-              sessionId,
-              ...metrics,
-            });
-          }
-        }
-      }
+      // Get active sessions count
+      const activeSessionIds = this.getActiveSessions();
+      const sessionCount = activeSessionIds.length;
 
       return {
         status: isAvailable ? 'healthy' : 'degraded',
         aicliCodeAvailable: isAvailable,
-        activeSessions: activeSessions.size,
+        activeSessions: activeSessionIds,
+        sessionCount,
         resources: {
           system: systemResources,
-          sessions: sessionMetrics,
+          sessions: [], // No process metrics since sessions don't have processes
         },
         timestamp: new Date().toISOString(),
       };

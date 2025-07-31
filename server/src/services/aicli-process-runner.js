@@ -2,22 +2,24 @@ import { spawn } from 'child_process';
 import { EventEmitter } from 'events';
 import { processMonitor } from '../utils/process-monitor.js';
 import { InputValidator, MessageProcessor, AICLIConfig } from './aicli-utils.js';
-import { AICLIMessageHandler } from './aicli-message-handler.js';
 import { ClaudeStreamParser } from './stream-parser.js';
 
 /**
  * Handles AICLI CLI process execution, monitoring, and stream parsing
  */
 export class AICLIProcessRunner extends EventEmitter {
-  constructor() {
+  constructor(options = {}) {
     super();
-    
+
     // Configuration
     this.aicliCommand = AICLIConfig.findAICLICommand();
     this.permissionMode = 'default';
     this.allowedTools = ['Read', 'Write', 'Edit'];
     this.disallowedTools = [];
     this.skipPermissions = false;
+
+    // Allow dependency injection for testing
+    this.spawnFunction = options.spawnFunction || spawn;
   }
 
   /**
@@ -104,10 +106,8 @@ export class AICLIProcessRunner extends EventEmitter {
 
     // Check if this should be handled as a long-running task
     if (longRunningTaskManager && timeoutMs > 300000) {
-      return longRunningTaskManager.handlePotentialLongRunningTask(
-        sessionId,
-        prompt,
-        () => this.runAICLIProcess(args, finalPrompt, workingDirectory, sessionId, timeoutMs)
+      return longRunningTaskManager.handlePotentialLongRunningTask(sessionId, prompt, () =>
+        this.runAICLIProcess(args, finalPrompt, workingDirectory, sessionId, timeoutMs)
       );
     }
 
@@ -177,7 +177,7 @@ export class AICLIProcessRunner extends EventEmitter {
         console.log(`   Has prompt: ${!!prompt}`);
         console.log(`   Using stdin for prompt: ${useStdin}`);
 
-        aicliProcess = spawn(this.aicliCommand, fullArgs, {
+        aicliProcess = this.spawnFunction(this.aicliCommand, fullArgs, {
           cwd: workingDirectory,
           stdio: ['pipe', 'pipe', 'pipe'],
         });
@@ -210,8 +210,13 @@ export class AICLIProcessRunner extends EventEmitter {
       });
 
       // Set up output handling
-      const outputHandler = this.createOutputHandler(sessionId, aicliProcess, promiseResolve, reject);
-      
+      const outputHandler = this.createOutputHandler(
+        sessionId,
+        aicliProcess,
+        promiseResolve,
+        reject
+      );
+
       // Set up timeout handling
       const timeoutHandler = this.createTimeoutHandler(aicliProcess, timeoutMs, reject);
 
@@ -269,7 +274,7 @@ export class AICLIProcessRunner extends EventEmitter {
   createOutputHandler(sessionId, aicliProcess, promiseResolve, reject) {
     let stdout = '';
     let stderr = '';
-    let lastActivityTime = Date.now();
+    let _lastActivityTime = Date.now();
     let hasReceivedOutput = false;
     const stdoutBuffers = []; // Store raw buffers to prevent encoding issues
     const stderrBuffers = [];
@@ -278,7 +283,7 @@ export class AICLIProcessRunner extends EventEmitter {
     const streamParser = new ClaudeStreamParser();
 
     const resetActivityTimer = () => {
-      lastActivityTime = Date.now();
+      _lastActivityTime = Date.now();
       const wasFirstOutput = !hasReceivedOutput;
       hasReceivedOutput = true;
       console.log(
@@ -409,7 +414,7 @@ export class AICLIProcessRunner extends EventEmitter {
         }
 
         this.processOutput(completeStdout, sessionId, promiseResolve, reject);
-      }
+      },
     };
   }
 
@@ -483,7 +488,6 @@ export class AICLIProcessRunner extends EventEmitter {
    */
   createTimeoutHandler(aicliProcess, timeoutMs, reject) {
     let timeoutHandle;
-    let statusInterval;
     const startTime = Date.now();
     let lastActivityTime = Date.now();
     let hasReceivedOutput = false;
@@ -524,7 +528,7 @@ export class AICLIProcessRunner extends EventEmitter {
     };
 
     // Add periodic status logging
-    statusInterval = setInterval(
+    const statusInterval = setInterval(
       () => {
         if (aicliProcess && aicliProcess.pid) {
           console.log(
@@ -552,7 +556,7 @@ export class AICLIProcessRunner extends EventEmitter {
         if (statusInterval) {
           clearInterval(statusInterval);
         }
-      }
+      },
     };
   }
 

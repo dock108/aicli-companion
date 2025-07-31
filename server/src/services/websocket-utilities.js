@@ -8,17 +8,19 @@ export class WebSocketUtilities {
   static sendMessage(clientId, message, clients) {
     const client = clients.get(clientId);
     if (!client || client.ws.readyState !== 1) {
-      console.warn(`Cannot send message to client ${clientId}: client not available or not connected`);
+      console.warn(
+        `Cannot send message to client ${clientId}: client not available or not connected`
+      );
       return false;
     }
 
     try {
       const messageData = JSON.stringify(message);
       client.ws.send(messageData);
-      
+
       // Update client activity
       client.lastActivity = new Date();
-      
+
       return true;
     } catch (error) {
       console.error(`Error sending message to client ${clientId}:`, error);
@@ -49,7 +51,7 @@ export class WebSocketUtilities {
    */
   static broadcastToSessionClients(sessionId, message, clients) {
     const sessionClients = [];
-    
+
     clients.forEach((client, clientId) => {
       if (client.sessionIds && client.sessionIds.has(sessionId)) {
         sessionClients.push(clientId);
@@ -58,21 +60,23 @@ export class WebSocketUtilities {
 
     if (sessionClients.length === 0) {
       console.log(`📤 No connected clients for session ${sessionId}, queuing message`);
-      
+
       // Import messageQueueService here to avoid circular dependency
-      import('./message-queue.js').then(({ messageQueueService }) => {
-        messageQueueService.queueMessage(sessionId, message);
-      }).catch(error => {
-        console.error('Failed to queue message:', error);
-      });
-      
+      import('./message-queue.js')
+        .then(({ messageQueueService }) => {
+          messageQueueService.queueMessage(sessionId, message);
+        })
+        .catch((error) => {
+          console.error('Failed to queue message:', error);
+        });
+
       return;
     }
 
     console.log(`📤 Broadcasting to ${sessionClients.length} clients for session ${sessionId}`);
 
     let successCount = 0;
-    sessionClients.forEach(clientId => {
+    sessionClients.forEach((clientId) => {
       if (this.sendMessage(clientId, message, clients)) {
         successCount++;
       }
@@ -81,7 +85,7 @@ export class WebSocketUtilities {
     // Log delivery stats for debugging
     if (message.type !== 'ping' && message.type !== 'pong') {
       console.log(`📊 Message delivery: ${successCount}/${sessionClients.length} clients reached`);
-      
+
       if (message.type === 'streamChunk' && message.data?.chunk?.isFinal) {
         console.log(`🏁 Final stream chunk delivered to ${successCount} clients`);
       } else if (message.type === 'assistantMessage' && message.data?.isComplete) {
@@ -205,7 +209,7 @@ export class WebSocketUtilities {
       const value = parseInt(timeMatch[1]);
       const unit = timeMatch[2].toLowerCase();
       const seconds = unit.startsWith('min') ? value * 60 : value;
-      
+
       return {
         stage: 'processing',
         progress: null,
@@ -242,7 +246,11 @@ export class WebSocketUtilities {
     }
 
     // Parse completion indicators
-    if (lowerOutput.includes('completed') || lowerOutput.includes('finished') || lowerOutput.includes('done')) {
+    if (
+      lowerOutput.includes('completed') ||
+      lowerOutput.includes('finished') ||
+      lowerOutput.includes('done')
+    ) {
       return {
         stage: 'completing',
         progress: 1.0,
@@ -318,7 +326,7 @@ export class WebSocketUtilities {
    * Check if WebSocket is in ready state
    */
   static isWebSocketReady(ws) {
-    return ws && ws.readyState === 1; // WebSocket.OPEN = 1
+    return !!(ws && ws.readyState === 1); // WebSocket.OPEN = 1
   }
 
   /**

@@ -37,7 +37,9 @@ export class WebSocketMessageRouter extends EventEmitter {
    */
   unregisterHandler(messageType) {
     const removed = this.handlers.delete(messageType);
-    console.log(`📋 ${removed ? 'Removed' : 'Failed to remove'} handler for message type: ${messageType}`);
+    console.log(
+      `📋 ${removed ? 'Removed' : 'Failed to remove'} handler for message type: ${messageType}`
+    );
     return removed;
   }
 
@@ -88,7 +90,6 @@ export class WebSocketMessageRouter extends EventEmitter {
 
       // Route to appropriate handler
       await this.dispatchMessage(clientId, message, aicliService, connectionManager);
-
     } catch (error) {
       console.error(`❌ Error routing message from client ${clientId}:`, error);
 
@@ -140,7 +141,6 @@ export class WebSocketMessageRouter extends EventEmitter {
         requestId,
         timestamp: new Date().toISOString(),
       });
-
     } catch (handlerError) {
       console.error(`❌ Handler error for message type '${type}':`, handlerError);
 
@@ -190,22 +190,29 @@ export class WebSocketMessageRouter extends EventEmitter {
    */
   createMiddleware(middlewareFunction) {
     const originalDispatch = this.dispatchMessage.bind(this);
-    
+
     this.dispatchMessage = async (clientId, message, aicliService, connectionManager) => {
       try {
         // Run middleware
-        const shouldContinue = await middlewareFunction(clientId, message, aicliService, connectionManager);
-        
+        const shouldContinue = await middlewareFunction(
+          clientId,
+          message,
+          aicliService,
+          connectionManager
+        );
+
         if (shouldContinue !== false) {
           // Continue with normal dispatch
           return await originalDispatch(clientId, message, aicliService, connectionManager);
         } else {
-          console.log(`🚫 Message intercepted by middleware: ${message.type} from client ${clientId}`);
+          console.log(
+            `🚫 Message intercepted by middleware: ${message.type} from client ${clientId}`
+          );
         }
       } catch (middlewareError) {
         console.error(`❌ Middleware error:`, middlewareError);
         // Continue with normal dispatch even if middleware fails
-        return await originalDispatch(clientId, message, aicliService, connectionManager);
+        return originalDispatch(clientId, message, aicliService, connectionManager);
       }
     };
   }
@@ -216,14 +223,15 @@ export class WebSocketMessageRouter extends EventEmitter {
   enableMessageQueueing(options = {}) {
     const batchSize = options.batchSize || 10;
     const flushInterval = options.flushInterval || 100; // ms
-    
+
     this.messageQueue = [];
-    
-    const originalRouteMessage = this.routeMessage.bind(this);
-    
+
+    // Store the original routeMessage method
+    this.originalRouteMessage = this.routeMessage.bind(this);
+
     this.routeMessage = async (clientId, rawData, aicliService, connectionManager) => {
       this.messageQueue.push({ clientId, rawData, aicliService, connectionManager });
-      
+
       if (this.messageQueue.length >= batchSize) {
         await this.flushMessageQueue();
       }
@@ -250,7 +258,7 @@ export class WebSocketMessageRouter extends EventEmitter {
       const chunk = batch.slice(i, i + concurrency);
       await Promise.allSettled(
         chunk.map(({ clientId, rawData, aicliService, connectionManager }) =>
-          this.routeMessage(clientId, rawData, aicliService, connectionManager)
+          this.originalRouteMessage(clientId, rawData, aicliService, connectionManager)
         )
       );
     }
@@ -259,15 +267,21 @@ export class WebSocketMessageRouter extends EventEmitter {
   /**
    * Disable message queueing
    */
-  disableMessageQueueing() {
+  async disableMessageQueueing() {
     if (this.queueFlushInterval) {
       clearInterval(this.queueFlushInterval);
       this.queueFlushInterval = null;
     }
-    
+
     // Flush any remaining messages
-    if (this.messageQueue.length > 0) {
-      this.flushMessageQueue();
+    if (this.messageQueue && this.messageQueue.length > 0) {
+      await this.flushMessageQueue();
+    }
+
+    // Restore original routeMessage method
+    if (this.originalRouteMessage) {
+      this.routeMessage = this.originalRouteMessage;
+      this.originalRouteMessage = null;
     }
   }
 
@@ -286,13 +300,13 @@ export class WebSocketMessageRouter extends EventEmitter {
   /**
    * Shutdown the router
    */
-  shutdown() {
+  async shutdown() {
     console.log('🔄 Shutting down WebSocket Message Router...');
-    
-    this.disableMessageQueueing();
+
+    await this.disableMessageQueueing();
     this.handlers.clear();
     this.removeAllListeners();
-    
+
     console.log('✅ WebSocket Message Router shut down complete');
   }
 }

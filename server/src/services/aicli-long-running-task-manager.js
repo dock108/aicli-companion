@@ -61,7 +61,7 @@ export class AICLILongRunningTaskManager extends EventEmitter {
   /**
    * Run a long-running process in the background with status updates
    */
-  async runLongRunningProcess(sessionId, originalPrompt, executeFunction, timeoutMs) {
+  async runLongRunningProcess(sessionId, originalPrompt, executeFunction, _timeoutMs) {
     console.log(`🔄 Starting long-running background process for session ${sessionId}`);
 
     // Send periodic status updates

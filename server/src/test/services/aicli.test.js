@@ -596,19 +596,20 @@ describe('AICLIService Unit Tests', () => {
     it('should return healthy status when claude is available', async () => {
       // Mock checkAvailability to return true
       service.checkAvailability = mock.fn(async () => true);
-      // Mock session manager to return 1 active session
-      const originalGetActiveSessions = service.sessionManager.getActiveSessions;
-      service.sessionManager.getActiveSessions = () => ['test-session'];
+      // Mock getActiveSessions to return 1 active session
+      const originalGetActiveSessions = service.getActiveSessions;
+      service.getActiveSessions = mock.fn(() => ['test-session']);
 
       const result = await service.healthCheck();
 
       assert.strictEqual(result.status, 'healthy');
       assert.strictEqual(result.aicliCodeAvailable, true);
-      assert.strictEqual(result.activeSessions, 1);
+      assert.deepStrictEqual(result.activeSessions, ['test-session']);
+      assert.strictEqual(result.sessionCount, 1);
       assert.ok(result.timestamp);
 
       // Clean up
-      service.sessionManager.getActiveSessions = originalGetActiveSessions;
+      service.getActiveSessions = originalGetActiveSessions;
     });
 
     it('should return degraded status when claude is not available', async () => {
@@ -619,7 +620,8 @@ describe('AICLIService Unit Tests', () => {
 
       assert.strictEqual(result.status, 'degraded');
       assert.strictEqual(result.aicliCodeAvailable, false);
-      assert.strictEqual(result.activeSessions, 0);
+      assert.deepStrictEqual(result.activeSessions, []);
+      assert.strictEqual(result.sessionCount, 0);
       assert.ok(result.timestamp);
     });
 
@@ -640,38 +642,20 @@ describe('AICLIService Unit Tests', () => {
       // Mock checkAvailability to return true
       service.checkAvailability = mock.fn(async () => true);
 
-      // Mock session manager to return a session with PID
-      const originalGetActiveSessions = service.sessionManager.getActiveSessions;
-      service.sessionManager.getActiveSessions = () => ['session-with-pid'];
+      // Mock getActiveSessions to return a session
+      const originalGetActiveSessions = service.getActiveSessions;
+      service.getActiveSessions = mock.fn(() => ['session-with-pid']);
 
       const result = await service.healthCheck();
 
       assert.strictEqual(result.status, 'healthy');
       assert.strictEqual(result.aicliCodeAvailable, true);
-      assert.strictEqual(result.activeSessions, 1);
+      assert.deepStrictEqual(result.activeSessions, ['session-with-pid']);
+      assert.strictEqual(result.sessionCount, 1);
       assert.ok(result.timestamp);
 
       // Clean up
-      service.sessionManager.getActiveSessions = originalGetActiveSessions;
-    });
-
-    it('should handle sessions without process PIDs in healthCheck', async () => {
-      // Mock checkAvailability to return true
-      service.checkAvailability = mock.fn(async () => true);
-
-      // Set up sessions - one with PID, one without
-      service.activeSessions.set('session-no-process', { isActive: true });
-      service.activeSessions.set('session-no-pid', { process: {} });
-
-      const result = await service.healthCheck();
-
-      assert.strictEqual(result.status, 'healthy');
-      assert.strictEqual(result.aicliCodeAvailable, true);
-      assert.strictEqual(result.activeSessions, 2);
-      assert.ok(result.timestamp);
-
-      // Clean up
-      service.activeSessions.clear();
+      service.getActiveSessions = originalGetActiveSessions;
     });
   });
 
@@ -779,8 +763,8 @@ describe('AICLIService Unit Tests', () => {
     });
 
     it('should manage active sessions map', () => {
-      assert.ok(service.activeSessions instanceof Map);
-      assert.strictEqual(service.activeSessions.size, 0);
+      assert.ok(service.sessionManager.activeSessions instanceof Map);
+      assert.strictEqual(service.sessionManager.activeSessions.size, 0);
     });
   });
 
@@ -864,7 +848,7 @@ describe('AICLIService Unit Tests', () => {
         },
       };
 
-      service.activeSessions.set('test-session', {
+      service.sessionManager.activeSessions.set('test-session', {
         process: mockProcess,
         isActive: true,
       });
@@ -883,7 +867,7 @@ describe('AICLIService Unit Tests', () => {
         // This might fail in test environment, which is expected
         assert.ok(true);
       } finally {
-        service.activeSessions.clear();
+        service.sessionManager.activeSessions.clear();
       }
     });
 
@@ -897,7 +881,7 @@ describe('AICLIService Unit Tests', () => {
         },
       };
 
-      service.activeSessions.set('error-session', {
+      service.sessionManager.activeSessions.set('error-session', {
         process: mockProcess,
         isActive: true,
       });
@@ -908,7 +892,7 @@ describe('AICLIService Unit Tests', () => {
       } catch (error) {
         assert.ok(error.message.includes('Failed to send to session'));
         // Session should be removed after error
-        assert.strictEqual(service.activeSessions.has('error-session'), false);
+        assert.strictEqual(service.sessionManager.activeSessions.has('error-session'), false);
       }
     });
 
@@ -923,7 +907,7 @@ describe('AICLIService Unit Tests', () => {
         stderr: new EventEmitter(),
       };
 
-      service.activeSessions.set('close-session', {
+      service.sessionManager.activeSessions.set('close-session', {
         process: mockProcess,
         isActive: true,
       });
@@ -936,7 +920,7 @@ describe('AICLIService Unit Tests', () => {
       assert.strictEqual(mockProcess.kill.mock.calls[0].arguments[0], 'SIGTERM');
 
       // Session should be removed
-      assert.strictEqual(service.activeSessions.has('close-session'), false);
+      assert.strictEqual(service.sessionManager.activeSessions.has('close-session'), false);
     });
 
     it('should handle handlePermissionPrompt parameter validation', async () => {
@@ -960,7 +944,7 @@ describe('AICLIService Unit Tests', () => {
         },
       };
 
-      service.activeSessions.set('perm-session', {
+      service.sessionManager.activeSessions.set('perm-session', {
         process: mockProcess,
         isActive: true,
       });
@@ -978,7 +962,7 @@ describe('AICLIService Unit Tests', () => {
         // May fail in test environment, which is acceptable
         assert.ok(true);
       } finally {
-        service.activeSessions.clear();
+        service.sessionManager.activeSessions.clear();
       }
     });
 
@@ -992,7 +976,7 @@ describe('AICLIService Unit Tests', () => {
         },
       };
 
-      service.activeSessions.set('perm-error-session', {
+      service.sessionManager.activeSessions.set('perm-error-session', {
         process: mockProcess,
         isActive: true,
       });
@@ -1004,7 +988,7 @@ describe('AICLIService Unit Tests', () => {
         assert.ok(error.message.includes('Failed to respond to permission prompt'));
         assert.ok(error.message.includes('Write failed'));
       } finally {
-        service.activeSessions.clear();
+        service.sessionManager.activeSessions.clear();
       }
     });
 
@@ -1021,7 +1005,7 @@ describe('AICLIService Unit Tests', () => {
         stderr: new EventEmitter(),
       };
 
-      service.activeSessions.set('error-close-session', {
+      service.sessionManager.activeSessions.set('error-close-session', {
         process: mockProcess,
         isActive: true,
       });
@@ -1039,7 +1023,7 @@ describe('AICLIService Unit Tests', () => {
         stdin: { write: mock.fn() },
       };
 
-      service.activeSessions.set('existing-session', {
+      service.sessionManager.activeSessions.set('existing-session', {
         process: mockProcess,
         isActive: true,
       });
@@ -1068,7 +1052,7 @@ describe('AICLIService Unit Tests', () => {
         assert.ok(true);
       } finally {
         service.sendToExistingSession = originalSendToExisting;
-        service.activeSessions.clear();
+        service.sessionManager.activeSessions.clear();
       }
     });
 

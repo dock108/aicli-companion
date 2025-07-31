@@ -18,7 +18,7 @@ export class AICLIValidationService {
       const parsed = JSON.parse(jsonString);
 
       // Additional checks for completeness
-      const trimmed = jsonString.trim();
+      const _trimmed = jsonString.trim();
 
       // For primitive JSON values, they are valid if they parse successfully
       // No additional validation needed for strings, numbers, booleans, null
@@ -45,7 +45,7 @@ export class AICLIValidationService {
 
       try {
         // Try parsing each line as JSON
-        let parsed = JSON.parse(line);
+        const parsed = JSON.parse(line);
         responses.push(parsed);
       } catch (parseError) {
         // For incomplete lines, try to extract complete objects
@@ -186,9 +186,9 @@ export class AICLIValidationService {
     if (!arrayText || typeof arrayText !== 'string') {
       return [];
     }
-    
+
     const objects = [];
-    let depth = 0;
+    const _depth = 0;
     let currentObject = '';
     let inString = false;
     let escaped = false;

@@ -30,7 +30,7 @@ export function setupWebSocket(wss, aicliService, authToken) {
   wss.on('connection', (ws, request) => {
     // Handle connection through connection manager
     const clientId = connectionManager.handleConnection(ws, request, authToken);
-    
+
     if (!clientId) {
       // Connection was rejected (likely authentication failure)
       return;
@@ -46,46 +46,52 @@ export function setupWebSocket(wss, aicliService, authToken) {
   // Handle connection manager events
   connectionManager.on('clientConnected', ({ clientId, connectionInfo }) => {
     console.log(`🔗 Client connected: ${clientId} from ${connectionInfo.ip}`);
-    
+
     // Emit to event broadcaster for any system-wide notifications
     eventBroadcaster.emit('clientConnected', { clientId, connectionInfo });
   });
 
   connectionManager.on('clientDisconnected', ({ clientId, sessionCount, closeCode, reason }) => {
-    console.log(`🔌 Client disconnected: ${clientId} (${sessionCount} sessions, code: ${closeCode})`);
-    
+    console.log(
+      `🔌 Client disconnected: ${clientId} (${sessionCount} sessions, code: ${closeCode})`
+    );
+
     // Clean up any remaining sessions for this client
     // Note: Sessions should continue running in background for reconnection
     console.log(`   Preserving ${sessionCount} AICLI sessions for background processing`);
-    
+
     // Unregister device token for push notifications
-    import('./push-notification.js').then(({ pushNotificationService }) => {
-      pushNotificationService.unregisterDevice(clientId);
-    }).catch(error => {
-      console.warn('Failed to unregister device for push notifications:', error);
-    });
+    import('./push-notification.js')
+      .then(({ pushNotificationService }) => {
+        pushNotificationService.unregisterDevice(clientId);
+      })
+      .catch((error) => {
+        console.warn('Failed to unregister device for push notifications:', error);
+      });
 
     // Emit to event broadcaster
     eventBroadcaster.emit('clientDisconnected', { clientId, sessionCount, closeCode, reason });
   });
 
   // Handle message router events for monitoring
-  messageRouter.on('messageReceived', ({ clientId, messageType, timestamp }) => {
-    if (messageType !== 'ping') { // Reduce log noise
+  messageRouter.on('messageReceived', ({ clientId, messageType, timestamp: _timestamp }) => {
+    if (messageType !== 'ping') {
+      // Reduce log noise
       console.log(`📨 Message received: ${messageType} from ${clientId}`);
     }
   });
 
   messageRouter.on('routingError', ({ clientId, error, messageType }) => {
     console.error(`❌ Routing error from ${clientId} (${messageType}): ${error}`);
-    
+
     // Emit to event broadcaster for error tracking
     eventBroadcaster.emit('routingError', { clientId, error, messageType });
   });
 
   // Handle event broadcaster events for monitoring
   eventBroadcaster.on('messageBroadcast', ({ sessionId, messageType, clientCount }) => {
-    if (messageType !== 'ping' && messageType !== 'commandProgress') { // Reduce log noise
+    if (messageType !== 'ping' && messageType !== 'commandProgress') {
+      // Reduce log noise
       console.log(`📡 Broadcast ${messageType} to ${clientCount} clients (session: ${sessionId})`);
     }
   });
@@ -94,14 +100,14 @@ export function setupWebSocket(wss, aicliService, authToken) {
   connectionManager.startHealthMonitoring();
 
   // Handle WebSocket server close
-  wss.on('close', () => {
+  wss.on('close', async () => {
     console.log('🔄 WebSocket server closing, shutting down modules...');
-    
+
     connectionManager.stopHealthMonitoring();
     connectionManager.shutdown();
-    messageRouter.shutdown();
+    await messageRouter.shutdown();
     eventBroadcaster.shutdown();
-    
+
     console.log('✅ WebSocket service shutdown complete');
   });
 
@@ -136,9 +142,10 @@ export function setupWebSocket(wss, aicliService, authToken) {
     },
 
     // Shutdown method
-    shutdown() {
+    async shutdown() {
+      connectionManager.stopHealthMonitoring();
       connectionManager.shutdown();
-      messageRouter.shutdown();
+      await messageRouter.shutdown();
       eventBroadcaster.shutdown();
     },
 
@@ -153,7 +160,9 @@ export function setupWebSocket(wss, aicliService, authToken) {
   };
 
   console.log(`🎉 WebSocket service setup complete!`);
-  console.log(`   Registered message types: ${WebSocketMessageHandlers.getSupportedTypes().join(', ')}`);
+  console.log(
+    `   Registered message types: ${WebSocketMessageHandlers.getSupportedTypes().join(', ')}`
+  );
   console.log(`   Health monitoring: enabled`);
   console.log(`   Event broadcasting: enabled`);
   console.log(`   Authentication: ${authToken ? 'enabled' : 'disabled'}`);

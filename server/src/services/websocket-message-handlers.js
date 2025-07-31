@@ -1,6 +1,8 @@
 import { WebSocketUtilities } from './websocket-utilities.js';
 import { pushNotificationService } from './push-notification.js';
 import { messageQueueService } from './message-queue.js';
+import fs from 'fs';
+import path from 'path';
 
 /**
  * Collection of WebSocket message handlers for different message types
@@ -27,7 +29,7 @@ export class WebSocketMessageHandlers {
         clientId,
         WebSocketUtilities.createResponse('ask', requestId, {
           success: true,
-          result: result,
+          result,
           timestamp: new Date().toISOString(),
         }),
         clients
@@ -48,7 +50,14 @@ export class WebSocketMessageHandlers {
   /**
    * Handle 'streamStart' message - start streaming session
    */
-  static async handleStreamStartMessage(clientId, requestId, data, aicliService, clients, connectionManager) {
+  static async handleStreamStartMessage(
+    clientId,
+    requestId,
+    data,
+    aicliService,
+    clients,
+    connectionManager
+  ) {
     const { sessionId, initialPrompt, workingDirectory } = data;
 
     console.log(`🌊 Starting stream session for client ${clientId}`);
@@ -81,12 +90,14 @@ export class WebSocketMessageHandlers {
         // Check for any queued messages for this session
         const queuedMessages = messageQueueService.getQueuedMessages(sessionId);
         if (queuedMessages.length > 0) {
-          console.log(`📬 Delivering ${queuedMessages.length} queued messages for session ${sessionId}`);
-          
+          console.log(
+            `📬 Delivering ${queuedMessages.length} queued messages for session ${sessionId}`
+          );
+
           for (const queuedMessage of queuedMessages) {
             WebSocketUtilities.sendMessage(clientId, queuedMessage, clients);
           }
-          
+
           messageQueueService.markMessagesDelivered(sessionId);
         }
       } else {
@@ -142,7 +153,14 @@ export class WebSocketMessageHandlers {
   /**
    * Handle 'streamClose' message - close streaming session
    */
-  static async handleStreamCloseMessage(clientId, requestId, data, aicliService, clients, connectionManager) {
+  static async handleStreamCloseMessage(
+    clientId,
+    requestId,
+    data,
+    aicliService,
+    clients,
+    connectionManager
+  ) {
     const { sessionId } = data;
 
     console.log(`🔚 Closing stream session ${sessionId} for client ${clientId}`);
@@ -216,7 +234,7 @@ export class WebSocketMessageHandlers {
    */
   static handlePingMessage(clientId, requestId, data, clients) {
     const { timestamp: clientTimestamp } = data || {};
-    
+
     WebSocketUtilities.sendMessage(
       clientId,
       WebSocketUtilities.createResponse('pong', requestId, {
@@ -276,11 +294,8 @@ export class WebSocketMessageHandlers {
 
     try {
       // Validate the working directory exists
-      const fs = await import('fs');
-      const path = await import('path');
-      
       const resolvedPath = path.resolve(workingDirectory);
-      
+
       if (!fs.existsSync(resolvedPath)) {
         throw new Error(`Directory does not exist: ${resolvedPath}`);
       }
@@ -319,8 +334,15 @@ export class WebSocketMessageHandlers {
   /**
    * Handle 'aicliCommand' message - execute direct AICLI commands
    */
-  static async handleAICLICommandMessage(clientId, requestId, data, aicliService, clients, connectionManager) {
-    const { sessionId, command, args, workingDirectory } = data;
+  static async handleAICLICommandMessage(
+    clientId,
+    requestId,
+    data,
+    aicliService,
+    clients,
+    connectionManager
+  ) {
+    const { sessionId, command, args, workingDirectory: _workingDirectory } = data;
 
     console.log(`⚡ Executing AICLI command for client ${clientId}:`);
     console.log(`   Session: ${sessionId}`);
@@ -336,7 +358,7 @@ export class WebSocketMessageHandlers {
       // This would be handled by the AICLI service based on the command
       // For now, we'll delegate to the appropriate service method
       let result;
-      
+
       switch (command) {
         case 'status':
           result = await aicliService.healthCheck();
@@ -380,7 +402,9 @@ export class WebSocketMessageHandlers {
   static handleClientBackgroundingMessage(clientId, requestId, data, clients) {
     const { isBackgrounding } = data;
 
-    console.log(`📱 Client ${clientId} ${isBackgrounding ? 'entering' : 'leaving'} background mode`);
+    console.log(
+      `📱 Client ${clientId} ${isBackgrounding ? 'entering' : 'leaving'} background mode`
+    );
 
     // Update client state (this would typically be stored in connection manager)
     const client = clients.get(clientId);

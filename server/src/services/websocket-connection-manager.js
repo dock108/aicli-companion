@@ -5,17 +5,20 @@ import { EventEmitter } from 'events';
  * Manages WebSocket client connections, authentication, and health monitoring
  */
 export class WebSocketConnectionManager extends EventEmitter {
-  constructor() {
+  constructor(options = {}) {
     super();
     this.clients = new Map();
     this.pingInterval = null;
+    // Allow dependency injection for testing
+    this.generateId = options.generateId || uuidv4;
+    this.healthCheckInterval = options.healthCheckInterval || 15000; // Default 15 seconds
   }
 
   /**
    * Handle new WebSocket connection
    */
   handleConnection(ws, request, authToken) {
-    const clientId = uuidv4();
+    const clientId = this.generateId();
     const clientIP = request.socket.remoteAddress;
     const clientFamily = request.socket.remoteFamily;
     const userAgent = request.headers['user-agent'] || 'unknown';
@@ -52,9 +55,9 @@ export class WebSocketConnectionManager extends EventEmitter {
     ws.isAlive = true;
     ws.on('pong', () => {
       ws.isAlive = true;
-      const client = this.clients.get(clientId);
-      if (client) {
-        client.lastActivity = new Date();
+      const clientData = this.clients.get(clientId);
+      if (clientData) {
+        clientData.lastActivity = new Date();
       }
     });
 
@@ -135,7 +138,7 @@ export class WebSocketConnectionManager extends EventEmitter {
 
         // Mark as potentially dead and send ping
         client.ws.isAlive = false;
-        
+
         try {
           client.ws.ping();
         } catch (error) {
@@ -146,14 +149,14 @@ export class WebSocketConnectionManager extends EventEmitter {
       });
 
       // Clean up dead clients
-      deadClients.forEach(clientId => {
+      deadClients.forEach((clientId) => {
         this.handleDisconnection(clientId, 1006, 'Connection lost - no pong received');
       });
 
       if (this.clients.size > 0) {
         console.log(`📡 Pinged ${this.clients.size} WebSocket clients`);
       }
-    }, 15000); // Check every 15 seconds
+    }, this.healthCheckInterval);
   }
 
   /**
@@ -187,7 +190,9 @@ export class WebSocketConnectionManager extends EventEmitter {
     const client = this.clients.get(clientId);
     if (client) {
       client.sessionIds.add(sessionId);
-      console.log(`📎 Added session ${sessionId} to client ${clientId} (total: ${client.sessionIds.size})`);
+      console.log(
+        `📎 Added session ${sessionId} to client ${clientId} (total: ${client.sessionIds.size})`
+      );
     }
   }
 
@@ -198,7 +203,9 @@ export class WebSocketConnectionManager extends EventEmitter {
     const client = this.clients.get(clientId);
     if (client) {
       client.sessionIds.delete(sessionId);
-      console.log(`📎 Removed session ${sessionId} from client ${clientId} (remaining: ${client.sessionIds.size})`);
+      console.log(
+        `📎 Removed session ${sessionId} from client ${clientId} (remaining: ${client.sessionIds.size})`
+      );
     }
   }
 
@@ -209,11 +216,13 @@ export class WebSocketConnectionManager extends EventEmitter {
     const client = this.clients.get(clientId);
     if (client) {
       if (Array.isArray(events)) {
-        events.forEach(event => client.subscribedEvents.add(event));
+        events.forEach((event) => client.subscribedEvents.add(event));
       } else {
         client.subscribedEvents.add(events);
       }
-      console.log(`📡 Client ${clientId} subscribed to events: ${Array.from(client.subscribedEvents).join(', ')}`);
+      console.log(
+        `📡 Client ${clientId} subscribed to events: ${Array.from(client.subscribedEvents).join(', ')}`
+      );
     }
   }
 
@@ -245,7 +254,7 @@ export class WebSocketConnectionManager extends EventEmitter {
    */
   shutdown() {
     console.log('🔄 Shutting down WebSocket Connection Manager...');
-    
+
     this.stopHealthMonitoring();
 
     // Close all connections
@@ -268,7 +277,7 @@ export class WebSocketConnectionManager extends EventEmitter {
     let totalSessions = 0;
     let totalSubscriptions = 0;
 
-    this.clients.forEach(client => {
+    this.clients.forEach((client) => {
       totalSessions += client.sessionIds.size;
       totalSubscriptions += client.subscribedEvents.size;
     });

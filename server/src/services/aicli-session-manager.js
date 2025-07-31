@@ -8,11 +8,11 @@ import { AICLIMessageHandler } from './aicli-message-handler.js';
 export class AICLISessionManager extends EventEmitter {
   constructor(options = {}) {
     super();
-    
+
     // Session storage
     this.activeSessions = new Map();
     this.sessionMessageBuffers = new Map();
-    
+
     // Configuration
     this.maxSessions = options.maxSessions || 10;
     this.sessionTimeout = options.sessionTimeout || 30 * 60 * 1000; // 30 minutes
@@ -58,21 +58,23 @@ export class AICLISessionManager extends EventEmitter {
     // Set up session timeout (only timeout if inactive AND no pending messages)
     const timeoutId = setTimeout(() => {
       if (this.activeSessions.has(sanitizedSessionId)) {
-        const session = this.activeSessions.get(sanitizedSessionId);
+        const sessionData = this.activeSessions.get(sanitizedSessionId);
         const buffer = this.sessionMessageBuffers.get(sanitizedSessionId);
-        
+
         // Only timeout if session is truly inactive (no pending messages)
-        if (!session.isProcessing && (!buffer || buffer.messages.length === 0)) {
+        if (!sessionData.isProcessing && (!buffer || buffer.messages.length === 0)) {
           console.log(`Session ${sanitizedSessionId} timed out, cleaning up`);
           this.closeSession(sanitizedSessionId);
         } else {
-          console.log(`Session ${sanitizedSessionId} timeout deferred - still active or has pending messages`);
+          console.log(
+            `Session ${sanitizedSessionId} timeout deferred - still active or has pending messages`
+          );
           // Reschedule timeout check
           setTimeout(() => this.checkSessionTimeout(sanitizedSessionId), this.sessionTimeout);
         }
       }
     }, this.sessionTimeout);
-    
+
     // Store timeout ID for potential cancellation
     session.timeoutId = timeoutId;
 
@@ -106,7 +108,7 @@ export class AICLISessionManager extends EventEmitter {
         session.timeoutId = null;
         console.log(`   Cleared timeout for session ${sessionId}`);
       }
-      
+
       // Mark session as inactive
       session.isActive = false;
 
@@ -199,18 +201,22 @@ export class AICLISessionManager extends EventEmitter {
     if (!this.activeSessions.has(sessionId)) {
       return; // Session already cleaned up
     }
-    
+
     const session = this.activeSessions.get(sessionId);
     const buffer = this.sessionMessageBuffers.get(sessionId);
     const now = Date.now();
     const inactiveTime = now - session.lastActivity;
-    
+
     // Only timeout if truly inactive for longer than timeout period
-    if (!session.isProcessing && 
-        (!buffer || buffer.messages.length === 0) && 
-        inactiveTime > this.sessionTimeout) {
-      console.log(`Session ${sessionId} timed out after ${Math.round(inactiveTime / 1000)}s of inactivity`);
-      
+    if (
+      !session.isProcessing &&
+      (!buffer || buffer.messages.length === 0) &&
+      inactiveTime > this.sessionTimeout
+    ) {
+      console.log(
+        `Session ${sessionId} timed out after ${Math.round(inactiveTime / 1000)}s of inactivity`
+      );
+
       // Clean up the session immediately (closeSession already emits sessionCleaned event)
       this.closeSession(sessionId);
     } else {
@@ -249,7 +255,7 @@ export class AICLISessionManager extends EventEmitter {
         clearTimeout(session.timeoutId);
         session.timeoutId = null;
       }
-      
+
       session.isActive = false;
       this.activeSessions.delete(sessionId);
       this.sessionMessageBuffers.delete(sessionId);

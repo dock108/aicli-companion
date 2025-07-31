@@ -114,7 +114,7 @@ describe('AICLIService Simple Unit Tests', () => {
   describe('State Management Methods', () => {
     describe('hasSession', () => {
       it('should return true for existing sessions', () => {
-        service.activeSessions.set('test-session', { isActive: true });
+        service.sessionManager.activeSessions.set('test-session', { isActive: true });
         assert.strictEqual(service.hasSession('test-session'), true);
       });
 
@@ -133,8 +133,8 @@ describe('AICLIService Simple Unit Tests', () => {
       });
 
       it('should return array of session IDs', () => {
-        service.activeSessions.set('session1', { isActive: true });
-        service.activeSessions.set('session2', { isActive: true });
+        service.sessionManager.activeSessions.set('session1', { isActive: true });
+        service.sessionManager.activeSessions.set('session2', { isActive: true });
 
         const sessions = service.getActiveSessions();
         assert.strictEqual(sessions.length, 2);
@@ -146,13 +146,13 @@ describe('AICLIService Simple Unit Tests', () => {
     describe('cleanupDeadSession', () => {
       it('should remove session from maps', () => {
         const sessionId = 'dead-session';
-        service.activeSessions.set(sessionId, { isActive: true });
-        service.sessionMessageBuffers.set(sessionId, { messages: [] });
+        service.sessionManager.activeSessions.set(sessionId, { isActive: true });
+        service.sessionManager.sessionMessageBuffers.set(sessionId, { messages: [] });
 
         service.cleanupDeadSession(sessionId);
 
-        assert.strictEqual(service.activeSessions.has(sessionId), false);
-        assert.strictEqual(service.sessionMessageBuffers.has(sessionId), false);
+        assert.strictEqual(service.sessionManager.activeSessions.has(sessionId), false);
+        assert.strictEqual(service.sessionManager.sessionMessageBuffers.has(sessionId), false);
       });
 
       it('should handle non-existent sessions gracefully', () => {
@@ -164,7 +164,7 @@ describe('AICLIService Simple Unit Tests', () => {
       it('should set session as inactive before removal', () => {
         const sessionId = 'test-session';
         const session = { isActive: true };
-        service.activeSessions.set(sessionId, session);
+        service.sessionManager.activeSessions.set(sessionId, session);
 
         service.cleanupDeadSession(sessionId);
 
@@ -175,7 +175,7 @@ describe('AICLIService Simple Unit Tests', () => {
     describe('clearSessionBuffer', () => {
       it('should clear existing buffer messages', () => {
         const sessionId = 'test-session';
-        service.sessionMessageBuffers.set(sessionId, {
+        service.sessionManager.sessionMessageBuffers.set(sessionId, {
           assistantMessages: [{ content: 'test' }],
           permissionRequestSent: true,
           toolUseInProgress: true,
@@ -185,7 +185,7 @@ describe('AICLIService Simple Unit Tests', () => {
 
         service.clearSessionBuffer(sessionId);
 
-        const buffer = service.sessionMessageBuffers.get(sessionId);
+        const buffer = service.sessionManager.sessionMessageBuffers.get(sessionId);
         assert.deepStrictEqual(buffer.assistantMessages, []);
         assert.strictEqual(buffer.permissionRequestSent, false);
         assert.strictEqual(buffer.toolUseInProgress, false);
@@ -474,19 +474,19 @@ describe('AICLIService Simple Unit Tests', () => {
       });
 
       it('should clear active sessions', () => {
-        service.activeSessions.set('test1', { isActive: true });
-        service.activeSessions.set('test2', { isActive: true });
+        service.sessionManager.activeSessions.set('test1', { isActive: true });
+        service.sessionManager.activeSessions.set('test2', { isActive: true });
 
         service.shutdown();
-        assert.strictEqual(service.activeSessions.size, 0);
+        assert.strictEqual(service.sessionManager.activeSessions.size, 0);
       });
 
       it('should clear session buffers', () => {
-        service.sessionMessageBuffers.set('test1', { messages: [] });
-        service.sessionMessageBuffers.set('test2', { messages: [] });
+        service.sessionManager.sessionMessageBuffers.set('test1', { messages: [] });
+        service.sessionManager.sessionMessageBuffers.set('test2', { messages: [] });
 
         service.shutdown();
-        assert.strictEqual(service.sessionMessageBuffers.size, 0);
+        assert.strictEqual(service.sessionManager.sessionMessageBuffers.size, 0);
       });
     });
   });
@@ -524,7 +524,7 @@ describe('AICLIService Simple Unit Tests', () => {
       });
 
       it('should handle sessions without process PIDs', async () => {
-        service.activeSessions.set('test-session', { isActive: true });
+        service.sessionManager.activeSessions.set('test-session', { isActive: true });
         await service.checkAllProcessHealth();
         assert.ok(true);
       });
@@ -533,7 +533,7 @@ describe('AICLIService Simple Unit Tests', () => {
     describe('emitAICLIResponse', () => {
       it('should handle basic response emission', () => {
         const sessionId = 'test-session';
-        service.sessionMessageBuffers.set(sessionId, {
+        service.sessionManager.sessionMessageBuffers.set(sessionId, {
           assistantMessages: [],
           permissionRequestSent: false,
         });

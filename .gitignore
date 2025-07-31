@@ -282,6 +282,8 @@ server/hostapp/src-tauri/gen/
 
 # Development logs
 server/hostapp/*.log
+.claude/settings.local.json
+server/*.txt
 
 # =================================
 # Database & Storage
@@ -340,4 +342,4 @@ $RECYCLE.BIN/
 .fuse_hidden*
 .directory
 .Trash-*
-.claude/settings.local.json
+

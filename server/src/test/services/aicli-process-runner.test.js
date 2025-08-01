@@ -43,6 +43,89 @@ describe('AICLIProcessRunner', () => {
     mockStderr.removeAllListeners();
   });
 
+  describe('constructor and configuration', () => {
+    it('should initialize with default configuration', () => {
+      const runner = new AICLIProcessRunner({ spawnFunction: mockSpawn });
+      assert.strictEqual(runner.permissionMode, 'default');
+      assert.deepStrictEqual(runner.allowedTools, ['Read', 'Write', 'Edit']);
+      assert.deepStrictEqual(runner.disallowedTools, []);
+      assert.strictEqual(runner.skipPermissions, false);
+    });
+
+    it('should accept custom spawn function in options', () => {
+      const customSpawn = () => {};
+      const runner = new AICLIProcessRunner({ spawnFunction: customSpawn });
+      assert.strictEqual(runner.spawnFunction, customSpawn);
+    });
+  });
+
+  describe('setPermissionMode', () => {
+    it('should set valid permission modes', () => {
+      processRunner.setPermissionMode('acceptEdits');
+      assert.strictEqual(processRunner.permissionMode, 'acceptEdits');
+
+      processRunner.setPermissionMode('bypassPermissions');
+      assert.strictEqual(processRunner.permissionMode, 'bypassPermissions');
+
+      processRunner.setPermissionMode('plan');
+      assert.strictEqual(processRunner.permissionMode, 'plan');
+    });
+
+    it('should reject invalid permission modes', () => {
+      const originalMode = processRunner.permissionMode;
+      processRunner.setPermissionMode('invalid');
+      assert.strictEqual(processRunner.permissionMode, originalMode);
+    });
+  });
+
+  describe('setAllowedTools', () => {
+    it('should set allowed tools from array', () => {
+      const tools = ['Read', 'Write', 'Bash'];
+      processRunner.setAllowedTools(tools);
+      assert.deepStrictEqual(processRunner.allowedTools, tools);
+    });
+
+    it('should ignore non-array input', () => {
+      const originalTools = [...processRunner.allowedTools];
+      processRunner.setAllowedTools('not-an-array');
+      assert.deepStrictEqual(processRunner.allowedTools, originalTools);
+    });
+  });
+
+  describe('setDisallowedTools', () => {
+    it('should set disallowed tools from array', () => {
+      const tools = ['Bash', 'System'];
+      processRunner.setDisallowedTools(tools);
+      assert.deepStrictEqual(processRunner.disallowedTools, tools);
+    });
+
+    it('should ignore non-array input', () => {
+      const originalTools = [...processRunner.disallowedTools];
+      processRunner.setDisallowedTools('not-an-array');
+      assert.deepStrictEqual(processRunner.disallowedTools, originalTools);
+    });
+  });
+
+  describe('setSkipPermissions', () => {
+    it('should set skip permissions to true', () => {
+      processRunner.setSkipPermissions(true);
+      assert.strictEqual(processRunner.skipPermissions, true);
+    });
+
+    it('should set skip permissions to false', () => {
+      processRunner.setSkipPermissions(false);
+      assert.strictEqual(processRunner.skipPermissions, false);
+    });
+
+    it('should convert truthy values to boolean', () => {
+      processRunner.setSkipPermissions('yes');
+      assert.strictEqual(processRunner.skipPermissions, true);
+
+      processRunner.setSkipPermissions('');
+      assert.strictEqual(processRunner.skipPermissions, false);
+    });
+  });
+
   describe('executeAICLICommand', () => {
     it('should execute command with initial prompt for new session', async () => {
       const session = {
@@ -292,6 +375,16 @@ describe('AICLIProcessRunner', () => {
       // When invalid JSON is parsed, it returns empty array which triggers error
       assert.strictEqual(reject.mock.calls.length, 1);
       assert.ok(reject.mock.calls[0].arguments[0].message.includes('No valid JSON objects found'));
+    });
+
+    it('should reject on whitespace-only output', () => {
+      const resolve = mock.fn();
+      const reject = mock.fn();
+
+      processRunner.processOutput('   \n  \t  ', 'test-session', resolve, reject);
+
+      assert.strictEqual(reject.mock.calls.length, 1);
+      assert.ok(reject.mock.calls[0].arguments[0].message.includes('empty output'));
     });
 
     it('should emit aicliResponse events for each parsed response', () => {

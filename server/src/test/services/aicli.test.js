@@ -1429,13 +1429,25 @@ describe('AICLIService Unit Tests', () => {
         const originalEnv = process.env.NODE_ENV;
         process.env.NODE_ENV = 'production';
 
-        const testService = new AICLIService();
+        // Create a mock process runner to avoid spawn attempts
+        const mockProcessRunner = createMockEventEmitter({
+          setPermissionMode: mock.fn(),
+          setAllowedTools: mock.fn(),
+          setDisallowedTools: mock.fn(),
+          setSkipPermissions: mock.fn(),
+        });
+
+        const testService = new AICLIService({
+          processRunner: mockProcessRunner,
+          processRunnerOptions: { spawnFunction: mock.fn() },
+        });
         testService.startProcessHealthMonitoring();
 
         assert.ok(testService.processHealthCheckInterval);
 
         // Clean up
         clearInterval(testService.processHealthCheckInterval);
+        testService.shutdown();
         process.env.NODE_ENV = originalEnv;
       });
     });

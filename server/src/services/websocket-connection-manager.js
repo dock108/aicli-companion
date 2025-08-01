@@ -140,18 +140,12 @@ export class WebSocketConnectionManager extends EventEmitter {
       type: WEBSOCKET_EVENTS.WELCOME,
       timestamp: new Date().toISOString(),
       data: {
-        clientId: clientId,
+        clientId,
         serverVersion: SERVER_VERSION,
         claudeCodeVersion,
-        capabilities: [
-          'chat',
-          'streaming',
-          'permissions',
-          'file-operations',
-          'session-management'
-        ],
-        maxSessions: DEFAULT_CONFIG.MAX_SESSIONS
-      }
+        capabilities: ['chat', 'streaming', 'permissions', 'file-operations', 'session-management'],
+        maxSessions: DEFAULT_CONFIG.MAX_SESSIONS,
+      },
     };
 
     const success = WebSocketUtilities.sendMessage(clientId, welcomeMessage, this.clients);

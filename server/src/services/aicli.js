@@ -52,8 +52,10 @@ export class AICLIService extends EventEmitter {
     this.processRunner.on('processExit', (data) => {
       // Clean up the session when process exits
       if (data.sessionId && data.code !== 0) {
-        console.log(`🧹 Cleaning up session ${data.sessionId} after process exit with code ${data.code}`);
-        this.sessionManager.cleanupDeadSession(data.sessionId).catch(error => {
+        console.log(
+          `🧹 Cleaning up session ${data.sessionId} after process exit with code ${data.code}`
+        );
+        this.sessionManager.cleanupDeadSession(data.sessionId).catch((error) => {
           console.warn(`⚠️ Failed to cleanup dead session ${data.sessionId}:`, error.message);
         });
       }
@@ -168,7 +170,7 @@ export class AICLIService extends EventEmitter {
             console.warn(
               `⚠️  Process ${session.process.pid} for session ${sessionId} no longer exists`
             );
-            this.cleanupDeadSession(sessionId).catch(error => {
+            this.cleanupDeadSession(sessionId).catch((error) => {
               console.warn(`⚠️ Failed to cleanup dead session ${sessionId}:`, error.message);
             });
           }
@@ -248,7 +250,10 @@ export class AICLIService extends EventEmitter {
     }
   }
 
-  async sendOneTimePrompt(prompt, { format = 'json', workingDirectory = process.cwd(), skipPermissions = false }) {
+  async sendOneTimePrompt(
+    prompt,
+    { format = 'json', workingDirectory = process.cwd(), skipPermissions = false }
+  ) {
     console.log(
       `📝 sendOneTimePrompt called with prompt: "${prompt?.substring(0, 50)}${prompt?.length > 50 ? '...' : ''}"`
     );
@@ -435,7 +440,10 @@ export class AICLIService extends EventEmitter {
     });
   }
 
-  async sendStreamingPrompt(prompt, { sessionId, workingDirectory = process.cwd(), skipPermissions = false }) {
+  async sendStreamingPrompt(
+    prompt,
+    { sessionId, workingDirectory = process.cwd(), skipPermissions = false }
+  ) {
     // Validate inputs
     const sanitizedPrompt = InputValidator.sanitizePrompt(prompt);
     const validatedWorkingDir = await InputValidator.validateWorkingDirectory(workingDirectory);
@@ -447,11 +455,26 @@ export class AICLIService extends EventEmitter {
     }
 
     // Create new interactive session
-    return this.createInteractiveSession(sessionKey, sanitizedPrompt, validatedWorkingDir, skipPermissions);
+    return this.createInteractiveSession(
+      sessionKey,
+      sanitizedPrompt,
+      validatedWorkingDir,
+      skipPermissions
+    );
   }
 
-  async createInteractiveSession(sessionId, initialPrompt, workingDirectory, skipPermissions = false) {
-    return this.sessionManager.createInteractiveSession(sessionId, initialPrompt, workingDirectory, { skipPermissions });
+  async createInteractiveSession(
+    sessionId,
+    initialPrompt,
+    workingDirectory,
+    skipPermissions = false
+  ) {
+    return this.sessionManager.createInteractiveSession(
+      sessionId,
+      initialPrompt,
+      workingDirectory,
+      { skipPermissions }
+    );
   }
 
   async sendToExistingSession(sessionId, prompt) {
@@ -518,12 +541,12 @@ export class AICLIService extends EventEmitter {
   async executeAICLICommand(session, prompt) {
     // Delegate to process runner
     const result = await this.processRunner.executeAICLICommand(session, prompt);
-    
+
     // Mark conversation as started AFTER successful first command
     if (!session.conversationStarted) {
       await this.sessionManager.markConversationStarted(session.sessionId);
     }
-    
+
     return result;
   }
 
@@ -749,11 +772,11 @@ export class AICLIService extends EventEmitter {
   }
 
   async markSessionBackgrounded(sessionId) {
-    return await this.sessionManager.markSessionBackgrounded(sessionId);
+    return this.sessionManager.markSessionBackgrounded(sessionId);
   }
 
   async markSessionForegrounded(sessionId) {
-    return await this.sessionManager.markSessionForegrounded(sessionId);
+    return this.sessionManager.markSessionForegrounded(sessionId);
   }
 
   // Cleanup method for graceful shutdown
@@ -1023,7 +1046,6 @@ export class AICLIService extends EventEmitter {
   findAICLICommand() {
     return AICLIConfig.findAICLICommand();
   }
-
 
   isPermissionPrompt(message) {
     return MessageProcessor.isPermissionPrompt(message);

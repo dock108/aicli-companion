@@ -12,7 +12,7 @@ export class SessionPersistenceService {
     this.storageDir = options.storageDir || path.join(os.homedir(), '.claude-companion');
     this.sessionsFile = path.join(this.storageDir, 'sessions.json');
     this.backupFile = path.join(this.storageDir, 'sessions.backup.json');
-    
+
     // In-memory cache for performance
     this.sessionsCache = new Map();
     this.isInitialized = false;
@@ -27,10 +27,10 @@ export class SessionPersistenceService {
     try {
       // Ensure storage directory exists
       await fs.mkdir(this.storageDir, { recursive: true });
-      
+
       // Load existing sessions into cache
       await this.loadSessions();
-      
+
       this.isInitialized = true;
       console.log(`📚 Session persistence initialized: ${this.sessionsCache.size} sessions loaded`);
     } catch (error) {
@@ -46,7 +46,7 @@ export class SessionPersistenceService {
     try {
       const data = await fs.readFile(this.sessionsFile, 'utf8');
       const sessions = JSON.parse(data);
-      
+
       // Convert array to Map for efficient lookups
       this.sessionsCache.clear();
       for (const session of sessions) {
@@ -55,10 +55,12 @@ export class SessionPersistenceService {
           // Parse timestamps back to numbers
           createdAt: new Date(session.createdAt).getTime(),
           lastActivity: new Date(session.lastActivity).getTime(),
-          backgroundedAt: session.backgroundedAt ? new Date(session.backgroundedAt).getTime() : null,
+          backgroundedAt: session.backgroundedAt
+            ? new Date(session.backgroundedAt).getTime()
+            : null,
         });
       }
-      
+
       console.log(`📖 Loaded ${sessions.length} persisted sessions from disk`);
     } catch (error) {
       if (error.code === 'ENOENT') {
@@ -82,17 +84,19 @@ export class SessionPersistenceService {
       console.log('🔄 Attempting to load sessions from backup file...');
       const data = await fs.readFile(this.backupFile, 'utf8');
       const sessions = JSON.parse(data);
-      
+
       this.sessionsCache.clear();
       for (const session of sessions) {
         this.sessionsCache.set(session.sessionId, {
           ...session,
           createdAt: new Date(session.createdAt).getTime(),
           lastActivity: new Date(session.lastActivity).getTime(),
-          backgroundedAt: session.backgroundedAt ? new Date(session.backgroundedAt).getTime() : null,
+          backgroundedAt: session.backgroundedAt
+            ? new Date(session.backgroundedAt).getTime()
+            : null,
         });
       }
-      
+
       console.log(`✅ Restored ${sessions.length} sessions from backup`);
     } catch (backupError) {
       console.warn('⚠️ Could not load from backup file:', backupError.message);
@@ -110,16 +114,18 @@ export class SessionPersistenceService {
 
     try {
       // Convert Map to serializable array
-      const sessions = Array.from(this.sessionsCache.values()).map(session => ({
+      const sessions = Array.from(this.sessionsCache.values()).map((session) => ({
         ...session,
         // Convert timestamps to ISO strings for JSON serialization
         createdAt: new Date(session.createdAt).toISOString(),
         lastActivity: new Date(session.lastActivity).toISOString(),
-        backgroundedAt: session.backgroundedAt ? new Date(session.backgroundedAt).toISOString() : null,
+        backgroundedAt: session.backgroundedAt
+          ? new Date(session.backgroundedAt).toISOString()
+          : null,
       }));
 
       const data = JSON.stringify(sessions, null, 2);
-      
+
       // Create backup of current file before writing
       try {
         await fs.copyFile(this.sessionsFile, this.backupFile);
@@ -129,12 +135,12 @@ export class SessionPersistenceService {
           console.warn('⚠️ Could not create backup:', error.message);
         }
       }
-      
+
       // Atomic write: write to temp file first, then rename
       const tempFile = `${this.sessionsFile}.tmp`;
       await fs.writeFile(tempFile, data, 'utf8');
       await fs.rename(tempFile, this.sessionsFile);
-      
+
       console.log(`💾 Saved ${sessions.length} sessions to disk`);
     } catch (error) {
       console.error('❌ Failed to save sessions to disk:', error);
@@ -191,10 +197,10 @@ export class SessionPersistenceService {
     };
 
     this.sessionsCache.set(sessionId, session);
-    
+
     // Save to disk immediately for durability
     await this.saveSessions();
-    
+
     console.log(`💾 Persisted session ${sessionId} (conversation: ${session.conversationStarted})`);
     return session;
   }
@@ -220,7 +226,7 @@ export class SessionPersistenceService {
 
     this.sessionsCache.set(sessionId, updatedSession);
     await this.saveSessions();
-    
+
     console.log(`🔄 Updated persisted session ${sessionId}:`, Object.keys(updates));
     return updatedSession;
   }
@@ -244,7 +250,8 @@ export class SessionPersistenceService {
   /**
    * Clean up old sessions (older than specified age)
    */
-  async cleanup(maxAgeMs = 7 * 24 * 60 * 60 * 1000) { // Default: 7 days
+  async cleanup(maxAgeMs = 7 * 24 * 60 * 60 * 1000) {
+    // Default: 7 days
     if (!this.isInitialized) {
       await this.initialize();
     }
@@ -263,7 +270,7 @@ export class SessionPersistenceService {
       for (const sessionId of sessionsToRemove) {
         this.sessionsCache.delete(sessionId);
       }
-      
+
       await this.saveSessions();
       console.log(`🧹 Cleaned up ${sessionsToRemove.length} old sessions from persistence`);
     }
@@ -274,7 +281,8 @@ export class SessionPersistenceService {
   /**
    * Get sessions that might be stale (not updated recently)
    */
-  getStaleSessionIds(maxIdleMs = 4 * 60 * 60 * 1000) { // Default: 4 hours
+  getStaleSessionIds(maxIdleMs = 4 * 60 * 60 * 1000) {
+    // Default: 4 hours
     const now = Date.now();
     const staleSessions = [];
 
@@ -305,14 +313,14 @@ export class SessionPersistenceService {
   getStats() {
     const sessions = Array.from(this.sessionsCache.values());
     const now = Date.now();
-    
+
     const stats = {
       total: sessions.length,
-      withConversation: sessions.filter(s => s.conversationStarted).length,
-      backgrounded: sessions.filter(s => s.isBackgrounded).length,
-      recentlyActive: sessions.filter(s => (now - s.lastActivity) < 60 * 60 * 1000).length, // Active in last hour
-      oldest: sessions.length > 0 ? Math.min(...sessions.map(s => s.createdAt)) : null,
-      newest: sessions.length > 0 ? Math.max(...sessions.map(s => s.createdAt)) : null,
+      withConversation: sessions.filter((s) => s.conversationStarted).length,
+      backgrounded: sessions.filter((s) => s.isBackgrounded).length,
+      recentlyActive: sessions.filter((s) => now - s.lastActivity < 60 * 60 * 1000).length, // Active in last hour
+      oldest: sessions.length > 0 ? Math.min(...sessions.map((s) => s.createdAt)) : null,
+      newest: sessions.length > 0 ? Math.max(...sessions.map((s) => s.createdAt)) : null,
     };
 
     return stats;

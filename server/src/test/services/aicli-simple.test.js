@@ -499,7 +499,6 @@ describe('AICLIService Simple Unit Tests', () => {
         assert.ok(result.length > 0);
       });
     });
-
   });
 
   describe('Additional Method Coverage', () => {

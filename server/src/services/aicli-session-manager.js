@@ -18,7 +18,7 @@ export class AICLISessionManager extends EventEmitter {
     this.maxSessions = options.maxSessions || 10;
     this.sessionTimeout = options.sessionTimeout || 30 * 60 * 1000; // 30 minutes
     this.backgroundedSessionTimeout = options.backgroundedSessionTimeout || 4 * 60 * 60 * 1000; // 4 hours
-    
+
     // Initialize persistence on startup
     this.initializePersistence();
   }
@@ -41,10 +41,10 @@ export class AICLISessionManager extends EventEmitter {
   async restorePersistedSessions() {
     const persistedSessions = sessionPersistence.getAllSessions();
     console.log(`🔄 Restoring ${persistedSessions.length} persisted sessions`);
-    
+
     for (const persistedSession of persistedSessions) {
       const { sessionId } = persistedSession;
-      
+
       // Create in-memory session based on persisted data
       const session = {
         sessionId,
@@ -61,21 +61,23 @@ export class AICLISessionManager extends EventEmitter {
         backgroundedAt: persistedSession.backgroundedAt,
         isRestoredSession: true, // Mark this session as restored from persistence
       };
-      
+
       this.activeSessions.set(sessionId, session);
-      
+
       // Initialize message buffer for restored session
       this.sessionMessageBuffers.set(sessionId, AICLIMessageHandler.createSessionBuffer());
-      
+
       // Set up timeout for restored session
       const timeoutId = setTimeout(() => {
         this.checkSessionTimeout(sessionId);
       }, this.sessionTimeout);
       session.timeoutId = timeoutId;
-      
-      console.log(`   ✅ Restored session ${sessionId} (conversation: ${session.conversationStarted})`);
+
+      console.log(
+        `   ✅ Restored session ${sessionId} (conversation: ${session.conversationStarted})`
+      );
     }
-    
+
     if (persistedSessions.length > 0) {
       console.log(`🎉 Successfully restored ${persistedSessions.length} sessions from persistence`);
     }
@@ -180,7 +182,7 @@ export class AICLISessionManager extends EventEmitter {
       // Remove from active sessions and clean up message buffer
       this.activeSessions.delete(sessionId);
       this.sessionMessageBuffers.delete(sessionId);
-      
+
       // Remove from persistent storage
       try {
         await sessionPersistence.removeSession(sessionId);
@@ -243,7 +245,7 @@ export class AICLISessionManager extends EventEmitter {
     const session = this.activeSessions.get(sessionId);
     if (session) {
       session.lastActivity = Date.now();
-      
+
       // Update persistence
       try {
         await sessionPersistence.updateSession(sessionId, {
@@ -273,7 +275,7 @@ export class AICLISessionManager extends EventEmitter {
     const session = this.activeSessions.get(sessionId);
     if (session) {
       session.conversationStarted = true;
-      
+
       // Update persistence
       try {
         await sessionPersistence.updateSession(sessionId, {
@@ -281,7 +283,10 @@ export class AICLISessionManager extends EventEmitter {
         });
         console.log(`💾 Session ${sessionId} conversation start persisted`);
       } catch (error) {
-        console.warn(`⚠️ Failed to persist conversation start for session ${sessionId}:`, error.message);
+        console.warn(
+          `⚠️ Failed to persist conversation start for session ${sessionId}:`,
+          error.message
+        );
       }
     }
   }
@@ -295,7 +300,7 @@ export class AICLISessionManager extends EventEmitter {
       session.isBackgrounded = true;
       session.backgroundedAt = Date.now();
       console.log(`📱 Session ${sessionId} marked as backgrounded`);
-      
+
       // Update persistence
       try {
         await sessionPersistence.updateSession(sessionId, {
@@ -303,7 +308,10 @@ export class AICLISessionManager extends EventEmitter {
           backgroundedAt: session.backgroundedAt,
         });
       } catch (error) {
-        console.warn(`⚠️ Failed to persist background state for session ${sessionId}:`, error.message);
+        console.warn(
+          `⚠️ Failed to persist background state for session ${sessionId}:`,
+          error.message
+        );
       }
     }
   }
@@ -318,7 +326,7 @@ export class AICLISessionManager extends EventEmitter {
       session.backgroundedAt = null;
       await this.updateSessionActivity(sessionId);
       console.log(`📱 Session ${sessionId} marked as foregrounded`);
-      
+
       // Update persistence
       try {
         await sessionPersistence.updateSession(sessionId, {
@@ -326,7 +334,10 @@ export class AICLISessionManager extends EventEmitter {
           backgroundedAt: null,
         });
       } catch (error) {
-        console.warn(`⚠️ Failed to persist foreground state for session ${sessionId}:`, error.message);
+        console.warn(
+          `⚠️ Failed to persist foreground state for session ${sessionId}:`,
+          error.message
+        );
       }
     }
   }
@@ -345,7 +356,9 @@ export class AICLISessionManager extends EventEmitter {
     const inactiveTime = now - session.lastActivity;
 
     // Determine appropriate timeout based on background state
-    const timeoutToUse = session.isBackgrounded ? this.backgroundedSessionTimeout : this.sessionTimeout;
+    const timeoutToUse = session.isBackgrounded
+      ? this.backgroundedSessionTimeout
+      : this.sessionTimeout;
     const timeoutName = session.isBackgrounded ? 'backgrounded timeout' : 'regular timeout';
 
     // Only timeout if truly inactive for longer than timeout period
@@ -400,13 +413,16 @@ export class AICLISessionManager extends EventEmitter {
       session.isActive = false;
       this.activeSessions.delete(sessionId);
       this.sessionMessageBuffers.delete(sessionId);
-      
+
       // Remove from persistent storage
       try {
         await sessionPersistence.removeSession(sessionId);
         console.log(`💾 Dead session ${sessionId} removed from persistent storage`);
       } catch (error) {
-        console.warn(`⚠️ Failed to remove dead session ${sessionId} from persistence:`, error.message);
+        console.warn(
+          `⚠️ Failed to remove dead session ${sessionId} from persistence:`,
+          error.message
+        );
       }
 
       this.emit('sessionCleaned', {
@@ -438,28 +454,28 @@ export class AICLISessionManager extends EventEmitter {
 
     console.log('✅ AICLI Session Manager shut down complete');
   }
-  
+
   /**
    * Get persistence stats for debugging
    */
   getPersistenceStats() {
     return sessionPersistence.getStats();
   }
-  
+
   /**
    * Export sessions for debugging
    */
   async exportSessions() {
-    return await sessionPersistence.exportSessions();
+    return sessionPersistence.exportSessions();
   }
-  
+
   /**
    * Cleanup old persisted sessions
    */
   async cleanupOldSessions(maxAgeMs) {
-    return await sessionPersistence.cleanup(maxAgeMs);
+    return sessionPersistence.cleanup(maxAgeMs);
   }
-  
+
   /**
    * Reconcile session state with AICLI CLI to ensure consistency
    * This checks for sessions that exist in persistence but may be stale
@@ -468,31 +484,33 @@ export class AICLISessionManager extends EventEmitter {
   async reconcileSessionState() {
     try {
       console.log('🔄 Reconciling session state with AICLI CLI...');
-      
+
       const persistedSessions = sessionPersistence.getAllSessions();
       const staleSessions = [];
-      
+
       // Check each persisted session by attempting a test command
       for (const persistedSession of persistedSessions) {
         const { sessionId } = persistedSession;
-        
+
         // Skip if session is already active in memory
         if (this.activeSessions.has(sessionId)) {
           continue;
         }
-        
+
         // Try to test if AICLI CLI recognizes this session
         // We'll do this by attempting to resume the session with a no-op command
         try {
           console.log(`🔍 Testing session ${sessionId} recognition with AICLI CLI...`);
-          
+
           // If the session is truly stale, this will fail
           // For now, we'll mark sessions older than 7 days as potentially stale
           const age = Date.now() - persistedSession.lastActivity;
           const sevenDays = 7 * 24 * 60 * 60 * 1000;
-          
+
           if (age > sevenDays) {
-            console.log(`⚠️ Session ${sessionId} is ${Math.round(age / (24 * 60 * 60 * 1000))} days old, marking as stale`);
+            console.log(
+              `⚠️ Session ${sessionId} is ${Math.round(age / (24 * 60 * 60 * 1000))} days old, marking as stale`
+            );
             staleSessions.push(sessionId);
           }
         } catch (error) {
@@ -500,7 +518,7 @@ export class AICLISessionManager extends EventEmitter {
           staleSessions.push(sessionId);
         }
       }
-      
+
       // Remove stale sessions from persistence
       let removedCount = 0;
       for (const staleSessionId of staleSessions) {
@@ -512,7 +530,7 @@ export class AICLISessionManager extends EventEmitter {
           console.warn(`⚠️ Failed to remove stale session ${staleSessionId}:`, error.message);
         }
       }
-      
+
       console.log(`✅ Session reconciliation complete: removed ${removedCount} stale sessions`);
       return {
         totalPersisted: persistedSessions.length,

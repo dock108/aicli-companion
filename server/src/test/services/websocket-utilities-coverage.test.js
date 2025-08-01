@@ -732,9 +732,9 @@ describe('WebSocketUtilities Coverage Tests', () => {
           send: mock.fn(),
         };
         const clients = new Map([['client1', { ws: mockWs, lastActivity: new Date() }]]);
-        const message = { 
-          type: 'test', 
-          data: 'Special chars: \n\r\t\b\f"\'\\/ emoji: 😀 unicode: \u0000' 
+        const message = {
+          type: 'test',
+          data: 'Special chars: \n\r\t\b\f"\'\\/ emoji: 😀 unicode: \u0000',
         };
 
         const result = WebSocketUtilities.sendMessage('client1', message, clients);
@@ -755,10 +755,15 @@ describe('WebSocketUtilities Coverage Tests', () => {
         // Send 100 messages rapidly
         const results = [];
         for (let i = 0; i < 100; i++) {
-          results.push(WebSocketUtilities.sendMessage('client1', { type: 'test', seq: i }, clients));
+          results.push(
+            WebSocketUtilities.sendMessage('client1', { type: 'test', seq: i }, clients)
+          );
         }
 
-        assert.strictEqual(results.every(r => r === true), true);
+        assert.strictEqual(
+          results.every((r) => r === true),
+          true
+        );
         assert.strictEqual(mockWs.send.mock.calls.length, 100);
       });
     });
@@ -767,7 +772,7 @@ describe('WebSocketUtilities Coverage Tests', () => {
       it('should handle broadcasting to many concurrent clients', () => {
         const clients = new Map();
         const mockSends = [];
-        
+
         // Create 50 clients for the same session
         for (let i = 0; i < 50; i++) {
           const mockWs = { readyState: 1, send: mock.fn() };
@@ -775,7 +780,7 @@ describe('WebSocketUtilities Coverage Tests', () => {
           clients.set(`client${i}`, {
             ws: mockWs,
             sessionIds: new Set(['session1']),
-            lastActivity: new Date()
+            lastActivity: new Date(),
           });
         }
 
@@ -783,7 +788,7 @@ describe('WebSocketUtilities Coverage Tests', () => {
         WebSocketUtilities.broadcastToSessionClients('session1', message, clients);
 
         // All clients should receive the message
-        mockSends.forEach(sendMock => {
+        mockSends.forEach((sendMock) => {
           assert.strictEqual(sendMock.mock.calls.length, 1);
         });
       });
@@ -792,25 +797,25 @@ describe('WebSocketUtilities Coverage Tests', () => {
         const clients = new Map();
         const connectedMocks = [];
         const disconnectedMocks = [];
-        
+
         // Create mix of connected and disconnected clients
         for (let i = 0; i < 20; i++) {
           const isConnected = i % 2 === 0;
-          const mockWs = { 
-            readyState: isConnected ? 1 : 3, 
-            send: mock.fn() 
+          const mockWs = {
+            readyState: isConnected ? 1 : 3,
+            send: mock.fn(),
           };
-          
+
           if (isConnected) {
             connectedMocks.push(mockWs.send);
           } else {
             disconnectedMocks.push(mockWs.send);
           }
-          
+
           clients.set(`client${i}`, {
             ws: mockWs,
             sessionIds: new Set(['session1']),
-            lastActivity: new Date()
+            lastActivity: new Date(),
           });
         }
 
@@ -818,26 +823,26 @@ describe('WebSocketUtilities Coverage Tests', () => {
         WebSocketUtilities.broadcastToSessionClients('session1', message, clients);
 
         // Only connected clients should receive the message
-        connectedMocks.forEach(sendMock => {
+        connectedMocks.forEach((sendMock) => {
           assert.strictEqual(sendMock.mock.calls.length, 1);
         });
-        disconnectedMocks.forEach(sendMock => {
+        disconnectedMocks.forEach((sendMock) => {
           assert.strictEqual(sendMock.mock.calls.length, 0);
         });
       });
 
       it('should handle concurrent broadcasts to different sessions', () => {
         const clients = new Map();
-        
+
         // Create clients for different sessions
         for (let i = 0; i < 30; i++) {
           const sessionId = i < 10 ? 'session1' : i < 20 ? 'session2' : 'session3';
           const mockWs = { readyState: 1, send: mock.fn() };
-          
+
           clients.set(`client${i}`, {
             ws: mockWs,
             sessionIds: new Set([sessionId]),
-            lastActivity: new Date()
+            lastActivity: new Date(),
           });
         }
 
@@ -850,7 +855,7 @@ describe('WebSocketUtilities Coverage Tests', () => {
         clients.forEach((client, clientId) => {
           assert.strictEqual(client.ws.send.mock.calls.length, 1);
           const sentMessage = JSON.parse(client.ws.send.mock.calls[0].arguments[0]);
-          
+
           if (clientId.startsWith('client') && parseInt(clientId.slice(6)) < 10) {
             assert.strictEqual(sentMessage.type, 'msg1');
           } else if (parseInt(clientId.slice(6)) < 20) {
@@ -872,7 +877,7 @@ describe('WebSocketUtilities Coverage Tests', () => {
           'step 15 of 10', // Step exceeding total
         ];
 
-        malformedOutputs.forEach(output => {
+        malformedOutputs.forEach((output) => {
           const result = WebSocketUtilities.parseProgressFromOutput(output);
           if (result) {
             // Progress should be clamped between 0 and 1
@@ -884,7 +889,7 @@ describe('WebSocketUtilities Coverage Tests', () => {
       it('should handle multiple progress indicators in one output', () => {
         const output = 'Processing: 25% complete, step 3 of 10, estimated 5 minutes remaining';
         const result = WebSocketUtilities.parseProgressFromOutput(output);
-        
+
         assert.ok(result);
         // Should pick the first match (percentage in this case)
         assert.strictEqual(result.progress, 0.25);
@@ -898,7 +903,7 @@ describe('WebSocketUtilities Coverage Tests', () => {
           'Прогресс: 90%', // Russian
         ];
 
-        internationalOutputs.forEach(output => {
+        internationalOutputs.forEach((output) => {
           const result = WebSocketUtilities.parseProgressFromOutput(output);
           assert.ok(result);
           assert.ok(result.progress > 0 && result.progress < 1);
@@ -913,7 +918,7 @@ describe('WebSocketUtilities Coverage Tests', () => {
           Memory usage: 512MB
           Time elapsed: 2m 30s
         `;
-        
+
         const result = WebSocketUtilities.parseProgressFromOutput(multiLineOutput);
         assert.ok(result);
         assert.strictEqual(result.progress, 0.45);
@@ -922,9 +927,9 @@ describe('WebSocketUtilities Coverage Tests', () => {
 
     describe('formatStreamContent stress tests', () => {
       it('should handle deeply nested objects', () => {
-        let deepObject = { level: 0 };
+        const deepObject = { level: 0 };
         let current = deepObject;
-        
+
         // Create 100 levels of nesting
         for (let i = 1; i < 100; i++) {
           current.nested = { level: i };
@@ -932,7 +937,7 @@ describe('WebSocketUtilities Coverage Tests', () => {
         }
 
         const result = WebSocketUtilities.formatStreamContent(deepObject);
-        
+
         assert.ok(result);
         assert.ok(result.text);
         assert.ok(result.metadata);
@@ -940,9 +945,9 @@ describe('WebSocketUtilities Coverage Tests', () => {
       });
 
       it('should handle binary data representation', () => {
-        const binaryData = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]); // JPEG header
+        const binaryData = Buffer.from([0xff, 0xd8, 0xff, 0xe0]); // JPEG header
         const result = WebSocketUtilities.formatStreamContent(binaryData);
-        
+
         assert.ok(result);
         assert.ok(result.text);
         assert.strictEqual(result.metadata.type, 'object');
@@ -951,7 +956,7 @@ describe('WebSocketUtilities Coverage Tests', () => {
       it('should handle very long strings efficiently', () => {
         const longString = 'a'.repeat(10000000); // 10MB string
         const result = WebSocketUtilities.formatStreamContent(longString);
-        
+
         assert.ok(result);
         assert.strictEqual(result.text.length, 10000000);
         assert.strictEqual(result.metadata.length, 10000000);
@@ -963,17 +968,17 @@ describe('WebSocketUtilities Coverage Tests', () => {
           number: 42,
           boolean: true,
           null: null,
-          undefined: undefined,
+          undefined,
           array: [1, 2, 3],
           nested: {
             date: new Date(),
             regex: /test/g,
             function: () => {},
-          }
+          },
         };
 
         const result = WebSocketUtilities.formatStreamContent(mixedContent);
-        
+
         assert.ok(result);
         assert.ok(result.text);
         assert.strictEqual(result.metadata.type, 'json');
@@ -986,12 +991,12 @@ describe('WebSocketUtilities Coverage Tests', () => {
       it('should handle high-frequency message validation', () => {
         const validMessage = { type: 'test', requestId: 'req123', data: {} };
         const startTime = Date.now();
-        
+
         // Validate 10000 messages
         for (let i = 0; i < 10000; i++) {
           WebSocketUtilities.validateMessage(validMessage);
         }
-        
+
         const duration = Date.now() - startTime;
         // Should complete in reasonable time (less than 100ms)
         assert.ok(duration < 100, `Validation took ${duration}ms`);
@@ -999,12 +1004,17 @@ describe('WebSocketUtilities Coverage Tests', () => {
 
       it('should efficiently create responses in bulk', () => {
         const startTime = Date.now();
-        
+
         // Create 5000 responses
         for (let i = 0; i < 5000; i++) {
-          WebSocketUtilities.createResponse('test', `req${i}`, { index: i }, { metadata: { bulk: true } });
+          WebSocketUtilities.createResponse(
+            'test',
+            `req${i}`,
+            { index: i },
+            { metadata: { bulk: true } }
+          );
         }
-        
+
         const duration = Date.now() - startTime;
         // Should complete in reasonable time (less than 50ms)
         assert.ok(duration < 50, `Response creation took ${duration}ms`);
@@ -1021,14 +1031,16 @@ describe('WebSocketUtilities Coverage Tests', () => {
             if (sendCount === 3) {
               throw new Error('WebSocket closed unexpectedly');
             }
-          })
+          }),
         };
         const clients = new Map([['client1', { ws: mockWs, lastActivity: new Date() }]]);
 
         // Send 5 messages, 3rd one will fail
         const results = [];
         for (let i = 0; i < 5; i++) {
-          results.push(WebSocketUtilities.sendMessage('client1', { type: 'test', seq: i }, clients));
+          results.push(
+            WebSocketUtilities.sendMessage('client1', { type: 'test', seq: i }, clients)
+          );
         }
 
         assert.strictEqual(results[0], true);
@@ -1040,7 +1052,7 @@ describe('WebSocketUtilities Coverage Tests', () => {
 
       it('should handle WebSocket state changes during broadcast', () => {
         const clients = new Map();
-        
+
         // Create clients that will change state during iteration
         for (let i = 0; i < 10; i++) {
           const mockWs = {
@@ -1050,13 +1062,13 @@ describe('WebSocketUtilities Coverage Tests', () => {
               if (i > 5) {
                 mockWs.readyState = 3;
               }
-            })
+            }),
           };
-          
+
           clients.set(`client${i}`, {
             ws: mockWs,
             sessionIds: new Set(['session1']),
-            lastActivity: new Date()
+            lastActivity: new Date(),
           });
         }
 

@@ -12,7 +12,7 @@ describe('AICLIProcessRunner Simple Tests', () => {
 
   afterEach(() => {
     // Clean up any health monitors created during tests
-    activeHealthMonitors.forEach(monitor => {
+    activeHealthMonitors.forEach((monitor) => {
       if (monitor && typeof monitor.cleanup === 'function') {
         monitor.cleanup();
       }
@@ -273,10 +273,10 @@ describe('AICLIProcessRunner Simple Tests', () => {
 
   describe('createHealthMonitor', () => {
     it('should create health monitor with cleanup function', () => {
-      const mockProcess = { 
+      const mockProcess = {
         kill: mock.fn(),
         on: mock.fn(),
-        pid: 12345
+        pid: 12345,
       };
       const healthMonitor = processRunner.createHealthMonitor(mockProcess, 'session123');
       activeHealthMonitors.push(healthMonitor);
@@ -286,10 +286,10 @@ describe('AICLIProcessRunner Simple Tests', () => {
     });
 
     it('should cleanup monitoring interval', () => {
-      const mockProcess = { 
+      const mockProcess = {
         kill: mock.fn(),
         on: mock.fn(),
-        pid: 12345
+        pid: 12345,
       };
       const healthMonitor = processRunner.createHealthMonitor(mockProcess, 'session123');
       activeHealthMonitors.push(healthMonitor);
@@ -298,7 +298,7 @@ describe('AICLIProcessRunner Simple Tests', () => {
       assert.doesNotThrow(() => {
         healthMonitor.cleanup();
       });
-      
+
       // Calling cleanup multiple times should be safe
       assert.doesNotThrow(() => {
         healthMonitor.cleanup();
@@ -306,10 +306,10 @@ describe('AICLIProcessRunner Simple Tests', () => {
     });
 
     it('should record activity', () => {
-      const mockProcess = { 
+      const mockProcess = {
         kill: mock.fn(),
         on: mock.fn(),
-        pid: 12345
+        pid: 12345,
       };
       const healthMonitor = processRunner.createHealthMonitor(mockProcess, 'session123');
       activeHealthMonitors.push(healthMonitor);

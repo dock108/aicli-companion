@@ -1,7 +1,6 @@
 import { describe, it, mock } from 'node:test';
 import assert from 'node:assert';
 import { AICLIService } from '../../services/aicli.js';
-import { EventEmitter } from 'events';
 
 // Unit tests for AICLIService that don't require process spawning
 describe('AICLIService Unit Tests', () => {
@@ -1176,7 +1175,6 @@ describe('AICLIService Unit Tests', () => {
     });
   });
 
-
   describe('extractPermissionPromptFromMessage', () => {
     it('should extract text from message and clean prompt', () => {
       const message = { result: 'Do you want to continue? (y/n)' };
@@ -1270,15 +1268,18 @@ describe('AICLIService Unit Tests', () => {
       it('should delegate to process runner and update local property', () => {
         const mockProcessRunner = {
           setPermissionMode: mock.fn(),
-          permissionMode: 'acceptEdits'
+          permissionMode: 'acceptEdits',
         };
-        const service = new AICLIService({ processRunner: mockProcessRunner });
+        const testService = new AICLIService({ processRunner: mockProcessRunner });
 
-        service.setPermissionMode('acceptEdits');
+        testService.setPermissionMode('acceptEdits');
 
         assert.strictEqual(mockProcessRunner.setPermissionMode.mock.calls.length, 1);
-        assert.strictEqual(mockProcessRunner.setPermissionMode.mock.calls[0].arguments[0], 'acceptEdits');
-        assert.strictEqual(service.permissionMode, 'acceptEdits');
+        assert.strictEqual(
+          mockProcessRunner.setPermissionMode.mock.calls[0].arguments[0],
+          'acceptEdits'
+        );
+        assert.strictEqual(testService.permissionMode, 'acceptEdits');
       });
     });
 
@@ -1286,15 +1287,18 @@ describe('AICLIService Unit Tests', () => {
       it('should delegate to process runner and update local property', () => {
         const mockProcessRunner = {
           setAllowedTools: mock.fn(),
-          allowedTools: ['Read', 'Write']
+          allowedTools: ['Read', 'Write'],
         };
-        const service = new AICLIService({ processRunner: mockProcessRunner });
+        const testService = new AICLIService({ processRunner: mockProcessRunner });
 
-        service.setAllowedTools(['Read', 'Write']);
+        testService.setAllowedTools(['Read', 'Write']);
 
         assert.strictEqual(mockProcessRunner.setAllowedTools.mock.calls.length, 1);
-        assert.deepStrictEqual(mockProcessRunner.setAllowedTools.mock.calls[0].arguments[0], ['Read', 'Write']);
-        assert.deepStrictEqual(service.allowedTools, ['Read', 'Write']);
+        assert.deepStrictEqual(mockProcessRunner.setAllowedTools.mock.calls[0].arguments[0], [
+          'Read',
+          'Write',
+        ]);
+        assert.deepStrictEqual(testService.allowedTools, ['Read', 'Write']);
       });
     });
 
@@ -1302,34 +1306,37 @@ describe('AICLIService Unit Tests', () => {
       it('should delegate to process runner and update local property', () => {
         const mockProcessRunner = {
           setDisallowedTools: mock.fn(),
-          disallowedTools: ['Bash', 'System']
+          disallowedTools: ['Bash', 'System'],
         };
-        const service = new AICLIService({ processRunner: mockProcessRunner });
+        const testService = new AICLIService({ processRunner: mockProcessRunner });
 
-        service.setDisallowedTools(['Bash', 'System']);
+        testService.setDisallowedTools(['Bash', 'System']);
 
         assert.strictEqual(mockProcessRunner.setDisallowedTools.mock.calls.length, 1);
-        assert.deepStrictEqual(mockProcessRunner.setDisallowedTools.mock.calls[0].arguments[0], ['Bash', 'System']);
-        assert.deepStrictEqual(service.disallowedTools, ['Bash', 'System']);
+        assert.deepStrictEqual(mockProcessRunner.setDisallowedTools.mock.calls[0].arguments[0], [
+          'Bash',
+          'System',
+        ]);
+        assert.deepStrictEqual(testService.disallowedTools, ['Bash', 'System']);
       });
     });
 
     describe('setSafeRootDirectory', () => {
       it('should set safe root directory', () => {
-        const service = new AICLIService();
-        
-        service.setSafeRootDirectory('/safe/root');
-        
-        assert.strictEqual(service.safeRootDirectory, '/safe/root');
+        const testService = new AICLIService();
+
+        testService.setSafeRootDirectory('/safe/root');
+
+        assert.strictEqual(testService.safeRootDirectory, '/safe/root');
       });
 
       it('should handle null value', () => {
-        const service = new AICLIService();
-        service.safeRootDirectory = '/old/path';
-        
-        service.setSafeRootDirectory(null);
-        
-        assert.strictEqual(service.safeRootDirectory, null);
+        const testService = new AICLIService();
+        testService.safeRootDirectory = '/old/path';
+
+        testService.setSafeRootDirectory(null);
+
+        assert.strictEqual(testService.safeRootDirectory, null);
       });
     });
 
@@ -1337,29 +1344,29 @@ describe('AICLIService Unit Tests', () => {
       it('should delegate to process runner and update local property', () => {
         const mockProcessRunner = {
           setSkipPermissions: mock.fn(),
-          skipPermissions: true
+          skipPermissions: true,
         };
-        const service = new AICLIService({ processRunner: mockProcessRunner });
+        const testService = new AICLIService({ processRunner: mockProcessRunner });
 
-        service.setSkipPermissions(true);
+        testService.setSkipPermissions(true);
 
         assert.strictEqual(mockProcessRunner.setSkipPermissions.mock.calls.length, 1);
         assert.strictEqual(mockProcessRunner.setSkipPermissions.mock.calls[0].arguments[0], true);
-        assert.strictEqual(service.skipPermissions, true);
+        assert.strictEqual(testService.skipPermissions, true);
       });
 
       it('should handle falsy values', () => {
         const mockProcessRunner = {
           setSkipPermissions: mock.fn(),
-          skipPermissions: false
+          skipPermissions: false,
         };
-        const service = new AICLIService({ processRunner: mockProcessRunner });
+        const testService = new AICLIService({ processRunner: mockProcessRunner });
 
-        service.setSkipPermissions(false);
+        testService.setSkipPermissions(false);
 
         assert.strictEqual(mockProcessRunner.setSkipPermissions.mock.calls.length, 1);
         assert.strictEqual(mockProcessRunner.setSkipPermissions.mock.calls[0].arguments[0], false);
-        assert.strictEqual(service.skipPermissions, false);
+        assert.strictEqual(testService.skipPermissions, false);
       });
     });
   });
@@ -1369,46 +1376,46 @@ describe('AICLIService Unit Tests', () => {
       it('should not start monitoring in test environment', () => {
         const originalEnv = process.env.NODE_ENV;
         process.env.NODE_ENV = 'test';
-        
-        const service = new AICLIService();
-        service.startProcessHealthMonitoring();
-        
-        assert.strictEqual(service.processHealthCheckInterval, null);
-        
+
+        const testService = new AICLIService();
+        testService.startProcessHealthMonitoring();
+
+        assert.strictEqual(testService.processHealthCheckInterval, null);
+
         process.env.NODE_ENV = originalEnv;
       });
 
       it('should start monitoring in non-test environment', () => {
         const originalEnv = process.env.NODE_ENV;
         process.env.NODE_ENV = 'production';
-        
-        const service = new AICLIService();
-        service.startProcessHealthMonitoring();
-        
-        assert.ok(service.processHealthCheckInterval);
-        
+
+        const testService = new AICLIService();
+        testService.startProcessHealthMonitoring();
+
+        assert.ok(testService.processHealthCheckInterval);
+
         // Clean up
-        clearInterval(service.processHealthCheckInterval);
+        clearInterval(testService.processHealthCheckInterval);
         process.env.NODE_ENV = originalEnv;
       });
     });
 
     describe('stopProcessHealthMonitoring', () => {
       it('should clear interval if exists', () => {
-        const service = new AICLIService();
-        service.processHealthCheckInterval = setInterval(() => {}, 1000);
-        
-        service.stopProcessHealthMonitoring();
-        
-        assert.strictEqual(service.processHealthCheckInterval, null);
+        const testService = new AICLIService();
+        testService.processHealthCheckInterval = setInterval(() => {}, 1000);
+
+        testService.stopProcessHealthMonitoring();
+
+        assert.strictEqual(testService.processHealthCheckInterval, null);
       });
 
       it('should handle null interval gracefully', () => {
-        const service = new AICLIService();
-        service.processHealthCheckInterval = null;
-        
+        const testService = new AICLIService();
+        testService.processHealthCheckInterval = null;
+
         assert.doesNotThrow(() => {
-          service.stopProcessHealthMonitoring();
+          testService.stopProcessHealthMonitoring();
         });
       });
     });
@@ -1417,14 +1424,14 @@ describe('AICLIService Unit Tests', () => {
       it('should check health of all active sessions', async () => {
         const mockSession = {
           process: { pid: 12345 },
-          isActive: true
+          isActive: true,
         };
         const mockSessionManager = {
-          activeSessions: new Map([['session1', mockSession]])
+          activeSessions: new Map([['session1', mockSession]]),
         };
-        const service = new AICLIService({ sessionManager: mockSessionManager });
+        const testService = new AICLIService({ sessionManager: mockSessionManager });
 
-        const result = await service.checkAllProcessHealth();
+        const result = await testService.checkAllProcessHealth();
 
         assert.ok(result);
         assert.ok(Array.isArray(result));
@@ -1433,14 +1440,14 @@ describe('AICLIService Unit Tests', () => {
       it('should handle sessions without processes', async () => {
         const mockSession = {
           process: null,
-          isActive: true
+          isActive: true,
         };
         const mockSessionManager = {
-          activeSessions: new Map([['session1', mockSession]])
+          activeSessions: new Map([['session1', mockSession]]),
         };
-        const service = new AICLIService({ sessionManager: mockSessionManager });
+        const testService = new AICLIService({ sessionManager: mockSessionManager });
 
-        const result = await service.checkAllProcessHealth();
+        const result = await testService.checkAllProcessHealth();
 
         assert.ok(result);
         assert.ok(Array.isArray(result));
@@ -1450,14 +1457,17 @@ describe('AICLIService Unit Tests', () => {
     describe('cleanupDeadSession', () => {
       it('should delegate to session manager', async () => {
         const mockSessionManager = {
-          cleanupDeadSession: mock.fn(async () => {})
+          cleanupDeadSession: mock.fn(async () => {}),
         };
-        const service = new AICLIService({ sessionManager: mockSessionManager });
+        const testService = new AICLIService({ sessionManager: mockSessionManager });
 
-        await service.cleanupDeadSession('session123');
+        await testService.cleanupDeadSession('session123');
 
         assert.strictEqual(mockSessionManager.cleanupDeadSession.mock.calls.length, 1);
-        assert.strictEqual(mockSessionManager.cleanupDeadSession.mock.calls[0].arguments[0], 'session123');
+        assert.strictEqual(
+          mockSessionManager.cleanupDeadSession.mock.calls[0].arguments[0],
+          'session123'
+        );
       });
     });
   });
@@ -1465,54 +1475,54 @@ describe('AICLIService Unit Tests', () => {
   describe('JSON Processing Methods', () => {
     describe('isValidCompleteJSON', () => {
       it('should delegate to AICLIMessageHandler', () => {
-        const service = new AICLIService();
-        const result = service.isValidCompleteJSON('{"test": true}');
-        
+        const testService = new AICLIService();
+        const result = testService.isValidCompleteJSON('{"test": true}');
+
         assert.strictEqual(typeof result, 'boolean');
       });
     });
 
     describe('parseStreamJsonOutput', () => {
       it('should delegate to AICLIMessageHandler', () => {
-        const service = new AICLIService();
-        const result = service.parseStreamJsonOutput('{"type": "test"}');
-        
+        const testService = new AICLIService();
+        const result = testService.parseStreamJsonOutput('{"type": "test"}');
+
         assert.ok(result);
       });
     });
 
     describe('extractCompleteObjectsFromLine', () => {
       it('should delegate to AICLIMessageHandler', () => {
-        const service = new AICLIService();
-        const result = service.extractCompleteObjectsFromLine('{"type": "test"}');
-        
+        const testService = new AICLIService();
+        const result = testService.extractCompleteObjectsFromLine('{"type": "test"}');
+
         assert.ok(Array.isArray(result));
       });
     });
 
     describe('extractLastCompleteJSON', () => {
       it('should delegate to AICLIMessageHandler', () => {
-        const service = new AICLIService();
-        const result = service.extractLastCompleteJSON('{"partial": "json');
-        
+        const testService = new AICLIService();
+        const result = testService.extractLastCompleteJSON('{"partial": "json');
+
         assert.ok(result !== undefined);
       });
     });
 
     describe('findLastCompleteJSONStart', () => {
       it('should delegate to AICLIMessageHandler', () => {
-        const service = new AICLIService();
-        const result = service.findLastCompleteJSONStart('some text {"json": true}');
-        
+        const testService = new AICLIService();
+        const result = testService.findLastCompleteJSONStart('some text {"json": true}');
+
         assert.strictEqual(typeof result, 'number');
       });
     });
 
     describe('extractCompleteObjectsFromArray', () => {
       it('should delegate to AICLIMessageHandler', () => {
-        const service = new AICLIService();
-        const result = service.extractCompleteObjectsFromArray('[{"test": true}]');
-        
+        const testService = new AICLIService();
+        const result = testService.extractCompleteObjectsFromArray('[{"test": true}]');
+
         assert.ok(Array.isArray(result));
       });
     });
@@ -1524,38 +1534,38 @@ describe('AICLIService Unit Tests', () => {
         const mockBuffer = {
           assistantMessages: [],
           userMessages: [],
-          toolUseMessages: []
+          toolUseMessages: [],
         };
         const mockSessionManager = {
-          getSessionBuffer: mock.fn(() => mockBuffer)
+          getSessionBuffer: mock.fn(() => mockBuffer),
         };
-        const service = new AICLIService({ sessionManager: mockSessionManager });
+        const testService = new AICLIService({ sessionManager: mockSessionManager });
 
         // Mock classifyAICLIMessage to return a known result
-        const originalClassify = service.classifyAICLIMessage;
-        service.classifyAICLIMessage = mock.fn(() => ({
+        const originalClassify = testService.classifyAICLIMessage;
+        testService.classifyAICLIMessage = mock.fn(() => ({
           action: 'emit',
           eventType: 'assistantMessage',
-          data: { content: 'test' }
+          data: { content: 'test' },
         }));
 
-        service.emitAICLIResponse('session123', { type: 'assistant', content: 'test' });
+        testService.emitAICLIResponse('session123', { type: 'assistant', content: 'test' });
 
         assert.strictEqual(mockSessionManager.getSessionBuffer.mock.calls.length, 1);
-        assert.strictEqual(service.classifyAICLIMessage.mock.calls.length, 1);
+        assert.strictEqual(testService.classifyAICLIMessage.mock.calls.length, 1);
 
         // Restore original method
-        service.classifyAICLIMessage = originalClassify;
+        testService.classifyAICLIMessage = originalClassify;
       });
 
       it('should handle response without buffer', () => {
         const mockSessionManager = {
           getSessionBuffer: mock.fn(() => null),
-          createSessionBuffer: mock.fn()
+          createSessionBuffer: mock.fn(),
         };
-        const service = new AICLIService({ sessionManager: mockSessionManager });
+        const testService = new AICLIService({ sessionManager: mockSessionManager });
 
-        service.emitAICLIResponse('session123', { type: 'system', content: 'test' });
+        testService.emitAICLIResponse('session123', { type: 'system', content: 'test' });
 
         assert.strictEqual(mockSessionManager.getSessionBuffer.mock.calls.length, 1);
         assert.strictEqual(mockSessionManager.createSessionBuffer.mock.calls.length, 1);
@@ -1565,14 +1575,17 @@ describe('AICLIService Unit Tests', () => {
     describe('clearSessionBuffer', () => {
       it('should delegate to session manager', () => {
         const mockSessionManager = {
-          clearSessionBuffer: mock.fn()
+          clearSessionBuffer: mock.fn(),
         };
-        const service = new AICLIService({ sessionManager: mockSessionManager });
+        const testService = new AICLIService({ sessionManager: mockSessionManager });
 
-        service.clearSessionBuffer('session123');
+        testService.clearSessionBuffer('session123');
 
         assert.strictEqual(mockSessionManager.clearSessionBuffer.mock.calls.length, 1);
-        assert.strictEqual(mockSessionManager.clearSessionBuffer.mock.calls[0].arguments[0], 'session123');
+        assert.strictEqual(
+          mockSessionManager.clearSessionBuffer.mock.calls[0].arguments[0],
+          'session123'
+        );
       });
     });
   });
@@ -1580,41 +1593,44 @@ describe('AICLIService Unit Tests', () => {
   describe('Content Analysis Methods', () => {
     describe('containsPermissionRequest', () => {
       it('should detect permission requests', () => {
-        const service = new AICLIService();
-        
-        assert.strictEqual(service.containsPermissionRequest('Do you want to proceed? (y/n)'), true);
-        assert.strictEqual(service.containsPermissionRequest('Allow this operation?'), true);
-        assert.strictEqual(service.containsPermissionRequest('Grant permission for'), true);
-        assert.strictEqual(service.containsPermissionRequest('Regular text'), false);
+        const testService = new AICLIService();
+
+        assert.strictEqual(
+          testService.containsPermissionRequest('Do you want to proceed? (y/n)'),
+          true
+        );
+        assert.strictEqual(testService.containsPermissionRequest('Allow this operation?'), true);
+        assert.strictEqual(testService.containsPermissionRequest('Grant permission for'), true);
+        assert.strictEqual(testService.containsPermissionRequest('Regular text'), false);
       });
     });
 
     describe('containsToolUse', () => {
       it('should detect tool use patterns', () => {
-        const service = new AICLIService();
-        
-        assert.strictEqual(service.containsToolUse('Using tool: Read'), true);
-        assert.strictEqual(service.containsToolUse('Tool use: Write'), true);
-        assert.strictEqual(service.containsToolUse('<tool>Bash</tool>'), true);
-        assert.strictEqual(service.containsToolUse('Regular text'), false);
+        const testService = new AICLIService();
+
+        assert.strictEqual(testService.containsToolUse('Using tool: Read'), true);
+        assert.strictEqual(testService.containsToolUse('Tool use: Write'), true);
+        assert.strictEqual(testService.containsToolUse('<tool>Bash</tool>'), true);
+        assert.strictEqual(testService.containsToolUse('Regular text'), false);
       });
     });
 
     describe('extractCodeBlocks', () => {
       it('should extract code blocks from content', () => {
-        const service = new AICLIService();
+        const testService = new AICLIService();
         const content = 'Some text\n```javascript\nconst x = 1;\n```\nMore text';
-        
-        const result = service.extractCodeBlocks(content);
-        
+
+        const result = testService.extractCodeBlocks(content);
+
         assert.ok(Array.isArray(result));
         assert.ok(result.length > 0);
       });
 
       it('should handle content without code blocks', () => {
-        const service = new AICLIService();
-        const result = service.extractCodeBlocks('Regular text without code');
-        
+        const testService = new AICLIService();
+        const result = testService.extractCodeBlocks('Regular text without code');
+
         assert.ok(Array.isArray(result));
         assert.strictEqual(result.length, 0);
       });
@@ -1622,24 +1638,24 @@ describe('AICLIService Unit Tests', () => {
 
     describe('aggregateBufferedContent', () => {
       it('should aggregate content from buffer', () => {
-        const service = new AICLIService();
+        const testService = new AICLIService();
         const buffer = {
           assistantMessages: [
             { content: [{ type: 'text', text: 'Hello' }] },
-            { content: [{ type: 'text', text: 'World' }] }
-          ]
+            { content: [{ type: 'text', text: 'World' }] },
+          ],
         };
-        
-        const result = service.aggregateBufferedContent(buffer);
-        
+
+        const result = testService.aggregateBufferedContent(buffer);
+
         assert.ok(Array.isArray(result));
         assert.ok(result.length > 0);
       });
 
       it('should handle empty buffer', () => {
-        const service = new AICLIService();
-        const result = service.aggregateBufferedContent({});
-        
+        const testService = new AICLIService();
+        const result = testService.aggregateBufferedContent({});
+
         assert.ok(Array.isArray(result));
         assert.strictEqual(result.length, 0);
       });
@@ -1650,11 +1666,11 @@ describe('AICLIService Unit Tests', () => {
     describe('hasSession', () => {
       it('should delegate to session manager', () => {
         const mockSessionManager = {
-          hasSession: mock.fn(() => true)
+          hasSession: mock.fn(() => true),
         };
-        const service = new AICLIService({ sessionManager: mockSessionManager });
+        const testService = new AICLIService({ sessionManager: mockSessionManager });
 
-        const result = service.hasSession('session123');
+        const result = testService.hasSession('session123');
 
         assert.strictEqual(result, true);
         assert.strictEqual(mockSessionManager.hasSession.mock.calls.length, 1);
@@ -1666,11 +1682,11 @@ describe('AICLIService Unit Tests', () => {
       it('should delegate to session manager', () => {
         const mockSession = { id: 'session123' };
         const mockSessionManager = {
-          getSession: mock.fn(() => mockSession)
+          getSession: mock.fn(() => mockSession),
         };
-        const service = new AICLIService({ sessionManager: mockSessionManager });
+        const testService = new AICLIService({ sessionManager: mockSessionManager });
 
-        const result = service.getSession('session123');
+        const result = testService.getSession('session123');
 
         assert.strictEqual(result, mockSession);
         assert.strictEqual(mockSessionManager.getSession.mock.calls.length, 1);
@@ -1680,15 +1696,15 @@ describe('AICLIService Unit Tests', () => {
 
     describe('checkSessionTimeout', () => {
       it('should handle session with lastActivity', () => {
-        const mockSession = { 
-          lastActivity: new Date(Date.now() - 5 * 60 * 1000) // 5 minutes ago
+        const mockSession = {
+          lastActivity: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago
         };
         const mockSessionManager = {
-          getSession: mock.fn(() => mockSession)
+          getSession: mock.fn(() => mockSession),
         };
-        const service = new AICLIService({ sessionManager: mockSessionManager });
+        const testService = new AICLIService({ sessionManager: mockSessionManager });
 
-        const result = service.checkSessionTimeout('session123');
+        const result = testService.checkSessionTimeout('session123');
 
         assert.ok(result);
         assert.ok(result.isActive !== undefined);
@@ -1698,11 +1714,11 @@ describe('AICLIService Unit Tests', () => {
       it('should handle session without lastActivity', () => {
         const mockSession = {};
         const mockSessionManager = {
-          getSession: mock.fn(() => mockSession)
+          getSession: mock.fn(() => mockSession),
         };
-        const service = new AICLIService({ sessionManager: mockSessionManager });
+        const testService = new AICLIService({ sessionManager: mockSessionManager });
 
-        const result = service.checkSessionTimeout('session123');
+        const result = testService.checkSessionTimeout('session123');
 
         assert.ok(result);
         assert.strictEqual(result.isActive, false);
@@ -1710,11 +1726,11 @@ describe('AICLIService Unit Tests', () => {
 
       it('should handle non-existent session', () => {
         const mockSessionManager = {
-          getSession: mock.fn(() => null)
+          getSession: mock.fn(() => null),
         };
-        const service = new AICLIService({ sessionManager: mockSessionManager });
+        const testService = new AICLIService({ sessionManager: mockSessionManager });
 
-        const result = service.checkSessionTimeout('session123');
+        const result = testService.checkSessionTimeout('session123');
 
         assert.strictEqual(result, null);
       });
@@ -1723,28 +1739,34 @@ describe('AICLIService Unit Tests', () => {
     describe('markSessionBackgrounded', () => {
       it('should delegate to session manager', async () => {
         const mockSessionManager = {
-          markSessionBackgrounded: mock.fn(async () => {})
+          markSessionBackgrounded: mock.fn(async () => {}),
         };
-        const service = new AICLIService({ sessionManager: mockSessionManager });
+        const testService = new AICLIService({ sessionManager: mockSessionManager });
 
-        await service.markSessionBackgrounded('session123');
+        await testService.markSessionBackgrounded('session123');
 
         assert.strictEqual(mockSessionManager.markSessionBackgrounded.mock.calls.length, 1);
-        assert.strictEqual(mockSessionManager.markSessionBackgrounded.mock.calls[0].arguments[0], 'session123');
+        assert.strictEqual(
+          mockSessionManager.markSessionBackgrounded.mock.calls[0].arguments[0],
+          'session123'
+        );
       });
     });
 
     describe('markSessionForegrounded', () => {
       it('should delegate to session manager', async () => {
         const mockSessionManager = {
-          markSessionForegrounded: mock.fn(async () => {})
+          markSessionForegrounded: mock.fn(async () => {}),
         };
-        const service = new AICLIService({ sessionManager: mockSessionManager });
+        const testService = new AICLIService({ sessionManager: mockSessionManager });
 
-        await service.markSessionForegrounded('session123');
+        await testService.markSessionForegrounded('session123');
 
         assert.strictEqual(mockSessionManager.markSessionForegrounded.mock.calls.length, 1);
-        assert.strictEqual(mockSessionManager.markSessionForegrounded.mock.calls[0].arguments[0], 'session123');
+        assert.strictEqual(
+          mockSessionManager.markSessionForegrounded.mock.calls[0].arguments[0],
+          'session123'
+        );
       });
     });
 
@@ -1752,31 +1774,37 @@ describe('AICLIService Unit Tests', () => {
       it('should send prompt to existing session', async () => {
         const mockSession = {
           sessionId: 'session123',
-          conversationStarted: true
+          conversationStarted: true,
         };
         const mockSessionManager = {
-          sendPromptToSession: mock.fn(async () => ({ success: true }))
+          sendPromptToSession: mock.fn(async () => ({ success: true })),
         };
-        const service = new AICLIService({ sessionManager: mockSessionManager });
+        const testService = new AICLIService({ sessionManager: mockSessionManager });
 
-        await service.executeAICLICommand(mockSession, 'test prompt');
+        await testService.executeAICLICommand(mockSession, 'test prompt');
 
         assert.strictEqual(mockSessionManager.sendPromptToSession.mock.calls.length, 1);
-        assert.strictEqual(mockSessionManager.sendPromptToSession.mock.calls[0].arguments[0], 'session123');
-        assert.strictEqual(mockSessionManager.sendPromptToSession.mock.calls[0].arguments[1], 'test prompt');
+        assert.strictEqual(
+          mockSessionManager.sendPromptToSession.mock.calls[0].arguments[0],
+          'session123'
+        );
+        assert.strictEqual(
+          mockSessionManager.sendPromptToSession.mock.calls[0].arguments[1],
+          'test prompt'
+        );
       });
 
       it('should mark conversation as started for first prompt', async () => {
         const mockSession = {
           sessionId: 'session123',
-          conversationStarted: false
+          conversationStarted: false,
         };
         const mockSessionManager = {
-          sendPromptToSession: mock.fn(async () => ({ success: true }))
+          sendPromptToSession: mock.fn(async () => ({ success: true })),
         };
-        const service = new AICLIService({ sessionManager: mockSessionManager });
+        const testService = new AICLIService({ sessionManager: mockSessionManager });
 
-        await service.executeAICLICommand(mockSession, 'test prompt');
+        await testService.executeAICLICommand(mockSession, 'test prompt');
 
         assert.strictEqual(mockSession.conversationStarted, true);
       });
@@ -1787,20 +1815,20 @@ describe('AICLIService Unit Tests', () => {
     describe('shutdown', () => {
       it('should stop health monitoring and shutdown session manager', async () => {
         const mockSessionManager = {
-          shutdown: mock.fn(async () => {})
+          shutdown: mock.fn(async () => {}),
         };
-        const service = new AICLIService({ sessionManager: mockSessionManager });
-        service.processHealthCheckInterval = setInterval(() => {}, 1000);
-        
+        const testService = new AICLIService({ sessionManager: mockSessionManager });
+        testService.processHealthCheckInterval = setInterval(() => {}, 1000);
+
         // Mock stopProcessHealthMonitoring to verify it's called
-        const originalStop = service.stopProcessHealthMonitoring;
-        service.stopProcessHealthMonitoring = mock.fn(originalStop.bind(service));
+        const originalStop = testService.stopProcessHealthMonitoring;
+        testService.stopProcessHealthMonitoring = mock.fn(originalStop.bind(testService));
 
-        await service.shutdown();
+        await testService.shutdown();
 
-        assert.strictEqual(service.stopProcessHealthMonitoring.mock.calls.length, 1);
+        assert.strictEqual(testService.stopProcessHealthMonitoring.mock.calls.length, 1);
         assert.strictEqual(mockSessionManager.shutdown.mock.calls.length, 1);
-        assert.strictEqual(service.processHealthCheckInterval, null);
+        assert.strictEqual(testService.processHealthCheckInterval, null);
       });
     });
   });

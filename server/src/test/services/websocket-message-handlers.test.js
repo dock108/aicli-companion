@@ -199,13 +199,13 @@ describe('WebSocketMessageHandlers', () => {
 
     it('should deliver queued messages on stream start', async () => {
       const queuedMessages = [
-        { 
+        {
           id: 'msg1',
-          message: { type: 'test', data: 'message1' }
+          message: { type: 'test', data: 'message1' },
         },
-        { 
+        {
           id: 'msg2',
-          message: { type: 'test', data: 'message2' }
+          message: { type: 'test', data: 'message2' },
         },
       ];
 
@@ -225,7 +225,10 @@ describe('WebSocketMessageHandlers', () => {
       // Should send initial response + queued messages
       assert.strictEqual(WebSocketUtilities.sendMessage.mock.calls.length, 3);
       assert.strictEqual(messageQueueService.markAsDelivered.mock.calls.length, 1);
-      assert.deepStrictEqual(messageQueueService.markAsDelivered.mock.calls[0].arguments[0], ['msg1', 'msg2']);
+      assert.deepStrictEqual(messageQueueService.markAsDelivered.mock.calls[0].arguments[0], [
+        'msg1',
+        'msg2',
+      ]);
     });
 
     it('should handle stream start failure', async () => {
@@ -378,7 +381,13 @@ describe('WebSocketMessageHandlers', () => {
     it('should respond to ping with pong', () => {
       const data = { timestamp: '2023-01-01T00:00:00Z' };
 
-      WebSocketMessageHandlers.handlePingMessage('client1', 'req123', data, mockAicliService, mockClients);
+      WebSocketMessageHandlers.handlePingMessage(
+        'client1',
+        'req123',
+        data,
+        mockAicliService,
+        mockClients
+      );
 
       assert.strictEqual(WebSocketUtilities.sendMessage.mock.calls.length, 1);
       const response = WebSocketUtilities.sendMessage.mock.calls[0].arguments[1];
@@ -387,7 +396,13 @@ describe('WebSocketMessageHandlers', () => {
     });
 
     it('should handle ping without timestamp', () => {
-      WebSocketMessageHandlers.handlePingMessage('client1', 'req123', null, mockAicliService, mockClients);
+      WebSocketMessageHandlers.handlePingMessage(
+        'client1',
+        'req123',
+        null,
+        mockAicliService,
+        mockClients
+      );
 
       assert.strictEqual(WebSocketUtilities.sendMessage.mock.calls.length, 1);
     });
@@ -433,23 +448,23 @@ describe('WebSocketMessageHandlers', () => {
     });
 
     it('should handle session subscription with queued messages', async () => {
-      const data = { 
+      const data = {
         events: ['event1', 'event2'],
-        sessionIds: ['session1', 'session2']
+        sessionIds: ['session1', 'session2'],
       };
 
       // Mock queued messages for session1
       const queuedMessages = [
-        { 
-          id: 'msg1', 
-          message: { type: 'assistantMessage', data: { content: 'Hello' } } 
+        {
+          id: 'msg1',
+          message: { type: 'assistantMessage', data: { content: 'Hello' } },
         },
-        { 
-          id: 'msg2', 
-          message: { type: 'assistantMessage', data: { content: 'World' } } 
-        }
+        {
+          id: 'msg2',
+          message: { type: 'assistantMessage', data: { content: 'World' } },
+        },
       ];
-      
+
       messageQueueService.getUndeliveredMessages = mock.fn((sessionId) => {
         return sessionId === 'session1' ? queuedMessages : [];
       });
@@ -466,15 +481,18 @@ describe('WebSocketMessageHandlers', () => {
       // Verify session tracking
       assert.strictEqual(mockConnectionManager.addSessionToClient.mock.calls.length, 2);
       assert.strictEqual(messageQueueService.trackSessionClient.mock.calls.length, 2);
-      
+
       // Verify queued messages were delivered
       assert.strictEqual(messageQueueService.getUndeliveredMessages.mock.calls.length, 2);
       assert.strictEqual(messageQueueService.markAsDelivered.mock.calls.length, 1);
-      assert.deepStrictEqual(messageQueueService.markAsDelivered.mock.calls[0].arguments[0], ['msg1', 'msg2']);
-      
+      assert.deepStrictEqual(messageQueueService.markAsDelivered.mock.calls[0].arguments[0], [
+        'msg1',
+        'msg2',
+      ]);
+
       // Verify response includes session info
       const sendCalls = WebSocketUtilities.sendMessage.mock.calls;
-      const responseCall = sendCalls.find(call => call.arguments[1].type === 'subscribe');
+      const responseCall = sendCalls.find((call) => call.arguments[1].type === 'subscribe');
       assert.ok(responseCall);
       assert.deepStrictEqual(responseCall.arguments[1].data.sessionIds, ['session1', 'session2']);
     });
@@ -594,10 +612,10 @@ describe('WebSocketMessageHandlers', () => {
     });
 
     it('should handle chat command', async () => {
-      const data = { 
+      const data = {
         command: 'Hello, how are you?',
         sessionId: 'session123',
-        projectPath: '/test/project'
+        projectPath: '/test/project',
       };
 
       await WebSocketMessageHandlers.handleClaudeCommandMessage(
@@ -611,16 +629,19 @@ describe('WebSocketMessageHandlers', () => {
 
       // Non-meta commands are treated as chat messages
       assert.strictEqual(mockAicliService.sendPrompt.mock.calls.length, 1);
-      assert.strictEqual(mockAicliService.sendPrompt.mock.calls[0].arguments[0], 'Hello, how are you?');
+      assert.strictEqual(
+        mockAicliService.sendPrompt.mock.calls[0].arguments[0],
+        'Hello, how are you?'
+      );
       assert.strictEqual(WebSocketUtilities.sendMessage.mock.calls.length, 1);
     });
   });
 
   describe('handleClientBackgroundingMessage', () => {
     it('should handle client backgrounding', async () => {
-      const data = { 
+      const data = {
         sessionId: 'session123',
-        timestamp: '2023-01-01T00:00:00Z'
+        timestamp: '2023-01-01T00:00:00Z',
       };
 
       mockAicliService.markSessionBackgrounded = mock.fn(async () => {});
@@ -644,9 +665,9 @@ describe('WebSocketMessageHandlers', () => {
     });
 
     it('should handle client without session', async () => {
-      const data = { 
+      const data = {
         // No sessionId
-        timestamp: '2023-01-01T00:00:00Z'
+        timestamp: '2023-01-01T00:00:00Z',
       };
 
       await WebSocketMessageHandlers.handleClientBackgroundingMessage(
@@ -665,9 +686,9 @@ describe('WebSocketMessageHandlers', () => {
     });
 
     it('should handle non-existent client gracefully', async () => {
-      const data = { 
+      const data = {
         sessionId: 'session123',
-        timestamp: '2023-01-01T00:00:00Z'
+        timestamp: '2023-01-01T00:00:00Z',
       };
 
       await WebSocketMessageHandlers.handleClientBackgroundingMessage(

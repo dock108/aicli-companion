@@ -55,8 +55,8 @@ describe('Project Routes', () => {
         workingDirectory: workingDir,
       })),
       closeSession: mock.fn(async () => {}),
-      hasSession: mock.fn((sessionId) => false),
-      getSession: mock.fn((sessionId) => null),
+      hasSession: mock.fn((_sessionId) => false),
+      getSession: mock.fn((_sessionId) => null),
       sessionManager: {
         getPersistenceStats: mock.fn(),
         exportSessions: mock.fn(async () => []),

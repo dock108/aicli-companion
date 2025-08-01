@@ -182,9 +182,7 @@ export function setupProjectRoutes(app, aicliService) {
 
       // Generate a session ID for this project session or use existing
       const sessionId =
-        continueSession && existingSessionId
-          ? existingSessionId
-          : crypto.randomUUID();
+        continueSession && existingSessionId ? existingSessionId : crypto.randomUUID();
 
       console.log(
         `${continueSession ? 'Continuing' : 'Starting'} AICLI CLI session for project: ${name}`
@@ -210,30 +208,34 @@ export function setupProjectRoutes(app, aicliService) {
         if (continueSession && existingSessionId) {
           // First check if session exists in AICLI session manager
           const sessionExists = aicliService.hasSession(existingSessionId);
-          
+
           if (sessionExists) {
             // Get session metadata to check if conversation started
             const sessionData = aicliService.getSession(existingSessionId);
-            console.log(`🔍 Found existing session ${existingSessionId} (conversation started: ${sessionData?.conversationStarted || false})`);
-            
+            console.log(
+              `🔍 Found existing session ${existingSessionId} (conversation started: ${sessionData?.conversationStarted || false})`
+            );
+
             // Session exists in AICLI manager, check our local tracking
             const existingSession = activeSessions.get(existingSessionId);
-            
+
             if (!existingSession) {
               // Session exists in AICLI but not in our tracking - sync it
               console.log(`🔄 Syncing session ${existingSessionId} with local tracking`);
-              
+
               const sessionInfo = {
                 sessionId: existingSessionId,
                 projectName: name,
                 projectPath,
                 status: 'running',
-                startedAt: sessionData?.createdAt ? new Date(sessionData.createdAt).toISOString() : new Date().toISOString(),
+                startedAt: sessionData?.createdAt
+                  ? new Date(sessionData.createdAt).toISOString()
+                  : new Date().toISOString(),
                 conversationStarted: sessionData?.conversationStarted || false,
               };
               activeSessions.set(existingSessionId, sessionInfo);
             }
-            
+
             console.log(`✅ Continuing existing AICLI CLI session: ${existingSessionId}`);
 
             // Return existing session info
@@ -242,7 +244,11 @@ export function setupProjectRoutes(app, aicliService) {
               projectName: name,
               projectPath,
               status: 'running',
-              startedAt: existingSession?.startedAt || (sessionData?.createdAt ? new Date(sessionData.createdAt).toISOString() : new Date().toISOString()),
+              startedAt:
+                existingSession?.startedAt ||
+                (sessionData?.createdAt
+                  ? new Date(sessionData.createdAt).toISOString()
+                  : new Date().toISOString()),
               conversationStarted: sessionData?.conversationStarted || false,
             };
 
@@ -254,20 +260,25 @@ export function setupProjectRoutes(app, aicliService) {
             });
           } else {
             // Session doesn't exist in AICLI manager, but might exist in persistence
-            console.log(`⚠️ Session ${existingSessionId} not found in AICLI manager, checking persistence...`);
-            
+            console.log(
+              `⚠️ Session ${existingSessionId} not found in AICLI manager, checking persistence...`
+            );
+
             // Check if session exists in persistence
-            const persistedSession = aicliService.sessionManager.getPersistenceStats ? 
-              (await aicliService.sessionManager.exportSessions()).find(s => s.sessionId === existingSessionId) : null;
-              
+            const persistedSession = aicliService.sessionManager.getPersistenceStats
+              ? (await aicliService.sessionManager.exportSessions()).find(
+                  (s) => s.sessionId === existingSessionId
+                )
+              : null;
+
             if (persistedSession) {
               console.log(`📚 Found persisted session ${existingSessionId}, restoring metadata...`);
-              
+
               // The session exists in persistence but not in active memory
               // This typically happens after a server restart
               // AICLI CLI may still know about this session, so we don't create a new one
               // We just restore the session metadata to our active tracking
-              
+
               try {
                 // Sync with local tracking - just restore the metadata
                 const sessionInfo = {
@@ -279,10 +290,12 @@ export function setupProjectRoutes(app, aicliService) {
                   conversationStarted: persistedSession.conversationStarted,
                 };
                 activeSessions.set(existingSessionId, sessionInfo);
-                
+
                 console.log(`✅ Successfully restored session metadata for ${existingSessionId}`);
-                console.log(`   AICLI CLI will handle session restoration using --resume flag when first command is sent`);
-                
+                console.log(
+                  `   AICLI CLI will handle session restoration using --resume flag when first command is sent`
+                );
+
                 const responseSession = {
                   sessionId: existingSessionId,
                   projectName: name,
@@ -304,13 +317,13 @@ export function setupProjectRoutes(app, aicliService) {
                 // Fall through to create new session
               }
             }
-            
+
             // Clean up our local tracking if it exists
             if (activeSessions.has(existingSessionId)) {
               activeSessions.delete(existingSessionId);
               console.log(`🧹 Cleaned up stale session from local tracking`);
             }
-            
+
             // Fall through to create a new session
             console.log(`📝 Creating new session since ${existingSessionId} could not be restored`);
           }

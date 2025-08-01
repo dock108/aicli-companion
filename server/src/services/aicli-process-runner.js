@@ -61,7 +61,8 @@ export class AICLIProcessRunner extends EventEmitter {
    * This method handles both regular and long-running commands
    */
   async executeAICLICommand(session, prompt) {
-    const { sessionId, workingDirectory, conversationStarted, initialPrompt, isRestoredSession } = session;
+    const { sessionId, workingDirectory, conversationStarted, initialPrompt, isRestoredSession } =
+      session;
 
     // Build AICLI CLI arguments - use stream-json to avoid buffer limits
     const args = ['--print', '--output-format', 'stream-json', '--verbose'];
@@ -100,7 +101,9 @@ export class AICLIProcessRunner extends EventEmitter {
     );
     console.log(`   Conversation started: ${conversationStarted}`);
     console.log(`   Restored session: ${isRestoredSession || false}`);
-    console.log(`   Using CLI flag: ${conversationStarted || isRestoredSession ? '--resume' : '--session-id'}`);
+    console.log(
+      `   Using CLI flag: ${conversationStarted || isRestoredSession ? '--resume' : '--session-id'}`
+    );
 
     console.log(`📤 Calling runAICLIProcess with:`);
     console.log(`   Args (${args.length}):`, args);
@@ -478,7 +481,7 @@ export class AICLIProcessRunner extends EventEmitter {
   /**
    * Create simple health monitor - no timeouts, just monitoring
    */
-  createHealthMonitor(aicliProcess, sessionId) {
+  createHealthMonitor(aicliProcess, _sessionId) {
     const startTime = Date.now();
     let lastActivityTime = Date.now();
 
@@ -512,7 +515,7 @@ export class AICLIProcessRunner extends EventEmitter {
   findAICLICommand() {
     // Try different command names
     const commandNames = ['claude', 'aicli'];
-    
+
     for (const cmd of commandNames) {
       try {
         const result = spawn(cmd, ['--version'], { stdio: 'pipe' });
@@ -524,7 +527,7 @@ export class AICLIProcessRunner extends EventEmitter {
         // Command not found, try next
       }
     }
-    
+
     // Default to 'claude' if nothing found
     return 'claude';
   }

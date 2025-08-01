@@ -3,18 +3,15 @@ import assert from 'node:assert';
 import { EventEmitter } from 'events';
 import { WebSocketConnectionManager } from '../../services/websocket-connection-manager.js';
 
-// Mock ID generator for testing
-const mockGenerateId = mock.fn(() => 'mock-uuid-123');
-
 describe('WebSocketConnectionManager', () => {
   let connectionManager;
   let mockWs;
   let mockRequest;
+  let mockGenerateId;
 
   beforeEach(() => {
-    // Reset mock
-    mockGenerateId.mock.resetCalls();
-    mockGenerateId.mock.mockImplementation(() => 'mock-uuid-123');
+    // Create fresh mock for each test
+    mockGenerateId = mock.fn(() => 'mock-uuid-123');
 
     connectionManager = new WebSocketConnectionManager({
       generateId: mockGenerateId,
@@ -308,7 +305,7 @@ describe('WebSocketConnectionManager', () => {
       const innerClientId3 = connectionManager.handleConnection(mockWs, mockRequest, null);
       assert.ok(innerClientId3);
 
-      mockWs.ping.mock.mockImplementation(() => {
+      mockWs.ping = mock.fn(() => {
         throw new Error('Ping failed');
       });
 
@@ -421,8 +418,12 @@ describe('WebSocketConnectionManager', () => {
       mockWs2.terminate = mock.fn();
       mockWs2.ping = mock.fn();
 
-      mockGenerateId.mock.mockImplementation(() => 'client2');
+      // Create a new connection manager with different ID generator for second client
+      const mockGenerateId2 = mock.fn(() => 'client2');
+      connectionManager.generateId = mockGenerateId2;
       const clientId2 = connectionManager.handleConnection(mockWs2, mockRequest, null);
+      // Restore original ID generator
+      connectionManager.generateId = mockGenerateId;
 
       // Add sessions to clients
       connectionManager.addSessionToClient(clientId, 'session1');
@@ -452,7 +453,7 @@ describe('WebSocketConnectionManager', () => {
     });
 
     it('should handle close errors gracefully', () => {
-      mockWs.close.mock.mockImplementation(() => {
+      mockWs.close = mock.fn(() => {
         throw new Error('Close failed');
       });
 
@@ -480,8 +481,12 @@ describe('WebSocketConnectionManager', () => {
       mockWs2.terminate = mock.fn();
       mockWs2.ping = mock.fn();
 
-      mockGenerateId.mock.mockImplementation(() => 'client2');
+      // Create a new connection manager with different ID generator for second client
+      const mockGenerateId2 = mock.fn(() => 'client2');
+      connectionManager.generateId = mockGenerateId2;
       const clientId2 = connectionManager.handleConnection(mockWs2, mockRequest, null);
+      // Restore original ID generator
+      connectionManager.generateId = mockGenerateId;
 
       // Add sessions and subscriptions
       connectionManager.addSessionToClient(clientId1, 'session1');

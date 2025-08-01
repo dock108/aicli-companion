@@ -11,15 +11,16 @@ export class AICLIProcessRunner extends EventEmitter {
   constructor(options = {}) {
     super();
 
+    // Allow dependency injection for testing - set this first
+    this.spawnFunction = options.spawnFunction || spawn;
+
     // Configuration
-    this.aicliCommand = this.findAICLICommand();
+    // Skip command detection in test environment to avoid spawning processes
+    this.aicliCommand = process.env.NODE_ENV === 'test' ? 'claude' : this.findAICLICommand();
     this.permissionMode = 'default';
     this.allowedTools = ['Read', 'Write', 'Edit'];
     this.disallowedTools = [];
     this.skipPermissions = false;
-
-    // Allow dependency injection for testing
-    this.spawnFunction = options.spawnFunction || spawn;
   }
 
   /**
@@ -518,7 +519,7 @@ export class AICLIProcessRunner extends EventEmitter {
 
     for (const cmd of commandNames) {
       try {
-        const result = spawn(cmd, ['--version'], { stdio: 'pipe' });
+        const result = this.spawnFunction(cmd, ['--version'], { stdio: 'pipe' });
         if (result.pid) {
           result.kill();
           return cmd;

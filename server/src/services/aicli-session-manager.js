@@ -137,7 +137,7 @@ export class AICLISessionManager extends EventEmitter {
         });
         console.log(`💾 Session ${sanitizedSessionId} persisted to disk`);
       } catch (error) {
-        console.error(`❌ Failed to persist session ${sanitizedSessionId}:`, error);
+        console.error('❌ Failed to persist session %s:', sanitizedSessionId, error);
       }
     }
 

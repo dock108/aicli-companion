@@ -194,7 +194,7 @@ export class AICLISessionManager extends EventEmitter {
           await sessionPersistence.removeSession(sessionId);
           console.log(`💾 Session ${sessionId} removed from persistent storage`);
         } catch (error) {
-          console.error(`❌ Failed to remove session ${sessionId} from persistence:`, error);
+          console.error('❌ Failed to remove session %s from persistence:', sessionId, error);
         }
       }
 

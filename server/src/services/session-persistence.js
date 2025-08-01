@@ -227,7 +227,7 @@ export class SessionPersistenceService {
     this.sessionsCache.set(sessionId, updatedSession);
     await this.saveSessions();
 
-    console.log(`🔄 Updated persisted session ${sessionId}:`, Object.keys(updates));
+    console.log('🔄 Updated persisted session %s:', sessionId, Object.keys(updates));
     return updatedSession;
   }
 

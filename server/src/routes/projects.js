@@ -313,7 +313,7 @@ export function setupProjectRoutes(app, aicliService) {
                   restored: true,
                 });
               } catch (error) {
-                console.error(`❌ Failed to restore session metadata ${existingSessionId}:`, error);
+                console.error('❌ Failed to restore session metadata %s:', existingSessionId, error);
                 // Fall through to create new session
               }
             }

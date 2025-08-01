@@ -30,8 +30,18 @@ describe('AICLIProcessRunner', () => {
       kill: mock.fn(),
     };
 
-    // Create mock spawn function
-    mockSpawn = mock.fn(() => mockProcess);
+    // Create mock spawn function that returns a clean mock process
+    mockSpawn = mock.fn((cmd, args, options) => {
+      // Return a new object each time to avoid circular references
+      return {
+        pid: 12345,
+        stdout: mockStdout,
+        stderr: mockStderr,
+        stdin: mockStdin,
+        on: mockProcess.on,
+        kill: mockProcess.kill,
+      };
+    });
 
     // Create instance with mocked spawn
     processRunner = new AICLIProcessRunner({ spawnFunction: mockSpawn });
@@ -41,6 +51,8 @@ describe('AICLIProcessRunner', () => {
     // Clean up any listeners
     mockStdout.removeAllListeners();
     mockStderr.removeAllListeners();
+    // Clean up processRunner listeners
+    processRunner.removeAllListeners();
   });
 
   describe('constructor and configuration', () => {
@@ -393,27 +405,36 @@ describe('AICLIProcessRunner', () => {
       const resolve = mock.fn();
       const reject = mock.fn();
 
-      const emitCalls = [];
-      processRunner.emit = mock.fn((event, data) => {
-        emitCalls.push({ event, data });
+      const emittedEvents = [];
+      processRunner.on('aicliResponse', (data) => {
+        emittedEvents.push(data);
       });
 
       processRunner.processOutput(stdout, sessionId, resolve, reject);
 
-      const aicliResponseCalls = emitCalls.filter((call) => call.event === 'aicliResponse');
-      assert.strictEqual(aicliResponseCalls.length, 2);
-      assert.strictEqual(aicliResponseCalls[0].data.response.type, 'assistant');
-      assert.strictEqual(aicliResponseCalls[1].data.response.type, 'result');
-      assert.strictEqual(aicliResponseCalls[1].data.isLast, true);
+      assert.strictEqual(emittedEvents.length, 2);
+      assert.strictEqual(emittedEvents[0].response.type, 'assistant');
+      assert.strictEqual(emittedEvents[1].response.type, 'result');
+      assert.strictEqual(emittedEvents[1].isLast, true);
     });
   });
 
   describe('findAICLICommand', () => {
-    it('should find claude command if available', () => {
-      // This test depends on system configuration
-      const command = processRunner.findAICLICommand();
-      assert.ok(typeof command === 'string');
-      assert.ok(command === 'claude' || command === 'aicli');
+    it('should return default command in test environment', () => {
+      // In test environment, it should just return the default without spawning
+      assert.strictEqual(processRunner.aicliCommand, 'claude');
+    });
+
+    it('should handle spawn failures gracefully', () => {
+      // Create a new runner with a spawn function that always throws
+      const failingSpawn = mock.fn(() => {
+        throw new Error('spawn failed');
+      });
+      const runner = new AICLIProcessRunner({ spawnFunction: failingSpawn });
+      
+      // Even with failing spawn, findAICLICommand should return default
+      const command = runner.findAICLICommand();
+      assert.strictEqual(command, 'claude');
     });
   });
 
@@ -459,9 +480,9 @@ describe('AICLIProcessRunner', () => {
 
   describe('runAICLIProcess', () => {
     it('should emit processStart event', async () => {
-      const emitCalls = [];
-      processRunner.emit = mock.fn((event, data) => {
-        emitCalls.push({ event, data });
+      let processStartData = null;
+      processRunner.on('processStart', (data) => {
+        processStartData = data;
       });
 
       const runPromise = processRunner.runAICLIProcess(
@@ -473,11 +494,10 @@ describe('AICLIProcessRunner', () => {
 
       await new Promise((resolve) => setTimeout(resolve, 10));
 
-      const processStartCall = emitCalls.find((call) => call.event === 'processStart');
-      assert.ok(processStartCall);
-      assert.strictEqual(processStartCall.data.sessionId, 'session123');
-      assert.strictEqual(processStartCall.data.pid, 12345);
-      assert.strictEqual(processStartCall.data.workingDirectory, '/test/dir');
+      assert.ok(processStartData);
+      assert.strictEqual(processStartData.sessionId, 'session123');
+      assert.strictEqual(processStartData.pid, 12345);
+      assert.strictEqual(processStartData.workingDirectory, '/test/dir');
 
       // Complete the process
       mockStdout.emit('data', Buffer.from('{"type":"result"}'));
@@ -534,9 +554,9 @@ describe('AICLIProcessRunner', () => {
 
   describe('createOutputHandler', () => {
     it('should emit streamChunk events for parsed data', async () => {
-      const emitCalls = [];
-      processRunner.emit = mock.fn((event, data) => {
-        emitCalls.push({ event, data });
+      const streamChunks = [];
+      processRunner.on('streamChunk', (data) => {
+        streamChunks.push(data);
       });
 
       processRunner.createOutputHandler('session123', mockProcess, mock.fn(), mock.fn(), {
@@ -565,14 +585,13 @@ describe('AICLIProcessRunner', () => {
       assert.ok(mockStdout.listenerCount('data') > 0);
 
       // Also verify that streamChunk events were emitted for parsed data
-      const streamChunkEvents = emitCalls.filter((call) => call.event === 'streamChunk');
-      assert.ok(streamChunkEvents.length > 0, 'Should emit streamChunk events');
+      assert.ok(streamChunks.length > 0, 'Should emit streamChunk events');
     });
 
     it('should emit processStderr events', async () => {
-      const emitCalls = [];
-      processRunner.emit = mock.fn((event, data) => {
-        emitCalls.push({ event, data });
+      const stderrEvents = [];
+      processRunner.on('processStderr', (data) => {
+        stderrEvents.push(data);
       });
 
       processRunner.createOutputHandler('session123', mockProcess, mock.fn(), mock.fn(), {
@@ -585,9 +604,8 @@ describe('AICLIProcessRunner', () => {
 
       await new Promise((resolve) => setTimeout(resolve, 10));
 
-      const stderrCalls = emitCalls.filter((call) => call.event === 'processStderr');
-      assert.ok(stderrCalls.length > 0);
-      assert.strictEqual(stderrCalls[0].data.data, 'Warning message');
+      assert.ok(stderrEvents.length > 0);
+      assert.strictEqual(stderrEvents[0].data, 'Warning message');
     });
 
     it('should handle buffer concatenation correctly', () => {
@@ -623,9 +641,9 @@ describe('AICLIProcessRunner', () => {
     });
 
     it('should emit processExit event on close', async () => {
-      const emitCalls = [];
-      processRunner.emit = mock.fn((event, data) => {
-        emitCalls.push({ event, data });
+      let processExitData = null;
+      processRunner.on('processExit', (data) => {
+        processExitData = data;
       });
 
       const runPromise = processRunner.runAICLIProcess(
@@ -643,10 +661,9 @@ describe('AICLIProcessRunner', () => {
 
       await runPromise;
 
-      const exitCall = emitCalls.find((call) => call.event === 'processExit');
-      assert.ok(exitCall);
-      assert.strictEqual(exitCall.data.code, 0);
-      assert.strictEqual(exitCall.data.sessionId, 'session123');
+      assert.ok(processExitData);
+      assert.strictEqual(processExitData.code, 0);
+      assert.strictEqual(processExitData.sessionId, 'session123');
     });
   });
 });

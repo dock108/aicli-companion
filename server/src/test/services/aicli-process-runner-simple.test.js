@@ -1,12 +1,23 @@
-import { describe, it, mock, beforeEach } from 'node:test';
+import { describe, it, mock, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import { AICLIProcessRunner } from '../../services/aicli-process-runner.js';
 
 describe('AICLIProcessRunner Simple Tests', () => {
   let processRunner;
+  const activeHealthMonitors = [];
 
   beforeEach(() => {
     processRunner = new AICLIProcessRunner();
+  });
+
+  afterEach(() => {
+    // Clean up any health monitors created during tests
+    activeHealthMonitors.forEach(monitor => {
+      if (monitor && typeof monitor.cleanup === 'function') {
+        monitor.cleanup();
+      }
+    });
+    activeHealthMonitors.length = 0;
   });
 
   describe('constructor and configuration', () => {
@@ -260,38 +271,51 @@ describe('AICLIProcessRunner Simple Tests', () => {
     });
   });
 
-  describe('createTimeoutHandler', () => {
-    it('should create timeout handler with cleanup function', () => {
-      const mockProcess = { kill: mock.fn() };
-      const mockReject = mock.fn();
-      const timeoutHandler = processRunner.createTimeoutHandler(mockProcess, 1000, mockReject);
+  describe('createHealthMonitor', () => {
+    it('should create health monitor with cleanup function', () => {
+      const mockProcess = { 
+        kill: mock.fn(),
+        on: mock.fn(),
+        pid: 12345
+      };
+      const healthMonitor = processRunner.createHealthMonitor(mockProcess, 'session123');
+      activeHealthMonitors.push(healthMonitor);
 
-      assert.ok(typeof timeoutHandler.resetActivity === 'function');
-      assert.ok(typeof timeoutHandler.cleanup === 'function');
-
-      // Cleanup to prevent actual timeout
-      timeoutHandler.cleanup();
+      assert.ok(typeof healthMonitor.cleanup === 'function');
+      assert.ok(typeof healthMonitor.recordActivity === 'function');
     });
 
-    it('should reset activity correctly', () => {
-      const mockProcess = { kill: mock.fn() };
-      const mockReject = mock.fn();
-      const timeoutHandler = processRunner.createTimeoutHandler(mockProcess, 1000, mockReject);
+    it('should cleanup monitoring interval', () => {
+      const mockProcess = { 
+        kill: mock.fn(),
+        on: mock.fn(),
+        pid: 12345
+      };
+      const healthMonitor = processRunner.createHealthMonitor(mockProcess, 'session123');
+      activeHealthMonitors.push(healthMonitor);
 
+      // The interval should be created
       assert.doesNotThrow(() => {
-        timeoutHandler.resetActivity();
+        healthMonitor.cleanup();
       });
-
-      timeoutHandler.cleanup();
+      
+      // Calling cleanup multiple times should be safe
+      assert.doesNotThrow(() => {
+        healthMonitor.cleanup();
+      });
     });
 
-    it('should cleanup timeouts and intervals', () => {
-      const mockProcess = { kill: mock.fn() };
-      const mockReject = mock.fn();
-      const timeoutHandler = processRunner.createTimeoutHandler(mockProcess, 1000, mockReject);
+    it('should record activity', () => {
+      const mockProcess = { 
+        kill: mock.fn(),
+        on: mock.fn(),
+        pid: 12345
+      };
+      const healthMonitor = processRunner.createHealthMonitor(mockProcess, 'session123');
+      activeHealthMonitors.push(healthMonitor);
 
       assert.doesNotThrow(() => {
-        timeoutHandler.cleanup();
+        healthMonitor.recordActivity();
       });
     });
   });

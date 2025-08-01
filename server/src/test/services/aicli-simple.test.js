@@ -467,25 +467,25 @@ describe('AICLIService Simple Unit Tests', () => {
 
   describe('Shutdown', () => {
     describe('shutdown', () => {
-      it('should stop health monitoring', () => {
+      it('should stop health monitoring', async () => {
         service.processHealthCheckInterval = setInterval(() => {}, 1000);
-        service.shutdown();
+        await service.shutdown();
         assert.strictEqual(service.processHealthCheckInterval, null);
       });
 
-      it('should clear active sessions', () => {
+      it('should clear active sessions', async () => {
         service.sessionManager.activeSessions.set('test1', { isActive: true });
         service.sessionManager.activeSessions.set('test2', { isActive: true });
 
-        service.shutdown();
+        await service.shutdown();
         assert.strictEqual(service.sessionManager.activeSessions.size, 0);
       });
 
-      it('should clear session buffers', () => {
+      it('should clear session buffers', async () => {
         service.sessionManager.sessionMessageBuffers.set('test1', { messages: [] });
         service.sessionManager.sessionMessageBuffers.set('test2', { messages: [] });
 
-        service.shutdown();
+        await service.shutdown();
         assert.strictEqual(service.sessionManager.sessionMessageBuffers.size, 0);
       });
     });
@@ -500,19 +500,6 @@ describe('AICLIService Simple Unit Tests', () => {
       });
     });
 
-    describe('calculateTimeoutForCommand', () => {
-      it('should return timeout for valid commands', () => {
-        const result = service.calculateTimeoutForCommand('test command');
-        assert.strictEqual(typeof result, 'number');
-        assert.ok(result > 0);
-      });
-
-      it('should handle invalid inputs', () => {
-        assert.strictEqual(service.calculateTimeoutForCommand(null), 60000);
-        assert.strictEqual(service.calculateTimeoutForCommand(undefined), 60000);
-        assert.strictEqual(service.calculateTimeoutForCommand(''), 60000);
-      });
-    });
   });
 
   describe('Additional Method Coverage', () => {

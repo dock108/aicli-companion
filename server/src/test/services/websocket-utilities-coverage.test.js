@@ -706,4 +706,370 @@ describe('WebSocketUtilities Coverage Tests', () => {
       assert.strictEqual(WebSocketUtilities.safeParse('random text'), null);
     });
   });
+
+  describe('Additional Edge Cases and Stress Tests', () => {
+    describe('sendMessage edge cases', () => {
+      it('should handle very large messages', () => {
+        const mockWs = {
+          readyState: 1,
+          send: mock.fn(),
+        };
+        const clients = new Map([['client1', { ws: mockWs, lastActivity: new Date() }]]);
+        const largeContent = 'x'.repeat(1000000); // 1MB string
+        const message = { type: 'test', data: largeContent };
+
+        const result = WebSocketUtilities.sendMessage('client1', message, clients);
+
+        assert.strictEqual(result, true);
+        assert.strictEqual(mockWs.send.mock.calls.length, 1);
+        const sentData = JSON.parse(mockWs.send.mock.calls[0].arguments[0]);
+        assert.strictEqual(sentData.data.length, 1000000);
+      });
+
+      it('should handle messages with special characters', () => {
+        const mockWs = {
+          readyState: 1,
+          send: mock.fn(),
+        };
+        const clients = new Map([['client1', { ws: mockWs, lastActivity: new Date() }]]);
+        const message = { 
+          type: 'test', 
+          data: 'Special chars: \n\r\t\b\f"\'\\/ emoji: 😀 unicode: \u0000' 
+        };
+
+        const result = WebSocketUtilities.sendMessage('client1', message, clients);
+
+        assert.strictEqual(result, true);
+        assert.strictEqual(mockWs.send.mock.calls.length, 1);
+        const sentData = JSON.parse(mockWs.send.mock.calls[0].arguments[0]);
+        assert.ok(sentData.data.includes('😀'));
+      });
+
+      it('should handle rapid consecutive sends', () => {
+        const mockWs = {
+          readyState: 1,
+          send: mock.fn(),
+        };
+        const clients = new Map([['client1', { ws: mockWs, lastActivity: new Date() }]]);
+
+        // Send 100 messages rapidly
+        const results = [];
+        for (let i = 0; i < 100; i++) {
+          results.push(WebSocketUtilities.sendMessage('client1', { type: 'test', seq: i }, clients));
+        }
+
+        assert.strictEqual(results.every(r => r === true), true);
+        assert.strictEqual(mockWs.send.mock.calls.length, 100);
+      });
+    });
+
+    describe('broadcastToSessionClients stress tests', () => {
+      it('should handle broadcasting to many concurrent clients', () => {
+        const clients = new Map();
+        const mockSends = [];
+        
+        // Create 50 clients for the same session
+        for (let i = 0; i < 50; i++) {
+          const mockWs = { readyState: 1, send: mock.fn() };
+          mockSends.push(mockWs.send);
+          clients.set(`client${i}`, {
+            ws: mockWs,
+            sessionIds: new Set(['session1']),
+            lastActivity: new Date()
+          });
+        }
+
+        const message = { type: 'broadcast', data: 'test' };
+        WebSocketUtilities.broadcastToSessionClients('session1', message, clients);
+
+        // All clients should receive the message
+        mockSends.forEach(sendMock => {
+          assert.strictEqual(sendMock.mock.calls.length, 1);
+        });
+      });
+
+      it('should handle mixed client states efficiently', () => {
+        const clients = new Map();
+        const connectedMocks = [];
+        const disconnectedMocks = [];
+        
+        // Create mix of connected and disconnected clients
+        for (let i = 0; i < 20; i++) {
+          const isConnected = i % 2 === 0;
+          const mockWs = { 
+            readyState: isConnected ? 1 : 3, 
+            send: mock.fn() 
+          };
+          
+          if (isConnected) {
+            connectedMocks.push(mockWs.send);
+          } else {
+            disconnectedMocks.push(mockWs.send);
+          }
+          
+          clients.set(`client${i}`, {
+            ws: mockWs,
+            sessionIds: new Set(['session1']),
+            lastActivity: new Date()
+          });
+        }
+
+        const message = { type: 'broadcast', data: 'test' };
+        WebSocketUtilities.broadcastToSessionClients('session1', message, clients);
+
+        // Only connected clients should receive the message
+        connectedMocks.forEach(sendMock => {
+          assert.strictEqual(sendMock.mock.calls.length, 1);
+        });
+        disconnectedMocks.forEach(sendMock => {
+          assert.strictEqual(sendMock.mock.calls.length, 0);
+        });
+      });
+
+      it('should handle concurrent broadcasts to different sessions', () => {
+        const clients = new Map();
+        
+        // Create clients for different sessions
+        for (let i = 0; i < 30; i++) {
+          const sessionId = i < 10 ? 'session1' : i < 20 ? 'session2' : 'session3';
+          const mockWs = { readyState: 1, send: mock.fn() };
+          
+          clients.set(`client${i}`, {
+            ws: mockWs,
+            sessionIds: new Set([sessionId]),
+            lastActivity: new Date()
+          });
+        }
+
+        // Broadcast to all sessions
+        WebSocketUtilities.broadcastToSessionClients('session1', { type: 'msg1' }, clients);
+        WebSocketUtilities.broadcastToSessionClients('session2', { type: 'msg2' }, clients);
+        WebSocketUtilities.broadcastToSessionClients('session3', { type: 'msg3' }, clients);
+
+        // Each client should receive exactly one message for their session
+        clients.forEach((client, clientId) => {
+          assert.strictEqual(client.ws.send.mock.calls.length, 1);
+          const sentMessage = JSON.parse(client.ws.send.mock.calls[0].arguments[0]);
+          
+          if (clientId.startsWith('client') && parseInt(clientId.slice(6)) < 10) {
+            assert.strictEqual(sentMessage.type, 'msg1');
+          } else if (parseInt(clientId.slice(6)) < 20) {
+            assert.strictEqual(sentMessage.type, 'msg2');
+          } else {
+            assert.strictEqual(sentMessage.type, 'msg3');
+          }
+        });
+      });
+    });
+
+    describe('parseProgressFromOutput edge cases', () => {
+      it('should handle malformed progress indicators', () => {
+        const malformedOutputs = [
+          '%%100', // Double percentage
+          '150%', // Over 100%
+          '-50%', // Negative percentage
+          'step -1 of 10', // Negative step
+          'step 15 of 10', // Step exceeding total
+        ];
+
+        malformedOutputs.forEach(output => {
+          const result = WebSocketUtilities.parseProgressFromOutput(output);
+          if (result) {
+            // Progress should be clamped between 0 and 1
+            assert.ok(result.progress === null || (result.progress >= 0 && result.progress <= 1));
+          }
+        });
+      });
+
+      it('should handle multiple progress indicators in one output', () => {
+        const output = 'Processing: 25% complete, step 3 of 10, estimated 5 minutes remaining';
+        const result = WebSocketUtilities.parseProgressFromOutput(output);
+        
+        assert.ok(result);
+        // Should pick the first match (percentage in this case)
+        assert.strictEqual(result.progress, 0.25);
+      });
+
+      it('should handle internationalized output', () => {
+        const internationalOutputs = [
+          'Fortschritt: 50%', // German
+          'Progreso: 75%', // Spanish
+          '進捗: 30%', // Japanese
+          'Прогресс: 90%', // Russian
+        ];
+
+        internationalOutputs.forEach(output => {
+          const result = WebSocketUtilities.parseProgressFromOutput(output);
+          assert.ok(result);
+          assert.ok(result.progress > 0 && result.progress < 1);
+        });
+      });
+
+      it('should handle complex multi-line output', () => {
+        const multiLineOutput = `
+          Starting process...
+          Initializing components
+          Progress: 45%
+          Memory usage: 512MB
+          Time elapsed: 2m 30s
+        `;
+        
+        const result = WebSocketUtilities.parseProgressFromOutput(multiLineOutput);
+        assert.ok(result);
+        assert.strictEqual(result.progress, 0.45);
+      });
+    });
+
+    describe('formatStreamContent stress tests', () => {
+      it('should handle deeply nested objects', () => {
+        let deepObject = { level: 0 };
+        let current = deepObject;
+        
+        // Create 100 levels of nesting
+        for (let i = 1; i < 100; i++) {
+          current.nested = { level: i };
+          current = current.nested;
+        }
+
+        const result = WebSocketUtilities.formatStreamContent(deepObject);
+        
+        assert.ok(result);
+        assert.ok(result.text);
+        assert.ok(result.metadata);
+        assert.strictEqual(result.metadata.type, 'json');
+      });
+
+      it('should handle binary data representation', () => {
+        const binaryData = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]); // JPEG header
+        const result = WebSocketUtilities.formatStreamContent(binaryData);
+        
+        assert.ok(result);
+        assert.ok(result.text);
+        assert.strictEqual(result.metadata.type, 'object');
+      });
+
+      it('should handle very long strings efficiently', () => {
+        const longString = 'a'.repeat(10000000); // 10MB string
+        const result = WebSocketUtilities.formatStreamContent(longString);
+        
+        assert.ok(result);
+        assert.strictEqual(result.text.length, 10000000);
+        assert.strictEqual(result.metadata.length, 10000000);
+      });
+
+      it('should handle mixed content types', () => {
+        const mixedContent = {
+          text: 'Hello',
+          number: 42,
+          boolean: true,
+          null: null,
+          undefined: undefined,
+          array: [1, 2, 3],
+          nested: {
+            date: new Date(),
+            regex: /test/g,
+            function: () => {},
+          }
+        };
+
+        const result = WebSocketUtilities.formatStreamContent(mixedContent);
+        
+        assert.ok(result);
+        assert.ok(result.text);
+        assert.strictEqual(result.metadata.type, 'json');
+        // Should be valid JSON (functions and undefined will be stripped)
+        assert.doesNotThrow(() => JSON.parse(result.text));
+      });
+    });
+
+    describe('Performance benchmarks', () => {
+      it('should handle high-frequency message validation', () => {
+        const validMessage = { type: 'test', requestId: 'req123', data: {} };
+        const startTime = Date.now();
+        
+        // Validate 10000 messages
+        for (let i = 0; i < 10000; i++) {
+          WebSocketUtilities.validateMessage(validMessage);
+        }
+        
+        const duration = Date.now() - startTime;
+        // Should complete in reasonable time (less than 100ms)
+        assert.ok(duration < 100, `Validation took ${duration}ms`);
+      });
+
+      it('should efficiently create responses in bulk', () => {
+        const startTime = Date.now();
+        
+        // Create 5000 responses
+        for (let i = 0; i < 5000; i++) {
+          WebSocketUtilities.createResponse('test', `req${i}`, { index: i }, { metadata: { bulk: true } });
+        }
+        
+        const duration = Date.now() - startTime;
+        // Should complete in reasonable time (less than 50ms)
+        assert.ok(duration < 50, `Response creation took ${duration}ms`);
+      });
+    });
+
+    describe('Error recovery scenarios', () => {
+      it('should recover from WebSocket send failures gracefully', () => {
+        let sendCount = 0;
+        const mockWs = {
+          readyState: 1,
+          send: mock.fn(() => {
+            sendCount++;
+            if (sendCount === 3) {
+              throw new Error('WebSocket closed unexpectedly');
+            }
+          })
+        };
+        const clients = new Map([['client1', { ws: mockWs, lastActivity: new Date() }]]);
+
+        // Send 5 messages, 3rd one will fail
+        const results = [];
+        for (let i = 0; i < 5; i++) {
+          results.push(WebSocketUtilities.sendMessage('client1', { type: 'test', seq: i }, clients));
+        }
+
+        assert.strictEqual(results[0], true);
+        assert.strictEqual(results[1], true);
+        assert.strictEqual(results[2], false); // Failed
+        assert.strictEqual(results[3], true);
+        assert.strictEqual(results[4], true);
+      });
+
+      it('should handle WebSocket state changes during broadcast', () => {
+        const clients = new Map();
+        
+        // Create clients that will change state during iteration
+        for (let i = 0; i < 10; i++) {
+          const mockWs = {
+            readyState: 1,
+            send: mock.fn(() => {
+              // Simulate state change after first few sends
+              if (i > 5) {
+                mockWs.readyState = 3;
+              }
+            })
+          };
+          
+          clients.set(`client${i}`, {
+            ws: mockWs,
+            sessionIds: new Set(['session1']),
+            lastActivity: new Date()
+          });
+        }
+
+        WebSocketUtilities.broadcastToSessionClients('session1', { type: 'test' }, clients);
+
+        // Check that disconnected clients didn't cause issues
+        clients.forEach((client, clientId) => {
+          const index = parseInt(clientId.slice(6));
+          if (index <= 5) {
+            assert.strictEqual(client.ws.send.mock.calls.length, 1);
+          }
+        });
+      });
+    });
+  });
 });

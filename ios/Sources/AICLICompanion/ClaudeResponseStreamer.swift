@@ -78,10 +78,8 @@ class ClaudeResponseStreamer: ObservableObject {
         // Add chunk to message builder
         messageBuilder.addChunk(processedChunk)
         
-        // Update current message with built content
-        if let builtContent = messageBuilder.buildContent() {
-            currentMessage?.content = builtContent
-        }
+        // Don't update message content during streaming - wait for completion
+        // This prevents intermediate chunks from appearing as messages
         
         // If this is the final chunk, finalize the message
         if processedChunk.isFinal {
@@ -94,6 +92,14 @@ class ClaudeResponseStreamer: ObservableObject {
         print("✅ Finalizing streaming session with \(chunksReceived) chunks")
         
         isStreaming = false
+        
+        // Build final content now
+        if let builtContent = messageBuilder.buildContent() {
+            currentMessage?.content = builtContent
+        } else if currentMessage?.content.isEmpty ?? true {
+            // Fallback for empty responses - this shouldn't happen in normal operation
+            currentMessage?.content = "I apologize, but I wasn't able to generate a response. The operation may have timed out or encountered an error. Please try again."
+        }
         
         // Mark message as complete
         currentMessage?.streamingState = .complete

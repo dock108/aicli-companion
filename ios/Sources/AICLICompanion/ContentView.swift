@@ -113,8 +113,8 @@ public struct ContentView: View {
     }
     
     private func switchProject() {
-        // Clear WebSocket active session
-        WebSocketService.shared.setActiveSession(nil)
+        // Don't clear WebSocket active session - preserve it for when user returns
+        // This allows sessions to continue running in the background
         
         // Reset to project selection screen
         withAnimation(.easeInOut(duration: 0.3)) {

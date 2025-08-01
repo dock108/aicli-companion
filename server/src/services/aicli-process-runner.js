@@ -1,7 +1,7 @@
 import { spawn } from 'child_process';
 import { EventEmitter } from 'events';
 import { processMonitor } from '../utils/process-monitor.js';
-import { InputValidator, MessageProcessor, AICLIConfig } from './aicli-utils.js';
+import { InputValidator, MessageProcessor } from './aicli-utils.js';
 import { ClaudeStreamParser } from './stream-parser.js';
 
 /**
@@ -12,7 +12,7 @@ export class AICLIProcessRunner extends EventEmitter {
     super();
 
     // Configuration
-    this.aicliCommand = AICLIConfig.findAICLICommand();
+    this.aicliCommand = this.findAICLICommand();
     this.permissionMode = 'default';
     this.allowedTools = ['Read', 'Write', 'Edit'];
     this.disallowedTools = [];
@@ -60,15 +60,21 @@ export class AICLIProcessRunner extends EventEmitter {
    * Execute AICLI CLI command for a session
    * This method handles both regular and long-running commands
    */
-  async executeAICLICommand(session, prompt, longRunningTaskManager = null) {
-    const { sessionId, workingDirectory, conversationStarted, initialPrompt } = session;
+  async executeAICLICommand(session, prompt) {
+    const { sessionId, workingDirectory, conversationStarted, initialPrompt, isRestoredSession } = session;
 
     // Build AICLI CLI arguments - use stream-json to avoid buffer limits
     const args = ['--print', '--output-format', 'stream-json', '--verbose'];
 
-    // Add continue flag if conversation has started
-    if (conversationStarted) {
-      args.push('--continue');
+    // For continuing conversations or restored sessions, use --resume instead of --session-id
+    // Restored sessions must use --resume because AICLI CLI already knows about them
+    if (conversationStarted || isRestoredSession) {
+      args.push('--resume');
+      args.push(sessionId);
+    } else {
+      // For truly new conversations, use --session-id
+      args.push('--session-id');
+      args.push(sessionId);
     }
 
     // Add permission configuration
@@ -93,9 +99,8 @@ export class AICLIProcessRunner extends EventEmitter {
       `   Final prompt preview: "${finalPrompt?.substring(0, 100).replace(/\n/g, '\\n')}..."`
     );
     console.log(`   Conversation started: ${conversationStarted}`);
-
-    // Calculate dynamic timeout based on command complexity
-    const timeoutMs = AICLIConfig.calculateTimeoutForCommand(prompt);
+    console.log(`   Restored session: ${isRestoredSession || false}`);
+    console.log(`   Using CLI flag: ${conversationStarted || isRestoredSession ? '--resume' : '--session-id'}`);
 
     console.log(`📤 Calling runAICLIProcess with:`);
     console.log(`   Args (${args.length}):`, args);
@@ -104,14 +109,8 @@ export class AICLIProcessRunner extends EventEmitter {
     );
     console.log(`   SessionId: ${sessionId}`);
 
-    // Check if this should be handled as a long-running task
-    if (longRunningTaskManager && timeoutMs > 300000) {
-      return longRunningTaskManager.handlePotentialLongRunningTask(sessionId, prompt, () =>
-        this.runAICLIProcess(args, finalPrompt, workingDirectory, sessionId, timeoutMs)
-      );
-    }
-
-    return this.runAICLIProcess(args, finalPrompt, workingDirectory, sessionId, timeoutMs);
+    // No more timeout calculations - trust Claude CLI
+    return this.runAICLIProcess(args, finalPrompt, workingDirectory, sessionId);
   }
 
   /**
@@ -146,7 +145,7 @@ export class AICLIProcessRunner extends EventEmitter {
   /**
    * Run AICLI CLI process with comprehensive monitoring and parsing
    */
-  async runAICLIProcess(args, prompt, workingDirectory, sessionId, timeoutMs) {
+  async runAICLIProcess(args, prompt, workingDirectory, sessionId) {
     console.log(`\n🔧 === runAICLIProcess CALLED ===`);
     console.log(`🔧 Running AICLI CLI process:`);
     console.log(`   Args (${args.length}): ${JSON.stringify(args)}`);
@@ -157,7 +156,6 @@ export class AICLIProcessRunner extends EventEmitter {
     );
     console.log(`   Working dir: ${workingDirectory}`);
     console.log(`   Session ID: ${sessionId}`);
-    console.log(`   Timeout: ${timeoutMs}ms`);
 
     return new Promise((promiseResolve, reject) => {
       let aicliProcess;
@@ -209,26 +207,27 @@ export class AICLIProcessRunner extends EventEmitter {
         type: 'command',
       });
 
+      // Set up health monitoring (no timeouts, just monitoring)
+      const healthMonitor = this.createHealthMonitor(aicliProcess, sessionId);
+
       // Set up output handling
       const outputHandler = this.createOutputHandler(
         sessionId,
         aicliProcess,
         promiseResolve,
-        reject
+        reject,
+        healthMonitor
       );
-
-      // Set up timeout handling
-      const timeoutHandler = this.createTimeoutHandler(aicliProcess, timeoutMs, reject);
 
       // Handle process events
       aicliProcess.on('close', (code) => {
         outputHandler.handleClose(code);
-        timeoutHandler.cleanup();
+        healthMonitor.cleanup();
       });
 
       aicliProcess.on('error', (error) => {
         console.error(`❌ AICLI CLI process error:`, error);
-        timeoutHandler.cleanup();
+        healthMonitor.cleanup();
         reject(new Error(`AICLI CLI process error: ${error.message}`));
       });
     });
@@ -271,25 +270,14 @@ export class AICLIProcessRunner extends EventEmitter {
   /**
    * Create output handler for process stdout/stderr
    */
-  createOutputHandler(sessionId, aicliProcess, promiseResolve, reject) {
+  createOutputHandler(sessionId, aicliProcess, promiseResolve, reject, healthMonitor) {
     let stdout = '';
     let stderr = '';
-    let _lastActivityTime = Date.now();
-    let hasReceivedOutput = false;
     const stdoutBuffers = []; // Store raw buffers to prevent encoding issues
     const stderrBuffers = [];
 
     // Initialize stream parser for this command
     const streamParser = new ClaudeStreamParser();
-
-    const resetActivityTimer = () => {
-      _lastActivityTime = Date.now();
-      const wasFirstOutput = !hasReceivedOutput;
-      hasReceivedOutput = true;
-      console.log(
-        `💓 AICLI CLI activity detected${wasFirstOutput ? ' (first output)' : ''}, resetting timeout timer`
-      );
-    };
 
     aicliProcess.stdout.on('data', (data) => {
       // Store raw buffer to prevent encoding truncation
@@ -302,7 +290,9 @@ export class AICLIProcessRunner extends EventEmitter {
         JSON.stringify(chunk.substring(0, 200))
       );
 
-      resetActivityTimer();
+      if (healthMonitor) {
+        healthMonitor.recordActivity();
+      }
 
       // Parse the chunk into structured messages
       try {
@@ -339,7 +329,9 @@ export class AICLIProcessRunner extends EventEmitter {
         JSON.stringify(chunk)
       );
 
-      resetActivityTimer();
+      if (healthMonitor) {
+        healthMonitor.recordActivity();
+      }
 
       // Emit stderr for logging
       this.emit('processStderr', {
@@ -484,80 +476,57 @@ export class AICLIProcessRunner extends EventEmitter {
   }
 
   /**
-   * Create timeout handler with intelligent timeout logic
+   * Create simple health monitor - no timeouts, just monitoring
    */
-  createTimeoutHandler(aicliProcess, timeoutMs, reject) {
-    let timeoutHandle;
+  createHealthMonitor(aicliProcess, sessionId) {
     const startTime = Date.now();
     let lastActivityTime = Date.now();
-    let hasReceivedOutput = false;
-    const maxSilentTime = Math.min(timeoutMs / 3, 180000); // Max 3 minutes of silence, or 1/3 the total timeout
 
-    const updateTimeout = () => {
-      if (timeoutHandle) {
-        clearTimeout(timeoutHandle);
+    // Simple status logging every 10 seconds
+    const statusInterval = setInterval(() => {
+      if (aicliProcess && aicliProcess.pid) {
+        const runtime = Math.round((Date.now() - startTime) / 1000);
+        const timeSinceActivity = Math.round((Date.now() - lastActivityTime) / 1000);
+        console.log(
+          `📊 AICLI CLI PID ${aicliProcess.pid} still running... (runtime: ${runtime}s, last activity: ${timeSinceActivity}s ago)`
+        );
       }
-
-      const timeoutToUse = hasReceivedOutput ? maxSilentTime : timeoutMs;
-
-      console.log(
-        `🕐 Setting timeout: ${Math.round(timeoutToUse / 1000)}s (${hasReceivedOutput ? 'heartbeat mode' : 'initial mode'})`
-      );
-
-      timeoutHandle = setTimeout(() => {
-        const timeSinceActivity = Date.now() - lastActivityTime;
-        const totalRuntime = Date.now() - startTime;
-
-        if (hasReceivedOutput) {
-          console.log(
-            `⏰ AICLI CLI process silent timeout (${Math.round(timeSinceActivity / 1000)}s since last activity), killing PID ${aicliProcess.pid}...`
-          );
-          reject(
-            new Error(
-              `AICLI CLI process timed out after ${Math.round(timeSinceActivity / 1000)}s of silence`
-            )
-          );
-        } else {
-          console.log(
-            `⏰ AICLI CLI process initial timeout (${Math.round(totalRuntime / 1000)}s total), killing PID ${aicliProcess.pid}...`
-          );
-          reject(new Error('AICLI CLI process timed out'));
-        }
-        aicliProcess.kill('SIGTERM');
-      }, timeoutToUse);
-    };
-
-    // Add periodic status logging
-    const statusInterval = setInterval(
-      () => {
-        if (aicliProcess && aicliProcess.pid) {
-          console.log(
-            `📊 AICLI CLI PID ${aicliProcess.pid} still running... (timeout in ${Math.round((timeoutMs - (Date.now() - startTime)) / 1000)}s)`
-          );
-        }
-      },
-      Math.min(timeoutMs / 4, 10000)
-    ); // Status every 1/4 of timeout or 10s max
-
-    // Initial timeout
-    updateTimeout();
+    }, 10000); // Log status every 10 seconds
 
     return {
-      resetActivity: () => {
+      recordActivity: () => {
         lastActivityTime = Date.now();
-        hasReceivedOutput = true;
-        console.log(`💓 AICLI CLI activity detected, resetting timeout timer`);
-        updateTimeout();
+        console.log(`💓 AICLI CLI activity detected`);
       },
       cleanup: () => {
-        if (timeoutHandle) {
-          clearTimeout(timeoutHandle);
-        }
         if (statusInterval) {
           clearInterval(statusInterval);
         }
       },
     };
+  }
+
+  /**
+   * Find the Claude CLI command
+   */
+  findAICLICommand() {
+    // Try different command names
+    const commandNames = ['claude', 'aicli'];
+    
+    for (const cmd of commandNames) {
+      try {
+        const result = spawn(cmd, ['--version'], { stdio: 'pipe' });
+        if (result.pid) {
+          result.kill();
+          return cmd;
+        }
+      } catch (error) {
+        // Command not found, try next
+      }
+    }
+    
+    // Default to 'claude' if nothing found
+    return 'claude';
   }
 
   /**

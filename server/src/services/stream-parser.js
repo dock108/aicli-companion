@@ -42,16 +42,25 @@ export class ClaudeStreamParser {
         try {
           const parsed = JSON.parse(trimmedLine);
 
-          // Only process result messages
-          if (parsed.type === 'result' && parsed.result) {
-            console.log('📦 Found result in stream-json, extracting text content');
+          // Process tool_use messages for activity updates
+          if (parsed.type === 'tool_use' && parsed.tool_name) {
+            console.log('🔧 Found tool use:', parsed.tool_name);
             chunks.push(
-              this.createChunk('text', parsed.result, {
-                isFinal: isComplete,
+              this.createChunk('tool_use', '', {
+                metadata: { toolName: parsed.tool_name },
               })
             );
           }
-          // Skip all other message types (system, assistant, tool_use, etc.)
+          // Skip result messages - they contain metadata, not assistant responses
+          else if (parsed.type === 'result') {
+            console.log('📦 Skipping result message (metadata)');
+          }
+          // Process assistant messages - these contain the actual responses
+          else if (parsed.type === 'assistant' && parsed.message) {
+            console.log('💬 Found assistant message');
+            // Assistant messages contain the actual content to display
+            // We don't emit these as chunks since they're handled elsewhere
+          }
         } catch (e) {
           // Not valid JSON, skip this line
           console.log('⚠️ Failed to parse JSON line:', trimmedLine.substring(0, 100));

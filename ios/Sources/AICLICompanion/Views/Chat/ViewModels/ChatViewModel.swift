@@ -22,6 +22,7 @@ class ChatViewModel: ObservableObject {
     private var autoSaveTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
     private let responseStreamer = ClaudeResponseStreamer()
+    private var isWaitingForClaudeResponse = false
     
     // MARK: - Initialization
     init(aicliService: AICLIService, settings: SettingsManager) {
@@ -78,7 +79,7 @@ class ChatViewModel: ObservableObject {
         }
         
         // Create the command request
-        let claudeRequest = AICLICommandRequest(
+        let claudeRequest = ClaudeCommandRequest(
             command: command,
             projectPath: project.path,
             sessionId: session.sessionId
@@ -88,11 +89,12 @@ class ChatViewModel: ObservableObject {
         print("   Session ID: \(session.sessionId)")
         print("   Project path: \(project.path)")
         
-        // Set timeout
+        // Set timeout - 30 minutes to match server timeout
         messageTimeout?.invalidate()
-        messageTimeout = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: false) { _ in
+        messageTimeout = Timer.scheduledTimer(withTimeInterval: 1800.0, repeats: false) { _ in
             Task { @MainActor in
                 self.isLoading = false
+                self.isWaitingForClaudeResponse = false
                 let timeoutMessage = Message(
                     content: "⏰ Request timed out. The connection may have been lost or the server is taking too long to respond. Please try again.",
                     sender: .assistant,
@@ -102,8 +104,11 @@ class ChatViewModel: ObservableObject {
             }
         }
         
+        // Mark that we're waiting for a direct Claude response
+        isWaitingForClaudeResponse = true
+        
         // Send via WebSocket
-        webSocketService.sendMessage(claudeRequest, type: .aicliCommand) { result in
+        webSocketService.sendMessage(claudeRequest, type: .claudeCommand) { result in
             switch result {
             case .success(let message):
                 self.handleCommandResponse(message)
@@ -198,8 +203,9 @@ class ChatViewModel: ObservableObject {
     
     private func handleCommandResponse(_ message: WebSocketMessage) {
         messageTimeout?.invalidate()
+        isWaitingForClaudeResponse = false
         
-        if case .aicliResponse(let response) = message.data {
+        if case .claudeResponse(let response) = message.data {
             isLoading = false
             progressInfo = nil
             
@@ -230,6 +236,7 @@ class ChatViewModel: ObservableObject {
     private func handleCommandError(_ error: AICLICompanionError) {
         messageTimeout?.invalidate()
         isLoading = false
+        isWaitingForClaudeResponse = false
         progressInfo = nil
         
         let errorMessage = Message(
@@ -299,19 +306,49 @@ class ChatViewModel: ObservableObject {
     
     private func handleStreamComplete(_ complete: StreamCompleteResponse) {
         // Complete the streaming
-        if let streamedMessage = responseStreamer.currentMessage,
-           streamedMessage.streamingState == .complete {
-            messages.append(streamedMessage)
-        }
+        // Note: The message will be added by handleStreamingComplete notification
         isLoading = false
         progressInfo = nil
     }
     
     private func handleStreamChunk(_ chunkResponse: StreamChunkResponse) {
+        // Cancel timeout since we're receiving data
+        messageTimeout?.invalidate()
+        
+        // Don't start streaming for claudeCommand responses
+        // These are complete responses that don't need streaming
+        if isWaitingForClaudeResponse {
+            // Just update progress info if there's tool activity
+            if let toolName = extractToolName(from: chunkResponse.chunk) {
+                let progressResponse = ProgressResponse(
+                    sessionId: chunkResponse.sessionId,
+                    stage: "Working",
+                    progress: nil,
+                    message: getActivityMessage(for: toolName),
+                    timestamp: Date()
+                )
+                progressInfo = ProgressInfo(from: progressResponse)
+            }
+            return
+        }
+        
+        // For actual streaming responses, start the streamer
         if responseStreamer.currentSessionId != chunkResponse.sessionId {
             responseStreamer.startStreaming(sessionId: chunkResponse.sessionId)
             isLoading = false
             progressInfo = nil
+        }
+        
+        // Update activity based on chunk type
+        if let toolName = extractToolName(from: chunkResponse.chunk) {
+            let progressResponse = ProgressResponse(
+                sessionId: chunkResponse.sessionId,
+                stage: "Working",
+                progress: nil,
+                message: getActivityMessage(for: toolName),
+                timestamp: Date()
+            )
+            progressInfo = ProgressInfo(from: progressResponse)
         }
         
         // Post notification for the streamer
@@ -334,5 +371,54 @@ class ChatViewModel: ObservableObject {
         progressInfo = nil
         
         print("✅ Added streamed message to UI: \(message.content.prefix(50))...")
+    }
+    
+    // MARK: - Activity Helpers
+    private func extractToolName(from chunk: StreamChunk) -> String? {
+        // Check if this is a tool_use type chunk
+        if chunk.type == "tool_use", let metadata = chunk.metadata {
+            return metadata.toolName
+        }
+        
+        // Try to parse from content if it contains tool information
+        if chunk.content.contains("tool_name") {
+            // Simple extraction - could be improved with proper JSON parsing
+            if let range = chunk.content.range(of: "\"tool_name\":\\s*\"([^\"]+)\"", options: .regularExpression) {
+                let toolName = String(chunk.content[range])
+                    .replacingOccurrences(of: "\"tool_name\":", with: "")
+                    .replacingOccurrences(of: "\"", with: "")
+                    .trimmingCharacters(in: .whitespaces)
+                return toolName
+            }
+        }
+        
+        return nil
+    }
+    
+    private func getActivityMessage(for toolName: String) -> String {
+        switch toolName.lowercased() {
+        case "read":
+            return "Reading files..."
+        case "edit", "multiedit":
+            return "Making changes..."
+        case "write":
+            return "Writing files..."
+        case "bash":
+            return "Running commands..."
+        case "grep":
+            return "Searching code..."
+        case "glob":
+            return "Finding files..."
+        case "ls":
+            return "Listing directories..."
+        case "task":
+            return "Analyzing task..."
+        case "webfetch":
+            return "Fetching web content..."
+        case "websearch":
+            return "Searching the web..."
+        default:
+            return "Working on it..."
+        }
     }
 }

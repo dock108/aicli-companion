@@ -66,7 +66,9 @@ struct ChatView: View {
                     ProjectContextHeader(
                         project: project,
                         session: sessionManager.activeSession ?? session,
-                        onSwitchProject: onSwitchProject
+                        messageCount: viewModel.messages.count,
+                        onSwitchProject: onSwitchProject,
+                        onClearSession: clearCurrentSession
                     )
                     .padding(.horizontal, isIPad && horizontalSizeClass == .regular ? 40 : 16)
                     .padding(.vertical, 12)
@@ -215,6 +217,28 @@ struct ChatView: View {
         }
         
         viewModel.sendMessage(text, for: project)
+    }
+    
+    private func clearCurrentSession() {
+        guard let project = selectedProject else { return }
+        
+        // Clear messages from UI
+        viewModel.messages.removeAll()
+        
+        // Clear active session
+        viewModel.setActiveSession(nil)
+        
+        // Clear persisted messages and session data
+        let persistenceService = MessagePersistenceService.shared
+        persistenceService.clearMessages(for: project.path)
+        
+        // Clear WebSocket active session
+        WebSocketService.shared.setActiveSession(nil)
+        
+        // Restart session fresh
+        if let connection = settings.currentConnection {
+            viewModel.startSession(for: project, connection: connection)
+        }
     }
     
     // MARK: - WebSocket Connection

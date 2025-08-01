@@ -192,6 +192,18 @@ class AICLICompanionServer {
       // Set up WebSocket
       this.setupWebSocket();
 
+      // Initialize AICLI session persistence (recover any existing sessions)
+      console.log('🔄 Initializing session persistence...');
+      await this.aicliService.sessionManager.initializePersistence();
+      
+      // Reconcile session state with AICLI CLI to clean up stale sessions
+      try {
+        const reconcileStats = await this.aicliService.sessionManager.reconcileSessionState();
+        console.log(`📊 Session reconciliation stats:`, reconcileStats);
+      } catch (error) {
+        console.warn('⚠️ Session reconciliation failed:', error.message);
+      }
+      
       // Verify AICLI Code is available
       const isAvailable = await ServerStartup.checkAICLIAvailability(this.aicliService);
 

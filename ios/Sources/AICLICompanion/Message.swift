@@ -256,7 +256,7 @@ struct WebSocketMessage: Codable {
         case ping(PingRequest)
         case subscribe(SubscribeRequest)
         case setWorkingDirectory(SetWorkingDirectoryRequest)
-        case aicliCommand(AICLICommandRequest)
+        case claudeCommand(ClaudeCommandRequest)
         case registerDevice(RegisterDeviceRequest)
         case welcome(WelcomeResponse)
         case askResponse(AskResponseData)
@@ -268,7 +268,7 @@ struct WebSocketMessage: Codable {
         case error(ErrorResponse)
         case sessionStatus(SessionStatusResponse)
         case pong(PongResponse)
-        case aicliResponse(AICLICommandResponse)
+        case claudeResponse(ClaudeCommandResponse)
         case subscribed(SubscribedResponse)
 
         // New rich message types
@@ -329,8 +329,8 @@ struct WebSocketMessage: Codable {
             self.data = .workingDirectorySet(try WorkingDirectorySetResponse(from: dataDecoder))
         case .progress:
             self.data = .progress(try ProgressResponse(from: dataDecoder))
-        case .aicliResponse:
-            self.data = .aicliResponse(try AICLICommandResponse(from: dataDecoder))
+        case .claudeResponse:
+            self.data = .claudeResponse(try ClaudeCommandResponse(from: dataDecoder))
         case .subscribed:
             self.data = .subscribed(try SubscribedResponse(from: dataDecoder))
         case .streamChunk:
@@ -371,7 +371,7 @@ struct WebSocketMessage: Codable {
             try container.encode(request, forKey: .data)
         case .setWorkingDirectory(let request):
             try container.encode(request, forKey: .data)
-        case .aicliCommand(let request):
+        case .claudeCommand(let request):
             try container.encode(request, forKey: .data)
         case .registerDevice(let request):
             try container.encode(request, forKey: .data)
@@ -395,7 +395,7 @@ struct WebSocketMessage: Codable {
             try container.encode(response, forKey: .data)
         case .pong(let response):
             try container.encode(response, forKey: .data)
-        case .aicliResponse(let response):
+        case .claudeResponse(let response):
             try container.encode(response, forKey: .data)
         case .subscribed(let response):
             try container.encode(response, forKey: .data)
@@ -431,7 +431,7 @@ enum WebSocketMessageType: String, Codable {
     case ping = "ping"
     case subscribe = "subscribe"
     case setWorkingDirectory = "setWorkingDirectory"
-    case aicliCommand = "aicliCommand"
+    case claudeCommand = "claudeCommand"
     case registerDevice = "registerDevice"
 
     // Server → Client
@@ -445,7 +445,7 @@ enum WebSocketMessageType: String, Codable {
     case error = "error"
     case sessionStatus = "sessionStatus"
     case pong = "pong"
-    case aicliResponse = "aicliResponse"
+    case claudeResponse = "claudeResponse"
     case subscribed = "subscribed"
 
     // New rich message types from enhanced server
@@ -517,7 +517,7 @@ struct SetWorkingDirectoryRequest: Codable {
     let workingDirectory: String
 }
 
-struct AICLICommandRequest: Codable {
+struct ClaudeCommandRequest: Codable {
     let command: String
     let projectPath: String
     let sessionId: String?
@@ -581,16 +581,19 @@ struct StreamChunk: Codable {
 struct StreamChunkMetadata: Codable {
     let language: String?
     let level: Int?
+    let toolName: String?
     
-    init(language: String? = nil, level: Int? = nil) {
+    init(language: String? = nil, level: Int? = nil, toolName: String? = nil) {
         self.language = language
         self.level = level
+        self.toolName = toolName
     }
     
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: DynamicCodingKeys.self)
         self.language = try container.decodeIfPresent(String.self, forKey: DynamicCodingKeys(stringValue: "language"))
         self.level = try container.decodeIfPresent(Int.self, forKey: DynamicCodingKeys(stringValue: "level"))
+        self.toolName = try container.decodeIfPresent(String.self, forKey: DynamicCodingKeys(stringValue: "toolName"))
     }
     
     struct DynamicCodingKeys: CodingKey {
@@ -713,7 +716,7 @@ struct WorkingDirectorySetResponse: Codable {
     let success: Bool
 }
 
-struct AICLICommandResponse: Codable {
+struct ClaudeCommandResponse: Codable {
     let content: String
     let success: Bool
     let sessionId: String?

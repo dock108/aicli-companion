@@ -8,7 +8,7 @@ import { AICLIMessageHandler } from './aicli-message-handler.js';
 // import { pushNotificationService } from './push-notification.js';
 import { AICLISessionManager } from './aicli-session-manager.js';
 import { AICLIProcessRunner } from './aicli-process-runner.js';
-import { AICLILongRunningTaskManager } from './aicli-long-running-task-manager.js';
+// Long-running task manager removed - trusting Claude CLI timeouts
 import { AICLIValidationService } from './aicli-validation-service.js';
 
 const execAsync = promisify(exec);
@@ -30,8 +30,7 @@ export class AICLIService extends EventEmitter {
       options.processRunner || new AICLIProcessRunner(options.processRunnerOptions);
 
     // Initialize long-running task manager
-    this.longRunningTaskManager =
-      options.longRunningTaskManager || new AICLILongRunningTaskManager();
+    // Long-running task manager removed - trusting Claude CLI timeouts
 
     // Forward events from all managers
     this.sessionManager.on('sessionCleaned', (data) => {
@@ -51,6 +50,13 @@ export class AICLIService extends EventEmitter {
     });
 
     this.processRunner.on('processExit', (data) => {
+      // Clean up the session when process exits
+      if (data.sessionId && data.code !== 0) {
+        console.log(`🧹 Cleaning up session ${data.sessionId} after process exit with code ${data.code}`);
+        this.sessionManager.cleanupDeadSession(data.sessionId).catch(error => {
+          console.warn(`⚠️ Failed to cleanup dead session ${data.sessionId}:`, error.message);
+        });
+      }
       this.emit('processExit', data);
     });
 
@@ -62,13 +68,7 @@ export class AICLIService extends EventEmitter {
       this.emitAICLIResponse(data.sessionId, data.response, data.isLast);
     });
 
-    this.longRunningTaskManager.on('assistantMessage', (data) => {
-      this.emit('assistantMessage', data);
-    });
-
-    this.longRunningTaskManager.on('streamError', (data) => {
-      this.emit('streamError', data);
-    });
+    // Event handlers removed with long-running task manager
 
     // Configuration (will be delegated to appropriate managers)
     this.aicliCommand = this.processRunner.aicliCommand;
@@ -168,7 +168,9 @@ export class AICLIService extends EventEmitter {
             console.warn(
               `⚠️  Process ${session.process.pid} for session ${sessionId} no longer exists`
             );
-            this.cleanupDeadSession(sessionId);
+            this.cleanupDeadSession(sessionId).catch(error => {
+              console.warn(`⚠️ Failed to cleanup dead session ${sessionId}:`, error.message);
+            });
           }
         } catch (error) {
           console.error(`Failed to monitor process ${session.process.pid}:`, error);
@@ -181,8 +183,8 @@ export class AICLIService extends EventEmitter {
   }
 
   // Cleanup dead session
-  cleanupDeadSession(sessionId) {
-    this.sessionManager.cleanupDeadSession(sessionId);
+  async cleanupDeadSession(sessionId) {
+    await this.sessionManager.cleanupDeadSession(sessionId);
   }
 
   async checkAvailability() {
@@ -214,6 +216,7 @@ export class AICLIService extends EventEmitter {
       format = 'json',
       workingDirectory = process.cwd(),
       streaming = false,
+      skipPermissions = false,
     } = options;
 
     try {
@@ -230,11 +233,13 @@ export class AICLIService extends EventEmitter {
         return await this.sendStreamingPrompt(sanitizedPrompt, {
           sessionId: sanitizedSessionId,
           workingDirectory: validatedWorkingDir,
+          skipPermissions,
         });
       } else {
         return await this.sendOneTimePrompt(sanitizedPrompt, {
           format: validatedFormat,
           workingDirectory: validatedWorkingDir,
+          skipPermissions,
         });
       }
     } catch (error) {
@@ -243,7 +248,7 @@ export class AICLIService extends EventEmitter {
     }
   }
 
-  async sendOneTimePrompt(prompt, { format = 'json', workingDirectory = process.cwd() }) {
+  async sendOneTimePrompt(prompt, { format = 'json', workingDirectory = process.cwd(), skipPermissions = false }) {
     console.log(
       `📝 sendOneTimePrompt called with prompt: "${prompt?.substring(0, 50)}${prompt?.length > 50 ? '...' : ''}"`
     );
@@ -260,7 +265,7 @@ export class AICLIService extends EventEmitter {
     const args = ['--print', '--output-format', validatedFormat];
 
     // Add permission flags before the prompt
-    if (this.skipPermissions) {
+    if (skipPermissions || this.skipPermissions) {
       args.push('--dangerously-skip-permissions');
     } else {
       // Only add permission configuration if not skipping permissions
@@ -423,20 +428,14 @@ export class AICLIService extends EventEmitter {
         reject(new Error(`Failed to start AICLI Code: ${error.message}`));
       });
 
-      // Add timeout protection
-      const timeout = setTimeout(() => {
-        console.log(`   ⏰ Process timeout, killing...`);
-        aicliProcess.kill('SIGTERM');
-        reject(new Error('AICLI Code process timed out'));
-      }, 30000);
-
+      // No timeout - trust Claude CLI
       aicliProcess.on('close', () => {
-        clearTimeout(timeout);
+        // Process closed
       });
     });
   }
 
-  async sendStreamingPrompt(prompt, { sessionId, workingDirectory = process.cwd() }) {
+  async sendStreamingPrompt(prompt, { sessionId, workingDirectory = process.cwd(), skipPermissions = false }) {
     // Validate inputs
     const sanitizedPrompt = InputValidator.sanitizePrompt(prompt);
     const validatedWorkingDir = await InputValidator.validateWorkingDirectory(workingDirectory);
@@ -448,11 +447,11 @@ export class AICLIService extends EventEmitter {
     }
 
     // Create new interactive session
-    return this.createInteractiveSession(sessionKey, sanitizedPrompt, validatedWorkingDir);
+    return this.createInteractiveSession(sessionKey, sanitizedPrompt, validatedWorkingDir, skipPermissions);
   }
 
-  async createInteractiveSession(sessionId, initialPrompt, workingDirectory) {
-    return this.sessionManager.createInteractiveSession(sessionId, initialPrompt, workingDirectory);
+  async createInteractiveSession(sessionId, initialPrompt, workingDirectory, skipPermissions = false) {
+    return this.sessionManager.createInteractiveSession(sessionId, initialPrompt, workingDirectory, { skipPermissions });
   }
 
   async sendToExistingSession(sessionId, prompt) {
@@ -472,7 +471,7 @@ export class AICLIService extends EventEmitter {
 
     try {
       // Update activity and processing state
-      this.sessionManager.updateSessionActivity(sanitizedSessionId);
+      await this.sessionManager.updateSessionActivity(sanitizedSessionId);
       this.sessionManager.setSessionProcessing(sanitizedSessionId, true);
 
       console.log(
@@ -502,7 +501,6 @@ export class AICLIService extends EventEmitter {
       return {
         sessionId: sanitizedSessionId,
         success: true,
-        message: 'Command executed successfully',
         response,
       };
     } catch (error) {
@@ -518,13 +516,15 @@ export class AICLIService extends EventEmitter {
   }
 
   async executeAICLICommand(session, prompt) {
-    // Mark conversation as started if needed
+    // Delegate to process runner
+    const result = await this.processRunner.executeAICLICommand(session, prompt);
+    
+    // Mark conversation as started AFTER successful first command
     if (!session.conversationStarted) {
-      this.sessionManager.markConversationStarted(session.sessionId);
+      await this.sessionManager.markConversationStarted(session.sessionId);
     }
-
-    // Delegate to process runner with long-running task manager
-    return this.processRunner.executeAICLICommand(session, prompt, this.longRunningTaskManager);
+    
+    return result;
   }
 
   // Delegate validation methods to AICLIValidationService
@@ -740,19 +740,31 @@ export class AICLIService extends EventEmitter {
     return this.sessionManager.hasSession(sessionId);
   }
 
+  getSession(sessionId) {
+    return this.sessionManager.getSession(sessionId);
+  }
+
   getActiveSessions() {
     return this.sessionManager.getActiveSessions();
   }
 
+  async markSessionBackgrounded(sessionId) {
+    return await this.sessionManager.markSessionBackgrounded(sessionId);
+  }
+
+  async markSessionForegrounded(sessionId) {
+    return await this.sessionManager.markSessionForegrounded(sessionId);
+  }
+
   // Cleanup method for graceful shutdown
-  shutdown() {
+  async shutdown() {
     console.log('🔄 Shutting down AICLI Code Service...');
 
     // Stop health monitoring
     this.stopProcessHealthMonitoring();
 
     // Shutdown session manager
-    this.sessionManager.shutdown();
+    await this.sessionManager.shutdown();
 
     console.log('✅ AICLI Code Service shut down complete');
   }
@@ -1012,9 +1024,6 @@ export class AICLIService extends EventEmitter {
     return AICLIConfig.findAICLICommand();
   }
 
-  calculateTimeoutForCommand(command) {
-    return AICLIConfig.calculateTimeoutForCommand(command);
-  }
 
   isPermissionPrompt(message) {
     return MessageProcessor.isPermissionPrompt(message);

@@ -11,6 +11,15 @@ describe('Project Routes', () => {
   let handlers;
   let mockRouter;
 
+  // Helper to create a mock response object
+  const createMockResponse = () => {
+    const res = {
+      status: mock.fn(() => res),
+      json: mock.fn(() => res),
+    };
+    return res;
+  };
+
   beforeEach(() => {
     app = express();
     handlers = {};
@@ -46,6 +55,12 @@ describe('Project Routes', () => {
         workingDirectory: workingDir,
       })),
       closeSession: mock.fn(async () => {}),
+      hasSession: mock.fn((sessionId) => false),
+      getSession: mock.fn((sessionId) => null),
+      sessionManager: {
+        getPersistenceStats: mock.fn(),
+        exportSessions: mock.fn(async () => []),
+      },
     };
 
     // Mock app.use
@@ -97,9 +112,7 @@ describe('Project Routes', () => {
       ]);
 
       const req = {};
-      const res = {
-        json: mock.fn(),
-      };
+      const res = createMockResponse();
 
       await handlers['GET /projects'](req, res);
 
@@ -156,9 +169,7 @@ describe('Project Routes', () => {
       );
 
       const req = { params: { name: 'test-project' } };
-      const res = {
-        json: mock.fn(),
-      };
+      const res = createMockResponse();
 
       await handlers['GET /projects/:name'](req, res);
 
@@ -184,9 +195,7 @@ describe('Project Routes', () => {
       });
 
       const req = { params: { name: 'test-project' } };
-      const res = {
-        json: mock.fn(),
-      };
+      const res = createMockResponse();
 
       await handlers['GET /projects/:name'](req, res);
 
@@ -290,9 +299,7 @@ describe('Project Routes', () => {
       }));
 
       const req = { params: { name: 'test-project' } };
-      const res = {
-        json: mock.fn(),
-      };
+      const res = createMockResponse();
 
       await handlers['POST /projects/:name/start'](req, res);
 
@@ -467,9 +474,7 @@ describe('Project Routes', () => {
 
     it('should list sessions', async () => {
       const req = {};
-      const res = {
-        json: mock.fn(),
-      };
+      const res = createMockResponse();
 
       await handlers['GET /sessions'](req, res);
 
@@ -492,9 +497,7 @@ describe('Project Routes', () => {
 
       // Now list sessions
       const req = {};
-      const res = {
-        json: mock.fn(),
-      };
+      const res = createMockResponse();
 
       await handlers['GET /sessions'](req, res);
 
@@ -514,12 +517,10 @@ describe('Project Routes', () => {
 
     it('should handle errors', async () => {
       const req = {};
-      const res = {
-        status: mock.fn(() => res),
-        json: mock.fn(() => {
-          throw new Error('Test error');
-        }),
-      };
+      const res = createMockResponse();
+      res.json = mock.fn(() => {
+        throw new Error('Test error');
+      });
 
       try {
         await handlers['GET /sessions'](req, res);
@@ -550,9 +551,7 @@ describe('Project Routes', () => {
 
       // Now get the session
       const req = { params: { sessionId } };
-      const res = {
-        json: mock.fn(),
-      };
+      const res = createMockResponse();
 
       await handlers['GET /sessions/:sessionId'](req, res);
 
@@ -581,12 +580,10 @@ describe('Project Routes', () => {
 
     it('should handle errors gracefully', async () => {
       const req = { params: { sessionId: 'test' } };
-      const res = {
-        status: mock.fn(() => res),
-        json: mock.fn(() => {
-          throw new Error('Unexpected error');
-        }),
-      };
+      const res = createMockResponse();
+      res.json = mock.fn(() => {
+        throw new Error('Unexpected error');
+      });
 
       try {
         await handlers['GET /sessions/:sessionId'](req, res);
@@ -617,9 +614,7 @@ describe('Project Routes', () => {
 
       // Now delete the session
       const req = { params: { sessionId } };
-      const res = {
-        json: mock.fn(),
-      };
+      const res = createMockResponse();
 
       await handlers['DELETE /sessions/:sessionId'](req, res);
 
@@ -712,9 +707,7 @@ describe('Project Routes', () => {
       });
 
       const req = { params: { sessionId } };
-      const res = {
-        json: mock.fn(),
-      };
+      const res = createMockResponse();
 
       await handlers['DELETE /sessions/:sessionId'](req, res);
 
@@ -727,12 +720,10 @@ describe('Project Routes', () => {
 
     it('should handle general errors', async () => {
       const req = { params: { sessionId: 'test' } };
-      const res = {
-        status: mock.fn(() => res),
-        json: mock.fn(() => {
-          throw new Error('Test error');
-        }),
-      };
+      const res = createMockResponse();
+      res.json = mock.fn(() => {
+        throw new Error('Test error');
+      });
 
       try {
         await handlers['DELETE /sessions/:sessionId'](req, res);

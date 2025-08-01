@@ -1,5 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { EventEmitter } from 'events';
+import { WebSocketUtilities } from './websocket-utilities.js';
+import { WEBSOCKET_EVENTS, SERVER_VERSION, DEFAULT_CONFIG } from '../constants/index.js';
 
 /**
  * Manages WebSocket client connections, authentication, and health monitoring
@@ -72,6 +74,9 @@ export class WebSocketConnectionManager extends EventEmitter {
       this.handleDisconnection(clientId, 1011, 'Internal error');
     });
 
+    // Send welcome message
+    this.sendWelcomeMessage(clientId);
+
     // Emit connection event
     this.emit('clientConnected', {
       clientId,
@@ -115,6 +120,46 @@ export class WebSocketConnectionManager extends EventEmitter {
     this.clients.delete(clientId);
 
     console.log(`   Remaining clients: ${this.clients.size}`);
+  }
+
+  /**
+   * Send welcome message to newly connected client
+   */
+  sendWelcomeMessage(clientId) {
+    // Get Claude Code version if available
+    let claudeCodeVersion = null;
+    try {
+      // This will be filled in by the actual version check if needed
+      // For now, we'll leave it as null and the client can handle that
+      claudeCodeVersion = null;
+    } catch (error) {
+      // Ignore version check errors
+    }
+
+    const welcomeMessage = {
+      type: WEBSOCKET_EVENTS.WELCOME,
+      timestamp: new Date().toISOString(),
+      data: {
+        clientId: clientId,
+        serverVersion: SERVER_VERSION,
+        claudeCodeVersion,
+        capabilities: [
+          'chat',
+          'streaming',
+          'permissions',
+          'file-operations',
+          'session-management'
+        ],
+        maxSessions: DEFAULT_CONFIG.MAX_SESSIONS
+      }
+    };
+
+    const success = WebSocketUtilities.sendMessage(clientId, welcomeMessage, this.clients);
+    if (success) {
+      console.log(`✅ Welcome message sent to client ${clientId}`);
+    } else {
+      console.warn(`⚠️ Failed to send welcome message to client ${clientId}`);
+    }
   }
 
   /**

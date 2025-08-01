@@ -37,13 +37,6 @@ struct ProjectStartResponse: Codable {
     let message: String
 }
 
-// MARK: - Pending Session State
-
-struct PendingSessionState: Identifiable {
-    let id = UUID()
-    let project: Project
-    let metadata: SessionMetadata
-}
 
 // MARK: - Project Selection View
 
@@ -57,7 +50,6 @@ struct ProjectSelectionView: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var isStartingProject = false
-    @State private var pendingSessionState: PendingSessionState?
     @State private var cancellables = Set<AnyCancellable>()
     @State private var lastSelectionTime: Date = .distantPast
     
@@ -193,41 +185,6 @@ struct ProjectSelectionView: View {
                 }
             }
         )
-        .sheet(item: $pendingSessionState) { sessionState in
-            SessionContinuationSheet(
-                project: sessionState.project,
-                sessionMetadata: sessionState.metadata,
-                onContinue: {
-                        print("🟢 ProjectSelection: Sheet onContinue called for '\(sessionState.project.name)'")
-                        // Dismiss sheet first, then start session after a small delay
-                        // Sheet dismissed by setting pendingSessionState to nil
-                        let project = sessionState.project
-                        let metadata = sessionState.metadata
-                        pendingSessionState = nil
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            continueExistingSession(project, metadata: metadata)
-                        }
-                    },
-                    onStartFresh: {
-                        print("🟢 ProjectSelection: Sheet onStartFresh called for '\(sessionState.project.name)'")
-                        // Dismiss sheet first, then start session after a small delay
-                        // Sheet dismissed by setting pendingSessionState to nil
-                        let project = sessionState.project
-                        pendingSessionState = nil
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            startFreshSession(project)
-                        }
-                    },
-                    onViewHistory: {
-                        // TODO: Implement history view
-                        print("View history for \(sessionState.project.name)")
-                        // Sheet dismissed by setting pendingSessionState to nil
-                        pendingSessionState = nil
-                    }
-                )
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-        }
     }
     
     // MARK: - Private Methods
@@ -323,25 +280,15 @@ struct ProjectSelectionView: View {
                 print("   - AICLI Session ID: \(metadata.aicliSessionId ?? "nil")")
                 print("   - Message Count: \(metadata.messageCount)")
                 print("   - Last Used: \(metadata.formattedLastUsed)")
+                
+                // Automatically continue existing session
+                print("🟢 ProjectSelection: Automatically continuing session for '\(project.name)'")
+                continueExistingSession(project, metadata: metadata)
             } else {
                 print("⚠️ ProjectSelection: No metadata found for '\(project.name)' despite hasSession = true")
-            }
-            
-            // IMPORTANT: Do not set selectedProject here - only pendingSessionState
-            // Store both project and metadata before showing sheet
-            if let metadata = persistenceService.getSessionMetadata(for: project.path) {
-                print("🟢 ProjectSelection: Showing continuation sheet for '\(project.name)'")
-                print("   - Has existing session: \(hasSession)")
-                print("   - Setting pendingSessionState with project '\(project.name)' and \(metadata.messageCount) messages")
-                
-                // Add a delay and use withAnimation to ensure smooth presentation
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        pendingSessionState = PendingSessionState(project: project, metadata: metadata)
-                    }
-                }
-            } else {
-                print("❌ ProjectSelection: Failed to get metadata for project despite hasSession = true")
+                // Fall back to starting fresh session
+                print("🔵 ProjectSelection: Falling back to fresh session for '\(project.name)'")
+                startProjectSession(project, continueExisting: false)
             }
         } else {
             print("🔵 ProjectSelection: Starting fresh session for '\(project.name)'")

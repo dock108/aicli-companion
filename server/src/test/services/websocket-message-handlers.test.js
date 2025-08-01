@@ -14,6 +14,9 @@ const originalCreateResponse = WebSocketUtilities.createResponse;
 const originalRegisterDevice = pushNotificationService.registerDevice;
 const originalGetQueuedMessages = messageQueueService.getQueuedMessages;
 const originalMarkMessagesDelivered = messageQueueService.markMessagesDelivered;
+const originalGetUndeliveredMessages = messageQueueService.getUndeliveredMessages;
+const originalTrackSessionClient = messageQueueService.trackSessionClient;
+const originalMarkAsDelivered = messageQueueService.markAsDelivered;
 const originalExistsSync = fs.existsSync;
 const originalStatSync = fs.statSync;
 const originalResolve = path.resolve;
@@ -42,6 +45,9 @@ describe('WebSocketMessageHandlers', () => {
     // Mock message queue service
     messageQueueService.getQueuedMessages = mock.fn(() => []);
     messageQueueService.markMessagesDelivered = mock.fn();
+    messageQueueService.getUndeliveredMessages = mock.fn(() => []);
+    messageQueueService.trackSessionClient = mock.fn();
+    messageQueueService.markAsDelivered = mock.fn();
 
     // Mock fs and path modules
     fs.existsSync = mock.fn(() => true);
@@ -79,6 +85,13 @@ describe('WebSocketMessageHandlers', () => {
       healthCheck: mock.fn(() => Promise.resolve({ status: 'healthy' })),
       getActiveSessions: mock.fn(() => ['session1', 'session2']),
       testAICLICommand: mock.fn(() => Promise.resolve({ version: '1.0.0' })),
+      hasSession: mock.fn(() => false),
+      markSessionForegrounded: mock.fn(async () => {}),
+      markSessionBackgrounded: mock.fn(async () => {}),
+      sessionManager: {
+        getSessionBuffer: mock.fn(() => null),
+      },
+      aggregateBufferedContent: mock.fn(() => []),
     };
 
     // Mock clients
@@ -104,6 +117,9 @@ describe('WebSocketMessageHandlers', () => {
     pushNotificationService.registerDevice = originalRegisterDevice;
     messageQueueService.getQueuedMessages = originalGetQueuedMessages;
     messageQueueService.markMessagesDelivered = originalMarkMessagesDelivered;
+    messageQueueService.getUndeliveredMessages = originalGetUndeliveredMessages;
+    messageQueueService.trackSessionClient = originalTrackSessionClient;
+    messageQueueService.markAsDelivered = originalMarkAsDelivered;
     fs.existsSync = originalExistsSync;
     fs.statSync = originalStatSync;
     path.resolve = originalResolve;
@@ -183,11 +199,17 @@ describe('WebSocketMessageHandlers', () => {
 
     it('should deliver queued messages on stream start', async () => {
       const queuedMessages = [
-        { type: 'test', data: 'message1' },
-        { type: 'test', data: 'message2' },
+        { 
+          id: 'msg1',
+          message: { type: 'test', data: 'message1' }
+        },
+        { 
+          id: 'msg2',
+          message: { type: 'test', data: 'message2' }
+        },
       ];
 
-      messageQueueService.getQueuedMessages.mock.mockImplementation(() => queuedMessages);
+      messageQueueService.getUndeliveredMessages.mock.mockImplementation(() => queuedMessages);
 
       const data = { sessionId: 'session123', initialPrompt: 'test' };
 
@@ -202,7 +224,8 @@ describe('WebSocketMessageHandlers', () => {
 
       // Should send initial response + queued messages
       assert.strictEqual(WebSocketUtilities.sendMessage.mock.calls.length, 3);
-      assert.strictEqual(messageQueueService.markMessagesDelivered.mock.calls.length, 1);
+      assert.strictEqual(messageQueueService.markAsDelivered.mock.calls.length, 1);
+      assert.deepStrictEqual(messageQueueService.markAsDelivered.mock.calls[0].arguments[0], ['msg1', 'msg2']);
     });
 
     it('should handle stream start failure', async () => {
@@ -283,14 +306,15 @@ describe('WebSocketMessageHandlers', () => {
         mockConnectionManager
       );
 
-      assert.strictEqual(mockAicliService.closeSession.mock.calls.length, 1);
+      // We no longer call closeSession, just remove from client
+      assert.strictEqual(mockAicliService.closeSession.mock.calls.length, 0);
       assert.strictEqual(mockConnectionManager.removeSessionFromClient.mock.calls.length, 1);
       assert.strictEqual(WebSocketUtilities.sendMessage.mock.calls.length, 1);
     });
 
-    it('should handle stream close failure', async () => {
-      mockAicliService.closeSession.mock.mockImplementation(() => {
-        throw new Error('Close failed');
+    it('should handle connection manager error', async () => {
+      mockConnectionManager.removeSessionFromClient.mock.mockImplementation(() => {
+        throw new Error('Remove failed');
       });
 
       const data = { sessionId: 'session123' };
@@ -354,29 +378,30 @@ describe('WebSocketMessageHandlers', () => {
     it('should respond to ping with pong', () => {
       const data = { timestamp: '2023-01-01T00:00:00Z' };
 
-      WebSocketMessageHandlers.handlePingMessage('client1', 'req123', data, mockClients);
+      WebSocketMessageHandlers.handlePingMessage('client1', 'req123', data, mockAicliService, mockClients);
 
       assert.strictEqual(WebSocketUtilities.sendMessage.mock.calls.length, 1);
       const response = WebSocketUtilities.sendMessage.mock.calls[0].arguments[1];
       assert.strictEqual(response.data.clientTimestamp, '2023-01-01T00:00:00Z');
-      assert.ok(response.data.serverTimestamp);
+      assert.ok(response.data.serverTime);
     });
 
     it('should handle ping without timestamp', () => {
-      WebSocketMessageHandlers.handlePingMessage('client1', 'req123', null, mockClients);
+      WebSocketMessageHandlers.handlePingMessage('client1', 'req123', null, mockAicliService, mockClients);
 
       assert.strictEqual(WebSocketUtilities.sendMessage.mock.calls.length, 1);
     });
   });
 
   describe('handleSubscribeMessage', () => {
-    it('should handle event subscription', () => {
+    it('should handle event subscription', async () => {
       const data = { events: ['event1', 'event2'] };
 
-      WebSocketMessageHandlers.handleSubscribeMessage(
+      await WebSocketMessageHandlers.handleSubscribeMessage(
         'client1',
         'req123',
         data,
+        mockAicliService,
         mockClients,
         mockConnectionManager
       );
@@ -389,13 +414,14 @@ describe('WebSocketMessageHandlers', () => {
       assert.deepStrictEqual(response.data.subscribedEvents, ['event1', 'event2']);
     });
 
-    it('should handle invalid events array', () => {
+    it('should handle invalid events array', async () => {
       const data = { events: 'not-an-array' };
 
-      WebSocketMessageHandlers.handleSubscribeMessage(
+      await WebSocketMessageHandlers.handleSubscribeMessage(
         'client1',
         'req123',
         data,
+        mockAicliService,
         mockClients,
         mockConnectionManager
       );
@@ -404,6 +430,53 @@ describe('WebSocketMessageHandlers', () => {
       const errorCall = WebSocketUtilities.sendErrorMessage.mock.calls[0];
       assert.strictEqual(errorCall.arguments[2], 'SUBSCRIPTION_FAILED');
       assert.ok(errorCall.arguments[3].includes('must be an array'));
+    });
+
+    it('should handle session subscription with queued messages', async () => {
+      const data = { 
+        events: ['event1', 'event2'],
+        sessionIds: ['session1', 'session2']
+      };
+
+      // Mock queued messages for session1
+      const queuedMessages = [
+        { 
+          id: 'msg1', 
+          message: { type: 'assistantMessage', data: { content: 'Hello' } } 
+        },
+        { 
+          id: 'msg2', 
+          message: { type: 'assistantMessage', data: { content: 'World' } } 
+        }
+      ];
+      
+      messageQueueService.getUndeliveredMessages = mock.fn((sessionId) => {
+        return sessionId === 'session1' ? queuedMessages : [];
+      });
+
+      await WebSocketMessageHandlers.handleSubscribeMessage(
+        'client1',
+        'req123',
+        data,
+        mockAicliService,
+        mockClients,
+        mockConnectionManager
+      );
+
+      // Verify session tracking
+      assert.strictEqual(mockConnectionManager.addSessionToClient.mock.calls.length, 2);
+      assert.strictEqual(messageQueueService.trackSessionClient.mock.calls.length, 2);
+      
+      // Verify queued messages were delivered
+      assert.strictEqual(messageQueueService.getUndeliveredMessages.mock.calls.length, 2);
+      assert.strictEqual(messageQueueService.markAsDelivered.mock.calls.length, 1);
+      assert.deepStrictEqual(messageQueueService.markAsDelivered.mock.calls[0].arguments[0], ['msg1', 'msg2']);
+      
+      // Verify response includes session info
+      const sendCalls = WebSocketUtilities.sendMessage.mock.calls;
+      const responseCall = sendCalls.find(call => call.arguments[1].type === 'subscribe');
+      assert.ok(responseCall);
+      assert.deepStrictEqual(responseCall.arguments[1].data.sessionIds, ['session1', 'session2']);
     });
   });
 
@@ -466,7 +539,7 @@ describe('WebSocketMessageHandlers', () => {
     });
   });
 
-  describe('handleAICLICommandMessage', () => {
+  describe('handleClaudeCommandMessage', () => {
     it('should handle status command', async () => {
       const data = {
         sessionId: 'session123',
@@ -474,7 +547,7 @@ describe('WebSocketMessageHandlers', () => {
         args: [],
       };
 
-      await WebSocketMessageHandlers.handleAICLICommandMessage(
+      await WebSocketMessageHandlers.handleClaudeCommandMessage(
         'client1',
         'req123',
         data,
@@ -491,7 +564,7 @@ describe('WebSocketMessageHandlers', () => {
     it('should handle sessions command', async () => {
       const data = { command: 'sessions' };
 
-      await WebSocketMessageHandlers.handleAICLICommandMessage(
+      await WebSocketMessageHandlers.handleClaudeCommandMessage(
         'client1',
         'req123',
         data,
@@ -507,7 +580,7 @@ describe('WebSocketMessageHandlers', () => {
     it('should handle test command', async () => {
       const data = { command: 'test', args: ['version'] };
 
-      await WebSocketMessageHandlers.handleAICLICommandMessage(
+      await WebSocketMessageHandlers.handleClaudeCommandMessage(
         'client1',
         'req123',
         data,
@@ -520,10 +593,14 @@ describe('WebSocketMessageHandlers', () => {
       assert.strictEqual(mockAicliService.testAICLICommand.mock.calls[0].arguments[0], 'version');
     });
 
-    it('should handle unknown command', async () => {
-      const data = { command: 'unknown' };
+    it('should handle chat command', async () => {
+      const data = { 
+        command: 'Hello, how are you?',
+        sessionId: 'session123',
+        projectPath: '/test/project'
+      };
 
-      await WebSocketMessageHandlers.handleAICLICommandMessage(
+      await WebSocketMessageHandlers.handleClaudeCommandMessage(
         'client1',
         'req123',
         data,
@@ -532,54 +609,74 @@ describe('WebSocketMessageHandlers', () => {
         mockConnectionManager
       );
 
-      assert.strictEqual(WebSocketUtilities.sendErrorMessage.mock.calls.length, 1);
-      const errorCall = WebSocketUtilities.sendErrorMessage.mock.calls[0];
-      assert.ok(errorCall.arguments[3].includes('Unknown command'));
+      // Non-meta commands are treated as chat messages
+      assert.strictEqual(mockAicliService.sendPrompt.mock.calls.length, 1);
+      assert.strictEqual(mockAicliService.sendPrompt.mock.calls[0].arguments[0], 'Hello, how are you?');
+      assert.strictEqual(WebSocketUtilities.sendMessage.mock.calls.length, 1);
     });
   });
 
   describe('handleClientBackgroundingMessage', () => {
-    it('should handle client backgrounding', () => {
-      const data = { isBackgrounding: true };
+    it('should handle client backgrounding', async () => {
+      const data = { 
+        sessionId: 'session123',
+        timestamp: '2023-01-01T00:00:00Z'
+      };
 
-      WebSocketMessageHandlers.handleClientBackgroundingMessage(
+      mockAicliService.markSessionBackgrounded = mock.fn(async () => {});
+
+      await WebSocketMessageHandlers.handleClientBackgroundingMessage(
         'client1',
         'req123',
         data,
-        mockClients
+        mockAicliService,
+        mockClients,
+        mockConnectionManager
       );
 
       const client = mockClients.get('client1');
       assert.strictEqual(client.isBackgrounded, true);
+      assert.strictEqual(client.backgroundedSessionId, 'session123');
       assert.strictEqual(WebSocketUtilities.sendMessage.mock.calls.length, 1);
 
       const response = WebSocketUtilities.sendMessage.mock.calls[0].arguments[1];
       assert.strictEqual(response.data.success, true);
-      assert.strictEqual(response.data.isBackgrounding, true);
     });
 
-    it('should handle client foregrounding', () => {
-      const data = { isBackgrounding: false };
+    it('should handle client without session', async () => {
+      const data = { 
+        // No sessionId
+        timestamp: '2023-01-01T00:00:00Z'
+      };
 
-      WebSocketMessageHandlers.handleClientBackgroundingMessage(
+      await WebSocketMessageHandlers.handleClientBackgroundingMessage(
         'client1',
         'req123',
         data,
-        mockClients
+        mockAicliService,
+        mockClients,
+        mockConnectionManager
       );
 
       const client = mockClients.get('client1');
-      assert.strictEqual(client.isBackgrounded, false);
+      assert.strictEqual(client.isBackgrounded, true);
+      assert.strictEqual(client.backgroundedSessionId, undefined);
+      assert.strictEqual(WebSocketUtilities.sendMessage.mock.calls.length, 1);
     });
 
-    it('should handle non-existent client gracefully', () => {
-      const data = { isBackgrounding: true };
+    it('should handle non-existent client gracefully', async () => {
+      const data = { 
+        sessionId: 'session123',
+        timestamp: '2023-01-01T00:00:00Z'
+      };
 
-      WebSocketMessageHandlers.handleClientBackgroundingMessage(
+      await WebSocketMessageHandlers.handleClientBackgroundingMessage(
         'nonexistent',
         'req123',
         data,
-        mockClients
+        mockAicliService,
+        mockClients,
+        mockConnectionManager
       );
 
       assert.strictEqual(WebSocketUtilities.sendMessage.mock.calls.length, 1);
@@ -647,7 +744,7 @@ describe('WebSocketMessageHandlers', () => {
         assert.ok(typeof handlers.ping === 'function');
         assert.ok(typeof handlers.subscribe === 'function');
         assert.ok(typeof handlers.setWorkingDirectory === 'function');
-        assert.ok(typeof handlers.aicliCommand === 'function');
+        assert.ok(typeof handlers.claudeCommand === 'function');
         assert.ok(typeof handlers.client_backgrounding === 'function');
         assert.ok(typeof handlers.registerDevice === 'function');
       });

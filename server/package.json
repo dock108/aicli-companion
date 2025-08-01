@@ -7,8 +7,9 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "test": "NODE_ENV=test node --test src/test/utils/*.test.js src/test/config/middleware-config.test.js src/test/config/tls-config.test.js src/test/services/*.test.js src/test/middleware/*.test.js src/test/routes/*.test.js",
-    "test:coverage": "NODE_ENV=test c8 --reporter=lcov --reporter=text node --test src/test/utils/*.test.js src/test/config/middleware-config.test.js src/test/config/tls-config.test.js src/test/services/*.test.js src/test/middleware/*.test.js src/test/routes/*.test.js",
+    "test": "NODE_ENV=test node --test --test-force-exit src/test/**/*.test.js",
+    "test:coverage": "NODE_ENV=test c8 --reporter=lcov --reporter=text node --test --test-force-exit src/test/**/*.test.js",
+    "test:integration": "NODE_ENV=test node --test src/test-integration/**/*.test.js",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "format": "prettier --write \"src/**/*.js\"",

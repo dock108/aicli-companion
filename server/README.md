@@ -219,13 +219,11 @@ npm test
 
 # Run with coverage
 npm run test:coverage
-
-# Run specific test file
-npm test -- src/test/services/websocket.test.js
-
-# Watch mode
-npm run test:watch
 ```
+
+### Note
+
+Tests run with `--experimental-test-isolation=none` to support EventEmitter-based tests. This requires Node.js v22.8.0 or higher for the isolation flag.
 
 ## Development
 

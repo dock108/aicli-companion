@@ -1,6 +1,15 @@
 import { Bonjour } from 'bonjour-service';
 
 export function setupBonjour(port, enableTLS = false) {
+  // Skip Bonjour setup in test environment to prevent network conflicts
+  if (process.env.NODE_ENV === 'test') {
+    console.log('   📡 Bonjour service skipped in test environment');
+    return {
+      on: () => {},
+      unpublishAll: () => {},
+    };
+  }
+
   try {
     const bonjour = new Bonjour();
 

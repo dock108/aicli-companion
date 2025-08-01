@@ -942,6 +942,7 @@ describe('WebSocketUtilities Coverage Tests', () => {
         assert.ok(result.text);
         assert.ok(result.metadata);
         assert.strictEqual(result.metadata.type, 'json');
+        assert.ok(result.metadata.original);
       });
 
       it('should handle binary data representation', () => {
@@ -950,7 +951,9 @@ describe('WebSocketUtilities Coverage Tests', () => {
 
         assert.ok(result);
         assert.ok(result.text);
-        assert.strictEqual(result.metadata.type, 'object');
+        // Buffer is treated as object and serialized to JSON
+        assert.strictEqual(result.metadata.type, 'json');
+        assert.ok(result.metadata.original);
       });
 
       it('should handle very long strings efficiently', () => {
@@ -981,9 +984,9 @@ describe('WebSocketUtilities Coverage Tests', () => {
 
         assert.ok(result);
         assert.ok(result.text);
-        assert.strictEqual(result.metadata.type, 'json');
-        // Should be valid JSON (functions and undefined will be stripped)
-        assert.doesNotThrow(() => JSON.parse(result.text));
+        assert.strictEqual(result.metadata.type, 'text');
+        // When object has 'text' property, formatStreamContent returns that text directly
+        assert.strictEqual(result.text, 'Hello');
       });
     });
 

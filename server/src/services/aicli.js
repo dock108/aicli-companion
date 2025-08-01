@@ -825,7 +825,29 @@ export class AICLIService extends EventEmitter {
 
   // Check if session should timeout
   checkSessionTimeout(sessionId) {
-    this.sessionManager.checkSessionTimeout(sessionId);
+    const session = this.sessionManager.getSession(sessionId);
+    if (!session) {
+      return null;
+    }
+    const now = Date.now();
+    const lastActivity = session.lastActivity || session.createdAt;
+    if (!lastActivity) {
+      // No activity recorded - consider inactive
+      return {
+        sessionId,
+        isActive: false,
+        timeSinceLastActivity: Infinity,
+        lastActivity: null,
+      };
+    }
+    const timeSinceLastActivity = now - lastActivity;
+    const isActive = timeSinceLastActivity < 30 * 60 * 1000; // 30 minutes
+    return {
+      sessionId,
+      isActive,
+      timeSinceLastActivity,
+      lastActivity,
+    };
   }
 
   // Handle permission prompts

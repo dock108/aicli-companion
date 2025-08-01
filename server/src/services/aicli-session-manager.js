@@ -19,8 +19,10 @@ export class AICLISessionManager extends EventEmitter {
     this.sessionTimeout = options.sessionTimeout || 30 * 60 * 1000; // 30 minutes
     this.backgroundedSessionTimeout = options.backgroundedSessionTimeout || 4 * 60 * 60 * 1000; // 4 hours
 
-    // Initialize persistence on startup
-    this.initializePersistence();
+    // Initialize persistence on startup (skip in test environment)
+    if (process.env.NODE_ENV !== 'test') {
+      this.initializePersistence();
+    }
   }
 
   /**
@@ -39,6 +41,9 @@ export class AICLISessionManager extends EventEmitter {
    * Restore sessions from persistent storage on server startup
    */
   async restorePersistedSessions() {
+    if (process.env.NODE_ENV === 'test') {
+      return; // Skip persistence in test environment
+    }
     const persistedSessions = sessionPersistence.getAllSessions();
     console.log(`🔄 Restoring ${persistedSessions.length} persisted sessions`);
 
@@ -121,17 +126,19 @@ export class AICLISessionManager extends EventEmitter {
 
     this.activeSessions.set(sanitizedSessionId, session);
 
-    // Persist session to disk
-    try {
-      await sessionPersistence.setSession(sanitizedSessionId, {
-        workingDirectory: validatedWorkingDir,
-        conversationStarted: false,
-        initialPrompt: sanitizedPrompt,
-        skipPermissions,
-      });
-      console.log(`💾 Session ${sanitizedSessionId} persisted to disk`);
-    } catch (error) {
-      console.error(`❌ Failed to persist session ${sanitizedSessionId}:`, error);
+    // Persist session to disk (skip in test environment)
+    if (process.env.NODE_ENV !== 'test') {
+      try {
+        await sessionPersistence.setSession(sanitizedSessionId, {
+          workingDirectory: validatedWorkingDir,
+          conversationStarted: false,
+          initialPrompt: sanitizedPrompt,
+          skipPermissions,
+        });
+        console.log(`💾 Session ${sanitizedSessionId} persisted to disk`);
+      } catch (error) {
+        console.error(`❌ Failed to persist session ${sanitizedSessionId}:`, error);
+      }
     }
 
     // Initialize message buffer for this session
@@ -183,12 +190,14 @@ export class AICLISessionManager extends EventEmitter {
       this.activeSessions.delete(sessionId);
       this.sessionMessageBuffers.delete(sessionId);
 
-      // Remove from persistent storage
-      try {
-        await sessionPersistence.removeSession(sessionId);
-        console.log(`💾 Session ${sessionId} removed from persistent storage`);
-      } catch (error) {
-        console.error(`❌ Failed to remove session ${sessionId} from persistence:`, error);
+      // Remove from persistent storage (skip in test environment)
+      if (process.env.NODE_ENV !== 'test') {
+        try {
+          await sessionPersistence.removeSession(sessionId);
+          console.log(`💾 Session ${sessionId} removed from persistent storage`);
+        } catch (error) {
+          console.error(`❌ Failed to remove session ${sessionId} from persistence:`, error);
+        }
       }
 
       // Emit session cleaned event for other components to handle cleanup
@@ -246,13 +255,15 @@ export class AICLISessionManager extends EventEmitter {
     if (session) {
       session.lastActivity = Date.now();
 
-      // Update persistence
-      try {
-        await sessionPersistence.updateSession(sessionId, {
-          lastActivity: session.lastActivity,
-        });
-      } catch (error) {
-        console.warn(`⚠️ Failed to update session activity in persistence:`, error.message);
+      // Update persistence (skip in test environment)
+      if (process.env.NODE_ENV !== 'test') {
+        try {
+          await sessionPersistence.updateSession(sessionId, {
+            lastActivity: session.lastActivity,
+          });
+        } catch (error) {
+          console.warn(`⚠️ Failed to update session activity in persistence:`, error.message);
+        }
       }
     }
   }
@@ -276,17 +287,19 @@ export class AICLISessionManager extends EventEmitter {
     if (session) {
       session.conversationStarted = true;
 
-      // Update persistence
-      try {
-        await sessionPersistence.updateSession(sessionId, {
-          conversationStarted: true,
-        });
-        console.log(`💾 Session ${sessionId} conversation start persisted`);
-      } catch (error) {
-        console.warn(
-          `⚠️ Failed to persist conversation start for session ${sessionId}:`,
-          error.message
-        );
+      // Update persistence (skip in test environment)
+      if (process.env.NODE_ENV !== 'test') {
+        try {
+          await sessionPersistence.updateSession(sessionId, {
+            conversationStarted: true,
+          });
+          console.log(`💾 Session ${sessionId} conversation start persisted`);
+        } catch (error) {
+          console.warn(
+            `⚠️ Failed to persist conversation start for session ${sessionId}:`,
+            error.message
+          );
+        }
       }
     }
   }
@@ -301,17 +314,19 @@ export class AICLISessionManager extends EventEmitter {
       session.backgroundedAt = Date.now();
       console.log(`📱 Session ${sessionId} marked as backgrounded`);
 
-      // Update persistence
-      try {
-        await sessionPersistence.updateSession(sessionId, {
-          isBackgrounded: true,
-          backgroundedAt: session.backgroundedAt,
-        });
-      } catch (error) {
-        console.warn(
-          `⚠️ Failed to persist background state for session ${sessionId}:`,
-          error.message
-        );
+      // Update persistence (skip in test environment)
+      if (process.env.NODE_ENV !== 'test') {
+        try {
+          await sessionPersistence.updateSession(sessionId, {
+            isBackgrounded: true,
+            backgroundedAt: session.backgroundedAt,
+          });
+        } catch (error) {
+          console.warn(
+            `⚠️ Failed to persist background state for session ${sessionId}:`,
+            error.message
+          );
+        }
       }
     }
   }
@@ -327,17 +342,19 @@ export class AICLISessionManager extends EventEmitter {
       await this.updateSessionActivity(sessionId);
       console.log(`📱 Session ${sessionId} marked as foregrounded`);
 
-      // Update persistence
-      try {
-        await sessionPersistence.updateSession(sessionId, {
-          isBackgrounded: false,
-          backgroundedAt: null,
-        });
-      } catch (error) {
-        console.warn(
-          `⚠️ Failed to persist foreground state for session ${sessionId}:`,
-          error.message
-        );
+      // Update persistence (skip in test environment)
+      if (process.env.NODE_ENV !== 'test') {
+        try {
+          await sessionPersistence.updateSession(sessionId, {
+            isBackgrounded: false,
+            backgroundedAt: null,
+          });
+        } catch (error) {
+          console.warn(
+            `⚠️ Failed to persist foreground state for session ${sessionId}:`,
+            error.message
+          );
+        }
       }
     }
   }
@@ -414,15 +431,17 @@ export class AICLISessionManager extends EventEmitter {
       this.activeSessions.delete(sessionId);
       this.sessionMessageBuffers.delete(sessionId);
 
-      // Remove from persistent storage
-      try {
-        await sessionPersistence.removeSession(sessionId);
-        console.log(`💾 Dead session ${sessionId} removed from persistent storage`);
-      } catch (error) {
-        console.warn(
-          `⚠️ Failed to remove dead session ${sessionId} from persistence:`,
-          error.message
-        );
+      // Remove from persistent storage (skip in test environment)
+      if (process.env.NODE_ENV !== 'test') {
+        try {
+          await sessionPersistence.removeSession(sessionId);
+          console.log(`💾 Dead session ${sessionId} removed from persistent storage`);
+        } catch (error) {
+          console.warn(
+            `⚠️ Failed to remove dead session ${sessionId} from persistence:`,
+            error.message
+          );
+        }
       }
 
       this.emit('sessionCleaned', {

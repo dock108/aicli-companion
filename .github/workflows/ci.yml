@@ -7,7 +7,7 @@ on:
     branches: [ main, develop ]
 
 env:
-  NODE_VERSION: '20'
+  NODE_VERSION: '22'
   XCODE_VERSION: '16.0'
   RUST_VERSION: 'stable'
 
@@ -29,7 +29,7 @@ jobs:
       with:
         node-version: ${{ env.NODE_VERSION }}
         cache: 'npm'
-        cache-dependency-path: server/package-lock.json
+        cache-dependency-path: package-lock.json
     
     - name: Install dependencies
       run: npm ci

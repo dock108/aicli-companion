@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Secondary outlined button style with Dark-Slate Terminal design
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 public struct SecondaryButton: View {
     let title: String
     let action: () -> Void
@@ -71,7 +71,7 @@ public struct SecondaryButton: View {
 }
 
 /// Text link button style
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 public struct TextLinkButton: View {
     let title: String
     let action: () -> Void
@@ -107,7 +107,7 @@ public struct TextLinkButton: View {
 }
 
 /// Icon button style
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 public struct IconButton: View {
     let systemName: String
     let action: () -> Void
@@ -151,7 +151,7 @@ public struct IconButton: View {
 }
 
 // MARK: - Preview
-@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 #Preview("Secondary Buttons") {
     VStack(spacing: Spacing.lg) {
         SecondaryButton("Manual Setup") {

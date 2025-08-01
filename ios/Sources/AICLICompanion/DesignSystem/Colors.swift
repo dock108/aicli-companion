@@ -6,7 +6,7 @@ import AppKit
 #endif
 
 /// Dark-Slate Terminal design system color palette
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 public struct Colors {
     // MARK: - Background Colors
     /// App canvas background
@@ -115,7 +115,7 @@ public struct Colors {
 }
 
 // MARK: - Color Extension for Hex Support
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 extension Color {
     init(hex: String) {
         let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
@@ -157,7 +157,7 @@ extension Color {
 }
 
 // MARK: - Gradient Definitions
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 public struct Gradients {
     /// Primary button gradient
     public static func primaryButton(for colorScheme: ColorScheme) -> LinearGradient {

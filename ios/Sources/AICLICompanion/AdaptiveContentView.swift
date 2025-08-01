@@ -1,6 +1,6 @@
 import SwiftUI
 
-@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 public struct AdaptiveContentView: View {
     public init() {}
     @EnvironmentObject var aicliService: AICLIService
@@ -244,7 +244,7 @@ public struct AdaptiveContentView: View {
     }
 }
 
-@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 #Preview("iPad Light") {
     AdaptiveContentView()
         .environmentObject(AICLIService())
@@ -253,7 +253,7 @@ public struct AdaptiveContentView: View {
         .previewDevice(PreviewDevice(rawValue: "iPad Pro (12.9-inch) (6th generation)"))
 }
 
-@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 #Preview("iPad Dark") {
     AdaptiveContentView()
         .environmentObject(AICLIService())
@@ -262,7 +262,7 @@ public struct AdaptiveContentView: View {
         .previewDevice(PreviewDevice(rawValue: "iPad Pro (12.9-inch) (6th generation)"))
 }
 
-@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 #Preview("iPhone Light") {
     AdaptiveContentView()
         .environmentObject(AICLIService())
@@ -271,7 +271,7 @@ public struct AdaptiveContentView: View {
         .previewDevice(PreviewDevice(rawValue: "iPhone 15 Pro"))
 }
 
-@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 #Preview("iPhone Dark") {
     AdaptiveContentView()
         .environmentObject(AICLIService())

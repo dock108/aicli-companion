@@ -2,101 +2,164 @@
 
 Get Claude Companion up and running in 5 minutes!
 
-## 1. Start the Server
+## Prerequisites
+
+- Claude Code CLI installed (`claude --version`)
+- Node.js 18+ installed
+- iOS device with iOS 17.0+
+- Mac for running the companion server
+
+## 1. Clone and Install
 
 ```bash
-# If installed globally
-claude-companion-server
-
-# Or from source
-cd server && npm start
+git clone https://github.com/your-repo/claude-companion.git
+cd claude-companion
+npm install
 ```
 
-You should see:
+## 2. Start the Companion Server
+
+```bash
+cd server
+npm start
+```
+
+You'll see:
 ```
 🚀 Claude Companion Server v1.0.0
-📡 Server running on http://localhost:3001
-🔐 Auth token required: true
-📢 Bonjour broadcasting as: claude-companion-3001
+🔐 Auth Token: abc123xyz...
+📡 Server running on https://0.0.0.0:8765
+🔍 Bonjour: _aiclicode._tcp
+✅ Claude Code CLI found at: /usr/local/bin/claude
 ```
 
-## 2. Connect from iOS
+**Important**: Copy the auth token shown - you'll need it for the iOS app!
+
+## 3. Build and Run the iOS App
+
+### Option A: Using Xcode
+```bash
+cd ios
+open AICLICompanion.xcodeproj
+```
+
+In Xcode:
+1. Select your development team
+2. Choose your device/simulator
+3. Press ⌘R to build and run
+
+### Option B: Using Xcodegen (if configured)
+```bash
+cd ios
+xcodegen generate
+open AICLICompanion.xcodeproj
+```
+
+## 4. Connect iOS App to Server
 
 1. **Launch the app** on your iOS device
-2. **Tap Settings** (gear icon)
-3. **Enable Auto-Discovery** - your server should appear
-4. **Enter your auth token** (from server startup or `.env`)
-5. **Tap "Test Connection"** - should show success
-6. **Save** the connection
+2. The app will automatically discover the server via Bonjour
+3. **Tap on the discovered server** (shows as "Claude Companion Server")
+4. **Enter the auth token** from step 2
+5. **Tap "Connect"**
 
-## 3. Start Chatting
+## 5. Start Using Claude
 
-1. **Return to Chat** screen
-2. **Set working directory** (tap folder icon)
-3. **Type a message**: "What files are in this directory?"
-4. **Send** and watch Claude respond!
+1. **Select a Project**: Choose or create a project directory
+2. **Start Chatting**: Type your first message
+3. **Watch the Magic**: See Claude's responses stream in real-time
 
-## Common First Commands
-
-Try these to get familiar with Claude Companion:
+### Example First Commands
 
 ```
-"List all JavaScript files in this project"
-"Show me the package.json file"
-"What does this project do?"
-"Run npm test and show me the results"
+"What files are in this directory?"
+"Explain the purpose of this project"
+"Help me create a new React component"
+"Run the tests and show me the results"
 ```
 
-## Using with Existing Projects
+## Features to Try
 
-1. **Navigate to your project**:
-   ```bash
-   cd /path/to/your/project
-   ```
+### Real-time Streaming
+Watch Claude's responses appear word by word as they're generated.
 
-2. **Start server with working directory**:
-   ```bash
-   claude-companion-server --cwd .
-   ```
+### Push Notifications
+Get notified when Claude completes a long-running task.
 
-3. **Connect from iOS** and you're ready to code!
+### Session Persistence
+Close the app and reopen - your conversation continues where you left off.
 
-## Quick Tips
+### Project Switching
+Tap the project name to switch between different coding projects.
 
-- **Offline Mode**: Messages queue when disconnected
-- **Tool Indicators**: Watch for file/command activity
-- **Conversation History**: Swipe down to search past chats
-- **File Browser**: Tap 📁 to browse and select files
-- **Multiple Sessions**: Premium supports 5 concurrent sessions
+## Quick Configuration
 
-## Desktop Host App (Optional)
+### Server Environment Variables
+Create `server/.env`:
+```env
+PORT=8765
+REQUIRE_AUTH=true
+ENABLE_TLS=true
+CLAUDE_PERMISSION_MODE=relaxed
+ENABLE_BONJOUR=true
+```
 
-For a GUI interface to manage the server:
+### iOS App Settings
+In the app, tap Settings to configure:
+- Push notification preferences
+- Auto-save intervals
+- UI theme
+
+## Using the Desktop Host App (Optional)
+
+For easier server management:
 
 ```bash
 cd server/hostapp
+npm install
 npm run tauri dev
 ```
 
 This provides:
-- Visual server controls
-- QR code for easy mobile connection
+- Visual server status
+- QR code for mobile connection
 - Log viewing
-- Configuration management
+- Easy start/stop controls
+
+## Troubleshooting Quick Fixes
+
+### Can't find server on iOS?
+- Ensure both devices are on the same network
+- Check firewall isn't blocking port 8765
+- Try manual connection with IP address
+
+### Claude Code not found?
+```bash
+export CLAUDE_CLI_PATH=/usr/local/bin/claude
+```
+
+### Permission errors?
+Set relaxed permissions in `.env`:
+```env
+CLAUDE_PERMISSION_MODE=relaxed
+CLAUDE_ALLOWED_TOOLS=read,write,edit,list
+```
 
 ## What's Next?
 
-- **Explore Features**: Check the [Architecture Overview](../architecture/overview.md)
-- **Learn the API**: Read the [WebSocket Protocol](../api/websocket-api.md)
-- **Customize**: See [Development Setup](../development/setup.md)
-- **Deploy**: Follow the [Deployment Guide](../operations/deployment.md)
+- 📖 Read the [full documentation](../README.md)
+- 🏗️ Understand the [architecture](../architecture/overview.md)
+- 🔧 Learn about [advanced features](../features/streaming-and-notifications.md)
+- 🚀 Deploy to [production](../operations/deployment.md)
 
 ## Need Help?
 
-- **Connection Issues?** See [Troubleshooting](./troubleshooting.md)
-- **API Questions?** Check [REST API](../api/rest-api.md)
-- **Report Bugs**: [GitHub Issues](https://github.com/your-repo/claude-companion/issues)
+- 🐛 [Report issues](https://github.com/your-repo/claude-companion/issues)
+- 💬 [Join discussions](https://github.com/your-repo/claude-companion/discussions)
+- 📚 [Full documentation](../README.md)
 
 ---
 
-**Last Updated**: 2025-07-27
+**Happy Coding with Claude! 🚀**
+
+*Last Updated: 2025-07-30*

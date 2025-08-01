@@ -4,6 +4,7 @@
   "exclude": [
     "src/**/*.test.js", 
     "src/test/**/*.js", 
+    "src/test-integration/**/*.js",
     "src/__tests__/**/*.js", 
     "test-*.js",
     "src/constants/index.js",

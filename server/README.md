@@ -1,31 +1,22 @@
-# AICLI Companion Server
+# Claude Companion Server
 
-A Node.js companion server that provides HTTP and WebSocket APIs for connecting mobile devices to AICLI Code CLI.
+The Node.js companion server that bridges the Claude Companion iOS app with Claude Code CLI.
 
-## Features
+## Overview
 
-- **HTTP REST API** for one-time AICLI Code interactions
-- **WebSocket API** for real-time streaming conversations
-- **Bonjour/mDNS discovery** for automatic server detection on local networks
-- **Authentication support** with token-based security
-- **Session management** for maintaining conversation context
-- **Permission handling** for interactive AICLI Code prompts
-- **Process monitoring** for resource management
+This server provides:
+- WebSocket connection for real-time communication with iOS clients
+- REST API for one-time queries and project management
+- Claude Code CLI integration with streaming support
+- Service discovery via Bonjour/mDNS
+- TLS encryption and token-based authentication
+- Push notification support for iOS devices
 
 ## Installation
 
-### Option 1: Global Installation
 ```bash
-npm install -g aicli-companion-server
-aicli-companion-server
-```
-
-### Option 2: Local Development
-```bash
-git clone <repository>
 cd server
 npm install
-npm start
 ```
 
 ## Configuration
@@ -35,143 +26,286 @@ npm start
 Create a `.env` file in the server directory:
 
 ```env
-# Server configuration
-PORT=3001
-HOST=0.0.0.0
+# Server Configuration
+PORT=8765                    # Server port (default: 8765)
+HOST=0.0.0.0                # Host to bind to
+NODE_ENV=development        # Environment (development/production)
 
-# Authentication (optional but recommended)
-AUTH_TOKEN=your-secret-token-here
+# Security
+REQUIRE_AUTH=true           # Require authentication token
+ENABLE_TLS=true            # Enable TLS/SSL
+TLS_CERT_PATH=./certs/server.crt
+TLS_KEY_PATH=./certs/server.key
 
-# CORS settings
-ALLOWED_ORIGINS=http://localhost:3000,https://your-domain.com
+# Claude Code Configuration
+CLAUDE_CLI_PATH=/usr/local/bin/claude    # Path to Claude CLI
+CLAUDE_PERMISSION_MODE=relaxed           # Permission mode: strict/relaxed/custom
+CLAUDE_ALLOWED_TOOLS=read,write,list     # Allowed tools (comma-separated)
+CLAUDE_SKIP_PERMISSIONS=false            # Skip permission prompts
 
-# Features
-ENABLE_BONJOUR=true
+# Service Discovery
+ENABLE_BONJOUR=true         # Enable Bonjour/mDNS broadcasting
 
-# AICLI CLI Permission Configuration
-# Note: AICLI CLI uses camelCase for permission flags (--allowedTools, not --allowed-tools)
-AICLI_PERMISSION_MODE=default  # Options: default, acceptEdits, bypassPermissions, plan
-AICLI_ALLOWED_TOOLS=Read,Write,Edit  # Comma-separated list of allowed tools (default: Read,Write,Edit)
-AICLI_DISALLOWED_TOOLS=Bash(rm:*),Bash(sudo:*)  # Comma-separated list of disallowed tools
-AICLI_SKIP_PERMISSIONS=false  # Set to 'true' to use --dangerously-skip-permissions (use with caution)
+# Push Notifications (optional)
+APNS_CERT_PATH=./certs/apns-cert.pem
+APNS_KEY_PATH=./certs/apns-key.pem
+APNS_PASSPHRASE=your-passphrase
 ```
 
-### Permission Configuration
+### Permission Modes
 
-The server supports configuring AICLI CLI permission settings to reduce permission prompts:
+Configure how Claude Code handles permissions:
 
-- **AICLI_PERMISSION_MODE**: Controls how AICLI handles permissions
-  - `default`: Normal permission prompts
-  - `acceptEdits`: Automatically accept file edits
-  - `bypassPermissions`: Skip all permission checks (use with caution)
-  - `plan`: Enter planning mode before making changes
+- **`strict`**: All operations require explicit approval
+- **`relaxed`**: Basic file operations auto-approved
+- **`custom`**: Use CLAUDE_ALLOWED_TOOLS to specify
 
-- **AICLI_ALLOWED_TOOLS**: Pre-approve specific tools
-  - Default: `Read,Write,Edit` (basic file operations)
-  - Example: `Bash,Edit,Read,Write` (includes bash commands)
-  - Reduces permission prompts for common operations
+### TLS Setup
 
-- **AICLI_DISALLOWED_TOOLS**: Block specific tool patterns
-  - Example: `Bash(rm:*),Bash(sudo:*)` blocks dangerous commands
-  - Adds safety restrictions
-
-- **AICLI_SKIP_PERMISSIONS**: Bypass all permission checks
-  - Set to `true` to use `--dangerously-skip-permissions`
-  - Only use in trusted, sandboxed environments
-  - Useful for automated workflows
-
-### Command Line Options
+For secure connections, place your certificates in the `certs` directory:
 
 ```bash
-# Start with custom port
-PORT=8080 npm start
+mkdir certs
+# Place server.crt and server.key in this directory
+```
 
-# Start with authentication
-AUTH_TOKEN=my-secret-token npm start
+For development, you can generate self-signed certificates:
 
-# Start with custom AICLI path
-AICLI_CLI_PATH=/usr/local/bin/aicli npm start
+```bash
+cd certs
+openssl req -x509 -newkey rsa:4096 -keyout server.key -out server.crt -days 365 -nodes
+```
+
+## Running the Server
+
+### Development
+```bash
+npm run dev    # Runs with nodemon for auto-restart
+```
+
+### Production
+```bash
+npm start
+```
+
+### With Custom Configuration
+```bash
+PORT=3000 REQUIRE_AUTH=false npm start
+```
+
+### Using the Desktop App
+```bash
+cd hostapp
+npm run tauri dev    # Development
+npm run tauri build  # Build desktop app
 ```
 
 ## API Endpoints
 
-### HTTP REST API
+### REST API
 
-- `GET /health` - Health check
-- `GET /api/info` - Server information
-- `POST /api/ask` - Send prompt to AICLI Code
-- `POST /api/stream/start` - Start streaming session
-- `POST /api/stream/:sessionId` - Send to existing session
-- `DELETE /api/stream/:sessionId` - Close session
-- `GET /api/sessions` - List active sessions
-- `POST /api/permission/:sessionId` - Respond to permission prompts
+#### Health & Info
+- `GET /health` - Server health check
+- `GET /api/info` - Server information and capabilities
+
+#### Projects
+- `GET /api/projects` - List available projects
+- `POST /api/projects/:name/start` - Start Claude session in project
+
+#### Claude Interactions
+- `POST /api/claude/ask` - One-time Claude query
+- `GET /api/claude/sessions` - List active sessions
+- `DELETE /api/claude/sessions/:id` - Close a session
+- `GET /api/claude/status` - Check Claude Code availability
 
 ### WebSocket API
 
-Connect to `/ws` with authentication token in query string:
+Connect to `/ws` for real-time communication:
+
+```javascript
+const ws = new WebSocket('wss://localhost:8765/ws');
+
+// Authentication
+ws.send(JSON.stringify({
+  type: 'auth',
+  token: 'your-auth-token'
+}));
+
+// Send message to Claude
+ws.send(JSON.stringify({
+  type: 'message',
+  sessionId: 'session-123',
+  content: 'Help me write a function'
+}));
+
+// Handle streaming chunks
+ws.on('message', (data) => {
+  const msg = JSON.parse(data);
+  if (msg.type === 'streamChunk') {
+    console.log('Chunk:', msg.chunk);
+  }
+});
 ```
-ws://localhost:3001/ws?token=your-auth-token
+
+## Architecture
+
+```
+server/
+├── src/
+│   ├── index.js              # Main server entry point
+│   ├── config/               # Configuration modules
+│   │   ├── middleware-config.js
+│   │   ├── server-config.js
+│   │   └── tls-config.js
+│   ├── middleware/           # Express middleware
+│   │   ├── auth.js          # Authentication
+│   │   └── error.js         # Error handling
+│   ├── routes/              # REST API routes
+│   │   ├── index.js         # Main routes
+│   │   ├── projects.js      # Project management
+│   │   └── aicli-status.js  # Claude status
+│   ├── services/            # Core services
+│   │   ├── aicli.js         # Claude Code integration
+│   │   ├── websocket.js     # WebSocket handling
+│   │   ├── discovery.js     # Bonjour/mDNS
+│   │   ├── stream-parser.js # Response streaming
+│   │   └── push-notification.js
+│   └── utils/               # Utility functions
+├── test/                    # Test files
+├── certs/                   # TLS certificates
+└── hostapp/                # Tauri desktop app
 ```
 
-Message types:
-- `askAICLI` - Send prompt
-- `continueSession` - Continue existing session
-- `closeSession` - Close session
-- `permission` - Respond to permission prompt
+## Core Services
 
-## Security
+### AICLI Service
+Manages Claude Code CLI processes and sessions:
+- Process lifecycle management
+- Session state tracking
+- Permission handling
+- Output streaming
 
-### Authentication
-- Token-based authentication for all endpoints
-- Token can be provided via:
-  - Query parameter: `?token=your-token`
-  - Authorization header: `Authorization: Bearer your-token`
+### WebSocket Service
+Real-time communication with iOS clients:
+- Authentication handling
+- Message routing
+- Event broadcasting
+- Connection management
 
-### TLS/SSL
-- Automatic self-signed certificate generation
-- Custom certificates supported via `certs/` directory
+### Stream Parser Service
+Parses Claude's output into structured chunks:
+- Markdown parsing
+- Code block detection
+- Section identification
+- Chunk metadata
 
-### CORS
-- Configurable allowed origins
-- Credentials support for authenticated requests
+### Discovery Service
+Broadcasts server availability:
+- Bonjour/mDNS registration
+- Service type: `_aiclicode._tcp`
+- Automatic network discovery
+
+### Push Notification Service
+iOS push notification support:
+- APNS integration
+- Notification on completion
+- Rich notification content
+
+## Testing
+
+```bash
+# Run all tests
+npm test
+
+# Run with coverage
+npm run test:coverage
+```
+
+### Note
+
+Tests run with `--experimental-test-isolation=none` to support EventEmitter-based tests. This requires Node.js v22.8.0 or higher for the isolation flag.
 
 ## Development
 
-### Testing
+### Code Quality
+
 ```bash
-npm test                 # Run tests
-npm run test:coverage    # Run with coverage
-npm run test:watch       # Watch mode
+# Linting
+npm run lint
+npm run lint:fix
+
+# Formatting
+npm run format
 ```
 
-### Linting
+### Debugging
+
+Enable debug logging:
 ```bash
-npm run lint             # Check code style
-npm run lint:fix         # Fix code style issues
+DEBUG=* npm run dev
 ```
 
-### Desktop App
+### Manual Testing
+
+Test scripts are available:
 ```bash
-npm run hostapp          # Run Tauri desktop app
-npm run hostapp:build    # Build desktop app
+node manual-tests/test-websocket.js
+node manual-tests/test-streaming.js
 ```
+
+## Security Considerations
+
+1. **Authentication**: Token-based auth enabled by default
+2. **TLS**: Use proper certificates in production
+3. **Permissions**: Configure Claude Code access carefully
+4. **Network**: Bind to specific interfaces in production
+5. **CORS**: Configure allowed origins appropriately
 
 ## Troubleshooting
 
-### AICLI CLI not found
-- Ensure AICLI CLI is installed: `npm install -g @anthropic/aicli-code`
-- Set custom path: `AICLI_CLI_PATH=/path/to/aicli npm start`
+### Common Issues
 
-### Permission denied errors
-- Check file permissions in working directory
-- Use `AICLI_ALLOWED_TOOLS` to pre-approve tools
-- Consider `AICLI_SKIP_PERMISSIONS=true` for trusted environments
+1. **Claude Code not found**
+   ```bash
+   # Set path explicitly
+   export CLAUDE_CLI_PATH=/usr/local/bin/claude
+   ```
 
-### High memory usage
-- Monitor active sessions with `/api/sessions`
-- Sessions timeout after 30 minutes of inactivity
-- Process health monitoring alerts on high resource usage
+2. **WebSocket connection fails**
+   - Check firewall settings
+   - Verify TLS certificates
+   - Ensure authentication token matches
+
+3. **Service discovery not working**
+   - Verify Bonjour/mDNS is enabled
+   - Check network allows multicast
+   - Try manual connection
+
+4. **High memory usage**
+   - Monitor with `/api/claude/sessions`
+   - Sessions timeout after 30 minutes
+   - Check for zombie processes
+
+### Debug Commands
+
+```bash
+# Check Claude Code installation
+which claude
+
+# Test Claude directly
+claude --version
+
+# Check server logs
+tail -f server.log
+
+# Monitor processes
+ps aux | grep claude
+```
+
+## Contributing
+
+See [Contributing Guide](../CONTRIBUTING.md) for development guidelines.
 
 ## License
 
-MIT License - See LICENSE file for details
+MIT - See [LICENSE](../LICENSE) for details.

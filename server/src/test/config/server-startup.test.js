@@ -1,5 +1,9 @@
 import { describe, it, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert';
+
+// Disable Bonjour for all tests to prevent network conflicts
+process.env.ENABLE_BONJOUR = 'false';
+
 import { ServerStartup } from '../../config/server-startup.js';
 
 describe('ServerStartup', () => {
@@ -62,6 +66,10 @@ describe('ServerStartup', () => {
     });
 
     it('should handle setupBonjour call when enabled', () => {
+      // Temporarily enable Bonjour for this test
+      const originalEnv = process.env.ENABLE_BONJOUR;
+      process.env.ENABLE_BONJOUR = 'true';
+
       const port = 3001;
       const enableTLS = false;
       const enableBonjour = true;
@@ -70,6 +78,9 @@ describe('ServerStartup', () => {
       assert.doesNotThrow(() => {
         ServerStartup.setupServiceDiscovery(port, enableTLS, enableBonjour);
       });
+
+      // Restore original setting
+      process.env.ENABLE_BONJOUR = originalEnv;
     });
   });
 
@@ -157,62 +168,62 @@ describe('ServerStartup', () => {
       assert.ok(tlsMessages.length > 0, 'Should display TLS information');
     });
 
-    it('should display Claude availability', () => {
+    it('should display AICLI availability', () => {
       const authToken = 'test-token';
-      const claudeAvailable = true;
+      const aicliAvailable = true;
       const fingerprint = null;
 
-      ServerStartup.displayStartupInfo(mockConfig, authToken, claudeAvailable, fingerprint);
+      ServerStartup.displayStartupInfo(mockConfig, authToken, aicliAvailable, fingerprint);
 
-      // Should log Claude status
+      // Should log AICLI status
       const logCalls = console.log.mock.calls.map((call) => call.arguments[0]);
-      const claudeMessages = logCalls.filter((msg) => msg.includes('Claude Code'));
-      assert.ok(claudeMessages.length > 0, 'Should display Claude status');
+      const aicliMessages = logCalls.filter((msg) => msg.includes('AICLI Code CLI detected'));
+      assert.ok(aicliMessages.length > 0, 'Should display AICLI status');
     });
   });
 
-  describe('checkClaudeAvailability', () => {
-    let mockClaudeService;
+  describe('checkAICLIAvailability', () => {
+    let mockAICLIService;
 
     beforeEach(() => {
-      mockClaudeService = {
+      mockAICLIService = {
         checkAvailability: mock.fn(),
       };
     });
 
-    it('should return true when Claude is available', async () => {
-      mockClaudeService.checkAvailability.mock.mockImplementation(() => Promise.resolve(true));
+    it('should return true when AICLI is available', async () => {
+      mockAICLIService.checkAvailability.mock.mockImplementation(() => Promise.resolve(true));
 
-      const result = await ServerStartup.checkClaudeAvailability(mockClaudeService);
+      const result = await ServerStartup.checkAICLIAvailability(mockAICLIService);
 
       assert.strictEqual(result, true);
-      assert.strictEqual(mockClaudeService.checkAvailability.mock.calls.length, 1);
+      assert.strictEqual(mockAICLIService.checkAvailability.mock.calls.length, 1);
     });
 
-    it('should return false and log warning when Claude not available', async () => {
-      mockClaudeService.checkAvailability.mock.mockImplementation(() => Promise.resolve(false));
+    it('should return false and log warning when AICLI not available', async () => {
+      mockAICLIService.checkAvailability.mock.mockImplementation(() => Promise.resolve(false));
 
-      const result = await ServerStartup.checkClaudeAvailability(mockClaudeService);
+      const result = await ServerStartup.checkAICLIAvailability(mockAICLIService);
 
       assert.strictEqual(result, false);
-      assert.strictEqual(mockClaudeService.checkAvailability.mock.calls.length, 1);
+      assert.strictEqual(mockAICLIService.checkAvailability.mock.calls.length, 1);
 
       // Should log warning messages
       assert.ok(console.warn.mock.calls.length >= 2);
     });
 
     it('should handle checkAvailability errors', async () => {
-      mockClaudeService.checkAvailability.mock.mockImplementation(() =>
+      mockAICLIService.checkAvailability.mock.mockImplementation(() =>
         Promise.reject(new Error('Test error'))
       );
 
       // This should throw because the actual implementation doesn't catch errors
       await assert.rejects(
-        () => ServerStartup.checkClaudeAvailability(mockClaudeService),
+        () => ServerStartup.checkAICLIAvailability(mockAICLIService),
         /Test error/
       );
 
-      assert.strictEqual(mockClaudeService.checkAvailability.mock.calls.length, 1);
+      assert.strictEqual(mockAICLIService.checkAvailability.mock.calls.length, 1);
     });
   });
 });

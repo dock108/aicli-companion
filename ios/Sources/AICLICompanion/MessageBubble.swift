@@ -1,6 +1,6 @@
 import SwiftUI
 
-@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 struct MessageBubble: View {
     let message: Message
     @Environment(\.colorScheme) var colorScheme
@@ -318,7 +318,7 @@ private enum ContentPart {
 }
 
 // MARK: - Code Block View
-@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 struct MessageCodeBlockView: View {
     let code: String
     let language: String?
@@ -397,7 +397,7 @@ struct MessageCodeBlockView: View {
 
 // MARK: - Preview
 
-@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 #Preview("Message Bubbles") {
     VStack(spacing: 20) {
         MessageBubble(message: Message(

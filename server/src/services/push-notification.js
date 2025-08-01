@@ -112,22 +112,42 @@ class PushNotificationService {
       notification.expiry = Math.floor(Date.now() / 1000) + 3600; // 1 hour
       notification.badge = 1;
       notification.sound = 'default';
-      notification.alert = {
-        title: 'Claude Response Ready',
-        subtitle: data.projectName,
-        body: this.truncateMessage(data.message, 150),
-      };
+
+      // Customize notification based on context
+      if (data.isLongRunningCompletion) {
+        notification.alert = {
+          title: '🎯 Task Completed',
+          subtitle: data.projectName,
+          body: this.truncateMessage(data.message, 150),
+        };
+        notification.sound = 'success.aiff'; // Different sound for completions
+      } else {
+        notification.alert = {
+          title: 'Claude Response Ready',
+          subtitle: data.projectName,
+          body: this.truncateMessage(data.message, 150),
+        };
+      }
       notification.topic = process.env.APNS_BUNDLE_ID || 'com.claude.companion';
       notification.payload = {
         sessionId: data.sessionId,
         projectName: data.projectName,
         totalChunks: data.totalChunks,
         timestamp: new Date().toISOString(),
+        isLongRunningCompletion: data.isLongRunningCompletion || false,
+        deepLink: `claude-companion://session/${data.sessionId}`,
       };
       notification.pushType = 'alert';
+      notification.category = 'CLAUDE_RESPONSE';
 
       // Set thread ID for conversation grouping
       notification.threadId = data.sessionId;
+
+      // Add action buttons for long-running completions
+      if (data.isLongRunningCompletion) {
+        notification.mutableContent = 1;
+        notification.category = 'TASK_COMPLETE';
+      }
 
       // Send the notification
       const result = await this.provider.send(notification, device.token);

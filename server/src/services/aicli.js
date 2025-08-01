@@ -4,56 +4,104 @@ import { EventEmitter } from 'events';
 import { processMonitor } from '../utils/process-monitor.js';
 import { InputValidator, MessageProcessor, AICLIConfig } from './aicli-utils.js';
 import { AICLIMessageHandler } from './aicli-message-handler.js';
-import { ClaudeStreamParser } from './stream-parser.js';
+// import { ClaudeStreamParser } from './stream-parser.js';
+// import { pushNotificationService } from './push-notification.js';
+import { AICLISessionManager } from './aicli-session-manager.js';
+import { AICLIProcessRunner } from './aicli-process-runner.js';
+// Long-running task manager removed - trusting Claude CLI timeouts
+import { AICLIValidationService } from './aicli-validation-service.js';
 
 const execAsync = promisify(exec);
 
 export class AICLIService extends EventEmitter {
-  constructor() {
+  constructor(options = {}) {
     super();
-    this.activeSessions = new Map();
-    this.sessionMessageBuffers = new Map(); // Buffer messages per session for intelligent filtering
-    // Try to find aicli in common locations
-    this.aicliCommand = AICLIConfig.findAICLICommand();
+
+    // Initialize session manager
+    this.sessionManager =
+      options.sessionManager ||
+      new AICLISessionManager({
+        maxSessions: 10,
+        sessionTimeout: 30 * 60 * 1000, // 30 minutes
+      });
+
+    // Initialize process runner with dependency injection support
+    this.processRunner =
+      options.processRunner || new AICLIProcessRunner(options.processRunnerOptions);
+
+    // Initialize long-running task manager
+    // Long-running task manager removed - trusting Claude CLI timeouts
+
+    // Forward events from all managers
+    this.sessionManager.on('sessionCleaned', (data) => {
+      this.emit('sessionCleaned', data);
+    });
+
+    this.processRunner.on('streamChunk', (data) => {
+      this.emit('streamChunk', data);
+    });
+
+    this.processRunner.on('commandProgress', (data) => {
+      this.emit('commandProgress', data);
+    });
+
+    this.processRunner.on('processStart', (data) => {
+      this.emit('processStart', data);
+    });
+
+    this.processRunner.on('processExit', (data) => {
+      // Clean up the session when process exits
+      if (data.sessionId && data.code !== 0) {
+        console.log(
+          `🧹 Cleaning up session ${data.sessionId} after process exit with code ${data.code}`
+        );
+        this.sessionManager.cleanupDeadSession(data.sessionId).catch((error) => {
+          console.warn(`⚠️ Failed to cleanup dead session ${data.sessionId}:`, error.message);
+        });
+      }
+      this.emit('processExit', data);
+    });
+
+    this.processRunner.on('processStderr', (data) => {
+      this.emit('processStderr', data);
+    });
+
+    this.processRunner.on('aicliResponse', (data) => {
+      this.emitAICLIResponse(data.sessionId, data.response, data.isLast);
+    });
+
+    // Event handlers removed with long-running task manager
+
+    // Configuration (will be delegated to appropriate managers)
+    this.aicliCommand = this.processRunner.aicliCommand;
     this.defaultWorkingDirectory = process.cwd();
     this.safeRootDirectory = null; // Will be set from server config
-    this.maxSessions = 10;
-    this.sessionTimeout = 30 * 60 * 1000; // 30 minutes
 
-    // Permission configuration
-    this.permissionMode = 'default'; // 'default', 'acceptEdits', 'bypassPermissions', 'plan'
-    this.allowedTools = ['Read', 'Write', 'Edit']; // Default allowed tools for basic operations
-    this.disallowedTools = []; // e.g., ['Bash(rm:*)', 'Bash(sudo:*)']
-    this.skipPermissions = false; // Whether to use --dangerously-skip-permissions
+    // Legacy permission properties (delegated to process runner)
+    this.permissionMode = this.processRunner.permissionMode;
+    this.allowedTools = this.processRunner.allowedTools;
+    this.disallowedTools = this.processRunner.disallowedTools;
+    this.skipPermissions = this.processRunner.skipPermissions;
 
     // Process monitoring
     this.processHealthCheckInterval = null;
     this.startProcessHealthMonitoring();
   }
 
-  // Configure permission settings
+  // Configure permission settings (delegated to process runner)
   setPermissionMode(mode) {
-    const validModes = ['default', 'acceptEdits', 'bypassPermissions', 'plan'];
-    if (validModes.includes(mode)) {
-      this.permissionMode = mode;
-      console.log(`🔐 Permission mode set to: ${mode}`);
-    } else {
-      console.warn(`⚠️  Invalid permission mode: ${mode}`);
-    }
+    this.processRunner.setPermissionMode(mode);
+    this.permissionMode = this.processRunner.permissionMode;
   }
 
   setAllowedTools(tools) {
-    if (Array.isArray(tools)) {
-      this.allowedTools = tools;
-      console.log(`✅ Allowed tools set to: ${tools.join(', ')}`);
-    }
+    this.processRunner.setAllowedTools(tools);
+    this.allowedTools = this.processRunner.allowedTools;
   }
 
   setDisallowedTools(tools) {
-    if (Array.isArray(tools)) {
-      this.disallowedTools = tools;
-      console.log(`🚫 Disallowed tools set to: ${tools.join(', ')}`);
-    }
+    this.processRunner.setDisallowedTools(tools);
+    this.disallowedTools = this.processRunner.disallowedTools;
   }
 
   setSafeRootDirectory(dir) {
@@ -61,10 +109,8 @@ export class AICLIService extends EventEmitter {
   }
 
   setSkipPermissions(skip) {
-    this.skipPermissions = !!skip;
-    if (skip) {
-      console.log('⚠️  Permission checks will be bypassed (--dangerously-skip-permissions)');
-    }
+    this.processRunner.setSkipPermissions(skip);
+    this.skipPermissions = this.processRunner.skipPermissions;
   }
 
   // Start process health monitoring
@@ -92,7 +138,7 @@ export class AICLIService extends EventEmitter {
   async checkAllProcessHealth() {
     const activePids = [];
 
-    for (const [sessionId, session] of this.activeSessions) {
+    for (const [sessionId, session] of this.sessionManager.activeSessions) {
       if (session.process && session.process.pid) {
         activePids.push(session.process.pid);
 
@@ -124,7 +170,9 @@ export class AICLIService extends EventEmitter {
             console.warn(
               `⚠️  Process ${session.process.pid} for session ${sessionId} no longer exists`
             );
-            this.cleanupDeadSession(sessionId);
+            this.cleanupDeadSession(sessionId).catch((error) => {
+              console.warn(`⚠️ Failed to cleanup dead session ${sessionId}:`, error.message);
+            });
           }
         } catch (error) {
           console.error(`Failed to monitor process ${session.process.pid}:`, error);
@@ -137,19 +185,8 @@ export class AICLIService extends EventEmitter {
   }
 
   // Cleanup dead session
-  cleanupDeadSession(sessionId) {
-    const session = this.activeSessions.get(sessionId);
-    if (session) {
-      session.isActive = false;
-      this.activeSessions.delete(sessionId);
-      this.sessionMessageBuffers.delete(sessionId);
-
-      this.emit('sessionCleaned', {
-        sessionId,
-        reason: 'process_died',
-        timestamp: new Date().toISOString(),
-      });
-    }
+  async cleanupDeadSession(sessionId) {
+    await this.sessionManager.cleanupDeadSession(sessionId);
   }
 
   async checkAvailability() {
@@ -181,6 +218,7 @@ export class AICLIService extends EventEmitter {
       format = 'json',
       workingDirectory = process.cwd(),
       streaming = false,
+      skipPermissions = false,
     } = options;
 
     try {
@@ -197,11 +235,13 @@ export class AICLIService extends EventEmitter {
         return await this.sendStreamingPrompt(sanitizedPrompt, {
           sessionId: sanitizedSessionId,
           workingDirectory: validatedWorkingDir,
+          skipPermissions,
         });
       } else {
         return await this.sendOneTimePrompt(sanitizedPrompt, {
           format: validatedFormat,
           workingDirectory: validatedWorkingDir,
+          skipPermissions,
         });
       }
     } catch (error) {
@@ -210,7 +250,10 @@ export class AICLIService extends EventEmitter {
     }
   }
 
-  async sendOneTimePrompt(prompt, { format = 'json', workingDirectory = process.cwd() }) {
+  async sendOneTimePrompt(
+    prompt,
+    { format = 'json', workingDirectory = process.cwd(), skipPermissions = false }
+  ) {
     console.log(
       `📝 sendOneTimePrompt called with prompt: "${prompt?.substring(0, 50)}${prompt?.length > 50 ? '...' : ''}"`
     );
@@ -227,7 +270,7 @@ export class AICLIService extends EventEmitter {
     const args = ['--print', '--output-format', validatedFormat];
 
     // Add permission flags before the prompt
-    if (this.skipPermissions) {
+    if (skipPermissions || this.skipPermissions) {
       args.push('--dangerously-skip-permissions');
     } else {
       // Only add permission configuration if not skipping permissions
@@ -390,81 +433,48 @@ export class AICLIService extends EventEmitter {
         reject(new Error(`Failed to start AICLI Code: ${error.message}`));
       });
 
-      // Add timeout protection
-      const timeout = setTimeout(() => {
-        console.log(`   ⏰ Process timeout, killing...`);
-        aicliProcess.kill('SIGTERM');
-        reject(new Error('AICLI Code process timed out'));
-      }, 30000);
-
+      // No timeout - trust Claude CLI
       aicliProcess.on('close', () => {
-        clearTimeout(timeout);
+        // Process closed
       });
     });
   }
 
-  async sendStreamingPrompt(prompt, { sessionId, workingDirectory = process.cwd() }) {
+  async sendStreamingPrompt(
+    prompt,
+    { sessionId, workingDirectory = process.cwd(), skipPermissions = false }
+  ) {
     // Validate inputs
     const sanitizedPrompt = InputValidator.sanitizePrompt(prompt);
     const validatedWorkingDir = await InputValidator.validateWorkingDirectory(workingDirectory);
     const sessionKey = sessionId || `session_${Date.now()}`;
 
-    // Check session limits
-    if (this.activeSessions.size >= this.maxSessions) {
-      throw new Error(`Maximum number of sessions (${this.maxSessions}) reached`);
-    }
-
     // Check if session already exists
-    if (this.activeSessions.has(sessionKey)) {
+    if (this.sessionManager.hasSession(sessionKey)) {
       return this.sendToExistingSession(sessionKey, sanitizedPrompt);
     }
 
     // Create new interactive session
-    return this.createInteractiveSession(sessionKey, sanitizedPrompt, validatedWorkingDir);
+    return this.createInteractiveSession(
+      sessionKey,
+      sanitizedPrompt,
+      validatedWorkingDir,
+      skipPermissions
+    );
   }
 
-  async createInteractiveSession(sessionId, initialPrompt, workingDirectory) {
-    // Validate and sanitize inputs
-    const sanitizedSessionId = InputValidator.sanitizeSessionId(sessionId);
-    const sanitizedPrompt = InputValidator.sanitizePrompt(initialPrompt);
-    const validatedWorkingDir = await InputValidator.validateWorkingDirectory(workingDirectory);
-
-    console.log(`🚀 Creating AICLI CLI session (metadata-only)`);
-    console.log(`   Session ID: ${sanitizedSessionId}`);
-    console.log(`   Working directory: ${validatedWorkingDir}`);
-    console.log(`   Initial prompt: "${sanitizedPrompt}"`);
-
-    // Create session metadata (no long-running process)
-    const session = {
-      sessionId: sanitizedSessionId,
-      workingDirectory: validatedWorkingDir,
-      isActive: true,
-      createdAt: Date.now(),
-      lastActivity: Date.now(),
-      initialPrompt: sanitizedPrompt,
-      conversationStarted: false,
-    };
-
-    this.activeSessions.set(sanitizedSessionId, session);
-
-    // Initialize message buffer for this session
-    this.sessionMessageBuffers.set(sanitizedSessionId, AICLIMessageHandler.createSessionBuffer());
-
-    // Set up session timeout
-    setTimeout(() => {
-      if (this.activeSessions.has(sanitizedSessionId)) {
-        console.log(`Session ${sanitizedSessionId} timed out, cleaning up`);
-        this.closeSession(sanitizedSessionId);
-      }
-    }, this.sessionTimeout);
-
-    console.log(`✅ AICLI CLI session metadata created successfully`);
-
-    return {
-      sessionId: sanitizedSessionId,
-      success: true,
-      message: 'Session ready for commands',
-    };
+  async createInteractiveSession(
+    sessionId,
+    initialPrompt,
+    workingDirectory,
+    skipPermissions = false
+  ) {
+    return this.sessionManager.createInteractiveSession(
+      sessionId,
+      initialPrompt,
+      workingDirectory,
+      { skipPermissions }
+    );
   }
 
   async sendToExistingSession(sessionId, prompt) {
@@ -476,15 +486,16 @@ export class AICLIService extends EventEmitter {
       throw new Error('Invalid session ID');
     }
 
-    const session = this.activeSessions.get(sanitizedSessionId);
+    const session = this.sessionManager.getSession(sanitizedSessionId);
 
     if (!session || !session.isActive) {
       throw new Error(`Session ${sanitizedSessionId} not found or inactive`);
     }
 
     try {
-      // Update last activity
-      session.lastActivity = Date.now();
+      // Update activity and processing state
+      await this.sessionManager.updateSessionActivity(sanitizedSessionId);
+      this.sessionManager.setSessionProcessing(sanitizedSessionId, true);
 
       console.log(
         `📝 Executing AICLI CLI command for session ${sanitizedSessionId}: "${sanitizedPrompt}"`
@@ -507,929 +518,65 @@ export class AICLIService extends EventEmitter {
         timestamp: new Date().toISOString(),
       });
 
+      // Mark processing as complete
+      this.sessionManager.setSessionProcessing(sanitizedSessionId, false);
+
       return {
         sessionId: sanitizedSessionId,
         success: true,
-        message: 'Command executed successfully',
         response,
       };
     } catch (error) {
+      // Mark processing as complete even on error
+      this.sessionManager.setSessionProcessing(sanitizedSessionId, false);
       console.error('❌ Failed to execute command for session %s:', sanitizedSessionId, error);
       throw new Error(`Failed to execute command: ${error.message}`);
     }
   }
 
   async testAICLICommand(testType = 'version') {
-    console.log(`🧪 Testing AICLI CLI command: ${testType}`);
-
-    let args = [];
-    const prompt = null;
-
-    switch (testType) {
-      case 'version':
-        args = ['--version'];
-        break;
-      case 'help':
-        args = ['--help'];
-        break;
-      case 'simple':
-        args = ['--print', 'Hello world'];
-        break;
-      case 'json':
-        args = ['--print', '--output-format', 'json', 'Hello world'];
-        break;
-      default:
-        throw new Error(`Unknown test type: ${testType}`);
-    }
-
-    return this.runAICLIProcess(args, prompt, process.cwd(), 'test-session', 30000);
+    return this.processRunner.testAICLICommand(testType);
   }
 
   async executeAICLICommand(session, prompt) {
-    const { sessionId, workingDirectory, conversationStarted, initialPrompt } = session;
+    // Delegate to process runner
+    const result = await this.processRunner.executeAICLICommand(session, prompt);
 
-    // Build AICLI CLI arguments - use stream-json to avoid buffer limits
-    const args = ['--print', '--output-format', 'stream-json', '--verbose'];
-
-    // Add continue flag if conversation has started
-    if (conversationStarted) {
-      args.push('--continue');
+    // Mark conversation as started AFTER successful first command
+    if (!session.conversationStarted) {
+      await this.sessionManager.markConversationStarted(session.sessionId);
     }
 
-    // Add skip permissions flag if configured
-    if (this.skipPermissions) {
-      args.push('--dangerously-skip-permissions');
-    } else {
-      // Only add permission configuration if not skipping permissions
-
-      // Add permission mode if configured
-      if (this.permissionMode && this.permissionMode !== 'default') {
-        args.push('--permission-mode');
-        args.push(this.permissionMode);
-      }
-
-      // Add allowed tools if configured
-      if (this.allowedTools.length > 0) {
-        args.push('--allowedTools');
-        args.push(this.allowedTools.join(','));
-      }
-
-      // Add disallowed tools if configured
-      if (this.disallowedTools.length > 0) {
-        args.push('--disallowedTools');
-        args.push(this.disallowedTools.join(','));
-      }
-    }
-
-    // Validate arguments
-    InputValidator.validateAICLIArgs(args);
-
-    // Determine the prompt to send
-    let finalPrompt = prompt;
-    if (!conversationStarted && initialPrompt) {
-      finalPrompt = `${initialPrompt}\n\n${prompt}`;
-      session.conversationStarted = true;
-      console.log(`   📝 Combined initial prompt with command prompt`);
-    } else if (!conversationStarted) {
-      session.conversationStarted = true;
-    }
-
-    console.log(`🚀 Executing AICLI CLI with args:`, args);
-    console.log(`   Working directory: ${workingDirectory}`);
-    console.log(`   Original prompt: "${prompt?.substring(0, 50)}..."`);
-    console.log(`   Initial prompt: "${initialPrompt?.substring(0, 50)}..."`);
-    console.log(`   Final prompt length: ${finalPrompt?.length} chars`);
-    console.log(
-      `   Final prompt preview: "${finalPrompt?.substring(0, 100).replace(/\n/g, '\\n')}..."`
-    );
-    console.log(`   Conversation started: ${conversationStarted}`);
-
-    // Calculate dynamic timeout based on command complexity
-    const timeoutMs = AICLIConfig.calculateTimeoutForCommand(prompt);
-
-    // Check if this is a long-running operation (> 5 minutes)
-    if (timeoutMs > 300000) {
-      const estimatedMinutes = Math.round(timeoutMs / 60000);
-      console.log(`🕐 Long-running operation detected (${estimatedMinutes} min timeout)`);
-
-      // Send immediate status response
-      this.emit('assistantMessage', {
-        sessionId,
-        data: {
-          type: 'assistant_response',
-          content: [
-            {
-              type: 'text',
-              text: `🔍 **Processing Complex Request**\n\nI'm working on your request: "${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}"\n\n⏱️ **Estimated time:** ${estimatedMinutes} minutes\n📊 **Status:** Starting analysis...\n\nI'll send you the complete results when finished. You can continue using the chat - I'm working in the background!`,
-            },
-          ],
-          timestamp: new Date().toISOString(),
-        },
-        isComplete: false,
-      });
-
-      // Run the process in the background and send results when complete
-      this.runLongRunningProcess(args, finalPrompt, workingDirectory, sessionId, timeoutMs, prompt);
-
-      // Return immediate acknowledgment
-      return {
-        type: 'status',
-        subtype: 'long_running_started',
-        is_error: false,
-        result: `Long-running operation started. Estimated completion: ${estimatedMinutes} minutes.`,
-        session_id: sessionId,
-        estimated_duration_ms: timeoutMs,
-        status: 'processing',
-      };
-    }
-
-    console.log(`📤 Calling runAICLIProcess with:`);
-    console.log(`   Args (${args.length}):`, args);
-    console.log(
-      `   Prompt: "${finalPrompt?.substring(0, 100)}${finalPrompt?.length > 100 ? '...' : ''}"`
-    );
-    console.log(`   SessionId: ${sessionId}`);
-
-    return this.runAICLIProcess(args, finalPrompt, workingDirectory, sessionId, timeoutMs);
+    return result;
   }
 
-  async runLongRunningProcess(
-    args,
-    prompt,
-    workingDirectory,
-    sessionId,
-    timeoutMs,
-    originalPrompt
-  ) {
-    console.log(`🔄 Starting long-running background process for session ${sessionId}`);
-
-    // Send periodic status updates
-    const statusUpdateInterval = setInterval(() => {
-      this.emit('assistantMessage', {
-        sessionId,
-        data: {
-          type: 'assistant_response',
-          content: [
-            {
-              type: 'text',
-              text: `⏳ Still working on your request: "${originalPrompt.substring(0, 60)}..."\n\n📊 **Status:** Processing in background...`,
-            },
-          ],
-          timestamp: new Date().toISOString(),
-        },
-        isComplete: false,
-      });
-    }, 120000); // Send update every 2 minutes
-
-    try {
-      // Run the actual AICLI process
-      const result = await this.runAICLIProcess(
-        args,
-        prompt,
-        workingDirectory,
-        sessionId,
-        timeoutMs
-      );
-
-      // Clear the status updates
-      clearInterval(statusUpdateInterval);
-
-      // Log the result structure for debugging
-      console.log(`📊 Long-running result structure:`, {
-        type: result?.type,
-        hasResult: !!result?.result,
-        resultLength: result?.result?.length,
-        isError: result?.is_error,
-      });
-
-      // For long-running processes, just send the actual results directly
-      if (result && result.type === 'result' && result.result) {
-        // Create a fresh buffer for the long-running completion
-        if (!this.sessionMessageBuffers.has(sessionId)) {
-          this.sessionMessageBuffers.set(sessionId, AICLIMessageHandler.createSessionBuffer());
-        }
-
-        // Create an assistant message with the actual result content (removed unused variable)
-
-        // Process and send the assistant message immediately
-        this.emit('assistantMessage', {
-          sessionId,
-          data: {
-            type: 'assistant_response',
-            content: [
-              {
-                type: 'text',
-                text: result.result,
-              },
-            ],
-            timestamp: new Date().toISOString(),
-          },
-          isComplete: true,
-        });
-      } else {
-        console.error(`❌ Unexpected result type from long-running process:`, result?.type);
-      }
-
-      console.log(`✅ Long-running process completed for session ${sessionId}`);
-    } catch (error) {
-      // Clear the status updates
-      clearInterval(statusUpdateInterval);
-
-      console.error(`❌ Long-running process failed for session ${sessionId}:`, error);
-
-      // Send error notification
-      this.emit('assistantMessage', {
-        sessionId,
-        data: {
-          type: 'assistant_response',
-          content: [
-            {
-              type: 'text',
-              text: `❌ **Complex Request Failed**\n\nYour request: "${originalPrompt.substring(0, 80)}${originalPrompt.length > 80 ? '...' : ''}"\n\n🔍 **Error:** ${error.message}\n\n💡 **Suggestion:** Try breaking this into smaller, more specific requests.`,
-            },
-          ],
-          timestamp: new Date().toISOString(),
-        },
-        isComplete: true,
-      });
-
-      // Also emit error through normal channels
-      this.emit('streamError', {
-        sessionId,
-        error: error.message,
-      });
-    }
-  }
-
-  async runAICLIProcess(args, prompt, workingDirectory, sessionId, timeoutMs) {
-    console.log(`\n🔧 === runAICLIProcess CALLED ===`);
-    console.log(`🔧 Running AICLI CLI process:`);
-    console.log(`   Args (${args.length}): ${JSON.stringify(args)}`);
-    console.log(`   Prompt provided: ${!!prompt}`);
-    console.log(`   Prompt length: ${prompt ? prompt.length : 0}`);
-    console.log(
-      `   Prompt preview: ${prompt ? `"${prompt.substring(0, 100).replace(/\n/g, '\\n')}${prompt.length > 100 ? '...' : ''}"` : 'none'}`
-    );
-    console.log(`   Working dir: ${workingDirectory}`);
-    console.log(`   Session ID: ${sessionId}`);
-    console.log(`   Timeout: ${timeoutMs}ms`);
-
-    return new Promise((promiseResolve, reject) => {
-      let aicliProcess;
-
-      try {
-        // Build the complete command arguments
-        // When using --print with stdin, don't include prompt in args
-        const useStdin = prompt && args.includes('--print');
-        const fullArgs = useStdin ? args : prompt ? [...args, prompt] : args;
-
-        console.log(`📝 Final args being passed to AICLI CLI:`);
-        console.log(`   Command: ${this.aicliCommand}`);
-        console.log(
-          `   Full args array (${fullArgs.length} items):`,
-          fullArgs.map((arg, i) => `[${i}] ${arg.substring(0, 100)}`)
-        );
-        console.log(`   Has prompt: ${!!prompt}`);
-        console.log(`   Using stdin for prompt: ${useStdin}`);
-
-        aicliProcess = spawn(this.aicliCommand, fullArgs, {
-          cwd: workingDirectory,
-          stdio: ['pipe', 'pipe', 'pipe'],
-        });
-      } catch (spawnError) {
-        console.error(`❌ Failed to spawn AICLI CLI:`, spawnError);
-        const errorMsg =
-          spawnError.code === 'ENOENT'
-            ? 'AICLI CLI not found. Please ensure AICLI CLI is installed and in your PATH.'
-            : `Failed to start AICLI CLI: ${spawnError.message}`;
-        reject(new Error(errorMsg));
-        return;
-      }
-
-      console.log(`   Process started with PID: ${aicliProcess.pid}`);
-
-      // When using --print, AICLI CLI might expect input from stdin
-      // Try writing the prompt to stdin instead of passing as argument
-      if (prompt && args.includes('--print')) {
-        console.log(`   📝 Writing prompt to stdin instead of args`);
-        aicliProcess.stdin.write(prompt);
-        aicliProcess.stdin.end();
-      } else {
-        // Close stdin immediately if no prompt
-        aicliProcess.stdin.end();
-      }
-
-      // Start monitoring this process
-      if (aicliProcess.pid) {
-        processMonitor
-          .monitorProcess(aicliProcess.pid)
-          .then((info) => {
-            if (info) {
-              console.log(
-                `📊 Initial process metrics: Memory: ${(info.rss / 1024 / 1024).toFixed(2)}MB, CPU: ${info.cpu}%`
-              );
-            }
-          })
-          .catch((err) => {
-            console.warn(`⚠️  Failed to get initial process metrics: ${err.message}`);
-          });
-      }
-
-      // Emit process start event
-      this.emit('processStart', {
-        sessionId,
-        pid: aicliProcess.pid,
-        command: this.aicliCommand,
-        args,
-        workingDirectory,
-        type: 'command',
-      });
-
-      let stdout = '';
-      let stderr = '';
-      let lastActivityTime = Date.now();
-      let hasReceivedOutput = false;
-      const stdoutBuffers = []; // Store raw buffers to prevent encoding issues
-      const stderrBuffers = [];
-
-      // Initialize stream parser for this command
-      const streamParser = new ClaudeStreamParser();
-
-      // Function to reset activity timer on any output (will be updated below)
-      // eslint-disable-next-line prefer-const
-      let resetActivityTimer;
-
-      aicliProcess.stdout.on('data', (data) => {
-        // Store raw buffer to prevent encoding truncation
-        stdoutBuffers.push(data);
-
-        const chunk = data.toString();
-        stdout += chunk;
-        console.log(
-          `📊 AICLI CLI STDOUT (${chunk.length} chars, total: ${stdout.length}):`,
-          JSON.stringify(chunk.substring(0, 200))
-        );
-
-        resetActivityTimer();
-
-        // Parse the chunk into structured messages
-        try {
-          const parsedChunks = streamParser.parseData(chunk, false);
-
-          // Emit each parsed chunk as a separate stream event
-          for (const parsedChunk of parsedChunks) {
-            this.emit('streamChunk', {
-              sessionId,
-              chunk: parsedChunk,
-              timestamp: new Date().toISOString(),
-            });
-          }
-        } catch (parseError) {
-          console.error('❌ Failed to parse stream chunk:', parseError);
-          // Fallback to emitting raw data
-          this.emit('commandProgress', {
-            sessionId,
-            pid: aicliProcess.pid,
-            data: chunk,
-            timestamp: new Date().toISOString(),
-          });
-        }
-      });
-
-      aicliProcess.stderr.on('data', (data) => {
-        // Store raw buffer to prevent encoding truncation
-        stderrBuffers.push(data);
-
-        const chunk = data.toString();
-        stderr += chunk;
-        console.log(
-          `📛 AICLI CLI STDERR (${chunk.length} chars, total: ${stderr.length}):`,
-          JSON.stringify(chunk)
-        );
-
-        resetActivityTimer();
-
-        // Emit stderr for logging
-        this.emit('processStderr', {
-          sessionId,
-          pid: aicliProcess.pid,
-          data: chunk,
-          timestamp: new Date().toISOString(),
-        });
-      });
-
-      aicliProcess.on('close', (code) => {
-        console.log(`🔚 AICLI CLI process closed with code: ${code}`);
-
-        // Reconstruct complete output from buffers to prevent encoding issues
-        let completeStdout = '';
-        let completeStderr = '';
-
-        try {
-          if (stdoutBuffers.length > 0) {
-            const combinedBuffer = Buffer.concat(stdoutBuffers);
-            completeStdout = combinedBuffer.toString('utf8');
-            console.log(
-              `   STDOUT reconstructed: ${completeStdout.length} chars (${stdoutBuffers.length} chunks)`
-            );
-          }
-
-          if (stderrBuffers.length > 0) {
-            const combinedBuffer = Buffer.concat(stderrBuffers);
-            completeStderr = combinedBuffer.toString('utf8');
-            console.log(
-              `   STDERR reconstructed: ${completeStderr.length} chars (${stderrBuffers.length} chunks)`
-            );
-          }
-        } catch (bufferError) {
-          console.error(`❌ Failed to reconstruct buffers:`, bufferError);
-          // Fallback to the string concatenation approach
-          completeStdout = stdout;
-          completeStderr = stderr;
-        }
-
-        console.log(`   Final STDOUT length: ${completeStdout.length}`);
-        console.log(`   Final STDERR length: ${completeStderr.length}`);
-
-        // Emit any remaining chunks with final flag
-        try {
-          const finalChunks = streamParser.parseData('', true); // Pass empty string with isComplete=true
-          for (const chunk of finalChunks) {
-            this.emit('streamChunk', {
-              sessionId,
-              chunk,
-              timestamp: new Date().toISOString(),
-            });
-          }
-        } catch (parseError) {
-          console.error('❌ Failed to emit final chunks:', parseError);
-        }
-
-        // Emit process exit event
-        this.emit('processExit', {
-          sessionId,
-          pid: aicliProcess.pid,
-          code,
-          stdout: completeStdout.substring(0, 1000),
-          stderr: completeStderr,
-          timestamp: new Date().toISOString(),
-        });
-
-        if (code !== 0) {
-          reject(new Error(`AICLI CLI exited with code ${code}: ${completeStderr}`));
-          return;
-        }
-
-        try {
-          // Validate JSON before parsing
-          if (!completeStdout || completeStdout.length === 0) {
-            reject(new Error('AICLI CLI returned empty output'));
-            return;
-          }
-
-          // For stream-json format, we don't need strict JSON validation since it's newline-delimited
-          const trimmedOutput = completeStdout.trim();
-          if (!trimmedOutput || trimmedOutput.length === 0) {
-            reject(new Error('AICLI CLI returned empty output'));
-            return;
-          }
-
-          // Parse stream-json format - newline-delimited JSON objects
-          const responses = MessageProcessor.parseStreamJsonOutput(trimmedOutput);
-          console.log(`✅ AICLI CLI command completed successfully`);
-          console.log(`   Parsed ${responses.length} response objects from stream-json`);
-
-          if (responses.length === 0) {
-            reject(new Error('No valid JSON objects found in AICLI CLI output'));
-            return;
-          }
-
-          // Find the final result
-          const finalResult =
-            responses.find((r) => r.type === 'result') || responses[responses.length - 1];
-
-          // Ensure message buffer exists for this session
-          if (!this.sessionMessageBuffers.has(sessionId)) {
-            this.sessionMessageBuffers.set(sessionId, AICLIMessageHandler.createSessionBuffer());
-            console.log(`🔧 Created missing message buffer for session ${sessionId}`);
-          }
-
-          // Emit all responses for detailed tracking
-          responses.forEach((response, index) => {
-            console.log(
-              `   Response ${index + 1}: type=${response.type}, subtype=${response.subtype || 'none'}`
-            );
-            this.emitAICLIResponse(sessionId, response, index === responses.length - 1);
-          });
-
-          promiseResolve(finalResult);
-        } catch (error) {
-          console.error(`❌ Failed to parse AICLI CLI response:`, error);
-          console.error(`   Raw stdout length:`, completeStdout.length);
-          console.error(`   First 200 chars:`, completeStdout.substring(0, 200));
-          console.error(
-            `   Last 200 chars:`,
-            completeStdout.substring(Math.max(0, completeStdout.length - 200))
-          );
-
-          // Try to provide more helpful error information
-          if (error.message.includes('Unterminated string')) {
-            reject(new Error('AICLI CLI response was truncated - output is incomplete'));
-          } else if (error.message.includes('Unexpected end')) {
-            reject(new Error('AICLI CLI response ended unexpectedly - possible truncation'));
-          } else {
-            reject(new Error(`Failed to parse AICLI CLI response: ${error.message}`));
-          }
-        }
-      });
-
-      aicliProcess.on('error', (error) => {
-        console.error(`❌ AICLI CLI process error:`, error);
-        reject(new Error(`AICLI CLI process error: ${error.message}`));
-      });
-
-      // Implement intelligent timeout with heartbeat detection
-      let timeoutHandle;
-      const startTime = Date.now();
-      const maxSilentTime = Math.min(timeoutMs / 3, 180000); // Max 3 minutes of silence, or 1/3 the total timeout
-
-      const updateTimeout = () => {
-        if (timeoutHandle) {
-          clearTimeout(timeoutHandle);
-        }
-
-        const timeoutToUse = hasReceivedOutput ? maxSilentTime : timeoutMs;
-
-        console.log(
-          `🕐 Setting timeout: ${Math.round(timeoutToUse / 1000)}s (${hasReceivedOutput ? 'heartbeat mode' : 'initial mode'})`
-        );
-
-        timeoutHandle = setTimeout(() => {
-          const timeSinceActivity = Date.now() - lastActivityTime;
-          const totalRuntime = Date.now() - startTime;
-
-          if (hasReceivedOutput) {
-            console.log(
-              `⏰ AICLI CLI process silent timeout (${Math.round(timeSinceActivity / 1000)}s since last activity), killing PID ${aicliProcess.pid}...`
-            );
-            reject(
-              new Error(
-                `AICLI CLI process timed out after ${Math.round(timeSinceActivity / 1000)}s of silence`
-              )
-            );
-          } else {
-            console.log(
-              `⏰ AICLI CLI process initial timeout (${Math.round(totalRuntime / 1000)}s total), killing PID ${aicliProcess.pid}...`
-            );
-            reject(new Error('AICLI CLI process timed out'));
-          }
-          aicliProcess.kill('SIGTERM');
-        }, timeoutToUse);
-      };
-
-      // Define the reset function now that updateTimeout exists
-      resetActivityTimer = () => {
-        lastActivityTime = Date.now();
-        const wasFirstOutput = !hasReceivedOutput;
-        hasReceivedOutput = true;
-        console.log(
-          `💓 AICLI CLI activity detected${wasFirstOutput ? ' (first output)' : ''}, resetting timeout timer`
-        );
-        updateTimeout();
-      };
-
-      // Initial timeout
-      updateTimeout();
-
-      // Add periodic status logging
-      const statusInterval = setInterval(
-        () => {
-          if (aicliProcess && aicliProcess.pid) {
-            console.log(
-              `📊 AICLI CLI PID ${aicliProcess.pid} still running... (stdout: ${stdout.length} chars, stderr: ${stderr.length} chars)`
-            );
-          }
-        },
-        Math.min(timeoutMs / 4, 10000)
-      ); // Status every 1/4 of timeout or 10s max
-
-      aicliProcess.on('close', () => {
-        if (timeoutHandle) {
-          clearTimeout(timeoutHandle);
-        }
-        clearInterval(statusInterval);
-      });
-    });
-  }
-
-  // Validate that JSON is complete and not truncated
+  // Delegate validation methods to AICLIValidationService
   isValidCompleteJSON(jsonString) {
-    if (!jsonString || jsonString.length === 0) {
-      console.log(`JSON validation: Empty or null input`);
-      return false;
-    }
-
-    try {
-      // First, try basic JSON parsing
-      const parsed = JSON.parse(jsonString);
-
-      // Additional checks for completeness
-      const trimmed = jsonString.trim();
-
-      // Check that it starts and ends properly
-      if (trimmed.startsWith('[')) {
-        if (!trimmed.endsWith(']')) {
-          console.log(`JSON validation: Array doesn't end with ]`);
-          return false;
-        }
-      } else if (trimmed.startsWith('{')) {
-        if (!trimmed.endsWith('}')) {
-          console.log(`JSON validation: Object doesn't end with }`);
-          return false;
-        }
-      } else {
-        console.log(`JSON validation: Doesn't start with [ or {`);
-        return false;
-      }
-
-      // Check for common truncation indicators
-      // Only check if the JSON doesn't end properly
-      if (!trimmed.endsWith('}') && !trimmed.endsWith(']')) {
-        console.log(`JSON validation: Doesn't end with } or ]`);
-        return false;
-      }
-
-      // Simplified truncation detection - primarily rely on JSON.parse
-      // Only check for obvious incomplete endings
-      if (
-        trimmed.endsWith(',') ||
-        trimmed.endsWith(':') ||
-        (trimmed.endsWith('"') && !trimmed.endsWith('"}') && !trimmed.endsWith('"]'))
-      ) {
-        console.log(`JSON validation: Ends with incomplete syntax`);
-        return false;
-      }
-
-      // For arrays, check if the parsed result looks complete
-      if (Array.isArray(parsed)) {
-        // Check if each object in the array has expected structure
-        for (const item of parsed) {
-          if (typeof item === 'object' && item !== null) {
-            // Check for objects that seem incomplete (very basic check)
-            if (item.type && Object.keys(item).length === 1) {
-              console.log(
-                `JSON validation: Object with only 'type' field detected:`,
-                JSON.stringify(item)
-              );
-              return false;
-            }
-          }
-        }
-      }
-
-      console.log(`✅ JSON validation passed for ${trimmed.length} character response`);
-      return true;
-    } catch (parseError) {
-      console.log(`JSON validation failed:`, parseError.message);
-      console.log(`   Error type: ${parseError.name}`);
-
-      // Provide more specific error information for debugging
-      if (parseError.message.includes('Unterminated string')) {
-        console.log(`   Detected unterminated string - likely truncation`);
-      } else if (parseError.message.includes('Unexpected end')) {
-        console.log(`   Detected unexpected end - likely truncation`);
-      } else if (parseError.message.includes('Unexpected token')) {
-        console.log(`   Detected unexpected token - possible corruption`);
-      }
-
-      return false;
-    }
+    return AICLIValidationService.isValidCompleteJSON(jsonString);
   }
 
-  // Parse stream-json output format (newline-delimited JSON)
   parseStreamJsonOutput(output) {
-    const responses = [];
-    const lines = output.split('\n');
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (line.length === 0) continue;
-
-      try {
-        const parsed = JSON.parse(line);
-        responses.push(parsed);
-        console.log(`📦 Parsed stream-json line ${i + 1}: type=${parsed.type}`);
-      } catch (error) {
-        console.log(`⚠️  Failed to parse line ${i + 1} as JSON:`, line.substring(0, 100));
-        // Try to extract any complete JSON objects from this line
-        const extracted = MessageProcessor.extractCompleteObjectsFromLine(line);
-        responses.push(...extracted);
-      }
-    }
-
-    return responses;
+    return AICLIValidationService.parseStreamJsonOutput(output);
   }
 
-  // Extract complete JSON objects from a potentially malformed line
   extractCompleteObjectsFromLine(line) {
-    const objects = [];
-    let depth = 0;
-    let currentObject = '';
-    let inString = false;
-    let escaped = false;
-    let objectStart = -1;
-
-    for (let i = 0; i < line.length; i++) {
-      const char = line[i];
-
-      if (escaped) {
-        escaped = false;
-        if (depth > 0) currentObject += char;
-        continue;
-      }
-
-      if (char === '\\' && inString) {
-        escaped = true;
-        if (depth > 0) currentObject += char;
-        continue;
-      }
-
-      if (char === '"') {
-        inString = !inString;
-        if (depth > 0) currentObject += char;
-        continue;
-      }
-
-      if (inString) {
-        if (depth > 0) currentObject += char;
-        continue;
-      }
-
-      if (char === '{') {
-        if (depth === 0) {
-          objectStart = i;
-          currentObject = '';
-        }
-        depth++;
-        currentObject += char;
-      } else if (char === '}') {
-        depth--;
-        currentObject += char;
-
-        if (depth === 0 && objectStart >= 0) {
-          try {
-            const parsed = JSON.parse(currentObject);
-            objects.push(parsed);
-            console.log(`🔧 Extracted object from line: type=${parsed.type}`);
-            currentObject = '';
-            objectStart = -1;
-          } catch (error) {
-            // Object is malformed, continue
-          }
-        }
-      } else if (depth > 0) {
-        currentObject += char;
-      }
-    }
-
-    return objects;
+    return AICLIValidationService.extractCompleteObjectsFromLine(line);
   }
 
-  // Try to extract the last complete JSON object from a truncated response
   extractLastCompleteJSON(truncatedJSON) {
-    try {
-      // Look for complete JSON objects/arrays by finding balanced braces/brackets
-      const lastCompleteStart = this.findLastCompleteJSONStart(truncatedJSON);
-      if (lastCompleteStart >= 0) {
-        const candidate = truncatedJSON.substring(lastCompleteStart);
-        const parsed = JSON.parse(candidate);
-        console.log(`Found complete JSON from position ${lastCompleteStart}:`, typeof parsed);
-        return parsed;
-      }
-    } catch (error) {
-      // Try different approaches
-    }
-
-    // If it's an array, try to extract the last complete object
-    if (truncatedJSON.startsWith('[')) {
-      try {
-        const objects = this.extractCompleteObjectsFromArray(truncatedJSON);
-        if (objects.length > 0) {
-          return objects[objects.length - 1];
-        }
-      } catch (error) {
-        // Continue to next approach
-      }
-    }
-
-    return null;
+    return AICLIValidationService.extractLastCompleteJSON(truncatedJSON);
   }
 
   findLastCompleteJSONStart(text) {
-    let braceCount = 0;
-    let bracketCount = 0;
-    let inString = false;
-    let escaped = false;
-
-    for (let i = text.length - 1; i >= 0; i--) {
-      const char = text[i];
-
-      if (escaped) {
-        escaped = false;
-        continue;
-      }
-
-      if (char === '\\' && inString) {
-        escaped = true;
-        continue;
-      }
-
-      if (char === '"') {
-        inString = !inString;
-        continue;
-      }
-
-      if (inString) continue;
-
-      if (char === '}') braceCount++;
-      else if (char === '{') braceCount--;
-      else if (char === ']') bracketCount++;
-      else if (char === '[') bracketCount--;
-
-      // Found a complete structure
-      if ((braceCount === 0 && char === '{') || (bracketCount === 0 && char === '[')) {
-        return i;
-      }
-    }
-
-    return -1;
+    return AICLIValidationService.findLastCompleteJSONStart(text);
   }
 
   extractCompleteObjectsFromArray(arrayText) {
-    const objects = [];
-    let depth = 0;
-    let currentObject = '';
-    let inString = false;
-    let escaped = false;
-    let objectStart = -1;
-
-    for (let i = 0; i < arrayText.length; i++) {
-      const char = arrayText[i];
-
-      if (escaped) {
-        escaped = false;
-        currentObject += char;
-        continue;
-      }
-
-      if (char === '\\' && inString) {
-        escaped = true;
-        currentObject += char;
-        continue;
-      }
-
-      if (char === '"') {
-        inString = !inString;
-        currentObject += char;
-        continue;
-      }
-
-      if (inString) {
-        currentObject += char;
-        continue;
-      }
-
-      if (char === '{') {
-        if (depth === 0) {
-          objectStart = i;
-          currentObject = '';
-        }
-        depth++;
-        currentObject += char;
-      } else if (char === '}') {
-        depth--;
-        currentObject += char;
-
-        if (depth === 0 && objectStart >= 0) {
-          try {
-            const parsed = JSON.parse(currentObject);
-            objects.push(parsed);
-            currentObject = '';
-            objectStart = -1;
-          } catch (error) {
-            // Object is malformed, continue
-          }
-        }
-      } else if (depth > 0) {
-        currentObject += char;
-      }
-    }
-
-    return objects;
+    return AICLIValidationService.extractCompleteObjectsFromArray(arrayText);
   }
 
   emitAICLIResponse(sessionId, response, _isComplete = false, options = {}) {
-    const buffer = this.sessionMessageBuffers.get(sessionId);
+    const buffer = this.sessionManager.getSessionBuffer(sessionId);
     if (!buffer) {
       console.warn(`No message buffer found for session ${sessionId}`);
       return;
@@ -1552,11 +699,7 @@ export class AICLIService extends EventEmitter {
   // Message handling methods moved to AICLIMessageHandler - using proxy methods below for backward compatibility
 
   clearSessionBuffer(sessionId) {
-    const buffer = this.sessionMessageBuffers.get(sessionId);
-    if (buffer) {
-      AICLIMessageHandler.clearSessionBuffer(buffer);
-      console.log(`🧹 Cleared message buffer for session ${sessionId}`);
-    }
+    this.sessionManager.clearSessionBuffer(sessionId);
   }
 
   // Proxy methods for message handler functionality (for backward compatibility and testing)
@@ -1613,72 +756,38 @@ export class AICLIService extends EventEmitter {
   }
 
   async closeSession(sessionId) {
-    const session = this.activeSessions.get(sessionId);
-
-    if (!session) {
-      console.log(`⚠️  Attempted to close non-existent session: ${sessionId}`);
-      return { success: false, message: 'Session not found' };
-    }
-
-    console.log(`🔚 Closing AICLI CLI session: ${sessionId}`);
-    console.log(`   Session type: metadata-only (no long-running process)`);
-
-    try {
-      // Mark session as inactive
-      session.isActive = false;
-
-      // Remove from active sessions and clean up message buffer
-      this.activeSessions.delete(sessionId);
-      this.sessionMessageBuffers.delete(sessionId);
-
-      console.log(`✅ Session ${sessionId} closed successfully`);
-      console.log(`   Remaining active sessions: ${this.activeSessions.size}`);
-
-      return { success: true, message: 'Session closed' };
-    } catch (error) {
-      console.error('Error closing session:', error);
-      return { success: false, message: error.message };
-    }
+    return this.sessionManager.closeSession(sessionId);
   }
 
   hasSession(sessionId) {
-    return this.activeSessions.has(sessionId);
+    return this.sessionManager.hasSession(sessionId);
+  }
+
+  getSession(sessionId) {
+    return this.sessionManager.getSession(sessionId);
   }
 
   getActiveSessions() {
-    const sessions = Array.from(this.activeSessions.keys());
-    console.log(`📊 Active AICLI CLI sessions: ${sessions.length}`);
-    sessions.forEach((sessionId, index) => {
-      const session = this.activeSessions.get(sessionId);
-      const age = Math.round((Date.now() - session.createdAt) / 1000);
-      console.log(
-        `   ${index + 1}. ${sessionId} (age: ${age}s, conversation: ${session.conversationStarted ? 'started' : 'pending'})`
-      );
-    });
-    return sessions;
+    return this.sessionManager.getActiveSessions();
+  }
+
+  async markSessionBackgrounded(sessionId) {
+    return this.sessionManager.markSessionBackgrounded(sessionId);
+  }
+
+  async markSessionForegrounded(sessionId) {
+    return this.sessionManager.markSessionForegrounded(sessionId);
   }
 
   // Cleanup method for graceful shutdown
-  shutdown() {
+  async shutdown() {
     console.log('🔄 Shutting down AICLI Code Service...');
 
     // Stop health monitoring
     this.stopProcessHealthMonitoring();
 
-    // Close all active sessions
-    for (const [sessionId, _] of this.activeSessions) {
-      try {
-        this.closeSession(sessionId);
-      } catch (error) {
-        console.warn(`Failed to close session ${sessionId}:`, error.message);
-      }
-    }
-
-    // Clear all buffers
-    this.sessionMessageBuffers.clear();
-
-    // Clear all data structures
-    this.activeSessions.clear();
+    // Shutdown session manager
+    await this.sessionManager.shutdown();
 
     console.log('✅ AICLI Code Service shut down complete');
   }
@@ -1690,27 +799,18 @@ export class AICLIService extends EventEmitter {
       // Get system resources
       const systemResources = await processMonitor.getSystemResources();
 
-      // Get process metrics for active sessions
-      const sessionMetrics = [];
-      for (const [sessionId, session] of this.activeSessions) {
-        if (session.process && session.process.pid) {
-          const metrics = processMonitor.getMetricsSummary(session.process.pid);
-          if (metrics) {
-            sessionMetrics.push({
-              sessionId,
-              ...metrics,
-            });
-          }
-        }
-      }
+      // Get active sessions count
+      const activeSessionIds = this.getActiveSessions();
+      const sessionCount = activeSessionIds.length;
 
       return {
         status: isAvailable ? 'healthy' : 'degraded',
         aicliCodeAvailable: isAvailable,
-        activeSessions: this.activeSessions.size,
+        activeSessions: activeSessionIds,
+        sessionCount,
         resources: {
           system: systemResources,
-          sessions: sessionMetrics,
+          sessions: [], // No process metrics since sessions don't have processes
         },
         timestamp: new Date().toISOString(),
       };
@@ -1723,9 +823,36 @@ export class AICLIService extends EventEmitter {
     }
   }
 
+  // Check if session should timeout
+  checkSessionTimeout(sessionId) {
+    const session = this.sessionManager.getSession(sessionId);
+    if (!session) {
+      return null;
+    }
+    const now = Date.now();
+    const lastActivity = session.lastActivity || session.createdAt;
+    if (!lastActivity) {
+      // No activity recorded - consider inactive
+      return {
+        sessionId,
+        isActive: false,
+        timeSinceLastActivity: Infinity,
+        lastActivity: null,
+      };
+    }
+    const timeSinceLastActivity = now - lastActivity;
+    const isActive = timeSinceLastActivity < 30 * 60 * 1000; // 30 minutes
+    return {
+      sessionId,
+      isActive,
+      timeSinceLastActivity,
+      lastActivity,
+    };
+  }
+
   // Handle permission prompts
   async handlePermissionPrompt(sessionId, response) {
-    const session = this.activeSessions.get(sessionId);
+    const session = this.sessionManager.getSession(sessionId);
 
     if (!session) {
       throw new Error(`Session ${sessionId} not found`);
@@ -1736,7 +863,7 @@ export class AICLIService extends EventEmitter {
       console.log(`📝 Handling permission response for session ${sessionId}: "${response}"`);
 
       // Check if the session has a pending permission request
-      const buffer = this.sessionMessageBuffers.get(sessionId);
+      const buffer = this.sessionManager.getSessionBuffer(sessionId);
       if (buffer && buffer.pendingFinalResponse) {
         console.log(`✅ Found pending response, processing permission approval`);
 
@@ -1940,10 +1067,6 @@ export class AICLIService extends EventEmitter {
   // Proxy methods for backward compatibility with tests
   findAICLICommand() {
     return AICLIConfig.findAICLICommand();
-  }
-
-  calculateTimeoutForCommand(command) {
-    return AICLIConfig.calculateTimeoutForCommand(command);
   }
 
   isPermissionPrompt(message) {

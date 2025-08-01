@@ -2,7 +2,7 @@ import Foundation
 
 /// Parser for Claude's structured output
 /// Detects and extracts user-facing content from Claude's JSON responses
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 class ClaudeOutputParser {
     
     /// Attempts to parse Claude's JSON output and extract the user-facing content

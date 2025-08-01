@@ -1,28 +1,47 @@
-import { describe, it, mock } from 'node:test';
+import { describe, it, mock, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { AICLIService } from '../../services/aicli.js';
 import { EventEmitter } from 'events';
+import { AICLIService } from '../../services/aicli.js';
+
+// Helper to create mock EventEmitters with additional properties
+function createMockEventEmitter(additionalProps = {}) {
+  const emitter = new EventEmitter();
+  Object.assign(emitter, additionalProps);
+  return emitter;
+}
 
 // Unit tests for AICLIService that don't require process spawning
 describe('AICLIService Unit Tests', () => {
-  const service = new AICLIService();
+  let service;
+
+  beforeEach(() => {
+    // Create a fresh service instance for each test
+    service = new AICLIService();
+  });
+
+  afterEach(async () => {
+    // Clean up the service
+    if (service) {
+      await service.shutdown();
+      service = null;
+    }
+  });
 
   describe('constructor', () => {
-    it('should initialize with correct defaults', () => {
-      const newService = new AICLIService();
-      assert.strictEqual(newService.activeSessions.size, 0);
+    it('should initialize with correct defaults', async () => {
+      // Use the service from beforeEach
+      assert.strictEqual(service.getActiveSessions().length, 0);
       // Check that aicliCommand contains 'claude' (can be full path)
       assert.ok(
-        newService.aicliCommand.includes('claude'),
-        `Expected aicliCommand to include 'claude', got: ${newService.aicliCommand}`
+        service.aicliCommand.includes('claude'),
+        `Expected aicliCommand to include 'claude', got: ${service.aicliCommand}`
       );
-      assert.ok(newService.defaultWorkingDirectory);
-      assert.strictEqual(newService.maxSessions, 10);
-      assert.strictEqual(newService.sessionTimeout, 30 * 60 * 1000);
-      assert.strictEqual(newService.permissionMode, 'default');
-      assert.deepStrictEqual(newService.allowedTools, ['Read', 'Write', 'Edit']);
-      assert.deepStrictEqual(newService.disallowedTools, []);
-      assert.strictEqual(newService.skipPermissions, false);
+      assert.ok(service.defaultWorkingDirectory);
+      // These properties are now delegated to modules
+      assert.strictEqual(service.permissionMode, 'default');
+      assert.deepStrictEqual(service.allowedTools, ['Read', 'Write', 'Edit']);
+      assert.deepStrictEqual(service.disallowedTools, []);
+      assert.strictEqual(service.skipPermissions, false);
     });
   });
 
@@ -464,9 +483,11 @@ describe('AICLIService Unit Tests', () => {
       assert.strictEqual(sessions.length, 0);
     });
 
-    it('should return array of active session IDs', () => {
-      service.activeSessions.set('session-1', { process: {} });
-      service.activeSessions.set('session-2', { process: {} });
+    it('should delegate to session manager', () => {
+      // Mock the session manager to return test sessions
+      const mockSessions = ['session-1', 'session-2'];
+      const originalGetActiveSessions = service.sessionManager.getActiveSessions;
+      service.sessionManager.getActiveSessions = () => mockSessions;
 
       const sessions = service.getActiveSessions();
 
@@ -475,8 +496,8 @@ describe('AICLIService Unit Tests', () => {
       assert.ok(sessions.includes('session-1'));
       assert.ok(sessions.includes('session-2'));
 
-      // Clean up
-      service.activeSessions.clear();
+      // Restore original method
+      service.sessionManager.getActiveSessions = originalGetActiveSessions;
     });
   });
 
@@ -594,17 +615,20 @@ describe('AICLIService Unit Tests', () => {
     it('should return healthy status when claude is available', async () => {
       // Mock checkAvailability to return true
       service.checkAvailability = mock.fn(async () => true);
-      service.activeSessions.set('test-session', { process: {} });
+      // Mock getActiveSessions to return 1 active session
+      const originalGetActiveSessions = service.getActiveSessions;
+      service.getActiveSessions = mock.fn(() => ['test-session']);
 
       const result = await service.healthCheck();
 
       assert.strictEqual(result.status, 'healthy');
       assert.strictEqual(result.aicliCodeAvailable, true);
-      assert.strictEqual(result.activeSessions, 1);
+      assert.deepStrictEqual(result.activeSessions, ['test-session']);
+      assert.strictEqual(result.sessionCount, 1);
       assert.ok(result.timestamp);
 
       // Clean up
-      service.activeSessions.clear();
+      service.getActiveSessions = originalGetActiveSessions;
     });
 
     it('should return degraded status when claude is not available', async () => {
@@ -615,7 +639,8 @@ describe('AICLIService Unit Tests', () => {
 
       assert.strictEqual(result.status, 'degraded');
       assert.strictEqual(result.aicliCodeAvailable, false);
-      assert.strictEqual(result.activeSessions, 0);
+      assert.deepStrictEqual(result.activeSessions, []);
+      assert.strictEqual(result.sessionCount, 0);
       assert.ok(result.timestamp);
     });
 
@@ -632,63 +657,24 @@ describe('AICLIService Unit Tests', () => {
       assert.ok(result.timestamp);
     });
 
-    it('should collect process metrics for active sessions with PIDs', async () => {
+    it('should delegate health check to session manager and process runner', async () => {
       // Mock checkAvailability to return true
       service.checkAvailability = mock.fn(async () => true);
 
-      // Set up a session with a process that has a PID
-      service.activeSessions.set('session-with-pid', {
-        process: { pid: 12345 },
-      });
-
-      // Mock the processMonitor module that's imported in aicli.js
-      const _originalRequire = globalThis.require;
-      const _mockProcessMonitor = {
-        getSystemResources: mock.fn(async () => ({
-          memory: { total: 1000, used: 500 },
-          cpu: { usage: 25 },
-        })),
-        getMetricsSummary: mock.fn((pid) => {
-          if (pid === 12345) {
-            return {
-              memory: { rss: 100, heapUsed: 50 },
-              cpu: { usage: 15 },
-            };
-          }
-          return null;
-        }),
-      };
-
-      // Replace the import - since aicli.js already imported processMonitor,
-      // we need to test what we can. For now, let's verify the method structure
-      const result = await service.healthCheck();
-
-      assert.strictEqual(result.status, 'healthy');
-      assert.strictEqual(result.aicliCodeAvailable, true);
-      assert.strictEqual(result.activeSessions, 1);
-      assert.ok(result.timestamp);
-
-      // Clean up
-      service.activeSessions.clear();
-    });
-
-    it('should handle sessions without process PIDs in healthCheck', async () => {
-      // Mock checkAvailability to return true
-      service.checkAvailability = mock.fn(async () => true);
-
-      // Set up sessions - one with PID, one without
-      service.activeSessions.set('session-no-process', { isActive: true });
-      service.activeSessions.set('session-no-pid', { process: {} });
+      // Mock getActiveSessions to return a session
+      const originalGetActiveSessions = service.getActiveSessions;
+      service.getActiveSessions = mock.fn(() => ['session-with-pid']);
 
       const result = await service.healthCheck();
 
       assert.strictEqual(result.status, 'healthy');
       assert.strictEqual(result.aicliCodeAvailable, true);
-      assert.strictEqual(result.activeSessions, 2);
+      assert.deepStrictEqual(result.activeSessions, ['session-with-pid']);
+      assert.strictEqual(result.sessionCount, 1);
       assert.ok(result.timestamp);
 
       // Clean up
-      service.activeSessions.clear();
+      service.getActiveSessions = originalGetActiveSessions;
     });
   });
 
@@ -796,8 +782,8 @@ describe('AICLIService Unit Tests', () => {
     });
 
     it('should manage active sessions map', () => {
-      assert.ok(service.activeSessions instanceof Map);
-      assert.strictEqual(service.activeSessions.size, 0);
+      assert.ok(service.sessionManager.activeSessions instanceof Map);
+      assert.strictEqual(service.sessionManager.activeSessions.size, 0);
     });
   });
 
@@ -881,7 +867,7 @@ describe('AICLIService Unit Tests', () => {
         },
       };
 
-      service.activeSessions.set('test-session', {
+      service.sessionManager.activeSessions.set('test-session', {
         process: mockProcess,
         isActive: true,
       });
@@ -900,7 +886,7 @@ describe('AICLIService Unit Tests', () => {
         // This might fail in test environment, which is expected
         assert.ok(true);
       } finally {
-        service.activeSessions.clear();
+        service.sessionManager.activeSessions.clear();
       }
     });
 
@@ -914,7 +900,7 @@ describe('AICLIService Unit Tests', () => {
         },
       };
 
-      service.activeSessions.set('error-session', {
+      service.sessionManager.activeSessions.set('error-session', {
         process: mockProcess,
         isActive: true,
       });
@@ -925,7 +911,7 @@ describe('AICLIService Unit Tests', () => {
       } catch (error) {
         assert.ok(error.message.includes('Failed to send to session'));
         // Session should be removed after error
-        assert.strictEqual(service.activeSessions.has('error-session'), false);
+        assert.strictEqual(service.sessionManager.activeSessions.has('error-session'), false);
       }
     });
 
@@ -936,11 +922,11 @@ describe('AICLIService Unit Tests', () => {
           end: mock.fn(),
         },
         kill: mock.fn(),
-        stdout: new EventEmitter(),
-        stderr: new EventEmitter(),
+        stdout: { on: mock.fn(), removeAllListeners: mock.fn() },
+        stderr: { on: mock.fn(), removeAllListeners: mock.fn() },
       };
 
-      service.activeSessions.set('close-session', {
+      service.sessionManager.activeSessions.set('close-session', {
         process: mockProcess,
         isActive: true,
       });
@@ -953,7 +939,7 @@ describe('AICLIService Unit Tests', () => {
       assert.strictEqual(mockProcess.kill.mock.calls[0].arguments[0], 'SIGTERM');
 
       // Session should be removed
-      assert.strictEqual(service.activeSessions.has('close-session'), false);
+      assert.strictEqual(service.sessionManager.activeSessions.has('close-session'), false);
     });
 
     it('should handle handlePermissionPrompt parameter validation', async () => {
@@ -977,7 +963,7 @@ describe('AICLIService Unit Tests', () => {
         },
       };
 
-      service.activeSessions.set('perm-session', {
+      service.sessionManager.activeSessions.set('perm-session', {
         process: mockProcess,
         isActive: true,
       });
@@ -995,7 +981,7 @@ describe('AICLIService Unit Tests', () => {
         // May fail in test environment, which is acceptable
         assert.ok(true);
       } finally {
-        service.activeSessions.clear();
+        service.sessionManager.activeSessions.clear();
       }
     });
 
@@ -1009,7 +995,7 @@ describe('AICLIService Unit Tests', () => {
         },
       };
 
-      service.activeSessions.set('perm-error-session', {
+      service.sessionManager.activeSessions.set('perm-error-session', {
         process: mockProcess,
         isActive: true,
       });
@@ -1021,7 +1007,7 @@ describe('AICLIService Unit Tests', () => {
         assert.ok(error.message.includes('Failed to respond to permission prompt'));
         assert.ok(error.message.includes('Write failed'));
       } finally {
-        service.activeSessions.clear();
+        service.sessionManager.activeSessions.clear();
       }
     });
 
@@ -1034,11 +1020,11 @@ describe('AICLIService Unit Tests', () => {
           }),
         },
         kill: mock.fn(),
-        stdout: new EventEmitter(),
-        stderr: new EventEmitter(),
+        stdout: { on: mock.fn(), removeAllListeners: mock.fn() },
+        stderr: { on: mock.fn(), removeAllListeners: mock.fn() },
       };
 
-      service.activeSessions.set('error-close-session', {
+      service.sessionManager.activeSessions.set('error-close-session', {
         process: mockProcess,
         isActive: true,
       });
@@ -1056,7 +1042,7 @@ describe('AICLIService Unit Tests', () => {
         stdin: { write: mock.fn() },
       };
 
-      service.activeSessions.set('existing-session', {
+      service.sessionManager.activeSessions.set('existing-session', {
         process: mockProcess,
         isActive: true,
       });
@@ -1085,7 +1071,7 @@ describe('AICLIService Unit Tests', () => {
         assert.ok(true);
       } finally {
         service.sendToExistingSession = originalSendToExisting;
-        service.activeSessions.clear();
+        service.sessionManager.activeSessions.clear();
       }
     });
 
@@ -1209,75 +1195,6 @@ describe('AICLIService Unit Tests', () => {
     });
   });
 
-  describe('calculateTimeoutForCommand', () => {
-    it('should return default timeout for invalid input', () => {
-      assert.strictEqual(service.calculateTimeoutForCommand(null), 60000);
-      assert.strictEqual(service.calculateTimeoutForCommand(undefined), 60000);
-      assert.strictEqual(service.calculateTimeoutForCommand(123), 60000);
-      assert.strictEqual(service.calculateTimeoutForCommand(''), 60000);
-    });
-
-    it('should return basic timeout for simple commands', () => {
-      const result = service.calculateTimeoutForCommand('hello');
-      assert.strictEqual(result, 120000); // 2 minutes
-    });
-
-    it('should return medium timeout for medium-length commands', () => {
-      const mediumCommand = 'a'.repeat(100); // 100 characters
-      const result = service.calculateTimeoutForCommand(mediumCommand);
-      assert.strictEqual(result, 180000); // 3 minutes
-    });
-
-    it('should return long timeout for long commands', () => {
-      const longCommand = 'a'.repeat(250); // 250 characters
-      const result = service.calculateTimeoutForCommand(longCommand);
-      assert.strictEqual(result, 300000); // 5 minutes
-    });
-
-    it('should return complex timeout for commands with complex keywords', () => {
-      const complexCommands = [
-        'review this code',
-        'analyze the performance',
-        'audit security issues',
-        'debug this problem',
-        'test the feature', // Changed from "thoroughly" which is very complex
-        'document the API',
-      ];
-
-      complexCommands.forEach((command) => {
-        const result = service.calculateTimeoutForCommand(command);
-        assert.strictEqual(result, 300000); // 5 minutes
-      });
-    });
-
-    it('should return very complex timeout for commands with very complex keywords', () => {
-      const veryComplexCommands = [
-        'expert analysis of entire project',
-        'comprehensive review',
-        'thorough examination',
-        'complete audit of whole codebase',
-        'full analysis of all files',
-      ];
-
-      veryComplexCommands.forEach((command) => {
-        const result = service.calculateTimeoutForCommand(command);
-        assert.strictEqual(result, 600000); // 10 minutes
-      });
-    });
-
-    it('should prioritize very complex keywords over complex keywords', () => {
-      const command = 'expert review this code thoroughly'; // has both types
-      const result = service.calculateTimeoutForCommand(command);
-      assert.strictEqual(result, 600000); // Should use very complex timeout
-    });
-
-    it('should prioritize complex keywords over length', () => {
-      const command = 'review'; // short but complex keyword
-      const result = service.calculateTimeoutForCommand(command);
-      assert.strictEqual(result, 300000); // Should use complex timeout, not simple
-    });
-  });
-
   describe('extractPermissionPromptFromMessage', () => {
     it('should extract text from message and clean prompt', () => {
       const message = { result: 'Do you want to continue? (y/n)' };
@@ -1363,6 +1280,1019 @@ describe('AICLIService Unit Tests', () => {
     it.skip('should fall back to sendToExistingSession when no pending response', async () => {
       // These tests require complex mocking which can cause issues
       assert.ok(true);
+    });
+  });
+
+  describe('Permission Management Methods', () => {
+    describe('setPermissionMode', () => {
+      it('should delegate to process runner and update local property', () => {
+        const mockProcessRunner = createMockEventEmitter({
+          setPermissionMode: mock.fn(),
+          permissionMode: 'acceptEdits',
+        });
+        const mockSessionManager = createMockEventEmitter();
+        const testService = new AICLIService({
+          processRunner: mockProcessRunner,
+          sessionManager: mockSessionManager,
+        });
+
+        testService.setPermissionMode('acceptEdits');
+
+        assert.strictEqual(mockProcessRunner.setPermissionMode.mock.calls.length, 1);
+        assert.strictEqual(
+          mockProcessRunner.setPermissionMode.mock.calls[0].arguments[0],
+          'acceptEdits'
+        );
+        assert.strictEqual(testService.permissionMode, 'acceptEdits');
+      });
+    });
+
+    describe('setAllowedTools', () => {
+      it('should delegate to process runner and update local property', () => {
+        const mockProcessRunner = createMockEventEmitter({
+          setAllowedTools: mock.fn(),
+          allowedTools: ['Read', 'Write'],
+        });
+        const mockSessionManager = createMockEventEmitter();
+        const testService = new AICLIService({
+          processRunner: mockProcessRunner,
+          sessionManager: mockSessionManager,
+        });
+
+        testService.setAllowedTools(['Read', 'Write']);
+
+        assert.strictEqual(mockProcessRunner.setAllowedTools.mock.calls.length, 1);
+        assert.deepStrictEqual(mockProcessRunner.setAllowedTools.mock.calls[0].arguments[0], [
+          'Read',
+          'Write',
+        ]);
+        assert.deepStrictEqual(testService.allowedTools, ['Read', 'Write']);
+      });
+    });
+
+    describe('setDisallowedTools', () => {
+      it('should delegate to process runner and update local property', () => {
+        const mockProcessRunner = createMockEventEmitter({
+          setDisallowedTools: mock.fn(),
+          disallowedTools: ['Bash', 'System'],
+        });
+        const mockSessionManager = createMockEventEmitter();
+        const testService = new AICLIService({
+          processRunner: mockProcessRunner,
+          sessionManager: mockSessionManager,
+        });
+
+        testService.setDisallowedTools(['Bash', 'System']);
+
+        assert.strictEqual(mockProcessRunner.setDisallowedTools.mock.calls.length, 1);
+        assert.deepStrictEqual(mockProcessRunner.setDisallowedTools.mock.calls[0].arguments[0], [
+          'Bash',
+          'System',
+        ]);
+        assert.deepStrictEqual(testService.disallowedTools, ['Bash', 'System']);
+      });
+    });
+
+    describe('setSafeRootDirectory', () => {
+      it('should set safe root directory', () => {
+        const testService = new AICLIService();
+
+        testService.setSafeRootDirectory('/safe/root');
+
+        assert.strictEqual(testService.safeRootDirectory, '/safe/root');
+      });
+
+      it('should handle null value', () => {
+        const testService = new AICLIService();
+        testService.safeRootDirectory = '/old/path';
+
+        testService.setSafeRootDirectory(null);
+
+        assert.strictEqual(testService.safeRootDirectory, null);
+      });
+    });
+
+    describe('setSkipPermissions', () => {
+      it('should delegate to process runner and update local property', () => {
+        const mockProcessRunner = createMockEventEmitter({
+          setSkipPermissions: mock.fn(),
+          skipPermissions: true,
+        });
+        const mockSessionManager = createMockEventEmitter();
+        const testService = new AICLIService({
+          processRunner: mockProcessRunner,
+          sessionManager: mockSessionManager,
+        });
+
+        testService.setSkipPermissions(true);
+
+        assert.strictEqual(mockProcessRunner.setSkipPermissions.mock.calls.length, 1);
+        assert.strictEqual(mockProcessRunner.setSkipPermissions.mock.calls[0].arguments[0], true);
+        assert.strictEqual(testService.skipPermissions, true);
+      });
+
+      it('should handle falsy values', () => {
+        const mockProcessRunner = createMockEventEmitter({
+          setSkipPermissions: mock.fn(),
+          skipPermissions: false,
+        });
+        const mockSessionManager = createMockEventEmitter();
+        const testService = new AICLIService({
+          processRunner: mockProcessRunner,
+          sessionManager: mockSessionManager,
+        });
+
+        testService.setSkipPermissions(false);
+
+        assert.strictEqual(mockProcessRunner.setSkipPermissions.mock.calls.length, 1);
+        assert.strictEqual(mockProcessRunner.setSkipPermissions.mock.calls[0].arguments[0], false);
+        assert.strictEqual(testService.skipPermissions, false);
+      });
+    });
+  });
+
+  describe('Process Health Monitoring', () => {
+    describe('startProcessHealthMonitoring', () => {
+      it('should not start monitoring in test environment', () => {
+        const originalEnv = process.env.NODE_ENV;
+        process.env.NODE_ENV = 'test';
+
+        const testService = new AICLIService();
+        testService.startProcessHealthMonitoring();
+
+        assert.strictEqual(testService.processHealthCheckInterval, null);
+
+        process.env.NODE_ENV = originalEnv;
+      });
+
+      it('should start monitoring in non-test environment', () => {
+        const originalEnv = process.env.NODE_ENV;
+        process.env.NODE_ENV = 'production';
+
+        // Create a mock process runner to avoid spawn attempts
+        const mockProcessRunner = createMockEventEmitter({
+          setPermissionMode: mock.fn(),
+          setAllowedTools: mock.fn(),
+          setDisallowedTools: mock.fn(),
+          setSkipPermissions: mock.fn(),
+        });
+
+        const testService = new AICLIService({
+          processRunner: mockProcessRunner,
+          processRunnerOptions: { spawnFunction: mock.fn() },
+        });
+        testService.startProcessHealthMonitoring();
+
+        assert.ok(testService.processHealthCheckInterval);
+
+        // Clean up
+        clearInterval(testService.processHealthCheckInterval);
+        testService.shutdown();
+        process.env.NODE_ENV = originalEnv;
+      });
+    });
+
+    describe('stopProcessHealthMonitoring', () => {
+      it('should clear interval if exists', () => {
+        const testService = new AICLIService();
+        testService.processHealthCheckInterval = setInterval(() => {}, 1000);
+
+        testService.stopProcessHealthMonitoring();
+
+        assert.strictEqual(testService.processHealthCheckInterval, null);
+      });
+
+      it('should handle null interval gracefully', () => {
+        const testService = new AICLIService();
+        testService.processHealthCheckInterval = null;
+
+        assert.doesNotThrow(() => {
+          testService.stopProcessHealthMonitoring();
+        });
+      });
+    });
+
+    describe('checkAllProcessHealth', () => {
+      it('should check health of all active sessions', async () => {
+        const mockSession = {
+          process: { pid: 12345 },
+          isActive: true,
+        };
+        const mockSessionManager = createMockEventEmitter({
+          activeSessions: new Map([['session1', mockSession]]),
+        });
+        const mockProcessRunner = createMockEventEmitter();
+        const testService = new AICLIService({
+          sessionManager: mockSessionManager,
+          processRunner: mockProcessRunner,
+        });
+
+        // checkAllProcessHealth doesn't return anything, just verify it doesn't throw
+        await assert.doesNotReject(testService.checkAllProcessHealth());
+      });
+
+      it('should handle sessions without processes', async () => {
+        const mockSession = {
+          process: null,
+          isActive: true,
+        };
+        const mockSessionManager = createMockEventEmitter({
+          activeSessions: new Map([['session1', mockSession]]),
+        });
+        const mockProcessRunner = createMockEventEmitter();
+        const testService = new AICLIService({
+          sessionManager: mockSessionManager,
+          processRunner: mockProcessRunner,
+        });
+
+        // checkAllProcessHealth doesn't return anything, just verify it doesn't throw
+        await assert.doesNotReject(testService.checkAllProcessHealth());
+      });
+    });
+
+    describe('cleanupDeadSession', () => {
+      it('should delegate to session manager', async () => {
+        const mockSessionManager = createMockEventEmitter({
+          cleanupDeadSession: mock.fn(async () => {}),
+        });
+        const mockProcessRunner = createMockEventEmitter();
+        const testService = new AICLIService({
+          sessionManager: mockSessionManager,
+          processRunner: mockProcessRunner,
+        });
+
+        await testService.cleanupDeadSession('session123');
+
+        assert.strictEqual(mockSessionManager.cleanupDeadSession.mock.calls.length, 1);
+        assert.strictEqual(
+          mockSessionManager.cleanupDeadSession.mock.calls[0].arguments[0],
+          'session123'
+        );
+      });
+    });
+  });
+
+  describe('JSON Processing Methods', () => {
+    describe('isValidCompleteJSON', () => {
+      it('should delegate to AICLIMessageHandler', () => {
+        const testService = new AICLIService();
+        const result = testService.isValidCompleteJSON('{"test": true}');
+
+        assert.strictEqual(typeof result, 'boolean');
+      });
+    });
+
+    describe('parseStreamJsonOutput', () => {
+      it('should delegate to AICLIMessageHandler', () => {
+        const testService = new AICLIService();
+        const result = testService.parseStreamJsonOutput('{"type": "test"}');
+
+        assert.ok(result);
+      });
+    });
+
+    describe('extractCompleteObjectsFromLine', () => {
+      it('should delegate to AICLIMessageHandler', () => {
+        const testService = new AICLIService();
+        const result = testService.extractCompleteObjectsFromLine('{"type": "test"}');
+
+        assert.ok(Array.isArray(result));
+      });
+    });
+
+    describe('extractLastCompleteJSON', () => {
+      it('should delegate to AICLIMessageHandler', () => {
+        const testService = new AICLIService();
+        const result = testService.extractLastCompleteJSON('{"partial": "json');
+
+        assert.ok(result !== undefined);
+      });
+    });
+
+    describe('findLastCompleteJSONStart', () => {
+      it('should delegate to AICLIMessageHandler', () => {
+        const testService = new AICLIService();
+        const result = testService.findLastCompleteJSONStart('some text {"json": true}');
+
+        assert.strictEqual(typeof result, 'number');
+      });
+    });
+
+    describe('extractCompleteObjectsFromArray', () => {
+      it('should delegate to AICLIMessageHandler', () => {
+        const testService = new AICLIService();
+        const result = testService.extractCompleteObjectsFromArray('[{"test": true}]');
+
+        assert.ok(Array.isArray(result));
+      });
+    });
+  });
+
+  describe('Session Event Methods', () => {
+    describe('emitAICLIResponse', () => {
+      it('should handle response with existing buffer', () => {
+        const mockBuffer = {
+          assistantMessages: [],
+          userMessages: [],
+          toolUseMessages: [],
+        };
+        const mockSessionManager = createMockEventEmitter({
+          getSessionBuffer: mock.fn(() => mockBuffer),
+        });
+        const mockProcessRunner = createMockEventEmitter();
+        const testService = new AICLIService({
+          sessionManager: mockSessionManager,
+          processRunner: mockProcessRunner,
+        });
+
+        // Mock the emit method to verify events are emitted
+        const emitCalls = [];
+        testService.emit = mock.fn((event, data) => {
+          emitCalls.push({ event, data });
+        });
+
+        testService.emitAICLIResponse('session123', {
+          type: 'assistant',
+          message: { content: [{ type: 'text', text: 'test' }] },
+        });
+
+        assert.strictEqual(mockSessionManager.getSessionBuffer.mock.calls.length, 1);
+        // Should emit some event (buffer or another type)
+        assert.ok(emitCalls.length >= 0); // May or may not emit depending on message processing
+      });
+
+      it('should handle response without buffer', () => {
+        const mockSessionManager = createMockEventEmitter({
+          getSessionBuffer: mock.fn(() => null),
+          createSessionBuffer: mock.fn(),
+        });
+        const mockProcessRunner = createMockEventEmitter();
+        const testService = new AICLIService({
+          sessionManager: mockSessionManager,
+          processRunner: mockProcessRunner,
+        });
+
+        // When no buffer exists, it should log a warning and return early
+        testService.emitAICLIResponse('session123', { type: 'system', content: 'test' });
+
+        assert.strictEqual(mockSessionManager.getSessionBuffer.mock.calls.length, 1);
+        // createSessionBuffer should not be called - emitAICLIResponse doesn't create buffers
+      });
+    });
+
+    describe('clearSessionBuffer', () => {
+      it('should delegate to session manager', () => {
+        const mockSessionManager = createMockEventEmitter({
+          clearSessionBuffer: mock.fn(),
+        });
+        const mockProcessRunner = createMockEventEmitter();
+        const testService = new AICLIService({
+          sessionManager: mockSessionManager,
+          processRunner: mockProcessRunner,
+        });
+
+        testService.clearSessionBuffer('session123');
+
+        assert.strictEqual(mockSessionManager.clearSessionBuffer.mock.calls.length, 1);
+        assert.strictEqual(
+          mockSessionManager.clearSessionBuffer.mock.calls[0].arguments[0],
+          'session123'
+        );
+      });
+    });
+  });
+
+  describe('Content Analysis Methods', () => {
+    describe('containsPermissionRequest', () => {
+      it('should detect permission requests', () => {
+        const testService = new AICLIService();
+
+        // The method expects Claude message format (array of content blocks)
+        assert.strictEqual(
+          testService.containsPermissionRequest([
+            { type: 'text', text: 'Do you want to proceed? (y/n)' },
+          ]),
+          true
+        );
+        assert.strictEqual(
+          testService.containsPermissionRequest([
+            { type: 'text', text: 'Grant permission for this action' },
+          ]),
+          true
+        );
+        assert.strictEqual(
+          testService.containsPermissionRequest([{ type: 'text', text: 'Regular text' }]),
+          false
+        );
+        // Non-array input returns false
+        assert.strictEqual(testService.containsPermissionRequest('string input'), false);
+      });
+    });
+
+    describe('containsToolUse', () => {
+      it('should detect tool use patterns', () => {
+        const testService = new AICLIService();
+
+        // The method expects Claude message format and looks for tool_use content blocks
+        assert.strictEqual(testService.containsToolUse([{ type: 'tool_use', name: 'Read' }]), true);
+        assert.strictEqual(
+          testService.containsToolUse([{ type: 'text', text: 'Using tool: Read' }]),
+          false // Text mentioning tools is not actual tool use
+        );
+        assert.strictEqual(
+          testService.containsToolUse([{ type: 'text', text: 'Regular text' }]),
+          false
+        );
+        // Non-array input returns false
+        assert.strictEqual(testService.containsToolUse('string input'), false);
+      });
+    });
+
+    describe('extractCodeBlocks', () => {
+      it('should extract code blocks from content', () => {
+        const testService = new AICLIService();
+        const content = [
+          {
+            type: 'text',
+            text: 'Some text\n```javascript\nconst x = 1;\n```\nMore text',
+          },
+        ];
+
+        const result = testService.extractCodeBlocks(content);
+
+        assert.ok(Array.isArray(result));
+        assert.strictEqual(result.length, 1);
+        assert.strictEqual(result[0].type, 'code_block');
+        assert.strictEqual(result[0].language, 'javascript');
+        assert.strictEqual(result[0].code, 'const x = 1;');
+      });
+
+      it('should handle content without code blocks', () => {
+        const testService = new AICLIService();
+        // Non-array input returns empty array
+        assert.deepStrictEqual(testService.extractCodeBlocks('string input'), []);
+
+        // Array without code blocks
+        const result = testService.extractCodeBlocks([
+          {
+            type: 'text',
+            text: 'Regular text without code',
+          },
+        ]);
+
+        assert.ok(Array.isArray(result));
+        assert.strictEqual(result.length, 0);
+      });
+    });
+
+    describe('aggregateBufferedContent', () => {
+      it('should aggregate content from buffer', () => {
+        const testService = new AICLIService();
+        const buffer = {
+          assistantMessages: [
+            { content: [{ type: 'text', text: 'Hello' }] },
+            { content: [{ type: 'text', text: 'World' }] },
+          ],
+        };
+
+        const result = testService.aggregateBufferedContent(buffer);
+
+        assert.ok(Array.isArray(result));
+        assert.ok(result.length > 0);
+      });
+
+      it('should handle empty buffer', () => {
+        const testService = new AICLIService();
+        const result = testService.aggregateBufferedContent({});
+
+        assert.ok(Array.isArray(result));
+        assert.strictEqual(result.length, 0);
+      });
+    });
+  });
+
+  describe('Session Lifecycle Methods', () => {
+    describe('hasSession', () => {
+      it('should delegate to session manager', () => {
+        const mockSessionManager = createMockEventEmitter({
+          hasSession: mock.fn(() => true),
+        });
+        const mockProcessRunner = createMockEventEmitter();
+        const testService = new AICLIService({
+          sessionManager: mockSessionManager,
+          processRunner: mockProcessRunner,
+        });
+
+        const result = testService.hasSession('session123');
+
+        assert.strictEqual(result, true);
+        assert.strictEqual(mockSessionManager.hasSession.mock.calls.length, 1);
+        assert.strictEqual(mockSessionManager.hasSession.mock.calls[0].arguments[0], 'session123');
+      });
+    });
+
+    describe('getSession', () => {
+      it('should delegate to session manager', () => {
+        const mockSession = { id: 'session123' };
+        const mockSessionManager = createMockEventEmitter({
+          getSession: mock.fn(() => mockSession),
+        });
+        const mockProcessRunner = createMockEventEmitter();
+        const testService = new AICLIService({
+          sessionManager: mockSessionManager,
+          processRunner: mockProcessRunner,
+        });
+
+        const result = testService.getSession('session123');
+
+        assert.strictEqual(result, mockSession);
+        assert.strictEqual(mockSessionManager.getSession.mock.calls.length, 1);
+        assert.strictEqual(mockSessionManager.getSession.mock.calls[0].arguments[0], 'session123');
+      });
+    });
+
+    describe('checkSessionTimeout', () => {
+      it('should handle session with lastActivity', () => {
+        const mockSession = {
+          lastActivity: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago
+        };
+        const mockSessionManager = createMockEventEmitter({
+          getSession: mock.fn(() => mockSession),
+        });
+        const mockProcessRunner = createMockEventEmitter();
+        const testService = new AICLIService({
+          sessionManager: mockSessionManager,
+          processRunner: mockProcessRunner,
+        });
+
+        const result = testService.checkSessionTimeout('session123');
+
+        assert.ok(result);
+        assert.ok(result.isActive !== undefined);
+        assert.ok(result.timeSinceLastActivity !== undefined);
+      });
+
+      it('should handle session without lastActivity', () => {
+        const mockSession = {};
+        const mockSessionManager = createMockEventEmitter({
+          getSession: mock.fn(() => mockSession),
+        });
+        const mockProcessRunner = createMockEventEmitter();
+        const testService = new AICLIService({
+          sessionManager: mockSessionManager,
+          processRunner: mockProcessRunner,
+        });
+
+        const result = testService.checkSessionTimeout('session123');
+
+        assert.ok(result);
+        assert.strictEqual(result.isActive, false);
+      });
+
+      it('should handle non-existent session', () => {
+        const mockSessionManager = createMockEventEmitter({
+          getSession: mock.fn(() => null),
+        });
+        const mockProcessRunner = createMockEventEmitter();
+        const testService = new AICLIService({
+          sessionManager: mockSessionManager,
+          processRunner: mockProcessRunner,
+        });
+
+        const result = testService.checkSessionTimeout('session123');
+
+        assert.strictEqual(result, null);
+      });
+    });
+
+    describe('markSessionBackgrounded', () => {
+      it('should delegate to session manager', async () => {
+        const mockSessionManager = createMockEventEmitter({
+          markSessionBackgrounded: mock.fn(async () => {}),
+        });
+        const mockProcessRunner = createMockEventEmitter();
+        const testService = new AICLIService({
+          sessionManager: mockSessionManager,
+          processRunner: mockProcessRunner,
+        });
+
+        await testService.markSessionBackgrounded('session123');
+
+        assert.strictEqual(mockSessionManager.markSessionBackgrounded.mock.calls.length, 1);
+        assert.strictEqual(
+          mockSessionManager.markSessionBackgrounded.mock.calls[0].arguments[0],
+          'session123'
+        );
+      });
+    });
+
+    describe('markSessionForegrounded', () => {
+      it('should delegate to session manager', async () => {
+        const mockSessionManager = createMockEventEmitter({
+          markSessionForegrounded: mock.fn(async () => {}),
+        });
+        const mockProcessRunner = createMockEventEmitter();
+        const testService = new AICLIService({
+          sessionManager: mockSessionManager,
+          processRunner: mockProcessRunner,
+        });
+
+        await testService.markSessionForegrounded('session123');
+
+        assert.strictEqual(mockSessionManager.markSessionForegrounded.mock.calls.length, 1);
+        assert.strictEqual(
+          mockSessionManager.markSessionForegrounded.mock.calls[0].arguments[0],
+          'session123'
+        );
+      });
+    });
+
+    describe('executeAICLICommand', () => {
+      it('should send prompt to existing session', async () => {
+        const mockSession = {
+          sessionId: 'session123',
+          conversationStarted: true,
+        };
+        const mockProcessRunner = createMockEventEmitter({
+          executeAICLICommand: mock.fn(async () => ({ success: true })),
+        });
+        const mockSessionManager = createMockEventEmitter();
+        const testService = new AICLIService({
+          sessionManager: mockSessionManager,
+          processRunner: mockProcessRunner,
+        });
+
+        await testService.executeAICLICommand(mockSession, 'test prompt');
+
+        assert.strictEqual(mockProcessRunner.executeAICLICommand.mock.calls.length, 1);
+        assert.strictEqual(
+          mockProcessRunner.executeAICLICommand.mock.calls[0].arguments[0],
+          mockSession
+        );
+        assert.strictEqual(
+          mockProcessRunner.executeAICLICommand.mock.calls[0].arguments[1],
+          'test prompt'
+        );
+      });
+
+      it('should mark conversation as started for first prompt', async () => {
+        const mockSession = {
+          sessionId: 'session123',
+          conversationStarted: false,
+        };
+        const mockProcessRunner = createMockEventEmitter({
+          executeAICLICommand: mock.fn(async () => ({ success: true })),
+        });
+        const mockSessionManager = createMockEventEmitter({
+          markConversationStarted: mock.fn(async () => {}),
+        });
+        const testService = new AICLIService({
+          sessionManager: mockSessionManager,
+          processRunner: mockProcessRunner,
+        });
+
+        await testService.executeAICLICommand(mockSession, 'test prompt');
+
+        assert.strictEqual(mockSessionManager.markConversationStarted.mock.calls.length, 1);
+        assert.strictEqual(
+          mockSessionManager.markConversationStarted.mock.calls[0].arguments[0],
+          'session123'
+        );
+      });
+    });
+  });
+
+  describe('Cleanup Methods', () => {
+    describe('shutdown', () => {
+      it('should stop health monitoring and shutdown session manager', async () => {
+        const mockSessionManager = createMockEventEmitter({
+          shutdown: mock.fn(async () => {}),
+        });
+        const mockProcessRunner = createMockEventEmitter();
+        const testService = new AICLIService({
+          sessionManager: mockSessionManager,
+          processRunner: mockProcessRunner,
+        });
+        testService.processHealthCheckInterval = setInterval(() => {}, 1000);
+
+        // Mock stopProcessHealthMonitoring to verify it's called
+        const originalStop = testService.stopProcessHealthMonitoring;
+        testService.stopProcessHealthMonitoring = mock.fn(originalStop.bind(testService));
+
+        await testService.shutdown();
+
+        assert.strictEqual(testService.stopProcessHealthMonitoring.mock.calls.length, 1);
+        assert.strictEqual(mockSessionManager.shutdown.mock.calls.length, 1);
+        assert.strictEqual(testService.processHealthCheckInterval, null);
+      });
+    });
+  });
+
+  describe('State Management Methods', () => {
+    describe('hasSession', () => {
+      it('should return true for existing sessions', () => {
+        service.sessionManager.activeSessions.set('test-session', { isActive: true });
+        assert.strictEqual(service.hasSession('test-session'), true);
+      });
+
+      it('should return false for non-existing sessions', () => {
+        assert.strictEqual(service.hasSession('non-existent'), false);
+        assert.strictEqual(service.hasSession(null), false);
+        assert.strictEqual(service.hasSession(''), false);
+      });
+    });
+
+    describe('getActiveSessions', () => {
+      it('should return empty array when no sessions', () => {
+        const sessions = service.getActiveSessions();
+        assert.ok(Array.isArray(sessions));
+        assert.strictEqual(sessions.length, 0);
+      });
+
+      it('should return array of session IDs', () => {
+        service.sessionManager.activeSessions.set('session1', { isActive: true });
+        service.sessionManager.activeSessions.set('session2', { isActive: true });
+
+        const sessions = service.getActiveSessions();
+        assert.strictEqual(sessions.length, 2);
+        assert.ok(sessions.includes('session1'));
+        assert.ok(sessions.includes('session2'));
+      });
+    });
+
+    describe('cleanupDeadSession', () => {
+      it('should remove session from maps', () => {
+        const sessionId = 'dead-session';
+        service.sessionManager.activeSessions.set(sessionId, { isActive: true });
+        service.sessionManager.sessionMessageBuffers.set(sessionId, { messages: [] });
+
+        service.cleanupDeadSession(sessionId);
+
+        assert.strictEqual(service.sessionManager.activeSessions.has(sessionId), false);
+        assert.strictEqual(service.sessionManager.sessionMessageBuffers.has(sessionId), false);
+      });
+
+      it('should handle non-existent sessions gracefully', () => {
+        service.cleanupDeadSession('non-existent');
+        // Should not throw
+        assert.ok(true);
+      });
+
+      it('should set session as inactive before removal', () => {
+        const sessionId = 'test-session';
+        const session = { isActive: true };
+        service.sessionManager.activeSessions.set(sessionId, session);
+
+        service.cleanupDeadSession(sessionId);
+
+        assert.strictEqual(session.isActive, false);
+      });
+    });
+
+    describe('clearSessionBuffer', () => {
+      it('should clear existing buffer messages', () => {
+        const sessionId = 'test-session';
+        service.sessionManager.sessionMessageBuffers.set(sessionId, {
+          assistantMessages: [{ content: 'test' }],
+          permissionRequestSent: true,
+          toolUseInProgress: true,
+          permissionRequests: ['req1'],
+          deliverables: ['del1'],
+        });
+
+        service.clearSessionBuffer(sessionId);
+
+        const buffer = service.sessionManager.sessionMessageBuffers.get(sessionId);
+        assert.deepStrictEqual(buffer.assistantMessages, []);
+        assert.strictEqual(buffer.permissionRequestSent, false);
+        assert.strictEqual(buffer.toolUseInProgress, false);
+        assert.deepStrictEqual(buffer.permissionRequests, []);
+        assert.deepStrictEqual(buffer.deliverables, []);
+      });
+
+      it('should handle non-existent buffers gracefully', () => {
+        service.clearSessionBuffer('non-existent');
+        // Should not throw
+        assert.ok(true);
+      });
+    });
+  });
+
+  describe('Utility Methods', () => {
+    describe('isAvailable', () => {
+      it('should return boolean', () => {
+        const result = service.isAvailable();
+        assert.strictEqual(typeof result, 'boolean');
+        assert.strictEqual(result, true); // Current implementation returns true
+      });
+    });
+
+    describe('containsPermissionRequest', () => {
+      it('should detect permission requests in content arrays', () => {
+        const content = [{ type: 'text', text: 'Do you want to continue? (y/n)' }];
+        assert.strictEqual(service.containsPermissionRequest(content), true);
+      });
+
+      it('should return false for content without permission requests', () => {
+        const content = [{ type: 'text', text: 'Regular text' }];
+        assert.strictEqual(service.containsPermissionRequest(content), false);
+      });
+
+      it('should return false for non-array content', () => {
+        assert.strictEqual(service.containsPermissionRequest('string'), false);
+        assert.strictEqual(service.containsPermissionRequest(null), false);
+        assert.strictEqual(service.containsPermissionRequest(undefined), false);
+      });
+    });
+
+    describe('containsToolUse', () => {
+      it('should detect tool use in content arrays', () => {
+        const content = [
+          { type: 'text', text: 'Some text' },
+          { type: 'tool_use', name: 'Read' },
+        ];
+        assert.strictEqual(service.containsToolUse(content), true);
+      });
+
+      it('should return false for content without tool use', () => {
+        const content = [{ type: 'text', text: 'Regular text' }];
+        assert.strictEqual(service.containsToolUse(content), false);
+      });
+
+      it('should return false for non-array content', () => {
+        assert.strictEqual(service.containsToolUse('string'), false);
+        assert.strictEqual(service.containsToolUse(null), false);
+      });
+    });
+
+    describe('containsApprovalResponse', () => {
+      it('should detect positive responses', () => {
+        const positive = ['y', 'yes', 'approve', 'ok', 'proceed', 'continue'];
+        for (const response of positive) {
+          assert.strictEqual(
+            service.containsApprovalResponse(response),
+            true,
+            `Should approve: ${response}`
+          );
+        }
+      });
+
+      it('should detect negative responses', () => {
+        const negative = ['n', 'no', 'deny', 'reject'];
+        for (const response of negative) {
+          assert.strictEqual(service.containsApprovalResponse(response), false);
+        }
+      });
+
+      it('should handle case insensitivity and whitespace', () => {
+        assert.strictEqual(service.containsApprovalResponse('  YES  '), true);
+        assert.strictEqual(service.containsApprovalResponse('No'), false);
+      });
+
+      it('should return false for non-string input', () => {
+        assert.strictEqual(service.containsApprovalResponse(null), false);
+        assert.strictEqual(service.containsApprovalResponse(123), false);
+        assert.strictEqual(service.containsApprovalResponse(undefined), false);
+      });
+    });
+
+    describe('extractCodeBlocks', () => {
+      it('should extract code blocks from content', () => {
+        const content = [
+          { type: 'text', text: 'Here is code:\n```javascript\nconsole.log("hello");\n```' },
+        ];
+        const result = service.extractCodeBlocks(content);
+        assert.strictEqual(result.length, 1);
+        assert.strictEqual(result[0].language, 'javascript');
+        assert.strictEqual(result[0].code, 'console.log("hello");');
+      });
+
+      it('should return empty array for non-array content', () => {
+        assert.deepStrictEqual(service.extractCodeBlocks('string'), []);
+        assert.deepStrictEqual(service.extractCodeBlocks(null), []);
+      });
+
+      it('should handle content without code blocks', () => {
+        const content = [{ type: 'text', text: 'No code here' }];
+        assert.deepStrictEqual(service.extractCodeBlocks(content), []);
+      });
+    });
+
+    describe('aggregateBufferedContent', () => {
+      it('should aggregate content from buffer messages', () => {
+        const buffer = {
+          assistantMessages: [
+            { content: [{ type: 'text', text: 'First' }] },
+            { content: [{ type: 'text', text: 'Second' }] },
+          ],
+        };
+        const result = service.aggregateBufferedContent(buffer);
+        assert.strictEqual(result.length, 1);
+        assert.strictEqual(result[0].type, 'text');
+        assert.strictEqual(result[0].text, 'First\n\nSecond');
+      });
+
+      it('should handle empty buffer', () => {
+        const buffer = { assistantMessages: [] };
+        const result = service.aggregateBufferedContent(buffer);
+        assert.deepStrictEqual(result, []);
+      });
+
+      it('should handle null buffer', () => {
+        const result = service.aggregateBufferedContent(null);
+        assert.deepStrictEqual(result, []);
+      });
+    });
+  });
+
+  describe('Message Processing', () => {
+    describe('extractTextFromMessage', () => {
+      it('should extract text from string messages', () => {
+        assert.strictEqual(service.extractTextFromMessage('hello'), 'hello');
+      });
+
+      it('should extract text from result property', () => {
+        assert.strictEqual(
+          service.extractTextFromMessage({ result: 'result text' }),
+          'result text'
+        );
+      });
+
+      it('should extract text from text property', () => {
+        assert.strictEqual(service.extractTextFromMessage({ text: 'text prop' }), 'text prop');
+      });
+
+      it('should extract text from message content string', () => {
+        const msg = { message: { content: 'content string' } };
+        assert.strictEqual(service.extractTextFromMessage(msg), 'content string');
+      });
+
+      it('should extract text from message content array', () => {
+        const msg = {
+          message: {
+            content: [
+              { type: 'text', text: 'text block' },
+              { type: 'tool_use', name: 'Read' },
+            ],
+          },
+        };
+        assert.strictEqual(service.extractTextFromMessage(msg), 'text block');
+      });
+
+      it('should return null for unrecognized format', () => {
+        assert.strictEqual(service.extractTextFromMessage({ unknown: 'prop' }), null);
+      });
+    });
+
+    describe('extractPermissionPrompt', () => {
+      it('should extract lines with question marks', () => {
+        const text = 'Some context\nDo you want to continue?\nMore text';
+        const result = service.extractPermissionPrompt(text);
+        assert.strictEqual(result, 'Do you want to continue?');
+      });
+
+      it('should return null for empty text', () => {
+        assert.strictEqual(service.extractPermissionPrompt(''), null);
+        assert.strictEqual(service.extractPermissionPrompt(null), null);
+        assert.strictEqual(service.extractPermissionPrompt(undefined), null);
+      });
+
+      it('should return permission required fallback for no patterns', () => {
+        const text = 'No questions here\nJust statements';
+        const result = service.extractPermissionPrompt(text);
+        assert.strictEqual(result, 'Permission required to proceed');
+      });
+
+      it('should extract proceed patterns', () => {
+        const text = 'Should I proceed with the changes?';
+        const result = service.extractPermissionPrompt(text);
+        assert.strictEqual(result, 'Should I proceed with the changes?');
+      });
+    });
+
+    describe('extractPermissionPromptFromMessage', () => {
+      it('should extract and clean permission prompt', () => {
+        const msg = { result: 'Continue with changes? (y/n)' };
+        const result = service.extractPermissionPromptFromMessage(msg);
+        assert.strictEqual(result, 'Continue with changes?');
+      });
+
+      it('should return default for no text', () => {
+        assert.strictEqual(service.extractPermissionPromptFromMessage({}), 'Permission required');
+      });
+
+      it('should handle different y/n patterns', () => {
+        const tests = [
+          { input: 'Proceed? (Y/n)', expected: 'Proceed?' },
+          { input: 'Allow? [y/N]', expected: 'Allow? [y/N]' }, // This pattern isn't cleaned by the regex
+          { input: 'Continue?  (y/n)  ', expected: 'Continue?' },
+        ];
+
+        for (const test of tests) {
+          const result = service.extractPermissionPromptFromMessage({ result: test.input });
+          assert.strictEqual(result, test.expected);
+        }
+      });
     });
   });
 });

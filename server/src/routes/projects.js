@@ -11,6 +11,17 @@ export function setupProjectRoutes(app, aicliService) {
   // Session management for active AICLI CLI processes
   const activeSessions = new Map();
 
+  // Listen for session cleanup events from AICLIService to keep our tracking in sync
+  aicliService.on('sessionCleaned', ({ sessionId, reason }) => {
+    if (activeSessions.has(sessionId)) {
+      activeSessions.delete(sessionId);
+      console.log(
+        `🧹 Cleaned up session ${sessionId} from projects.js tracking (reason: ${reason})`
+      );
+      console.log(`📊 Remaining project sessions: ${activeSessions.size}`);
+    }
+  });
+
   // Get the configured project directory from config
   const getProjectsDir = () => {
     return config.configPath;
@@ -171,9 +182,7 @@ export function setupProjectRoutes(app, aicliService) {
 
       // Generate a session ID for this project session or use existing
       const sessionId =
-        continueSession && existingSessionId
-          ? existingSessionId
-          : `project_${name}_${Date.now()}_${crypto.randomBytes(9).toString('hex')}`;
+        continueSession && existingSessionId ? existingSessionId : crypto.randomUUID();
 
       console.log(
         `${continueSession ? 'Continuing' : 'Starting'} AICLI CLI session for project: ${name}`
@@ -197,27 +206,140 @@ export function setupProjectRoutes(app, aicliService) {
       try {
         // Check if we're continuing an existing session
         if (continueSession && existingSessionId) {
-          // Check if session exists in active sessions
-          const existingSession = activeSessions.get(existingSessionId);
-          if (existingSession && existingSession.status === 'running') {
+          // First check if session exists in AICLI session manager
+          const sessionExists = aicliService.hasSession(existingSessionId);
+
+          if (sessionExists) {
+            // Get session metadata to check if conversation started
+            const sessionData = aicliService.getSession(existingSessionId);
+            console.log(
+              `🔍 Found existing session ${existingSessionId} (conversation started: ${sessionData?.conversationStarted || false})`
+            );
+
+            // Session exists in AICLI manager, check our local tracking
+            const existingSession = activeSessions.get(existingSessionId);
+
+            if (!existingSession) {
+              // Session exists in AICLI but not in our tracking - sync it
+              console.log(`🔄 Syncing session ${existingSessionId} with local tracking`);
+
+              const sessionInfo = {
+                sessionId: existingSessionId,
+                projectName: name,
+                projectPath,
+                status: 'running',
+                startedAt: sessionData?.createdAt
+                  ? new Date(sessionData.createdAt).toISOString()
+                  : new Date().toISOString(),
+                conversationStarted: sessionData?.conversationStarted || false,
+              };
+              activeSessions.set(existingSessionId, sessionInfo);
+            }
+
             console.log(`✅ Continuing existing AICLI CLI session: ${existingSessionId}`);
 
             // Return existing session info
             const responseSession = {
-              sessionId: existingSession.sessionId,
+              sessionId: existingSessionId,
               projectName: name,
               projectPath,
               status: 'running',
-              startedAt: existingSession.startedAt,
+              startedAt:
+                existingSession?.startedAt ||
+                (sessionData?.createdAt
+                  ? new Date(sessionData.createdAt).toISOString()
+                  : new Date().toISOString()),
+              conversationStarted: sessionData?.conversationStarted || false,
             };
 
             return res.json({
               success: true,
               session: responseSession,
-              message: `Continuing AICLI CLI session for project '${name}'`,
+              message: `Continuing AICLI CLI session for project '${name}' ${sessionData?.conversationStarted ? '(with conversation history)' : '(no conversation yet)'}`,
               continued: true,
             });
+          } else {
+            // Session doesn't exist in AICLI manager, but might exist in persistence
+            console.log(
+              `⚠️ Session ${existingSessionId} not found in AICLI manager, checking persistence...`
+            );
+
+            // Check if session exists in persistence
+            const persistedSession = aicliService.sessionManager.getPersistenceStats
+              ? (await aicliService.sessionManager.exportSessions()).find(
+                  (s) => s.sessionId === existingSessionId
+                )
+              : null;
+
+            if (persistedSession) {
+              console.log(`📚 Found persisted session ${existingSessionId}, restoring metadata...`);
+
+              // The session exists in persistence but not in active memory
+              // This typically happens after a server restart
+              // AICLI CLI may still know about this session, so we don't create a new one
+              // We just restore the session metadata to our active tracking
+
+              try {
+                // Sync with local tracking - just restore the metadata
+                const sessionInfo = {
+                  sessionId: existingSessionId,
+                  projectName: name,
+                  projectPath,
+                  status: 'running',
+                  startedAt: new Date(persistedSession.createdAt).toISOString(),
+                  conversationStarted: persistedSession.conversationStarted,
+                };
+                activeSessions.set(existingSessionId, sessionInfo);
+
+                console.log(`✅ Successfully restored session metadata for ${existingSessionId}`);
+                console.log(
+                  `   AICLI CLI will handle session restoration using --resume flag when first command is sent`
+                );
+
+                const responseSession = {
+                  sessionId: existingSessionId,
+                  projectName: name,
+                  projectPath,
+                  status: 'running',
+                  startedAt: sessionInfo.startedAt,
+                  conversationStarted: persistedSession.conversationStarted,
+                };
+
+                return res.json({
+                  success: true,
+                  session: responseSession,
+                  message: `Restored session for project '${name}' ${persistedSession.conversationStarted ? '(with conversation history)' : '(no conversation yet)'}`,
+                  continued: true,
+                  restored: true,
+                });
+              } catch (error) {
+                console.error(
+                  '❌ Failed to restore session metadata %s:',
+                  existingSessionId,
+                  error
+                );
+                // Fall through to create new session
+              }
+            }
+
+            // Clean up our local tracking if it exists
+            if (activeSessions.has(existingSessionId)) {
+              activeSessions.delete(existingSessionId);
+              console.log(`🧹 Cleaned up stale session from local tracking`);
+            }
+
+            // Fall through to create a new session
+            console.log(`📝 Creating new session since ${existingSessionId} could not be restored`);
           }
+        }
+
+        // Check if session already exists in AICLI before creating
+        if (aicliService.hasSession(sessionId)) {
+          return res.status(409).json({
+            success: false,
+            error: 'Session already exists',
+            message: `Session ${sessionId} is already in use. Please try continuing the session instead.`,
+          });
         }
 
         // Start AICLI CLI session using the AICLIService
@@ -226,7 +348,7 @@ export function setupProjectRoutes(app, aicliService) {
           sessionId,
           continueSession
             ? `Continuing work in project: ${name}. Previous session context may be available.`
-            : `Starting work in project: ${name}`,
+            : `You are now working in the ${name} project. You have access to all files in this directory. Do not mention git branches, repository status, or version control information unless specifically asked about it.`,
           projectPath
         );
 
@@ -382,10 +504,15 @@ export function setupProjectRoutes(app, aicliService) {
       // Close the session using AICLIService
       try {
         await aicliService.closeSession(sessionId, 'user_requested');
-        session.status = 'stopped';
-        session.stoppedAt = new Date().toISOString();
+
+        // Remove the session from our tracking map
+        activeSessions.delete(sessionId);
+        console.log(`✅ Removed session ${sessionId} from projects.js activeSessions`);
+        console.log(`📊 Remaining project sessions: ${activeSessions.size}`);
       } catch (error) {
         console.error(`Error closing session: ${error.message}`);
+        // Still remove from our tracking even if aicli service cleanup failed
+        activeSessions.delete(sessionId);
       }
 
       res.json({

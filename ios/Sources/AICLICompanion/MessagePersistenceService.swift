@@ -3,7 +3,7 @@ import SwiftUI
 
 // MARK: - Session Metadata
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct SessionMetadata: Codable {
     let sessionId: String
     let projectId: String
@@ -23,7 +23,7 @@ struct SessionMetadata: Codable {
 
 // MARK: - Persisted Message
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct PersistedMessage: Codable {
     let id: String
     let content: String
@@ -55,7 +55,7 @@ struct PersistedMessage: Codable {
 
 // MARK: - Message Persistence Service
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 class MessagePersistenceService: ObservableObject {
     static let shared = MessagePersistenceService()
     

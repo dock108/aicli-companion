@@ -1,6 +1,6 @@
 import SwiftUI
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 public struct ContentView: View {
     public init() {}
     @EnvironmentObject var aicliService: AICLIService
@@ -113,6 +113,9 @@ public struct ContentView: View {
     }
     
     private func switchProject() {
+        // Don't clear WebSocket active session - preserve it for when user returns
+        // This allows sessions to continue running in the background
+        
         // Reset to project selection screen
         withAnimation(.easeInOut(duration: 0.3)) {
             selectedProject = nil
@@ -122,7 +125,7 @@ public struct ContentView: View {
     }
 }
 
-@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 #Preview("Light Mode") {
     ContentView()
         .environmentObject(AICLIService())
@@ -130,7 +133,7 @@ public struct ContentView: View {
         .preferredColorScheme(.light)
 }
 
-@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 #Preview("Dark Mode") {
     ContentView()
         .environmentObject(AICLIService())

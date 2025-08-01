@@ -1,6 +1,6 @@
 import SwiftUI
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct DevelopmentWorkflowView: View {
     @ObservedObject var workflowService: DevelopmentWorkflowService
     @Environment(\.dismiss) private var dismiss
@@ -107,7 +107,7 @@ struct DevelopmentWorkflowView: View {
 
 // MARK: - Overview Tab
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct OverviewTabView: View {
     @ObservedObject var workflowService: DevelopmentWorkflowService
     let onCommandSelected: (String) -> Void
@@ -138,7 +138,7 @@ struct OverviewTabView: View {
     }
 }
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct ProjectStatusCard: View {
     @ObservedObject var workflowService: DevelopmentWorkflowService
 
@@ -194,7 +194,7 @@ struct ProjectStatusCard: View {
     }
 }
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct StatusRow: View {
     let label: String
     let value: String
@@ -220,7 +220,7 @@ struct StatusRow: View {
     }
 }
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct WorkflowSuggestionsCard: View {
     let suggestions: [WorkflowSuggestion]
     let onCommandSelected: (String) -> Void
@@ -253,7 +253,7 @@ struct WorkflowSuggestionsCard: View {
     }
 }
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct WorkflowSuggestionRow: View {
     let suggestion: WorkflowSuggestion
     let onTap: () -> Void
@@ -296,7 +296,7 @@ struct WorkflowSuggestionRow: View {
     }
 }
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct QuickActionsCard: View {
     @ObservedObject var workflowService: DevelopmentWorkflowService
     let onCommandSelected: (String) -> Void
@@ -383,7 +383,7 @@ struct QuickActionsCard: View {
     }
 }
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct QuickActionButton: View {
     let title: String
     let icon: String
@@ -411,7 +411,7 @@ struct QuickActionButton: View {
     }
 }
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct RecentBuildCard: View {
     let buildResult: BuildResult
 
@@ -475,7 +475,7 @@ struct RecentBuildCard: View {
 
 // MARK: - Git Tab
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct GitTabView: View {
     let repository: GitRepository?
     let onCommandSelected: (String) -> Void
@@ -517,7 +517,7 @@ struct GitTabView: View {
     }
 }
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct GitRepositoryCard: View {
     let repository: GitRepository
 
@@ -584,7 +584,7 @@ struct GitRepositoryCard: View {
     }
 }
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct GitChangesCard: View {
     let changes: [GitFileChange]
     let onCommandSelected: (String) -> Void
@@ -636,7 +636,7 @@ struct GitChangesCard: View {
     }
 }
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct GitCommitsCard: View {
     let commits: [GitCommit]
 
@@ -700,7 +700,7 @@ struct GitCommitsCard: View {
     }
 }
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct GitActionsCard: View {
     let repository: GitRepository
     let onCommandSelected: (String) -> Void
@@ -764,7 +764,7 @@ struct GitActionsCard: View {
 
 // MARK: - Build Tab
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct BuildTabView: View {
     let buildSystem: BuildSystem?
     let onCommandSelected: (String) -> Void
@@ -803,7 +803,7 @@ struct BuildTabView: View {
     }
 }
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct BuildSystemCard: View {
     let buildSystem: BuildSystem
 
@@ -859,7 +859,7 @@ struct BuildSystemCard: View {
     }
 }
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct BuildScriptsCard: View {
     let scripts: [BuildScript]
     let onCommandSelected: (String) -> Void
@@ -919,7 +919,7 @@ struct BuildScriptsCard: View {
     }
 }
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct BuildResultsCard: View {
     let result: BuildResult
 
@@ -1003,7 +1003,7 @@ struct BuildResultsCard: View {
 
 // MARK: - Tests Tab
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct TestsTabView: View {
     let testSuites: [TestSuite]
     let onCommandSelected: (String) -> Void
@@ -1035,7 +1035,7 @@ struct TestsTabView: View {
     }
 }
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct TestSuiteCard: View {
     let testSuite: TestSuite
     let onCommandSelected: (String) -> Void
@@ -1074,7 +1074,7 @@ struct TestSuiteCard: View {
     }
 }
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct TestResultsView: View {
     let results: TestResults
 
@@ -1121,7 +1121,7 @@ struct TestResultsView: View {
     }
 }
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct TestMetric: View {
     let label: String
     let value: Int
@@ -1142,7 +1142,7 @@ struct TestMetric: View {
     }
 }
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct TestCoverageView: View {
     let coverage: TestCoverage
 
@@ -1186,7 +1186,7 @@ struct TestCoverageView: View {
     }
 }
 
-@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 #Preview {
     DevelopmentWorkflowView(
         workflowService: DevelopmentWorkflowService(workingDirectory: "/Users/test/project"),

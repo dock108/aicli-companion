@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Settings tile component with neumorphic design
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 public struct SettingsTile<Content: View>: View {
     let title: String
     let value: String?
@@ -42,7 +42,7 @@ public struct SettingsTile<Content: View>: View {
 }
 
 /// Settings section with card styling
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 public struct SettingsSection<Content: View>: View {
     let title: String?
     let content: Content
@@ -84,7 +84,7 @@ public struct SettingsSection<Content: View>: View {
 }
 
 /// Divider for settings rows
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 public struct SettingsDivider: View {
     @Environment(\.colorScheme) var colorScheme
     
@@ -97,7 +97,7 @@ public struct SettingsDivider: View {
 }
 
 /// Neumorphic toggle style
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 public struct NeumorphicToggleStyle: ToggleStyle {
     @Environment(\.colorScheme) var colorScheme
     
@@ -174,7 +174,7 @@ public struct NeumorphicToggleStyle: ToggleStyle {
 }
 
 /// Picker row style
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 public struct SettingsPickerRow<T: Hashable>: View {
     let title: String
     @Binding var selection: T
@@ -223,7 +223,7 @@ public struct SettingsPickerRow<T: Hashable>: View {
 
 // MARK: - Preview
 
-@available(iOS 17.0, iPadOS 17.0, macOS 14.0, *)
+@available(iOS 17.0, macOS 14.0, *)
 #Preview("Settings Tiles") {
     VStack(spacing: Spacing.lg) {
         // Connection section

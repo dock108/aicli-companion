@@ -132,7 +132,7 @@ struct AccessibilityHints {
 
 // MARK: - Accessibility View Modifiers
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct AccessibleMessage: ViewModifier {
     let sender: String
     let content: String
@@ -149,7 +149,7 @@ struct AccessibleMessage: ViewModifier {
     }
 }
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct AccessibleButton: ViewModifier {
     let label: String
     let hint: String
@@ -164,7 +164,7 @@ struct AccessibleButton: ViewModifier {
     }
 }
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct AccessibleFileItem: ViewModifier {
     let file: FileItem
 
@@ -182,7 +182,7 @@ struct AccessibleFileItem: ViewModifier {
     }
 }
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct AccessibleConversation: ViewModifier {
     let conversation: Conversation
     let isSelectMode: Bool
@@ -203,7 +203,7 @@ struct AccessibleConversation: ViewModifier {
 
 // MARK: - View Extensions
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 extension View {
     func accessibleMessage(sender: String, content: String, timestamp: Date, hasRichContent: Bool = false) -> some View {
         self.modifier(AccessibleMessage(sender: sender, content: content, timestamp: timestamp, hasRichContent: hasRichContent))
@@ -281,7 +281,7 @@ struct VoiceOverHelpers {
 
 // MARK: - Dynamic Type Support
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 extension Font {
     static func scaledSystem(_ style: Font.TextStyle, design: Font.Design = .default) -> Font {
         return .system(style, design: design)
@@ -294,7 +294,7 @@ extension Font {
 
 // MARK: - Reduced Motion Support
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 struct ReducedMotionModifier: ViewModifier {
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     let animation: Animation
@@ -311,7 +311,7 @@ struct ReducedMotionModifier: ViewModifier {
     }
 }
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 extension View {
     func respectReducedMotion(animation: Animation, fallback: Animation? = nil) -> some View {
         self.modifier(ReducedMotionModifier(animation: animation, fallback: fallback))

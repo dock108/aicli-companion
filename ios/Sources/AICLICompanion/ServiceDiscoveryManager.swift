@@ -2,7 +2,7 @@ import Foundation
 import Network
 import Combine
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 class ServiceDiscoveryManager: NSObject, ObservableObject {
     @Published var discoveredServers: [DiscoveredAICLIServer] = []
     @Published var isScanning = false
@@ -149,7 +149,7 @@ class ServiceDiscoveryManager: NSObject, ObservableObject {
 
 // MARK: - NetServiceBrowserDelegate
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 extension ServiceDiscoveryManager: NetServiceBrowserDelegate {
     func netServiceBrowser(_ browser: NetServiceBrowser, didFind service: NetService, moreComing: Bool) {
         print("🔍 Found service: \(service.name) at \(service.domain)")
@@ -197,7 +197,7 @@ extension ServiceDiscoveryManager: NetServiceBrowserDelegate {
 
 // MARK: - NetServiceDelegate
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 extension ServiceDiscoveryManager: NetServiceDelegate {
     func netServiceDidResolveAddress(_ sender: NetService) {
         print("🔍 Resolved service: \(sender.name) -> \(sender.hostName ?? "unknown"):\(sender.port)")
@@ -314,7 +314,7 @@ struct ManualServerConfiguration {
 
 // MARK: - Network Validation
 
-@available(iOS 16.0, iPadOS 16.0, macOS 13.0, *)
+@available(iOS 16.0, macOS 13.0, *)
 extension ServiceDiscoveryManager {
     func validateServer(_ server: DiscoveredAICLIServer, completion: @escaping (Result<ServerConnection, AICLICompanionError>) -> Void) {
         guard let url = server.url else {

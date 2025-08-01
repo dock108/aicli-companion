@@ -31,7 +31,7 @@ describe('AICLIProcessRunner', () => {
     };
 
     // Create mock spawn function that returns a clean mock process
-    mockSpawn = mock.fn((cmd, args, options) => {
+    mockSpawn = mock.fn(() => {
       // Return a new object each time to avoid circular references
       return {
         pid: 12345,
@@ -431,7 +431,7 @@ describe('AICLIProcessRunner', () => {
         throw new Error('spawn failed');
       });
       const runner = new AICLIProcessRunner({ spawnFunction: failingSpawn });
-      
+
       // Even with failing spawn, findAICLICommand should return default
       const command = runner.findAICLICommand();
       assert.strictEqual(command, 'claude');

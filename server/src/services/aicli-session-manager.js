@@ -19,10 +19,8 @@ export class AICLISessionManager extends EventEmitter {
     this.sessionTimeout = options.sessionTimeout || 30 * 60 * 1000; // 30 minutes
     this.backgroundedSessionTimeout = options.backgroundedSessionTimeout || 4 * 60 * 60 * 1000; // 4 hours
 
-    // Initialize persistence on startup (skip in test environment)
-    if (process.env.NODE_ENV !== 'test') {
-      this.initializePersistence();
-    }
+    // Persistence will be initialized by the server after startup
+    // This prevents race conditions from multiple initialization attempts
   }
 
   /**

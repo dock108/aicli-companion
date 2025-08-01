@@ -507,18 +507,21 @@ describe('AICLIProcessRunner', () => {
     });
 
     it('should handle process spawn errors', async () => {
-      // Create a new spawn function that throws
-      const failingSpawn = mock.fn(() => {
+      // Save the original spawn function
+      const originalSpawn = processRunner.spawnFunction;
+
+      // Replace with a failing spawn function
+      processRunner.spawnFunction = mock.fn(() => {
         throw new Error('ENOENT');
       });
 
-      // Create a new runner with the failing spawn
-      const runner = new AICLIProcessRunner({ spawnFunction: failingSpawn });
-
       await assert.rejects(
-        runner.runAICLIProcess(['--print'], 'Test', '/test/dir', 'session123'),
+        processRunner.runAICLIProcess(['--print'], 'Test', '/test/dir', 'session123'),
         /Failed to start AICLI CLI/
       );
+
+      // Restore the original spawn function
+      processRunner.spawnFunction = originalSpawn;
     });
 
     it('should handle process errors', async () => {

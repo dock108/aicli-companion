@@ -168,10 +168,10 @@ describe('AICLIProcessRunner - Additional Coverage', () => {
       );
 
       process.nextTick(() => {
-        // Send valid JSON that the stream parser will handle
-        spawnedProcess.stdout.emit('data', Buffer.from('Regular text output\n'));
-        spawnedProcess.stdout.emit('data', Buffer.from('## Code\n'));
-        spawnedProcess.stdout.emit('data', Buffer.from('```javascript\nconst x = 1;\n```\n'));
+        // Send valid JSON output with stream content
+        spawnedProcess.stdout.emit('data', Buffer.from('{"type":"content","content":"Regular text output"}\n'));
+        spawnedProcess.stdout.emit('data', Buffer.from('{"type":"content","content":"## Code"}\n'));
+        spawnedProcess.stdout.emit('data', Buffer.from('{"type":"content","content":"```javascript\\nconst x = 1;\\n```"}\n'));
         spawnedProcess.emit('close', 0);
       });
 
@@ -331,7 +331,7 @@ describe('AICLIProcessRunner - Additional Coverage', () => {
         spawnedProcess.emit('close', 0);
       });
 
-      await assert.rejects(promise, /truncated/);
+      await assert.rejects(promise, /No valid JSON objects found/);
     });
 
     it('should write prompt to stdin when using --print', async () => {

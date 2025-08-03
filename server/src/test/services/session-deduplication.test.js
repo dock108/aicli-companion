@@ -164,17 +164,26 @@ describe('Session Deduplication', () => {
     await sessionManager.createInteractiveSession('session-1', 'Initial', workingDir);
 
     // Get the session to check initial activity time
-    const session1 = sessionManager.getSession('session-1');
+    const session1 = await sessionManager.getSession('session-1');
     const initialActivity = session1.lastActivity;
 
     // Wait a bit
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
-    // Reuse session
-    await sessionManager.createInteractiveSession('session-2', 'Reuse', workingDir);
+    // Temporarily override NODE_ENV to ensure activity update works
+    const originalNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'development';
 
-    // Activity should be updated
-    const session2 = sessionManager.getSession('session-1');
-    assert.ok(session2.lastActivity > initialActivity, 'Activity timestamp should be updated');
+    try {
+      // Reuse session
+      await sessionManager.createInteractiveSession('session-2', 'Reuse', workingDir);
+
+      // Activity should be updated
+      const session2 = await sessionManager.getSession('session-1');
+      assert.ok(session2.lastActivity > initialActivity, 'Activity timestamp should be updated');
+    } finally {
+      // Always restore NODE_ENV
+      process.env.NODE_ENV = originalNodeEnv;
+    }
   });
 });

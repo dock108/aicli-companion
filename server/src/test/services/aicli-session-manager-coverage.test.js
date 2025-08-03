@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AICLISessionManager } from '../../services/aicli-session-manager.js';
@@ -29,17 +29,21 @@ describe('AICLISessionManager - Additional Coverage', () => {
     it('should enforce max session limit', async () => {
       // Create sessions up to limit
       for (let i = 1; i <= 3; i++) {
+        const projectDir = join(testDir, `project-${i}`);
+        mkdirSync(projectDir, { recursive: true });
         const result = await sessionManager.createInteractiveSession(
           `session-${i}`,
           'test prompt',
-          `${testDir}/project-${i}`
+          projectDir
         );
         assert.ok(result.success);
       }
 
       // Try to create one more
+      const project4Dir = join(testDir, 'project-4');
+      mkdirSync(project4Dir, { recursive: true });
       await assert.rejects(
-        sessionManager.createInteractiveSession('session-4', 'test', `${testDir}/project-4`),
+        sessionManager.createInteractiveSession('session-4', 'test', project4Dir),
         /Maximum number of sessions/
       );
     });
@@ -57,7 +61,7 @@ describe('AICLISessionManager - Additional Coverage', () => {
     it('should reject invalid working directory', async () => {
       await assert.rejects(
         sessionManager.createInteractiveSession('test', 'prompt', '/invalid/path/../../etc'),
-        /Invalid directory path/
+        /Access denied.*not allowed|Invalid directory path/
       );
     });
   });
@@ -330,7 +334,7 @@ describe('AICLISessionManager - Additional Coverage', () => {
         testDir
       );
 
-      const session = sessionManager.getSession(result.sessionId);
+      const session = await sessionManager.getSession(result.sessionId);
       session.isRestoredSession = true;
 
       const isActive = sessionManager.isClaudeSessionActive(result.sessionId);

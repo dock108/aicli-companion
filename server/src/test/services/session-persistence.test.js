@@ -230,10 +230,14 @@ describe('SessionPersistence', () => {
       storageDir: '/invalid/path/that/cannot/exist',
     });
 
-    // Should throw an error
-    await assert.rejects(badPersistence.initialize(), {
-      code: 'ENOENT',
-    });
+    // Should throw an error (ENOENT on local, EACCES in CI)
+    await assert.rejects(
+      badPersistence.initialize(),
+      (error) => {
+        // Accept either ENOENT (file not found) or EACCES (permission denied)
+        return error.code === 'ENOENT' || error.code === 'EACCES';
+      }
+    );
     assert.strictEqual(badPersistence.isInitialized, false);
   });
 

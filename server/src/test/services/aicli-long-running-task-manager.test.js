@@ -8,6 +8,7 @@ import { pushNotificationService } from '../../services/push-notification.js';
 // Store original methods
 const originalCalculateTimeout = AICLIConfig.calculateTimeoutForCommand;
 const originalSendNotification = pushNotificationService.sendClaudeResponseNotification;
+const originalSendToMultipleClients = pushNotificationService.sendToMultipleClients;
 
 describe('AICLILongRunningTaskManager', () => {
   let taskManager;
@@ -17,6 +18,7 @@ describe('AICLILongRunningTaskManager', () => {
     // Mock the methods
     AICLIConfig.calculateTimeoutForCommand = mock.fn();
     pushNotificationService.sendClaudeResponseNotification = mock.fn();
+    pushNotificationService.sendToMultipleClients = mock.fn();
 
     taskManager = new AICLILongRunningTaskManager();
 
@@ -34,6 +36,7 @@ describe('AICLILongRunningTaskManager', () => {
     // Restore original methods
     AICLIConfig.calculateTimeoutForCommand = originalCalculateTimeout;
     pushNotificationService.sendClaudeResponseNotification = originalSendNotification;
+    pushNotificationService.sendToMultipleClients = originalSendToMultipleClients;
 
     // Restore global
     global.webSocketClients = originalWebSocketClients;
@@ -166,10 +169,12 @@ describe('AICLILongRunningTaskManager', () => {
       });
 
       // Start the long-running process
-      taskManager.runLongRunningProcess('test-session', 'Long prompt', mockExecuteFunction, 600000);
-
-      // Wait for process to complete
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await taskManager.runLongRunningProcess(
+        'test-session',
+        'Long prompt',
+        mockExecuteFunction,
+        600000
+      );
 
       // Verify interval was created and cleared
       assert.strictEqual(global.setInterval.mock.calls.length, 1);
@@ -203,10 +208,12 @@ describe('AICLILongRunningTaskManager', () => {
       });
 
       // Start the process
-      taskManager.runLongRunningProcess('test-session', 'Test prompt', mockExecuteFunction, 400000);
-
-      // Wait for completion
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await taskManager.runLongRunningProcess(
+        'test-session',
+        'Test prompt',
+        mockExecuteFunction,
+        400000
+      );
 
       assert.ok(completionMessage);
       assert.strictEqual(completionMessage.sessionId, 'test-session');
@@ -214,10 +221,7 @@ describe('AICLILongRunningTaskManager', () => {
       assert.strictEqual(completionMessage.data.content[0].text, 'Task completed successfully');
 
       // Should call push notification
-      assert.strictEqual(
-        pushNotificationService.sendClaudeResponseNotification.mock.calls.length,
-        1
-      );
+      assert.strictEqual(pushNotificationService.sendToMultipleClients.mock.calls.length, 1);
     });
 
     it('should handle execution error', async () => {
@@ -243,15 +247,12 @@ describe('AICLILongRunningTaskManager', () => {
       });
 
       // Start the process
-      taskManager.runLongRunningProcess(
+      await taskManager.runLongRunningProcess(
         'test-session',
         'Failing prompt',
         mockExecuteFunction,
         400000
       );
-
-      // Wait for error handling
-      await new Promise((resolve) => setTimeout(resolve, 50));
 
       assert.ok(errorMessage);
       assert.strictEqual(errorMessage.sessionId, 'test-session');
@@ -264,10 +265,7 @@ describe('AICLILongRunningTaskManager', () => {
       assert.strictEqual(streamError.error, 'Task failed');
 
       // Should call push notification for error
-      assert.strictEqual(
-        pushNotificationService.sendClaudeResponseNotification.mock.calls.length,
-        1
-      );
+      assert.strictEqual(pushNotificationService.sendToMultipleClients.mock.calls.length, 1);
     });
   });
 
@@ -300,33 +298,33 @@ describe('AICLILongRunningTaskManager', () => {
       });
     });
 
-    it('should send notifications to clients with matching session and device token', () => {
-      taskManager.sendLongRunningCompletionNotification('test-session', 'Test prompt', false);
+    it('should send notifications to clients with matching session and device token', async () => {
+      await taskManager.sendLongRunningCompletionNotification('test-session', 'Test prompt', false);
 
-      // Should send to client1 and client2 (both have test-session and device tokens)
-      assert.strictEqual(
-        pushNotificationService.sendClaudeResponseNotification.mock.calls.length,
-        2
-      );
+      // Should call sendToMultipleClients with client1 and client2
+      assert.strictEqual(pushNotificationService.sendToMultipleClients.mock.calls.length, 1);
 
-      const calls = pushNotificationService.sendClaudeResponseNotification.mock.calls;
-      const clientIds = calls.map((call) => call.arguments[0]);
+      const call = pushNotificationService.sendToMultipleClients.mock.calls[0];
+      const clientIds = call.arguments[0];
+      assert.strictEqual(clientIds.length, 2);
       assert.ok(clientIds.includes('client1'));
       assert.ok(clientIds.includes('client2'));
       assert.ok(!clientIds.includes('client3')); // Wrong session
       assert.ok(!clientIds.includes('client4')); // No device token
     });
 
-    it('should send success notification with correct data', () => {
-      taskManager.sendLongRunningCompletionNotification(
+    it('should send success notification with correct data', async () => {
+      await taskManager.sendLongRunningCompletionNotification(
         'test_session_uuid123',
         'Test prompt for completion',
         false
       );
 
-      const call = pushNotificationService.sendClaudeResponseNotification.mock.calls[0];
-      const [_clientId, notificationData] = call.arguments;
+      const call = pushNotificationService.sendToMultipleClients.mock.calls[0];
+      const [clientIds, notificationData] = call.arguments;
 
+      assert.strictEqual(clientIds.length, 1);
+      assert.ok(clientIds.includes('client1'));
       assert.strictEqual(notificationData.sessionId, 'test_session_uuid123');
       assert.strictEqual(notificationData.projectName, 'test_session');
       assert.ok(notificationData.message.includes('Task completed'));
@@ -334,40 +332,45 @@ describe('AICLILongRunningTaskManager', () => {
       assert.strictEqual(notificationData.isLongRunningCompletion, true);
     });
 
-    it('should send error notification with correct data', () => {
-      taskManager.sendLongRunningCompletionNotification(
+    it('should send error notification with correct data', async () => {
+      await taskManager.sendLongRunningCompletionNotification(
         'test-session',
         'Failing prompt',
         true,
         'Something went wrong'
       );
 
-      const call = pushNotificationService.sendClaudeResponseNotification.mock.calls[0];
-      const [_clientId2, notificationData] = call.arguments;
+      const call = pushNotificationService.sendToMultipleClients.mock.calls[0];
+      const [clientIds, notificationData] = call.arguments;
 
+      assert.strictEqual(clientIds.length, 2);
       assert.ok(notificationData.message.includes('Task failed'));
       assert.ok(notificationData.message.includes('Failing prompt'));
       assert.ok(notificationData.message.includes('Something went wrong'));
     });
 
-    it('should extract project name from session ID', () => {
-      taskManager.sendLongRunningCompletionNotification('my_project_uuid123', 'Test prompt', false);
+    it('should extract project name from session ID', async () => {
+      await taskManager.sendLongRunningCompletionNotification(
+        'my_project_uuid123',
+        'Test prompt',
+        false
+      );
 
-      const call = pushNotificationService.sendClaudeResponseNotification.mock.calls[0];
-      const [_clientId3, notificationData] = call.arguments;
+      const call = pushNotificationService.sendToMultipleClients.mock.calls[0];
+      const [_clientIds, notificationData] = call.arguments;
 
       assert.strictEqual(notificationData.projectName, 'my_project');
     });
 
-    it('should handle complex project names', () => {
-      taskManager.sendLongRunningCompletionNotification(
+    it('should handle complex project names', async () => {
+      await taskManager.sendLongRunningCompletionNotification(
         'multi_word_project_name_uuid456',
         'Test',
         false
       );
 
-      const call = pushNotificationService.sendClaudeResponseNotification.mock.calls[0];
-      const [_clientId4, notificationData] = call.arguments;
+      const call = pushNotificationService.sendToMultipleClients.mock.calls[0];
+      const [_clientIds, notificationData] = call.arguments;
 
       assert.strictEqual(notificationData.projectName, 'multi_word_project_name');
     });
@@ -379,10 +382,12 @@ describe('AICLILongRunningTaskManager', () => {
         taskManager.sendLongRunningCompletionNotification('test-session', 'Test prompt', false);
       });
 
-      assert.strictEqual(
-        pushNotificationService.sendClaudeResponseNotification.mock.calls.length,
-        0
-      );
+      // Should be called with empty client IDs array when no clients
+      assert.strictEqual(pushNotificationService.sendToMultipleClients.mock.calls.length, 1);
+
+      const call = pushNotificationService.sendToMultipleClients.mock.calls[0];
+      const [clientIds] = call.arguments;
+      assert.strictEqual(clientIds.length, 0);
     });
   });
 
@@ -469,9 +474,14 @@ describe('AICLILongRunningTaskManager', () => {
         });
       });
 
-      taskManager.runLongRunningProcess('test-session', 'Test prompt', mockExecuteFunction, 400000);
+      const processPromise = taskManager.runLongRunningProcess(
+        'test-session',
+        'Test prompt',
+        mockExecuteFunction,
+        400000
+      );
 
-      await errorPromise;
+      await Promise.race([errorPromise, processPromise]);
     });
   });
 });

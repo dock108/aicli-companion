@@ -13,7 +13,9 @@ class ChatSessionManager: ObservableObject {
     // MARK: - Services
     private let webSocketService = WebSocketService.shared
     private let persistenceService = MessagePersistenceService.shared
+    private let sessionStatePersistence = SessionStatePersistenceService.shared
     private let aicliService = AICLIService()
+    private let sessionDeduplicationManager = SessionDeduplicationManager.shared
     
     // MARK: - Private Properties
     private var cancellables = Set<AnyCancellable>()
@@ -48,15 +50,50 @@ class ChatSessionManager: ObservableObject {
         connection: ServerConnection,
         completion: @escaping (Result<ProjectSession, Error>) -> Void
     ) {
-        aicliService.startProjectSession(project: project, connection: connection) { result in
-            switch result {
-            case .success(let session):
-                self.setActiveSession(session)
-                self.webSocketService.subscribeToSessions([session.sessionId])
-                completion(.success(session))
+        Task {
+            do {
+                // Get or reuse existing session ID for this project
+                let sessionId = try await sessionDeduplicationManager.getOrCreateSession(
+                    for: project.path,
+                    verifySession: { sessionId in
+                        // Verify with server if session is valid
+                        // For now, we'll assume it's valid if we have metadata
+                        return self.persistenceService.getSessionMetadata(for: project.path)?.aicliSessionId == sessionId
+                    }
+                )
                 
-            case .failure(let error):
-                self.sessionError = error.localizedDescription
+                // Start the project session with the deduplicated session ID
+                aicliService.startProjectSession(
+                    project: project,
+                    connection: connection,
+                    sessionId: sessionId
+                ) { result in
+                    switch result {
+                    case .success(let session):
+                        self.setActiveSession(session)
+                        self.webSocketService.subscribeToSessions([session.sessionId])
+                        
+                        // Update deduplication tracking
+                        self.sessionDeduplicationManager.touchSession(for: project.path)
+                        
+                        // Save session state
+                        self.sessionStatePersistence.saveSessionState(
+                            sessionId: session.sessionId,
+                            projectId: project.path,
+                            projectName: project.name,
+                            projectPath: project.path,
+                            messageCount: 0,
+                            aicliSessionId: session.sessionId
+                        )
+                        
+                        completion(.success(session))
+                        
+                    case .failure(let error):
+                        self.sessionError = error.localizedDescription
+                        completion(.failure(error))
+                    }
+                }
+            } catch {
                 completion(.failure(error))
             }
         }
@@ -68,7 +105,34 @@ class ChatSessionManager: ObservableObject {
     ) {
         isRestoring = true
         
-        // Check for existing session metadata
+        // First check enhanced session state persistence
+        if let sessionState = sessionStatePersistence.getSessionState(for: project.path) {
+            print("🔷 SessionManager: Found session state for '\(project.name)': \(sessionState.id)")
+            
+            // Check if session is still active
+            if !sessionState.isExpired {
+                let dateFormatter = ISO8601DateFormatter()
+                let restoredSession = ProjectSession(
+                    sessionId: sessionState.id,
+                    projectName: sessionState.projectName,
+                    projectPath: sessionState.projectPath,
+                    status: "ready",
+                    startedAt: dateFormatter.string(from: sessionState.createdAt)
+                )
+                
+                setActiveSession(restoredSession)
+                webSocketService.subscribeToSessions([sessionState.id])
+                
+                // Touch the session to update last active time
+                sessionStatePersistence.touchSession(sessionState.id)
+                
+                isRestoring = false
+                completion(.success(restoredSession))
+                return
+            }
+        }
+        
+        // Fallback to legacy session metadata
         guard let metadata = persistenceService.getSessionMetadata(for: project.path) else {
             print("🔷 SessionManager: No existing session found for '\(project.name)'")
             isRestoring = false
@@ -98,6 +162,16 @@ class ChatSessionManager: ObservableObject {
         setActiveSession(restoredSession)
         webSocketService.subscribeToSessions([sessionId])
         
+        // Migrate to new session state persistence
+        sessionStatePersistence.saveSessionState(
+            sessionId: sessionId,
+            projectId: project.path,
+            projectName: project.name,
+            projectPath: project.path,
+            messageCount: metadata.messageCount,
+            aicliSessionId: sessionId
+        )
+        
         isRestoring = false
         completion(.success(restoredSession))
     }
@@ -117,6 +191,9 @@ class ChatSessionManager: ObservableObject {
         webSocketService.setActiveSession(session.sessionId)
         webSocketService.trackSession(session.sessionId)
         sessionError = nil
+        
+        // Touch session state to update last active time
+        sessionStatePersistence.touchSession(session.sessionId)
     }
     
     private func setupWebSocketHandlers() {

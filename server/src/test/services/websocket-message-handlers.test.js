@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import { WebSocketMessageHandlers } from '../../services/websocket-message-handlers.js';
 import { WebSocketUtilities } from '../../services/websocket-utilities.js';
 import { pushNotificationService } from '../../services/push-notification.js';
-import { messageQueueService } from '../../services/message-queue.js';
+import { getMessageQueueService } from '../../services/message-queue.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -12,11 +12,25 @@ const originalSendMessage = WebSocketUtilities.sendMessage;
 const originalSendErrorMessage = WebSocketUtilities.sendErrorMessage;
 const originalCreateResponse = WebSocketUtilities.createResponse;
 const originalRegisterDevice = pushNotificationService.registerDevice;
-const originalGetQueuedMessages = messageQueueService.getQueuedMessages;
-const originalMarkMessagesDelivered = messageQueueService.markMessagesDelivered;
-const originalGetUndeliveredMessages = messageQueueService.getUndeliveredMessages;
-const originalTrackSessionClient = messageQueueService.trackSessionClient;
-const originalMarkAsDelivered = messageQueueService.markAsDelivered;
+const messageQueueService = getMessageQueueService();
+const originalGetQueuedMessages = messageQueueService
+  ? messageQueueService.getQueuedMessages
+  : () => {};
+const originalMarkMessagesDelivered = messageQueueService
+  ? messageQueueService.markMessagesDelivered
+  : () => {};
+const originalGetUndeliveredMessages = messageQueueService
+  ? messageQueueService.getUndeliveredMessages
+  : () => {};
+const originalTrackSessionClient = messageQueueService
+  ? messageQueueService.trackSessionClient
+  : () => {};
+const originalMarkAsDelivered = messageQueueService
+  ? messageQueueService.markAsDelivered
+  : () => {};
+const originalDeliverQueuedMessages = messageQueueService
+  ? messageQueueService.deliverQueuedMessages
+  : () => {};
 const originalExistsSync = fs.existsSync;
 const originalStatSync = fs.statSync;
 const originalResolve = path.resolve;
@@ -48,6 +62,20 @@ describe('WebSocketMessageHandlers', () => {
     messageQueueService.getUndeliveredMessages = mock.fn(() => []);
     messageQueueService.trackSessionClient = mock.fn();
     messageQueueService.markAsDelivered = mock.fn();
+    messageQueueService.deliverQueuedMessages = mock.fn((sessionId, clientId, sendMessageFn) => {
+      // Synchronously deliver messages in tests
+      const messages = messageQueueService.getUndeliveredMessages(sessionId, clientId);
+      const deliveredIds = [];
+      messages.forEach((msg) => {
+        if (sendMessageFn(msg.message)) {
+          deliveredIds.push(msg.id);
+        }
+      });
+      if (deliveredIds.length > 0) {
+        messageQueueService.markAsDelivered(deliveredIds, clientId);
+      }
+      return deliveredIds;
+    });
 
     // Mock fs and path modules
     fs.existsSync = mock.fn(() => true);
@@ -120,6 +148,7 @@ describe('WebSocketMessageHandlers', () => {
     messageQueueService.getUndeliveredMessages = originalGetUndeliveredMessages;
     messageQueueService.trackSessionClient = originalTrackSessionClient;
     messageQueueService.markAsDelivered = originalMarkAsDelivered;
+    messageQueueService.deliverQueuedMessages = originalDeliverQueuedMessages;
     fs.existsSync = originalExistsSync;
     fs.statSync = originalStatSync;
     path.resolve = originalResolve;
@@ -312,7 +341,8 @@ describe('WebSocketMessageHandlers', () => {
       // We no longer call closeSession, just remove from client
       assert.strictEqual(mockAicliService.closeSession.mock.calls.length, 0);
       assert.strictEqual(mockConnectionManager.removeSessionFromClient.mock.calls.length, 1);
-      assert.strictEqual(WebSocketUtilities.sendMessage.mock.calls.length, 1);
+      // Note: No response message sent for streamClose (iOS client compatibility)
+      assert.strictEqual(WebSocketUtilities.sendMessage.mock.calls.length, 0);
     });
 
     it('should handle connection manager error', async () => {
@@ -422,11 +452,8 @@ describe('WebSocketMessageHandlers', () => {
       );
 
       assert.strictEqual(mockConnectionManager.subscribeClient.mock.calls.length, 1);
-      assert.strictEqual(WebSocketUtilities.sendMessage.mock.calls.length, 1);
-
-      const response = WebSocketUtilities.sendMessage.mock.calls[0].arguments[1];
-      assert.strictEqual(response.data.success, true);
-      assert.deepStrictEqual(response.data.subscribedEvents, ['event1', 'event2']);
+      // Note: No response message sent for subscribe (iOS client compatibility)
+      assert.strictEqual(WebSocketUtilities.sendMessage.mock.calls.length, 0);
     });
 
     it('should handle invalid events array', async () => {
@@ -490,11 +517,23 @@ describe('WebSocketMessageHandlers', () => {
         'msg2',
       ]);
 
-      // Verify response includes session info
+      // Verify that WebSocketUtilities.sendMessage was called for each queued message
+      assert.strictEqual(WebSocketUtilities.sendMessage.mock.calls.length, 2);
+
+      // Verify the messages sent were the queued messages
+      const firstCall = WebSocketUtilities.sendMessage.mock.calls[0];
+      assert.strictEqual(firstCall.arguments[0], 'client1');
+      assert.deepStrictEqual(firstCall.arguments[1], queuedMessages[0].message);
+
+      const secondCall = WebSocketUtilities.sendMessage.mock.calls[1];
+      assert.strictEqual(secondCall.arguments[0], 'client1');
+      assert.deepStrictEqual(secondCall.arguments[1], queuedMessages[1].message);
+
+      // Note: No response message sent for subscribe (iOS client compatibility)
+      // The subscription success is indicated by the absence of error messages
       const sendCalls = WebSocketUtilities.sendMessage.mock.calls;
       const responseCall = sendCalls.find((call) => call.arguments[1].type === 'subscribe');
-      assert.ok(responseCall);
-      assert.deepStrictEqual(responseCall.arguments[1].data.sessionIds, ['session1', 'session2']);
+      assert.ok(!responseCall, 'No subscribe response should be sent for iOS compatibility');
     });
   });
 

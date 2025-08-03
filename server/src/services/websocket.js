@@ -27,9 +27,9 @@ export function setupWebSocket(wss, aicliService, authToken) {
   eventBroadcaster.setupEventListeners(aicliService);
 
   // Handle new WebSocket connections
-  wss.on('connection', (ws, request) => {
+  wss.on('connection', async (ws, request) => {
     // Handle connection through connection manager
-    const clientId = connectionManager.handleConnection(ws, request, authToken);
+    const clientId = await connectionManager.handleConnection(ws, request, authToken);
 
     if (!clientId) {
       // Connection was rejected (likely authentication failure)

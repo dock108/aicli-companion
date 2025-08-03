@@ -12,6 +12,7 @@ struct ChatView: View {
     @StateObject private var viewModel: ChatViewModel
     @StateObject private var sessionManager = ChatSessionManager.shared
     @ObservedObject private var webSocketService = WebSocketService.shared
+    @StateObject private var queueManager = MessageQueueManager.shared
     
     @State private var messageText = ""
     @State private var keyboardHeight: CGFloat = 0
@@ -70,9 +71,14 @@ struct ChatView: View {
                         onSwitchProject: onSwitchProject,
                         onClearSession: clearCurrentSession
                     )
-                    .padding(.horizontal, isIPad && horizontalSizeClass == .regular ? 40 : 16)
-                    .padding(.vertical, 12)
                 }
+                
+                // Message queue indicator
+                MessageQueueIndicator(
+                    queuedMessageCount: queueManager.queuedMessageCount,
+                    isReceivingQueued: queueManager.isReceivingQueued,
+                    oldestQueuedTimestamp: queueManager.oldestQueuedTimestamp
+                )
                 
                 // Message list
                 ChatMessageList(
@@ -142,7 +148,9 @@ struct ChatView: View {
         setupPermissionHandling()
         
         // Connect WebSocket if needed
+        print("🔗 ChatView: Connecting WebSocket for project '\(project.name)'")
         connectWebSocketIfNeeded {
+            print("🔗 ChatView: WebSocket connected, handling session for project '\(project.name)'")
             // Handle session after connection
             self.sessionManager.handleSessionAfterConnection(
                 for: project,
@@ -152,6 +160,12 @@ struct ChatView: View {
                 case .success(let session):
                     self.viewModel.setActiveSession(session)
                     self.viewModel.loadMessages(for: project, sessionId: session.sessionId)
+                    
+                    // If no messages were loaded locally but we have an active session,
+                    // this is a restored session with no local history - leave empty for clean start
+                    if self.viewModel.messages.isEmpty {
+                        print("🔍 Session exists but no local messages - clean start for restored session")
+                    }
                     
                 case .failure:
                     // No existing session, user can start one when ready
@@ -202,9 +216,12 @@ struct ChatView: View {
         
         // Check if we have a session
         if viewModel.activeSession == nil {
-            // Start a new session first
+            // Start a new session first, then send the message
             if let connection = settings.currentConnection {
-                viewModel.startSession(for: project, connection: connection)
+                viewModel.startSession(for: project, connection: connection) {
+                    // Once session is started, send the user's message
+                    self.viewModel.sendMessage(text, for: project)
+                }
             } else {
                 let errorMessage = Message(
                     content: "❌ No server connection configured",
@@ -245,14 +262,21 @@ struct ChatView: View {
     private func connectWebSocketIfNeeded(completion: @escaping () -> Void) {
         guard let connection = settings.currentConnection,
               let wsURL = connection.wsURL else {
+            print("⚠️ ChatView: No connection configuration available")
             completion()
             return
         }
         
+        print("🔗 ChatView: Checking WebSocket connection to \(wsURL)")
+        print("   Current connection state: \(webSocketService.isConnected)")
+        
         if webSocketService.isConnected {
+            print("✅ ChatView: WebSocket already connected")
             completion()
             return
         }
+        
+        print("🔗 ChatView: Starting WebSocket connection...")
         
         // Set up connection observer
         var connectionObserver: AnyCancellable?
@@ -260,13 +284,16 @@ struct ChatView: View {
             .dropFirst()
             .first(where: { $0 })
             .sink { connected in
+                print("🎉 ChatView: WebSocket connection state changed to: \(connected)")
                 if connected {
+                    print("✅ ChatView: WebSocket connection established, proceeding with session handling")
                     completion()
                     connectionObserver?.cancel()
                 }
             }
         
         webSocketService.connect(to: wsURL, authToken: connection.authToken)
+        print("🔗 ChatView: WebSocket connection initiated to \(wsURL)")
     }
     
     // MARK: - Permission Handling
@@ -339,6 +366,17 @@ struct ChatView: View {
             keyboardHeight = 0
         }
         #endif
+    }
+    
+    // MARK: - Session Welcome Messages
+    
+    private func addRestoredSessionWelcome(for project: Project) {
+        let welcomeMessage = Message(
+            content: "✅ Session restored for **\(project.name)**\n\nYou can continue working on your project. I have access to all files in this directory.\n\nWhat can I help you with today?",
+            sender: .assistant,
+            type: .text
+        )
+        viewModel.messages.append(welcomeMessage)
     }
     
     // MARK: - Scroll Management

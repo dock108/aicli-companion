@@ -174,7 +174,7 @@ public class AICLIService: ObservableObject {
     
     // MARK: - Project Management
     
-    func startProjectSession(project: Project, connection: ServerConnection, completion: @escaping (Result<ProjectSession, AICLICompanionError>) -> Void) {
+    func startProjectSession(project: Project, connection: ServerConnection, sessionId: String? = nil, completion: @escaping (Result<ProjectSession, AICLICompanionError>) -> Void) {
         guard let url = connection.url else {
             completion(.failure(.connectionFailed("Invalid server URL")))
             return
@@ -190,8 +190,9 @@ public class AICLIService: ObservableObject {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         
-        // Empty body for POST request
-        request.httpBody = Data()
+        // Include session ID in request body if provided
+        let requestBody: [String: Any] = sessionId != nil ? ["sessionId": sessionId!] : [:]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: requestBody)
         
         urlSession.dataTask(with: request) { [weak self] data, response, error in
             if let error = error {

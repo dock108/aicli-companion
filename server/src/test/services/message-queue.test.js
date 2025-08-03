@@ -39,7 +39,7 @@ describe('MessageQueueService', () => {
 
     it('should not set cleanup interval in test environment', () => {
       const mq = new MessageQueueService();
-      assert.strictEqual(mq.cleanupInterval, undefined);
+      assert.strictEqual(mq.cleanupInterval, null);
     });
 
     it('should set cleanup interval in non-test environment', () => {
@@ -73,6 +73,12 @@ describe('MessageQueueService', () => {
       assert.strictEqual(messageQueue.messageQueue.get(sessionId).length, 1);
       assert.strictEqual(messageQueue.messageMetadata.has(messageId), true);
 
+      // Verify message was enriched
+      const queuedMsg = messageQueue.messageQueue.get(sessionId)[0];
+      assert.strictEqual(queuedMsg.message._queued, true);
+      assert.ok(queuedMsg.message._queuedAt);
+      assert.strictEqual(queuedMsg.message._originalTimestamp, null); // message has no timestamp
+
       // Verify console output
       assert.strictEqual(consoleLogSpy.mock.calls.length, 4);
     });
@@ -97,6 +103,48 @@ describe('MessageQueueService', () => {
 
       const expectedExpiry = metadata.timestamp.getTime() + customTTL;
       assert.strictEqual(metadata.expiresAt.getTime(), expectedExpiry);
+    });
+
+    it('should reject invalid message structures', () => {
+      const sessionId = 'test-session-1';
+
+      // Mock console.error
+      const consoleErrorSpy = mock.method(console, 'error');
+
+      // Test null message
+      assert.strictEqual(messageQueue.queueMessage(sessionId, null), null);
+
+      // Test non-object message
+      assert.strictEqual(messageQueue.queueMessage(sessionId, 'string'), null);
+      assert.strictEqual(messageQueue.queueMessage(sessionId, 123), null);
+
+      // Verify error was logged
+      assert.ok(consoleErrorSpy.mock.calls.length > 0);
+    });
+
+    it('should filter empty streamChunk messages', () => {
+      const sessionId = 'test-session-1';
+
+      // Empty streamChunk
+      const emptyChunk = {
+        type: 'streamChunk',
+        data: { chunk: { content: '' } },
+      };
+      assert.strictEqual(messageQueue.queueMessage(sessionId, emptyChunk), null);
+
+      // Missing chunk content
+      const missingContent = {
+        type: 'streamChunk',
+        data: { chunk: {} },
+      };
+      assert.strictEqual(messageQueue.queueMessage(sessionId, missingContent), null);
+
+      // Valid streamChunk should pass
+      const validChunk = {
+        type: 'streamChunk',
+        data: { chunk: { content: 'Hello' } },
+      };
+      assert.ok(messageQueue.queueMessage(sessionId, validChunk));
     });
   });
 
@@ -440,11 +488,88 @@ describe('MessageQueueService', () => {
 
     it('should handle shutdown when no interval exists', () => {
       // Test environment - no interval
-      assert.strictEqual(messageQueue.cleanupInterval, undefined);
+      assert.strictEqual(messageQueue.cleanupInterval, null);
 
       // Should not throw
       messageQueue.shutdown();
       assert.ok(true);
+    });
+  });
+
+  describe('deliverQueuedMessages', () => {
+    it('should deliver valid messages with proper spacing', (t, done) => {
+      const sessionId = 'test-session-1';
+      const clientId = 'client1';
+
+      // Queue multiple messages
+      messageQueue.queueMessage(sessionId, { type: 'test1', data: 'msg1' });
+      messageQueue.queueMessage(sessionId, { type: 'test2', data: 'msg2' });
+      messageQueue.queueMessage(sessionId, {
+        type: 'streamChunk',
+        data: { chunk: { content: 'valid' } },
+      });
+
+      const deliveredMessages = [];
+      const sendMessageFn = mock.fn((message) => {
+        deliveredMessages.push(message);
+        return true;
+      });
+
+      const deliveredIds = messageQueue.deliverQueuedMessages(sessionId, clientId, sendMessageFn);
+
+      // Should return immediately with IDs
+      assert.ok(Array.isArray(deliveredIds));
+
+      // Wait for async delivery
+      setTimeout(() => {
+        assert.strictEqual(sendMessageFn.mock.calls.length, 3);
+        assert.strictEqual(deliveredMessages.length, 3);
+
+        // Verify messages were enriched
+        deliveredMessages.forEach((msg) => {
+          assert.strictEqual(msg._queued, true);
+          assert.ok(msg._queuedAt);
+        });
+
+        done();
+      }, 200);
+    });
+
+    it('should filter empty streamChunk messages during delivery', (t, done) => {
+      const sessionId = 'test-session-1';
+      const clientId = 'client1';
+
+      // Queue mixed messages
+      messageQueue.queueMessage(sessionId, { type: 'test', data: 'valid' });
+
+      // Force queue an empty chunk by bypassing validation
+      const emptyChunk = {
+        id: 'msg_empty',
+        sessionId,
+        message: { type: 'streamChunk', data: { chunk: { content: '' } } },
+        timestamp: new Date(),
+        expiresAt: new Date(Date.now() + 86400000),
+        delivered: false,
+        deliveredAt: null,
+        deliveredTo: new Set(),
+      };
+      messageQueue.messageQueue.get(sessionId).push(emptyChunk);
+
+      const sendMessageFn = mock.fn(() => true);
+
+      messageQueue.deliverQueuedMessages(sessionId, clientId, sendMessageFn);
+
+      setTimeout(() => {
+        // Should only deliver the valid message
+        assert.strictEqual(sendMessageFn.mock.calls.length, 1);
+        assert.strictEqual(sendMessageFn.mock.calls[0].arguments[0].type, 'test');
+        done();
+      }, 100);
+    });
+
+    it('should handle empty queue gracefully', () => {
+      const result = messageQueue.deliverQueuedMessages('non-existent', 'client1', mock.fn());
+      assert.deepStrictEqual(result, []);
     });
   });
 });

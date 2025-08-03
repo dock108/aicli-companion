@@ -48,6 +48,7 @@ public struct AdaptiveContentView: View {
                 isProjectSelected = false
             }
         }
+        .handleNotifications()
         .onChange(of: scenePhase) { _, newPhase in
             switch newPhase {
             case .active:

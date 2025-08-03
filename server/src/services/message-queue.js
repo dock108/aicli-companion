@@ -1,6 +1,8 @@
 // Message queue service for persisting messages to disconnected clients
 // This handles the case where long-running tasks complete after the client disconnects
 
+import { getTelemetryService } from './telemetry.js';
+
 class MessageQueueService {
   constructor() {
     // In-memory storage for now, can be replaced with Redis later
@@ -13,6 +15,8 @@ class MessageQueueService {
       this.cleanupInterval = setInterval(() => {
         this.cleanupExpiredMessages();
       }, 3600000); // 1 hour
+    } else {
+      this.cleanupInterval = null;
     }
   }
 
@@ -23,10 +27,35 @@ class MessageQueueService {
    * @param {Object} options - Options including TTL
    */
   queueMessage(sessionId, message, options = {}) {
+    // Validate message structure
+    if (!message || typeof message !== 'object') {
+      console.error('❌ Invalid message structure for queuing');
+      return null;
+    }
+
+    // Filter out empty or incomplete messages
+    if (message.type === 'streamChunk' && !message.data?.chunk?.content) {
+      console.log('🚫 Filtering empty stream chunk from queue');
+      getTelemetryService().recordMessageFiltered('empty_stream_chunk');
+      return null;
+    }
+
+    // TODO: [QUESTION] Should we filter other message types?
+    // Currently only filtering empty streamChunks
+    // Potential candidates: empty commandProgress, duplicate assistantMessage
+
     const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const timestamp = new Date();
     const ttl = options.ttl || 86400000; // Default 24 hours
     const expiresAt = new Date(timestamp.getTime() + ttl);
+
+    // Add delivery metadata
+    const enrichedMessage = {
+      ...message,
+      _queued: true,
+      _queuedAt: timestamp.toISOString(),
+      _originalTimestamp: message.timestamp || null,
+    };
 
     // Store message
     if (!this.messageQueue.has(sessionId)) {
@@ -36,7 +65,7 @@ class MessageQueueService {
     const queuedMessage = {
       id: messageId,
       sessionId,
-      message,
+      message: enrichedMessage,
       timestamp,
       expiresAt,
       delivered: false,
@@ -51,6 +80,9 @@ class MessageQueueService {
     console.log(`   Message type: ${message.type}`);
     console.log(`   Expires at: ${expiresAt.toISOString()}`);
     console.log(`   Queue size for session: ${this.messageQueue.get(sessionId).length}`);
+
+    // Record telemetry
+    getTelemetryService().recordMessageQueued();
 
     return messageId;
   }
@@ -104,6 +136,9 @@ class MessageQueueService {
         }
 
         console.log(`✅ Marked message ${messageId} as delivered to client ${clientId}`);
+
+        // Record telemetry
+        getTelemetryService().recordMessageDelivered();
       }
     }
   }
@@ -208,11 +243,70 @@ class MessageQueueService {
   }
 
   /**
+   * Deliver queued messages with proper validation and spacing
+   * @param {string} sessionId - The session ID
+   * @param {string} clientId - The client ID
+   * @param {Function} sendMessageFn - Function to send messages
+   * @returns {Array} Array of delivered message IDs
+   */
+  deliverQueuedMessages(sessionId, clientId, sendMessageFn) {
+    const messages = this.getUndeliveredMessages(sessionId, clientId);
+
+    if (messages.length === 0) {
+      return [];
+    }
+
+    // Sort by timestamp to maintain order
+    messages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+    // Filter and validate each message before delivery
+    const validMessages = messages.filter((msg) => {
+      if (msg.message.type === 'streamChunk' && !msg.message.data?.chunk?.content) {
+        console.log('🚫 Skipping empty queued chunk');
+        return false;
+      }
+
+      // TODO: [QUESTION] Add validation for other message types?
+      // Need to determine which message types can be safely filtered
+
+      return true;
+    });
+
+    const deliveredMessageIds = [];
+
+    // Deliver with proper spacing to prevent flooding
+    validMessages.forEach((msg, index) => {
+      setTimeout(() => {
+        const success = sendMessageFn(msg.message);
+        if (success) {
+          deliveredMessageIds.push(msg.id);
+        }
+      }, index * 50); // 50ms spacing
+    });
+
+    // Mark messages as delivered after a delay
+    setTimeout(
+      () => {
+        if (deliveredMessageIds.length > 0) {
+          this.markAsDelivered(deliveredMessageIds, clientId);
+        }
+      },
+      validMessages.length * 50 + 100
+    );
+
+    console.log(
+      `📬 Delivering ${validMessages.length} messages to client ${clientId} for session ${sessionId}`
+    );
+    return deliveredMessageIds;
+  }
+
+  /**
    * Shutdown the service
    */
   shutdown() {
     if (this.cleanupInterval) {
       clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
     }
     this.messageQueue.clear();
     this.messageMetadata.clear();
@@ -221,8 +315,21 @@ class MessageQueueService {
   }
 }
 
-// Export singleton instance
-export const messageQueueService = new MessageQueueService();
+// Create singleton instance lazily to avoid test issues
+let _messageQueueService = null;
+
+export const getMessageQueueService = () => {
+  if (!_messageQueueService) {
+    _messageQueueService = new MessageQueueService();
+  }
+  return _messageQueueService;
+};
+
+// For backward compatibility and easy access
+export const messageQueueService =
+  process.env.NODE_ENV === 'test'
+    ? null // Don't create singleton in test environment
+    : getMessageQueueService();
 
 // Export class for testing
 export { MessageQueueService };

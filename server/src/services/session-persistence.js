@@ -225,6 +225,20 @@ export class SessionPersistenceService {
   }
 
   /**
+   * Get session by working directory
+   * @param {string} workingDirectory - The working directory path
+   * @returns {Object|null} Session object with sessionId if found
+   */
+  getSessionByWorkingDirectory(workingDirectory) {
+    for (const [sessionId, session] of this.sessionsCache) {
+      if (session.workingDirectory === workingDirectory) {
+        return { sessionId, session };
+      }
+    }
+    return null;
+  }
+
+  /**
    * Store a new session or update existing one
    */
   async setSession(sessionId, sessionData) {

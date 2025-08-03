@@ -14,6 +14,9 @@ class ChatViewModel: ObservableObject {
     // MARK: - Services
     private let webSocketService = WebSocketService.shared
     private let persistenceService = MessagePersistenceService.shared
+    private let queueManager = MessageQueueManager.shared
+    private let reliabilityManager = ConnectionReliabilityManager.shared
+    private let performanceMonitor = PerformanceMonitor.shared
     private let aicliService: AICLIService
     private let settings: SettingsManager
     
@@ -47,13 +50,21 @@ class ChatViewModel: ObservableObject {
             type: .text
         )
         messages.append(userMessage)
+        reliabilityManager.cacheMessage(userMessage)
         
         // Send command
         isLoading = true
-        sendAICLICommand(text, for: project)
+        
+        // Start performance tracking
+        let messageStartTime = performanceMonitor.startMessageTracking(
+            messageId: userMessage.id.uuidString,
+            type: "user_command"
+        )
+        
+        sendAICLICommand(text, for: project, messageStartTime: messageStartTime)
     }
     
-    private func sendAICLICommand(_ command: String, for project: Project) {
+    private func sendAICLICommand(_ command: String, for project: Project, messageStartTime: Date) {
         // Check if we have an active session
         guard let session = activeSession else {
             isLoading = false
@@ -107,6 +118,9 @@ class ChatViewModel: ObservableObject {
         // Mark that we're waiting for a direct Claude response
         isWaitingForClaudeResponse = true
         
+        // Store the message start time for performance tracking
+        objc_setAssociatedObject(claudeRequest, "messageStartTime", messageStartTime, .OBJC_ASSOCIATION_RETAIN)
+        
         // Send via WebSocket
         webSocketService.sendMessage(claudeRequest, type: .claudeCommand) { result in
             switch result {
@@ -127,7 +141,7 @@ class ChatViewModel: ObservableObject {
         }
     }
     
-    func startSession(for project: Project, connection: ServerConnection) {
+    func startSession(for project: Project, connection: ServerConnection, completion: (() -> Void)? = nil) {
         guard !isLoading else { return }
         
         isLoading = true
@@ -147,13 +161,11 @@ class ChatViewModel: ObservableObject {
                     self.webSocketService.trackSession(session.sessionId)
                     self.webSocketService.subscribeToSessions([session.sessionId])
                     
-                    // Add success message
-                    let successMessage = Message(
-                        content: "✅ AICLI ready in **\(project.name)**\n\nYou can now interact with your project. I have access to all files in this directory and can help you with coding tasks, analysis, and more.\n\nType your first message to get started!",
-                        sender: .assistant,
-                        type: .text
-                    )
-                    self.messages.append(successMessage)
+                    // Session is ready - no welcome message needed
+                    // User can start typing immediately
+                    
+                    // Call completion callback if provided
+                    completion?()
                     
                 case .failure(let error):
                     self.sessionError = error.localizedDescription
@@ -191,7 +203,27 @@ class ChatViewModel: ObservableObject {
         if !restoredMessages.isEmpty {
             messages = restoredMessages
             print("📖 Loaded \(messages.count) messages for project \(project.name)")
+        } else {
+            // No persisted messages found - this could mean:
+            // 1. A brand new session (no messages yet)
+            // 2. Session exists on server but no conversation history was saved locally
+            print("📝 No persisted messages found for session \(sessionId)")
+            
+            // Don't automatically add welcome message - let the natural flow handle it
+            // The session will either:
+            // - Show empty state if truly new
+            // - Receive messages from server if conversation exists
+            messages = []
         }
+    }
+    
+    private func addWelcomeMessage(for project: Project) {
+        let welcomeMessage = Message(
+            content: "✅ Connected to **\(project.name)**\n\nSession restored. You can continue working on your project. I have access to all files in this directory.\n\nWhat can I help you with today?",
+            sender: .assistant,
+            type: .text
+        )
+        messages.append(welcomeMessage)
     }
     
     // MARK: - Private Methods
@@ -208,6 +240,16 @@ class ChatViewModel: ObservableObject {
         if case .claudeResponse(let response) = message.data {
             isLoading = false
             progressInfo = nil
+            
+            // Complete performance tracking
+            if let requestId = message.requestId {
+                performanceMonitor.completeMessageTracking(
+                    messageId: requestId,
+                    startTime: Date(), // This should be retrieved from the request
+                    type: "claude_response",
+                    success: response.success
+                )
+            }
             
             if response.success {
                 let assistantMessage = Message(
@@ -294,6 +336,19 @@ class ChatViewModel: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+        
+        // Listen for queued message notifications
+        webSocketService.setMessageHandler(for: .progress) { [weak self] message in
+            guard let self = self else { return }
+            
+            if case .progress(let progress) = message.data {
+                if progress.stage.contains("queue") {
+                    Task { @MainActor in
+                        self.handleQueueProgress(progress)
+                    }
+                }
+            }
+        }
     }
     
     private func handleStreamData(_ streamData: StreamDataResponse) {
@@ -363,14 +418,48 @@ class ChatViewModel: ObservableObject {
         // Cancel timeout since we got a response
         messageTimeout?.invalidate()
         
-        // Add the completed message to the UI
-        messages.append(message)
+        // Check if this message was already received (deduplication after reconnect)
+        if reliabilityManager.wasMessageReceived(message) {
+            print("🔄 Duplicate message detected after reconnection, skipping")
+            return
+        }
+        
+        // Check if this message was queued
+        var finalMessage = message
+        if let sessionId = activeSession?.sessionId {
+            let queueInfo = queueManager.getQueueInfo(for: sessionId)
+            if queueInfo.count > 0 {
+                // Mark message as delivered from queue
+                finalMessage.markDeliveredFromQueue()
+                queueManager.markMessageDelivered(messageId: message.id.uuidString)
+            }
+        }
+        
+        // Cache the message for reconnection deduplication
+        reliabilityManager.cacheMessage(finalMessage)
+        
+        // Add the completed message to the UI with proper ordering
+        let orderedMessages = MessageQueueOrganizer.sortMessages(messages + [finalMessage])
+        messages = orderedMessages
         
         // Reset loading state
         isLoading = false
         progressInfo = nil
         
         print("✅ Added streamed message to UI: \(message.content.prefix(50))...")
+    }
+    
+    private func handleQueueProgress(_ progress: ProgressResponse) {
+        // Update progress info with queue status
+        progressInfo = ProgressInfo(from: progress)
+        
+        // Track queued messages
+        if progress.message.contains("Message queued") {
+            queueManager.trackQueuedMessage(
+                messageId: UUID().uuidString,
+                sessionId: progress.sessionId
+            )
+        }
     }
     
     // MARK: - Activity Helpers

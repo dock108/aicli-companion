@@ -10,6 +10,9 @@ import { dirname, join } from 'path';
 import { setupRoutes } from './routes/index.js';
 import { setupProjectRoutes } from './routes/projects.js';
 import { setupAICLIStatusRoutes } from './routes/aicli-status.js';
+import { setupSessionRoutes } from './routes/sessions.js';
+import telemetryRoutes from './routes/telemetry.js';
+import pushNotificationRoutes from './routes/push-notifications.js';
 import { setupWebSocket } from './services/websocket.js';
 import { errorHandler } from './middleware/error.js';
 import { AICLIService } from './services/aicli.js';
@@ -80,6 +83,9 @@ class AICLICompanionServer {
     setupRoutes(this.app, this.aicliService);
     setupProjectRoutes(this.app, this.aicliService);
     setupAICLIStatusRoutes(this.app, this.aicliService);
+    setupSessionRoutes(this.app, this.aicliService);
+    this.app.use(telemetryRoutes);
+    this.app.use(pushNotificationRoutes);
 
     // Static files (for web interface if needed)
     this.app.use('/static', express.static(join(__dirname, '../public')));

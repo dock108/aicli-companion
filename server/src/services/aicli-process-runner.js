@@ -71,6 +71,8 @@ export class AICLIProcessRunner extends EventEmitter {
     // For continuing conversations or restored sessions, use --resume instead of --session-id
     // Restored sessions must use --resume because AICLI CLI already knows about them
     if (conversationStarted || isRestoredSession) {
+      // For established conversations or sessions that were restored from persistence,
+      // use --resume to continue the existing Claude CLI session
       args.push('--resume');
       args.push(sessionId);
     } else {
@@ -289,7 +291,7 @@ export class AICLIProcessRunner extends EventEmitter {
 
       const chunk = data.toString();
       stdout += chunk;
-      console.log(
+      console.info(
         `📊 AICLI CLI STDOUT (${chunk.length} chars, total: ${stdout.length}):`,
         JSON.stringify(chunk.substring(0, 200))
       );

@@ -1,3 +1,5 @@
+import { getTelemetryService } from './telemetry.js';
+
 /**
  * Utility functions for WebSocket message handling and formatting
  */
@@ -21,9 +23,13 @@ export class WebSocketUtilities {
       // Update client activity
       client.lastActivity = new Date();
 
+      // Record telemetry
+      getTelemetryService().recordMessageSent(clientId, message.type, true);
+
       return true;
     } catch (error) {
       console.error(`Error sending message to client ${clientId}:`, error);
+      getTelemetryService().recordMessageSent(clientId, message.type, false);
       return false;
     }
   }
@@ -92,6 +98,48 @@ export class WebSocketUtilities {
         console.log(`✅ Complete assistant message delivered to ${successCount} clients`);
       }
     }
+  }
+
+  /**
+   * Validate stream chunk before processing
+   */
+  static validateStreamChunk(chunk) {
+    if (!chunk || typeof chunk !== 'object') return false;
+
+    // Check for required fields - support both data-based and content-based chunks
+    if (!chunk.type) return false;
+
+    // Handle chunks from stream parser (has 'content' field directly)
+    if ('content' in chunk) {
+      // Filter empty content chunks
+      if ((chunk.type === 'text' || chunk.type === 'content') && !chunk.content?.trim()) {
+        return false;
+      }
+      return true;
+    }
+
+    // Handle chunks with data field (original format)
+    if (chunk.data) {
+      // Filter empty content chunks
+      if (chunk.type === 'content' && !chunk.data.content?.trim()) {
+        return false;
+      }
+      // Filter incomplete tool use chunks
+      if (chunk.type === 'tool_use' && !chunk.data.name) {
+        return false;
+      }
+      return true;
+    }
+
+    // Special case for complete/divider chunks that might not have content
+    if (chunk.type === 'complete' || chunk.type === 'divider' || chunk.type === 'tool_use') {
+      return true;
+    }
+
+    // TODO: [QUESTION] Get complete list of chunk types from Claude API docs
+    // Currently handling: content, tool_use, text, code, header, list, section, divider, complete
+
+    return false;
   }
 
   /**

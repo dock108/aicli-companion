@@ -19,6 +19,7 @@ export class AICLISessionManager extends EventEmitter {
     this.maxSessions = options.maxSessions || 10;
     this.sessionTimeout = options.sessionTimeout || 30 * 60 * 1000; // 30 minutes
     this.backgroundedSessionTimeout = options.backgroundedSessionTimeout || 4 * 60 * 60 * 1000; // 4 hours
+    this.minTimeoutCheckInterval = options.minTimeoutCheckInterval || 60000; // 1 minute default
 
     // Persistence will be initialized by the server after startup
     // This prevents race conditions from multiple initialization attempts
@@ -560,7 +561,7 @@ export class AICLISessionManager extends EventEmitter {
     // Only timeout if truly inactive for longer than timeout period
     if (
       !session.isProcessing &&
-      (!buffer || buffer.messages.length === 0) &&
+      (!buffer || buffer.assistantMessages.length === 0) &&
       inactiveTime > timeoutToUse
     ) {
       console.log(
@@ -571,7 +572,7 @@ export class AICLISessionManager extends EventEmitter {
       this.closeSession(sessionId);
     } else {
       // Reschedule another timeout check
-      const remainingTime = Math.max(timeoutToUse - inactiveTime, 60000); // At least 1 minute
+      const remainingTime = Math.max(timeoutToUse - inactiveTime, this.minTimeoutCheckInterval);
       setTimeout(() => this.checkSessionTimeout(sessionId), remainingTime);
     }
   }

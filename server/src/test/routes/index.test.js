@@ -1,4 +1,4 @@
-import { describe, it, beforeEach, mock } from 'node:test';
+import { describe, it, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert';
 import express from 'express';
 import { setupRoutes } from '../../routes/index.js';
@@ -7,10 +7,14 @@ describe('API Routes', () => {
   let app;
   let claudeService;
   let handlers;
+  let originalRouter;
 
   beforeEach(() => {
     app = express();
     handlers = {};
+
+    // Store original Router
+    originalRouter = express.Router;
 
     // Mock express router
     const mockRouter = {
@@ -64,6 +68,13 @@ describe('API Routes', () => {
     app.use = mock.fn();
 
     setupRoutes(app, claudeService);
+  });
+
+  afterEach(() => {
+    // Restore original Router
+    if (originalRouter) {
+      express.Router = originalRouter;
+    }
   });
 
   describe('GET /health', () => {

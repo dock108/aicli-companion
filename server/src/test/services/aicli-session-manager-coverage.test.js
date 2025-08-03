@@ -15,11 +15,18 @@ describe('AICLISessionManager - Additional Coverage', () => {
       maxSessions: 3,
       sessionTimeout: 1000, // 1 second for testing
       backgroundedSessionTimeout: 2000, // 2 seconds for testing
+      minTimeoutCheckInterval: 100, // 100ms for testing
     });
   });
 
   afterEach(async () => {
+    // Ensure all sessions are cleaned up
     await sessionManager.shutdown();
+
+    // Clear any remaining data
+    sessionManager.activeSessions.clear();
+    sessionManager.sessionMessageBuffers.clear();
+
     if (testDir) {
       rmSync(testDir, { recursive: true, force: true });
     }
@@ -72,7 +79,7 @@ describe('AICLISessionManager - Additional Coverage', () => {
 
       await sessionManager.markSessionBackgrounded(result.sessionId);
 
-      const session = sessionManager.getSession(result.sessionId);
+      const session = await sessionManager.getSession(result.sessionId);
       assert.strictEqual(session.isBackgrounded, true);
       assert.ok(session.backgroundedAt);
     });
@@ -103,14 +110,14 @@ describe('AICLISessionManager - Additional Coverage', () => {
         testDir
       );
 
-      const session1 = sessionManager.getSession(result.sessionId);
+      const session1 = await sessionManager.getSession(result.sessionId);
       const initialActivity = session1.lastActivity;
 
       // Wait a bit and update activity
       await new Promise((resolve) => setTimeout(resolve, 10));
       await sessionManager.updateSessionActivity(result.sessionId);
 
-      const session2 = sessionManager.getSession(result.sessionId);
+      const session2 = await sessionManager.getSession(result.sessionId);
       assert.ok(session2.lastActivity > initialActivity);
     });
 
@@ -122,11 +129,11 @@ describe('AICLISessionManager - Additional Coverage', () => {
       );
 
       sessionManager.setSessionProcessing(result.sessionId, true);
-      let session = sessionManager.getSession(result.sessionId);
+      let session = await sessionManager.getSession(result.sessionId);
       assert.strictEqual(session.isProcessing, true);
 
       sessionManager.setSessionProcessing(result.sessionId, false);
-      session = sessionManager.getSession(result.sessionId);
+      session = await sessionManager.getSession(result.sessionId);
       assert.strictEqual(session.isProcessing, false);
     });
 
@@ -147,10 +154,12 @@ describe('AICLISessionManager - Additional Coverage', () => {
 
       const buffer = sessionManager.getSessionBuffer(result.sessionId);
       assert.ok(buffer);
-      assert.ok(Array.isArray(buffer.messages));
+      assert.ok(Array.isArray(buffer.assistantMessages));
 
       sessionManager.clearSessionBuffer(result.sessionId);
-      assert.strictEqual(buffer.messages.length, 0);
+      // Get the buffer again to check if it was cleared
+      const clearedBuffer = sessionManager.getSessionBuffer(result.sessionId);
+      assert.strictEqual(clearedBuffer.assistantMessages.length, 0);
     });
 
     it('should handle clearing non-existent buffer', () => {
@@ -162,8 +171,13 @@ describe('AICLISessionManager - Additional Coverage', () => {
 
   describe('Session queries', () => {
     it('should get all active sessions', async () => {
-      await sessionManager.createInteractiveSession('s1', 'test', `${testDir}/p1`);
-      await sessionManager.createInteractiveSession('s2', 'test', `${testDir}/p2`);
+      const p1Dir = join(testDir, 'p1');
+      const p2Dir = join(testDir, 'p2');
+      mkdirSync(p1Dir, { recursive: true });
+      mkdirSync(p2Dir, { recursive: true });
+
+      await sessionManager.createInteractiveSession('s1', 'test', p1Dir);
+      await sessionManager.createInteractiveSession('s2', 'test', p2Dir);
 
       const sessions = sessionManager.getActiveSessions();
       assert.strictEqual(sessions.length, 2);
@@ -172,8 +186,13 @@ describe('AICLISessionManager - Additional Coverage', () => {
     });
 
     it('should get all sessions with metadata', async () => {
-      await sessionManager.createInteractiveSession('meta1', 'test', `${testDir}/meta1`);
-      await sessionManager.createInteractiveSession('meta2', 'test', `${testDir}/meta2`);
+      const meta1Dir = join(testDir, 'meta1');
+      const meta2Dir = join(testDir, 'meta2');
+      mkdirSync(meta1Dir, { recursive: true });
+      mkdirSync(meta2Dir, { recursive: true });
+
+      await sessionManager.createInteractiveSession('meta1', 'test', meta1Dir);
+      await sessionManager.createInteractiveSession('meta2', 'test', meta2Dir);
 
       const sessions = sessionManager.getAllSessions();
       assert.strictEqual(sessions.length, 2);
@@ -187,43 +206,62 @@ describe('AICLISessionManager - Additional Coverage', () => {
       // Increase test timeout
       this.timeout(3000);
 
-      const result = await sessionManager.createInteractiveSession(
+      // Create a fresh session manager for this test
+      const timeoutManager = new AICLISessionManager({
+        sessionTimeout: 500, // 500ms for testing
+        minTimeoutCheckInterval: 50, // 50ms for testing
+      });
+
+      const result = await timeoutManager.createInteractiveSession(
         'timeout-session',
         'test',
         testDir
       );
 
       // Wait for timeout
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       // Session should be cleaned up
-      const session = sessionManager.getSession(result.sessionId);
+      const session = await timeoutManager.getSession(result.sessionId);
       assert.strictEqual(session, null);
+
+      // Clean up
+      await timeoutManager.shutdown();
     });
 
     it('should handle backgrounded session with longer timeout', async function () {
-      this.timeout(3000);
+      this.timeout(5000);
 
-      const result = await sessionManager.createInteractiveSession(
+      // Create a fresh session manager for this test
+      const bgTimeoutManager = new AICLISessionManager({
+        sessionTimeout: 500, // 500ms for testing
+        backgroundedSessionTimeout: 1500, // 1.5 seconds for testing
+        minTimeoutCheckInterval: 50, // 50ms for testing
+      });
+
+      const result = await bgTimeoutManager.createInteractiveSession(
         'bg-timeout-session',
         'test',
         testDir
       );
 
       // Mark as backgrounded
-      await sessionManager.markSessionBackgrounded(result.sessionId);
+      await bgTimeoutManager.markSessionBackgrounded(result.sessionId);
 
       // Wait for regular timeout (should still exist due to longer backgrounded timeout)
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await new Promise((resolve) => setTimeout(resolve, 800));
 
-      let session = sessionManager.getSession(result.sessionId);
+      let session = await bgTimeoutManager.getSession(result.sessionId);
       assert.ok(session); // Should still exist
 
       // Wait for backgrounded timeout
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      session = sessionManager.getSession(result.sessionId);
+      session = await bgTimeoutManager.getSession(result.sessionId);
       assert.strictEqual(session, null); // Should be cleaned up
+
+      // Clean up
+      await bgTimeoutManager.shutdown();
     });
   });
 
@@ -233,7 +271,7 @@ describe('AICLISessionManager - Additional Coverage', () => {
 
       await sessionManager.cleanupDeadSession(result.sessionId);
 
-      const session = sessionManager.getSession(result.sessionId);
+      const session = await sessionManager.getSession(result.sessionId);
       assert.strictEqual(session, null);
     });
 
@@ -268,7 +306,7 @@ describe('AICLISessionManager - Additional Coverage', () => {
       assert.ok(closeResult.success);
       assert.strictEqual(closeResult.message, 'Session closed');
 
-      const session = sessionManager.getSession(result.sessionId);
+      const session = await sessionManager.getSession(result.sessionId);
       assert.strictEqual(session, null);
     });
 

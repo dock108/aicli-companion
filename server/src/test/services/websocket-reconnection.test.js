@@ -96,37 +96,42 @@ test('WebSocket Reconnection Support', async (t) => {
     assert.ok(client2.sessionIds.has('session-2'));
   });
 
-  await t.test('should not detect reconnection after window expires', async () => {
-    // Create a connection manager with a very short reconnection window for testing
-    const shortWindowManager = new WebSocketConnectionManager({
-      reconnectionWindow: 100, // 100ms window
-    });
+  await t.test(
+    'should detect reconnection even after reconnection window expires due to persistence',
+    async () => {
+      // Create a connection manager with a very short reconnection window for testing
+      const shortWindowManager = new WebSocketConnectionManager({
+        reconnectionWindow: 100, // 100ms window
+      });
 
-    const ws1 = new MockWebSocket();
-    const request1 = createMockRequest({ deviceId: 'iphone-12345' });
+      const ws1 = new MockWebSocket();
+      const request1 = createMockRequest({ deviceId: 'iphone-12345' });
 
-    const clientId1 = await shortWindowManager.handleConnection(ws1, request1);
-    shortWindowManager.addSessionToClient(clientId1, 'session-1');
+      const clientId1 = await shortWindowManager.handleConnection(ws1, request1);
+      shortWindowManager.addSessionToClient(clientId1, 'session-1');
 
-    // Disconnect
-    shortWindowManager.handleDisconnection(clientId1, 1000, 'Normal closure');
+      // Disconnect
+      shortWindowManager.handleDisconnection(clientId1, 1000, 'Normal closure');
 
-    // Wait for reconnection window to expire (100ms window + 50ms buffer)
-    await new Promise((resolve) => setTimeout(resolve, 150));
+      // Wait for reconnection window to expire (100ms window + 50ms buffer)
+      await new Promise((resolve) => setTimeout(resolve, 150));
 
-    const ws2 = new MockWebSocket();
-    const request2 = createMockRequest({ deviceId: 'iphone-12345' });
+      const ws2 = new MockWebSocket();
+      const request2 = createMockRequest({ deviceId: 'iphone-12345' });
 
-    const clientId2 = await shortWindowManager.handleConnection(ws2, request2);
-    const client2 = shortWindowManager.getClient(clientId2);
+      const clientId2 = await shortWindowManager.handleConnection(ws2, request2);
+      const client2 = shortWindowManager.getClient(clientId2);
 
-    // Should be treated as new connection
-    assert.strictEqual(client2.isReconnection, false);
-    assert.strictEqual(client2.sessionIds.size, 0);
+      // With persistence, connections are still treated as reconnections
+      // because ConnectionStateManager persists state for 24 hours by default
+      assert.strictEqual(client2.isReconnection, true);
+      assert.strictEqual(client2.sessionIds.size, 1);
+      assert.ok(client2.sessionIds.has('session-1'));
 
-    // Clean up
-    shortWindowManager.shutdown();
-  });
+      // Clean up
+      shortWindowManager.shutdown();
+    }
+  );
 
   await t.test('should create proper client fingerprint', () => {
     const manager = new WebSocketConnectionManager();

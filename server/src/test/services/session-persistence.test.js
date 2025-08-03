@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { SessionPersistence } from '../../services/session-persistence.js';
+import { SessionPersistenceService } from '../../services/session-persistence.js';
 
 describe('SessionPersistence', () => {
   let persistence;
@@ -14,8 +14,7 @@ describe('SessionPersistence', () => {
     testDir = mkdtempSync(join(tmpdir(), 'session-persist-test-'));
 
     // Create new persistence instance with test directory
-    persistence = new SessionPersistence();
-    persistence.sessionDir = testDir;
+    persistence = new SessionPersistenceService({ storageDir: testDir });
     persistence.sessionsCache = new Map();
     persistence.isInitialized = false;
 
@@ -52,8 +51,7 @@ describe('SessionPersistence', () => {
     await persistence.saveSessions();
 
     // Create new instance and load from disk
-    const newPersistence = new SessionPersistence();
-    newPersistence.sessionDir = testDir;
+    const newPersistence = new SessionPersistenceService({ storageDir: testDir });
     await newPersistence.initialize();
 
     // Check if session was loaded
@@ -198,32 +196,45 @@ describe('SessionPersistence', () => {
     });
 
     const exported = await persistence.exportSessions();
-    assert.strictEqual(exported.sessions.length, 2);
-    assert.ok(exported.exportedAt);
-    assert.strictEqual(exported.version, '1.0');
+    assert.strictEqual(exported.length, 2);
+    assert.ok(exported.some((s) => s.sessionId === 'export-1'));
+    assert.ok(exported.some((s) => s.sessionId === 'export-2'));
   });
 
   it('should get stats', () => {
-    persistence.sessionsCache.set('s1', { lastActivity: Date.now() });
-    persistence.sessionsCache.set('s2', { lastActivity: Date.now() - 5 * 60 * 60 * 1000 });
+    const now = Date.now();
+    persistence.sessionsCache.set('s1', {
+      lastActivity: now,
+      createdAt: now - 1000,
+      conversationStarted: true,
+      isBackgrounded: false,
+    });
+    persistence.sessionsCache.set('s2', {
+      lastActivity: now - 5 * 60 * 60 * 1000,
+      createdAt: now - 10000,
+      conversationStarted: false,
+      isBackgrounded: true,
+    });
 
     const stats = persistence.getStats();
-    assert.strictEqual(stats.totalSessions, 2);
-    assert.strictEqual(stats.staleSessions, 1);
-    assert.ok(stats.oldestSession);
-    assert.ok(stats.newestSession);
+    assert.strictEqual(stats.total, 2);
+    assert.strictEqual(stats.withConversation, 1);
+    assert.strictEqual(stats.backgrounded, 1);
+    assert.strictEqual(stats.recentlyActive, 1);
+    assert.ok(stats.oldest);
+    assert.ok(stats.newest);
   });
 
   it('should handle errors during initialization', async () => {
-    const badPersistence = new SessionPersistence();
-    badPersistence.sessionDir = '/invalid/path/that/cannot/exist';
+    const badPersistence = new SessionPersistenceService({
+      storageDir: '/invalid/path/that/cannot/exist',
+    });
 
-    // Should not throw, but log error
-    await badPersistence.initialize();
-
-    // Should still be usable (in-memory only)
-    await badPersistence.setSession('test', { workingDirectory: '/test' });
-    assert.ok(badPersistence.hasSession('test'));
+    // Should throw an error
+    await assert.rejects(badPersistence.initialize(), {
+      code: 'ENOENT',
+    });
+    assert.strictEqual(badPersistence.isInitialized, false);
   });
 
   it('should handle update on non-existent session', async () => {

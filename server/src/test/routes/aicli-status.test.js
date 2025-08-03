@@ -1,4 +1,4 @@
-import { describe, it, beforeEach, mock } from 'node:test';
+import { describe, it, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert';
 import express from 'express';
 import { setupAICLIStatusRoutes } from '../../routes/aicli-status.js';
@@ -8,6 +8,7 @@ describe('AICLI Status Routes', () => {
   let aicliService;
   let handlers;
   let mockRouter;
+  let originalRouter;
 
   beforeEach(() => {
     app = express();
@@ -24,6 +25,9 @@ describe('AICLI Status Routes', () => {
         handlers[`POST ${path}`] = handler;
       }),
     };
+
+    // Store original Router
+    originalRouter = express.Router;
 
     // Override express.Router
     express.Router = () => mockRouter;
@@ -66,6 +70,13 @@ describe('AICLI Status Routes', () => {
 
     // Mock app.use
     app.use = mock.fn();
+  });
+
+  afterEach(() => {
+    // Restore original Router
+    if (originalRouter) {
+      express.Router = originalRouter;
+    }
   });
 
   describe('setupAICLIStatusRoutes', () => {

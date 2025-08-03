@@ -202,9 +202,7 @@ describe('AICLISessionManager - Additional Coverage', () => {
   });
 
   describe('Session timeout', () => {
-    it('should timeout inactive session', async function () {
-      // Increase test timeout
-      this.timeout(3000);
+    it('should timeout inactive session', { timeout: 3000 }, async () => {
 
       // Create a fresh session manager for this test
       const timeoutManager = new AICLISessionManager({
@@ -229,8 +227,7 @@ describe('AICLISessionManager - Additional Coverage', () => {
       await timeoutManager.shutdown();
     });
 
-    it('should handle backgrounded session with longer timeout', async function () {
-      this.timeout(5000);
+    it('should handle backgrounded session with longer timeout', { timeout: 5000 }, async () => {
 
       // Create a fresh session manager for this test
       const bgTimeoutManager = new AICLISessionManager({

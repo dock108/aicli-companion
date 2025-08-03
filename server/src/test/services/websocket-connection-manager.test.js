@@ -25,20 +25,19 @@ describe('WebSocketConnectionManager', () => {
       writable: true,
       value: true,
     });
-    
+
     // Create mock functions with call tracking
     const createMockFunction = () => {
-      const fn = function(...args) {};
+      const fn = function (..._args) {};
       fn.mock = { calls: [] };
       const originalFn = fn;
-      const mockFn = function(...args) {
+      const mockFn = function (...args) {
         mockFn.mock.calls.push({ arguments: args });
         return originalFn.apply(this, args);
       };
       mockFn.mock = { calls: [] };
       return mockFn;
     };
-    
     mockWs.close = createMockFunction();
     mockWs.terminate = createMockFunction();
     mockWs.ping = createMockFunction();
@@ -411,15 +410,14 @@ describe('WebSocketConnectionManager', () => {
         writable: true,
         value: true,
       });
-      
+
       const createMockFunction = () => {
-        const mockFn = function(...args) {
+        const mockFn = function (...args) {
           mockFn.mock.calls.push({ arguments: args });
         };
         mockFn.mock = { calls: [] };
         return mockFn;
       };
-      
       mockWs2.close = createMockFunction();
       mockWs2.terminate = createMockFunction();
       mockWs2.ping = createMockFunction();
@@ -480,15 +478,14 @@ describe('WebSocketConnectionManager', () => {
         writable: true,
         value: true,
       });
-      
+
       const createMockFunction = () => {
-        const mockFn = function(...args) {
+        const mockFn = function (...args) {
           mockFn.mock.calls.push({ arguments: args });
         };
         mockFn.mock = { calls: [] };
         return mockFn;
       };
-      
       mockWs2.close = createMockFunction();
       mockWs2.terminate = createMockFunction();
       mockWs2.ping = createMockFunction();

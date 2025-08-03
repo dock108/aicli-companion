@@ -169,9 +169,15 @@ describe('AICLIProcessRunner - Additional Coverage', () => {
 
       process.nextTick(() => {
         // Send valid JSON output with stream content
-        spawnedProcess.stdout.emit('data', Buffer.from('{"type":"content","content":"Regular text output"}\n'));
+        spawnedProcess.stdout.emit(
+          'data',
+          Buffer.from('{"type":"content","content":"Regular text output"}\n')
+        );
         spawnedProcess.stdout.emit('data', Buffer.from('{"type":"content","content":"## Code"}\n'));
-        spawnedProcess.stdout.emit('data', Buffer.from('{"type":"content","content":"```javascript\\nconst x = 1;\\n```"}\n'));
+        spawnedProcess.stdout.emit(
+          'data',
+          Buffer.from('{"type":"content","content":"```javascript\\nconst x = 1;\\n```"}\n')
+        );
         spawnedProcess.emit('close', 0);
       });
 

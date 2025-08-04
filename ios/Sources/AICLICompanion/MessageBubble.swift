@@ -36,12 +36,6 @@ struct MessageBubble: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: message.sender == .user ? .trailing : .leading)
-                
-                // Timestamp
-                Text(message.timestamp, style: .time)
-                    .font(Typography.font(.caption))
-                    .foregroundColor(Colors.textSecondary(for: colorScheme))
-                    .padding(.horizontal, 4)
             }
             .frame(maxWidth: maxBubbleWidth)
             
@@ -141,9 +135,18 @@ struct MessageBubble: View {
         }
     }
     
-    // MARK: - Code Block Detection
+    // MARK: - Markdown Detection
     private var hasCodeBlock: Bool {
-        message.content.contains("```") || message.content.contains("`")
+        // Check for any markdown formatting
+        return message.content.contains("```") || 
+               message.content.contains("`") ||
+               message.content.contains("**") ||
+               message.content.contains("*") ||
+               message.content.contains("#") ||
+               message.content.contains("[") ||
+               message.content.contains("- ") ||
+               message.content.contains("* ") ||
+               message.content.range(of: "^\\d+\\. ", options: .regularExpression) != nil
     }
     
     // MARK: - Formatted Content Rendering
@@ -176,8 +179,65 @@ struct MessageBubble: View {
                                 .fill(Colors.bgBase(for: colorScheme))
                         )
                         .textSelection(.enabled)
+                    
+                case .heading(let text, let level):
+                    Text(text)
+                        .font(headingFont(for: level))
+                        .foregroundColor(Colors.textPrimary(for: colorScheme))
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                        .padding(.top, level == 1 ? 8 : 4)
+                    
+                case .bold(let text):
+                    Text(text)
+                        .font(Typography.font(.body))
+                        .fontWeight(.bold)
+                        .foregroundColor(Colors.textPrimary(for: colorScheme))
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                    
+                case .italic(let text):
+                    Text(text)
+                        .font(Typography.font(.body))
+                        .italic()
+                        .foregroundColor(Colors.textPrimary(for: colorScheme))
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                    
+                case .link(let text, let url):
+                    Link(text, destination: URL(string: url)!)
+                        .font(Typography.font(.body))
+                        .foregroundColor(Colors.accentPrimaryEnd)
+                        .underline()
+                    
+                case .listItem(let text, let ordered):
+                    HStack(alignment: .top, spacing: 8) {
+                        Text(ordered ? "1." : "•")
+                            .font(Typography.font(.body))
+                            .foregroundColor(Colors.textSecondary(for: colorScheme))
+                            .frame(width: 20, alignment: .leading)
+                        
+                        Text(text)
+                            .font(Typography.font(.body))
+                            .foregroundColor(Colors.textPrimary(for: colorScheme))
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .textSelection(.enabled)
+                    }
                 }
             }
+        }
+    }
+    
+    private func headingFont(for level: Int) -> Font {
+        switch level {
+        case 1: return Typography.font(.heading1)
+        case 2: return Typography.font(.heading2)
+        case 3: return Typography.font(.heading3)
+        default: return Typography.font(.headline)
         }
     }
     
@@ -195,7 +255,7 @@ struct MessageBubble: View {
             if line.hasPrefix("```") {
                 // Add any accumulated text
                 if !currentText.isEmpty {
-                    parts.append(.text(currentText.trimmingCharacters(in: .whitespacesAndNewlines)))
+                    parts.append(contentsOf: parseInlineMarkdown(currentText))
                     currentText = ""
                 }
                 
@@ -212,14 +272,24 @@ struct MessageBubble: View {
                 
                 let code = codeLines.joined(separator: "\n")
                 parts.append(.codeBlock(code, language: language.isEmpty ? nil : language))
-            } else if let inlineCode = extractInlineCode(from: line) {
-                // Handle inline code
+            } 
+            // Check for headings
+            else if let heading = parseHeading(line) {
                 if !currentText.isEmpty {
-                    parts.append(.text(currentText.trimmingCharacters(in: .whitespacesAndNewlines)))
+                    parts.append(contentsOf: parseInlineMarkdown(currentText))
                     currentText = ""
                 }
-                parts.append(.inlineCode(inlineCode))
-            } else {
+                parts.append(heading)
+            }
+            // Check for list items
+            else if let listItem = parseListItem(line) {
+                if !currentText.isEmpty {
+                    parts.append(contentsOf: parseInlineMarkdown(currentText))
+                    currentText = ""
+                }
+                parts.append(listItem)
+            }
+            else {
                 // Regular text
                 currentText += (currentText.isEmpty ? "" : "\n") + line
             }
@@ -229,10 +299,165 @@ struct MessageBubble: View {
         
         // Add any remaining text
         if !currentText.isEmpty {
-            parts.append(.text(currentText.trimmingCharacters(in: .whitespacesAndNewlines)))
+            parts.append(contentsOf: parseInlineMarkdown(currentText))
         }
         
         return parts
+    }
+    
+    private func parseHeading(_ line: String) -> ContentPart? {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        
+        if trimmed.hasPrefix("### ") {
+            return .heading(String(trimmed.dropFirst(4)), level: 3)
+        } else if trimmed.hasPrefix("## ") {
+            return .heading(String(trimmed.dropFirst(3)), level: 2)
+        } else if trimmed.hasPrefix("# ") {
+            return .heading(String(trimmed.dropFirst(2)), level: 1)
+        }
+        
+        return nil
+    }
+    
+    private func parseListItem(_ line: String) -> ContentPart? {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        
+        // Unordered list
+        if trimmed.hasPrefix("- ") || trimmed.hasPrefix("* ") {
+            return .listItem(String(trimmed.dropFirst(2)), ordered: false)
+        }
+        
+        // Ordered list (simple check for now)
+        if let firstChar = trimmed.first, firstChar.isNumber, trimmed.dropFirst().hasPrefix(". ") {
+            let content = trimmed.drop(while: { $0.isNumber }).dropFirst(2)
+            return .listItem(String(content), ordered: true)
+        }
+        
+        return nil
+    }
+    
+    private func parseInlineMarkdown(_ text: String) -> [ContentPart] {
+        var parts: [ContentPart] = []
+        var remaining = text
+        
+        while !remaining.isEmpty {
+            // Check for inline code
+            if let range = remaining.range(of: "`([^`]+)`", options: .regularExpression) {
+                let beforeCode = String(remaining[..<range.lowerBound])
+                if !beforeCode.isEmpty {
+                    parts.append(contentsOf: parseFormattedText(beforeCode))
+                }
+                
+                let codeContent = String(remaining[range]).dropFirst().dropLast()
+                parts.append(.inlineCode(String(codeContent)))
+                
+                remaining = String(remaining[range.upperBound...])
+            }
+            // Check for links
+            else if let linkPart = parseLink(from: remaining) {
+                let beforeLink = String(remaining[..<linkPart.range.lowerBound])
+                if !beforeLink.isEmpty {
+                    parts.append(contentsOf: parseFormattedText(beforeLink))
+                }
+                
+                parts.append(linkPart.part)
+                remaining = String(remaining[linkPart.range.upperBound...])
+            }
+            else {
+                // No more special formatting found
+                parts.append(contentsOf: parseFormattedText(remaining))
+                break
+            }
+        }
+        
+        return parts
+    }
+    
+    private func parseFormattedText(_ text: String) -> [ContentPart] {
+        var parts: [ContentPart] = []
+        var remaining = text
+        
+        while !remaining.isEmpty {
+            // Check for bold
+            if let range = remaining.range(of: "\\*\\*([^*]+)\\*\\*", options: .regularExpression) {
+                let beforeBold = String(remaining[..<range.lowerBound])
+                if !beforeBold.isEmpty {
+                    parts.append(contentsOf: parseItalicText(beforeBold))
+                }
+                
+                let boldContent = String(remaining[range]).dropFirst(2).dropLast(2)
+                parts.append(.bold(String(boldContent)))
+                
+                remaining = String(remaining[range.upperBound...])
+            }
+            // Check for italic
+            else if let range = remaining.range(of: "\\*([^*]+)\\*", options: .regularExpression) {
+                let beforeItalic = String(remaining[..<range.lowerBound])
+                if !beforeItalic.isEmpty {
+                    parts.append(.text(beforeItalic))
+                }
+                
+                let italicContent = String(remaining[range]).dropFirst().dropLast()
+                parts.append(.italic(String(italicContent)))
+                
+                remaining = String(remaining[range.upperBound...])
+            }
+            else {
+                // No formatting found
+                parts.append(.text(remaining))
+                break
+            }
+        }
+        
+        return parts
+    }
+    
+    private func parseItalicText(_ text: String) -> [ContentPart] {
+        // Check for italic that's not part of bold
+        if let range = text.range(of: "\\*([^*]+)\\*", options: .regularExpression) {
+            var parts: [ContentPart] = []
+            
+            let beforeItalic = String(text[..<range.lowerBound])
+            if !beforeItalic.isEmpty {
+                parts.append(.text(beforeItalic))
+            }
+            
+            let italicContent = String(text[range]).dropFirst().dropLast()
+            parts.append(.italic(String(italicContent)))
+            
+            let afterItalic = String(text[range.upperBound...])
+            if !afterItalic.isEmpty {
+                parts.append(.text(afterItalic))
+            }
+            
+            return parts
+        }
+        
+        return [.text(text)]
+    }
+    
+    private func parseLink(from text: String) -> (part: ContentPart, range: Range<String.Index>)? {
+        // Match [text](url) pattern
+        if let match = text.range(of: "\\[([^\\]]+)\\]\\(([^)]+)\\)", options: .regularExpression) {
+            let linkText = String(text[match])
+            
+            // Extract text and URL
+            if let textStart = linkText.firstIndex(of: "["),
+               let textEnd = linkText.firstIndex(of: "]"),
+               let urlStart = linkText.firstIndex(of: "("),
+               let urlEnd = linkText.lastIndex(of: ")") {
+                
+                let textStartIndex = linkText.index(after: textStart)
+                let urlStartIndex = linkText.index(after: urlStart)
+                
+                let text = String(linkText[textStartIndex..<textEnd])
+                let url = String(linkText[urlStartIndex..<urlEnd])
+                
+                return (.link(text: text, url: url), match)
+            }
+        }
+        
+        return nil
     }
     
     private func extractInlineCode(from line: String) -> String? {
@@ -315,6 +540,11 @@ private enum ContentPart {
     case text(String)
     case codeBlock(String, language: String?)
     case inlineCode(String)
+    case heading(String, level: Int)
+    case bold(String)
+    case italic(String)
+    case link(text: String, url: String)
+    case listItem(String, ordered: Bool)
 }
 
 // MARK: - Code Block View

@@ -24,7 +24,7 @@ struct ChatMessageList: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 8) {
                         ForEach(messages) { message in
-                            MessageBubble(message: message)
+                            QueueAwareMessageCell(message: message)
                                 .id(message.id)
                                 .transition(.asymmetric(
                                     insertion: .opacity.combined(with: .offset(y: 8)),

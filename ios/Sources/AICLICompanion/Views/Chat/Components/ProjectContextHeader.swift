@@ -37,28 +37,24 @@ struct ProjectContextHeader: View {
             .padding(.trailing, 12)
             
             // Project info
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 8) {
-                    Text(project.name)
-                        .font(Typography.font(.body))
-                        .fontWeight(.semibold)
-                        .foregroundColor(Colors.textPrimary(for: colorScheme))
-                    
-                    if session != nil {
-                        Circle()
-                            .fill(Color.green)
-                            .frame(width: 6, height: 6)
-                    }
-                }
+            HStack(spacing: 8) {
+                Text(project.name)
+                    .font(Typography.font(.body))
+                    .fontWeight(.semibold)
+                    .foregroundColor(Colors.textPrimary(for: colorScheme))
                 
-                Text(project.path)
-                    .font(Typography.font(.caption))
-                    .foregroundColor(Colors.textSecondary(for: colorScheme))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                if session != nil {
+                    Circle()
+                        .fill(Color.green)
+                        .frame(width: 6, height: 6)
+                }
             }
             
             Spacer()
+            
+            // Connection indicator
+            ConnectionQualityIndicator()
+                .padding(.trailing, 8)
             
             // Session menu
             ChatSessionMenu(
@@ -71,11 +67,13 @@ struct ProjectContextHeader: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Colors.bgCard(for: colorScheme).opacity(0.8))
+            Rectangle()
+                .fill(Colors.bgCard(for: colorScheme).opacity(0.95))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Colors.strokeLight, lineWidth: 1)
+                    Rectangle()
+                        .fill(Colors.strokeLight.opacity(0.3))
+                        .frame(height: 1),
+                    alignment: .bottom
                 )
         )
     }

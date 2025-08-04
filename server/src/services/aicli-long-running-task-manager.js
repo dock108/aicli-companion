@@ -158,7 +158,12 @@ export class AICLILongRunningTaskManager extends EventEmitter {
   /**
    * Send push notification when long-running task completes
    */
-  sendLongRunningCompletionNotification(sessionId, prompt, isError = false, errorMessage = null) {
+  async sendLongRunningCompletionNotification(
+    sessionId,
+    prompt,
+    isError = false,
+    errorMessage = null
+  ) {
     // Extract project name from session ID (format: project_name_uuid)
     const sessionParts = sessionId.split('_');
     const projectName = sessionParts.slice(0, -1).join('_') || 'Project';
@@ -173,24 +178,20 @@ export class AICLILongRunningTaskManager extends EventEmitter {
       });
     }
 
-    // Send notification to each device
-    deviceTokens.forEach(({ clientId }) => {
-      const notificationData = {
-        sessionId,
-        projectName,
-        message: isError
-          ? `Task failed: ${prompt.substring(0, 50)}...\n${errorMessage || 'Unknown error'}`
-          : `Task completed: ${prompt.substring(0, 50)}...\nTap to view results`,
-        totalChunks: 1,
-        isLongRunningCompletion: true,
-      };
+    // Prepare notification data
+    const notificationData = {
+      sessionId,
+      projectName,
+      message: isError
+        ? `Task failed: ${prompt.substring(0, 50)}...\n${errorMessage || 'Unknown error'}`
+        : `Task completed: ${prompt.substring(0, 50)}...\nTap to view results`,
+      totalChunks: 1,
+      isLongRunningCompletion: true,
+    };
 
-      pushNotificationService.sendClaudeResponseNotification(clientId, notificationData);
-    });
-
-    console.log(
-      `🔔 Sent push notifications to ${deviceTokens.length} devices for long-running task completion`
-    );
+    // Send notifications to all connected clients with improved retry logic
+    const clientIds = deviceTokens.map(({ clientId }) => clientId);
+    await pushNotificationService.sendToMultipleClients(clientIds, notificationData);
   }
 
   /**

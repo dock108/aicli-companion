@@ -1,4 +1,4 @@
-import { describe, it, beforeEach, mock } from 'node:test';
+import { describe, it, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert';
 import express from 'express';
 import path from 'path';
@@ -10,6 +10,7 @@ describe('Project Routes', () => {
   let claudeService;
   let handlers;
   let mockRouter;
+  let originalRouter;
 
   // Helper to create a mock response object
   const createMockResponse = () => {
@@ -40,6 +41,9 @@ describe('Project Routes', () => {
       }),
     };
 
+    // Store original Router
+    originalRouter = express.Router;
+
     // Override express.Router
     express.Router = () => mockRouter;
 
@@ -65,6 +69,13 @@ describe('Project Routes', () => {
 
     // Mock app.use
     app.use = mock.fn();
+  });
+
+  afterEach(() => {
+    // Restore original Router
+    if (originalRouter) {
+      express.Router = originalRouter;
+    }
   });
 
   describe('setupProjectRoutes', () => {

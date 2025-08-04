@@ -2,6 +2,7 @@ import { EventEmitter } from 'events';
 import { InputValidator } from './aicli-utils.js';
 import { AICLIMessageHandler } from './aicli-message-handler.js';
 import { sessionPersistence } from './session-persistence.js';
+import { getTelemetryService } from './telemetry.js';
 
 /**
  * Manages AICLI CLI session lifecycle, timeout handling, and cleanup
@@ -18,11 +19,10 @@ export class AICLISessionManager extends EventEmitter {
     this.maxSessions = options.maxSessions || 10;
     this.sessionTimeout = options.sessionTimeout || 30 * 60 * 1000; // 30 minutes
     this.backgroundedSessionTimeout = options.backgroundedSessionTimeout || 4 * 60 * 60 * 1000; // 4 hours
+    this.minTimeoutCheckInterval = options.minTimeoutCheckInterval || 60000; // 1 minute default
 
-    // Initialize persistence on startup (skip in test environment)
-    if (process.env.NODE_ENV !== 'test') {
-      this.initializePersistence();
-    }
+    // Persistence will be initialized by the server after startup
+    // This prevents race conditions from multiple initialization attempts
   }
 
   /**
@@ -97,6 +97,36 @@ export class AICLISessionManager extends EventEmitter {
     const sanitizedPrompt = InputValidator.sanitizePrompt(initialPrompt);
     const validatedWorkingDir = await InputValidator.validateWorkingDirectory(workingDirectory);
 
+    // Check if session already exists for this directory
+    const existingSession = await this.findSessionByWorkingDirectory(validatedWorkingDir);
+    if (existingSession) {
+      console.log(
+        `♻️ Reusing existing session ${existingSession.sessionId} for ${validatedWorkingDir}`
+      );
+
+      // TODO: [QUESTION] Should we update the initial prompt when reusing session?
+      // Current behavior: preserve existing session context
+
+      await this.updateSessionActivity(existingSession.sessionId);
+
+      // IMPORTANT: Mark conversation as started for reused sessions
+      // This prevents --session-id conflicts since Claude CLI already knows about this session
+      if (!existingSession.conversationStarted) {
+        console.log(`   📝 Marking reused session as conversation started to prevent conflicts`);
+        await this.markConversationStarted(existingSession.sessionId);
+      }
+
+      // Record telemetry
+      getTelemetryService().recordSessionCreated(true); // reused = true
+
+      return {
+        sessionId: existingSession.sessionId,
+        success: true,
+        message: 'Reusing existing session for this project',
+        reused: true,
+      };
+    }
+
     console.log(`🚀 Creating AICLI CLI session (metadata-only)`);
     console.log(`   Session ID: ${sanitizedSessionId}`);
     console.log(`   Working directory: ${validatedWorkingDir}`);
@@ -154,6 +184,9 @@ export class AICLISessionManager extends EventEmitter {
 
     console.log(`✅ AICLI CLI session metadata created successfully`);
 
+    // Record telemetry
+    getTelemetryService().recordSessionCreated(false); // reused = false
+
     return {
       sessionId: sanitizedSessionId,
       success: true,
@@ -196,7 +229,7 @@ export class AICLISessionManager extends EventEmitter {
           await sessionPersistence.removeSession(sessionId);
           console.log(`💾 Session ${sessionId} removed from persistent storage`);
         } catch (error) {
-          console.error(`❌ Failed to remove session ${sessionId} from persistence:`, error);
+          console.error('❌ Failed to remove session %s from persistence:', sessionId, error);
         }
       }
 
@@ -218,17 +251,113 @@ export class AICLISessionManager extends EventEmitter {
   }
 
   /**
-   * Check if a session exists and is active
+   * Check if a session exists and is active (including persisted sessions)
    */
   hasSession(sessionId) {
-    return this.activeSessions.has(sessionId);
+    // First check active sessions in memory
+    if (this.activeSessions.has(sessionId)) {
+      return true;
+    }
+
+    // If not in memory, check if it exists in persistence
+    // This allows us to restore backgrounded sessions
+    if (process.env.NODE_ENV !== 'test') {
+      return sessionPersistence.hasSession(sessionId);
+    }
+
+    return false;
   }
 
   /**
-   * Get session metadata
+   * Get session metadata (restore from persistence if needed)
    */
-  getSession(sessionId) {
-    return this.activeSessions.get(sessionId);
+  async getSession(sessionId) {
+    // First check active sessions in memory
+    let session = this.activeSessions.get(sessionId);
+    if (session) {
+      return session;
+    }
+
+    // If not in memory but exists in persistence, restore it
+    if (process.env.NODE_ENV !== 'test' && sessionPersistence.hasSession(sessionId)) {
+      console.log(`🔄 Restoring session ${sessionId} from persistence`);
+      await this._restoreSingleSession(sessionId);
+      session = this.activeSessions.get(sessionId);
+    }
+
+    return session || null;
+  }
+
+  /**
+   * Restore a single session from persistence
+   */
+  async _restoreSingleSession(sessionId) {
+    try {
+      const persistedSession = sessionPersistence.getSession(sessionId);
+      if (!persistedSession) {
+        return false;
+      }
+
+      // Create in-memory session based on persisted data
+      const session = {
+        sessionId,
+        workingDirectory: persistedSession.workingDirectory,
+        isActive: true,
+        isProcessing: false,
+        createdAt: persistedSession.createdAt,
+        lastActivity: persistedSession.lastActivity,
+        initialPrompt: persistedSession.initialPrompt,
+        conversationStarted: persistedSession.conversationStarted,
+        timeoutId: null,
+        skipPermissions: persistedSession.skipPermissions,
+        isBackgrounded: persistedSession.isBackgrounded,
+        backgroundedAt: persistedSession.backgroundedAt,
+        isRestoredSession: true,
+      };
+
+      this.activeSessions.set(sessionId, session);
+
+      // Initialize message buffer for restored session
+      this.sessionMessageBuffers.set(sessionId, AICLIMessageHandler.createSessionBuffer());
+
+      // Set up timeout for restored session
+      const timeoutId = setTimeout(() => {
+        this.checkSessionTimeout(sessionId);
+      }, this.sessionTimeout);
+      session.timeoutId = timeoutId;
+
+      console.log(`✅ Restored session ${sessionId} from persistence`);
+      return true;
+    } catch (error) {
+      console.error(`❌ Failed to restore session ${sessionId}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Find session by working directory
+   * @param {string} workingDirectory - The working directory path
+   * @returns {Object|null} Session object if found
+   */
+  async findSessionByWorkingDirectory(workingDirectory) {
+    // First check active sessions in memory
+    for (const [, session] of this.activeSessions) {
+      if (session.workingDirectory === workingDirectory) {
+        return session;
+      }
+    }
+
+    // Then check persistence
+    if (process.env.NODE_ENV !== 'test') {
+      const persistedResult = sessionPersistence.getSessionByWorkingDirectory(workingDirectory);
+      if (persistedResult) {
+        // Restore the session to active memory
+        await this._restoreSingleSession(persistedResult.sessionId);
+        return this.activeSessions.get(persistedResult.sessionId);
+      }
+    }
+
+    return null;
   }
 
   /**
@@ -244,6 +373,20 @@ export class AICLISessionManager extends EventEmitter {
         `   ${index + 1}. ${sessionId} (age: ${age}s, conversation: ${session.conversationStarted ? 'started' : 'pending'})`
       );
     });
+    return sessions;
+  }
+
+  /**
+   * Get all sessions with metadata
+   */
+  getAllSessions() {
+    const sessions = [];
+    for (const [sessionId, session] of this.activeSessions) {
+      sessions.push({
+        sessionId,
+        ...session,
+      });
+    }
     return sessions;
   }
 
@@ -305,6 +448,29 @@ export class AICLISessionManager extends EventEmitter {
   }
 
   /**
+   * Check if Claude CLI has an active session with this ID
+   * This is used to determine whether to use --session-id or --resume
+   */
+  isClaudeSessionActive(sessionId) {
+    const session = this.activeSessions.get(sessionId);
+    if (!session) {
+      return false;
+    }
+
+    // If conversation has started, Claude CLI knows about this session
+    if (session.conversationStarted) {
+      return true;
+    }
+
+    // If this is a restored session, Claude CLI may still have it active
+    if (session.isRestoredSession) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
    * Mark session as backgrounded
    */
   async markSessionBackgrounded(sessionId) {
@@ -332,31 +498,45 @@ export class AICLISessionManager extends EventEmitter {
   }
 
   /**
-   * Mark session as foregrounded (no longer backgrounded)
+   * Mark a session as foregrounded (not backgrounded)
    */
   async markSessionForegrounded(sessionId) {
-    const session = this.activeSessions.get(sessionId);
-    if (session) {
-      session.isBackgrounded = false;
-      session.backgroundedAt = null;
-      await this.updateSessionActivity(sessionId);
-      console.log(`📱 Session ${sessionId} marked as foregrounded`);
+    const session = await this.getSession(sessionId);
+    if (!session) {
+      console.warn(`Cannot mark non-existent session as foregrounded: ${sessionId}`);
+      return;
+    }
 
-      // Update persistence (skip in test environment)
-      if (process.env.NODE_ENV !== 'test') {
-        try {
-          await sessionPersistence.updateSession(sessionId, {
-            isBackgrounded: false,
-            backgroundedAt: null,
-          });
-        } catch (error) {
-          console.warn(
-            `⚠️ Failed to persist foreground state for session ${sessionId}:`,
-            error.message
-          );
-        }
+    session.isBackgrounded = false;
+    session.backgroundedAt = null;
+    session.lastActivity = Date.now();
+
+    // Reset timeout since session is active again
+    if (session.timeoutId) {
+      clearTimeout(session.timeoutId);
+    }
+    const timeoutId = setTimeout(() => {
+      this.checkSessionTimeout(sessionId);
+    }, this.sessionTimeout);
+    session.timeoutId = timeoutId;
+
+    // Update persistence (skip in test environment)
+    if (process.env.NODE_ENV !== 'test') {
+      try {
+        await sessionPersistence.updateSession(sessionId, {
+          isBackgrounded: false,
+          backgroundedAt: null,
+          lastActivity: session.lastActivity,
+        });
+      } catch (error) {
+        console.warn(
+          `⚠️ Failed to persist foreground state for session ${sessionId}:`,
+          error.message
+        );
       }
     }
+
+    console.log(`☀️ Session ${sessionId} marked as foregrounded`);
   }
 
   /**
@@ -381,7 +561,7 @@ export class AICLISessionManager extends EventEmitter {
     // Only timeout if truly inactive for longer than timeout period
     if (
       !session.isProcessing &&
-      (!buffer || buffer.messages.length === 0) &&
+      (!buffer || buffer.assistantMessages.length === 0) &&
       inactiveTime > timeoutToUse
     ) {
       console.log(
@@ -392,7 +572,7 @@ export class AICLISessionManager extends EventEmitter {
       this.closeSession(sessionId);
     } else {
       // Reschedule another timeout check
-      const remainingTime = Math.max(timeoutToUse - inactiveTime, 60000); // At least 1 minute
+      const remainingTime = Math.max(timeoutToUse - inactiveTime, this.minTimeoutCheckInterval);
       setTimeout(() => this.checkSessionTimeout(sessionId), remainingTime);
     }
   }

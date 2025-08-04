@@ -1,6 +1,8 @@
 import { v4 as uuidv4 } from 'uuid';
 import { EventEmitter } from 'events';
 import { WebSocketUtilities } from './websocket-utilities.js';
+import { ConnectionStateManager } from './connection-state-manager.js';
+import { getTelemetryService } from './telemetry.js';
 import { WEBSOCKET_EVENTS, SERVER_VERSION, DEFAULT_CONFIG } from '../constants/index.js';
 
 /**
@@ -10,23 +12,50 @@ export class WebSocketConnectionManager extends EventEmitter {
   constructor(options = {}) {
     super();
     this.clients = new Map();
+    this.connectionHistory = new Map(); // Track recent connections for reconnection
     this.pingInterval = null;
     // Allow dependency injection for testing
     this.generateId = options.generateId || uuidv4;
     this.healthCheckInterval = options.healthCheckInterval || 15000; // Default 15 seconds
+    this.reconnectionWindow = options.reconnectionWindow || 30000; // 30 seconds
+
+    // TODO: [QUESTION] Optimal reconnection window?
+    // 30s is arbitrary - need to test with real app behavior
+    // Consider: app background time, network switches, etc.
+
+    // Initialize connection state manager
+    this.connectionStateManager = options.connectionStateManager || new ConnectionStateManager();
+
+    // Start connection history cleanup (disabled in test environment)
+    if (process.env.NODE_ENV !== 'test') {
+      this.startConnectionHistoryCleanup();
+    }
   }
 
   /**
    * Handle new WebSocket connection
    */
-  handleConnection(ws, request, authToken) {
+  async handleConnection(ws, request, authToken) {
     const clientId = this.generateId();
-    const clientIP = request.socket.remoteAddress;
-    const clientFamily = request.socket.remoteFamily;
-    const userAgent = request.headers['user-agent'] || 'unknown';
+    const clientInfo = this.extractClientInfo(request);
 
-    console.log(`WebSocket client connected: ${clientId} from ${clientIP} (${clientFamily})`);
-    console.log(`   User-Agent: ${userAgent}`);
+    // Check for recent connection from same client
+    const recentConnection = await this.findRecentConnection(clientInfo);
+    if (recentConnection) {
+      console.log(`♻️ Client reconnection detected: ${recentConnection.clientId} → ${clientId}`);
+      console.log(`   Previous sessions: ${Array.from(recentConnection.sessionIds).join(', ')}`);
+
+      // TODO: [QUESTION] Define reconnection criteria
+      // Currently using deviceId from headers, but may need:
+      // - IP address consideration?
+      // - Auth token validation?
+      // - User agent matching?
+    }
+
+    console.log(
+      `WebSocket client connected: ${clientId} from ${clientInfo.ip} (${clientInfo.family})`
+    );
+    console.log(`   User-Agent: ${clientInfo.userAgent}`);
     console.log(`   Total clients: ${this.clients.size + 1}`);
 
     // Authentication check
@@ -44,14 +73,26 @@ export class WebSocketConnectionManager extends EventEmitter {
     // Store client info
     const client = {
       ws,
-      sessionIds: new Set(),
+      sessionIds: recentConnection ? new Set(recentConnection.sessionIds) : new Set(),
       isAlive: true,
       subscribedEvents: new Set(),
       connectedAt: new Date(),
       lastActivity: new Date(),
+      clientInfo,
+      isReconnection: !!recentConnection,
+      previousClientId: recentConnection?.clientId,
     };
 
     this.clients.set(clientId, client);
+
+    // Store in connection history for future reconnection detection
+    this.addToConnectionHistory(clientId, clientInfo, client.sessionIds);
+
+    // Record telemetry
+    getTelemetryService().recordConnection(clientId, clientInfo);
+    if (recentConnection) {
+      getTelemetryService().recordReconnection(clientId, recentConnection.clientId);
+    }
 
     // Set up ping/pong for connection health
     ws.isAlive = true;
@@ -74,7 +115,7 @@ export class WebSocketConnectionManager extends EventEmitter {
       this.handleDisconnection(clientId, 1011, 'Internal error');
     });
 
-    // Send welcome message
+    // Send welcome message - required for iOS connection state detection
     this.sendWelcomeMessage(clientId);
 
     // Emit connection event
@@ -82,9 +123,9 @@ export class WebSocketConnectionManager extends EventEmitter {
       clientId,
       client,
       connectionInfo: {
-        ip: clientIP,
-        family: clientFamily,
-        userAgent,
+        ip: clientInfo.ip,
+        family: clientInfo.family,
+        userAgent: clientInfo.userAgent,
       },
     });
 
@@ -97,6 +138,11 @@ export class WebSocketConnectionManager extends EventEmitter {
   handleDisconnection(clientId, code, reason) {
     const client = this.clients.get(clientId);
     if (!client) return;
+
+    // Update connection history with final session list
+    if (client.clientInfo && client.sessionIds.size > 0) {
+      this.addToConnectionHistory(clientId, client.clientInfo, client.sessionIds);
+    }
 
     const sessionCount = client.sessionIds.size;
     const reasonStr = reason ? reason.toString() : 'No reason provided';
@@ -118,6 +164,9 @@ export class WebSocketConnectionManager extends EventEmitter {
 
     // Clean up client data
     this.clients.delete(clientId);
+
+    // Record telemetry
+    getTelemetryService().recordDisconnection(clientId);
 
     console.log(`   Remaining clients: ${this.clients.size}`);
   }
@@ -289,12 +338,144 @@ export class WebSocketConnectionManager extends EventEmitter {
   }
 
   /**
+   * Extract client info from request
+   */
+  extractClientInfo(request) {
+    const userAgent = request.headers['user-agent'] || 'unknown';
+    const ip = request.socket.remoteAddress;
+    const family = request.socket.remoteFamily;
+
+    // Try to extract device ID from headers (iOS should send this)
+    const deviceId = request.headers['x-device-id'] || null;
+
+    return {
+      userAgent,
+      ip,
+      family,
+      deviceId,
+      // Create a fingerprint for reconnection matching
+      fingerprint: this.createClientFingerprint({ userAgent, deviceId }),
+    };
+  }
+
+  /**
+   * Create a fingerprint for client identification
+   */
+  createClientFingerprint(info) {
+    // TODO: [QUESTION] What makes a good fingerprint?
+    // Currently using deviceId if available, otherwise user agent
+    // May need to consider IP for better accuracy?
+
+    if (info.deviceId) {
+      return `device:${info.deviceId}`;
+    }
+
+    // Fallback to user agent hash
+    return `ua:${Buffer.from(info.userAgent).toString('base64').substring(0, 20)}`;
+  }
+
+  /**
+   * Find recent connection from same client
+   */
+  async findRecentConnection(clientInfo) {
+    const now = Date.now();
+
+    // First check in-memory history
+    for (const [, data] of this.connectionHistory) {
+      // Check if within reconnection window
+      if (now - data.lastSeen > this.reconnectionWindow) {
+        continue;
+      }
+
+      // Match by fingerprint
+      if (data.fingerprint === clientInfo.fingerprint) {
+        return {
+          clientId: data.clientId,
+          sessionIds: data.sessionIds,
+          lastSeen: data.lastSeen,
+        };
+      }
+    }
+
+    // If not found in memory, check persistent state
+    const persistedState = await this.connectionStateManager.getConnectionState(
+      clientInfo.fingerprint
+    );
+
+    if (persistedState && persistedState.sessionIds) {
+      return {
+        clientId: null, // No recent clientId from persistent state
+        sessionIds: persistedState.sessionIds,
+        lastSeen: persistedState.lastUpdated,
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Add to connection history
+   */
+  async addToConnectionHistory(clientId, clientInfo, sessionIds) {
+    const key = `${clientInfo.fingerprint}:${clientId}`;
+
+    this.connectionHistory.set(key, {
+      clientId,
+      fingerprint: clientInfo.fingerprint,
+      sessionIds: new Set(sessionIds),
+      lastSeen: Date.now(),
+      clientInfo,
+    });
+
+    // Also save to persistent state manager
+    if (sessionIds.size > 0) {
+      await this.connectionStateManager.updateConnectionSessions(
+        clientInfo.fingerprint,
+        Array.from(sessionIds)
+      );
+    }
+  }
+
+  /**
+   * Start connection history cleanup
+   */
+  startConnectionHistoryCleanup() {
+    // Clean up old entries every minute
+    this.historyCleanupInterval = setInterval(() => {
+      const now = Date.now();
+      const expired = [];
+
+      for (const [key, data] of this.connectionHistory) {
+        if (now - data.lastSeen > this.reconnectionWindow * 2) {
+          expired.push(key);
+        }
+      }
+
+      expired.forEach((key) => this.connectionHistory.delete(key));
+
+      if (expired.length > 0) {
+        console.log(`🧹 Cleaned ${expired.length} expired connection history entries`);
+      }
+    }, 60000); // Every minute
+  }
+
+  /**
    * Shutdown connection manager
    */
   shutdown() {
     console.log('🔄 Shutting down WebSocket Connection Manager...');
 
     this.stopHealthMonitoring();
+
+    // Stop history cleanup
+    if (this.historyCleanupInterval) {
+      clearInterval(this.historyCleanupInterval);
+    }
+
+    // Shutdown connection state manager
+    if (this.connectionStateManager) {
+      this.connectionStateManager.shutdown();
+    }
 
     // Close all connections
     this.clients.forEach((client, clientId) => {
@@ -306,6 +487,7 @@ export class WebSocketConnectionManager extends EventEmitter {
     });
 
     this.clients.clear();
+    this.connectionHistory.clear();
     console.log('✅ WebSocket Connection Manager shut down complete');
   }
 

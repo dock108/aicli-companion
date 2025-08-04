@@ -141,6 +141,34 @@ struct SettingsView: View {
                                 .buttonStyle(PlainButtonStyle())
                             }
                         }
+                        
+                        // Session Management Section
+                        SettingsSection(title: "Sessions") {
+                            NavigationLink(destination: SessionExpiryView()) {
+                                SettingsTile(title: "Active Sessions") {
+                                    HStack(spacing: Spacing.xs) {
+                                        Text("\(SessionStatePersistenceService.shared.activeSessions.count)")
+                                            .font(Typography.font(.caption))
+                                            .foregroundColor(Colors.textSecondary(for: colorScheme))
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption)
+                                            .foregroundColor(Colors.textSecondary(for: colorScheme))
+                                    }
+                                }
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            
+                            SettingsDivider()
+                            
+                            NavigationLink(destination: PerformanceDashboard()) {
+                                SettingsTile(title: "Performance Metrics") {
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundColor(Colors.textSecondary(for: colorScheme))
+                                }
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
 
                         // About Section
                         SettingsSection(title: "About") {

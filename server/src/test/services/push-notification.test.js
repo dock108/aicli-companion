@@ -339,9 +339,18 @@ test('PushNotificationService', async (t) => {
         totalChunks: 5,
       });
 
-      assert.ok(
-        consoleErrorSpy.mock.calls[0].arguments[0].includes('Error sending push notification')
+      // Wait a bit for async operations to complete
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // Check all console.error calls for the expected message
+      const errorCalls = consoleErrorSpy.mock.calls;
+      const hasExpectedError = errorCalls.some(
+        (call) =>
+          call.arguments[0].includes('Push notification attempt') ||
+          call.arguments[0].includes('❌ Error sending push notification')
       );
+
+      assert.ok(hasExpectedError, 'Expected error message not found in console.error calls');
 
       consoleErrorSpy.mock.restore();
       notificationMock.mock.restore();
@@ -427,9 +436,18 @@ test('PushNotificationService', async (t) => {
         error: 'Test error',
       });
 
-      assert.ok(
-        consoleErrorSpy.mock.calls[0].arguments[0].includes('Error sending error notification')
+      // Wait a bit for async operations to complete
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // Check all console.error calls for the expected message
+      const errorCalls = consoleErrorSpy.mock.calls;
+      const hasExpectedError = errorCalls.some(
+        (call) =>
+          call.arguments[0].includes('Push notification attempt') ||
+          call.arguments[0].includes('❌ Error sending push notification')
       );
+
+      assert.ok(hasExpectedError, 'Expected error message not found in console.error calls');
 
       consoleErrorSpy.mock.restore();
       notificationMock.mock.restore();

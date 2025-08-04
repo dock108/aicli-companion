@@ -1,11 +1,14 @@
 import apn from '@parse/node-apn';
 import fs from 'fs';
+import { getTelemetryService } from './telemetry.js';
 
 class PushNotificationService {
   constructor() {
     this.provider = null;
     this.deviceTokens = new Map(); // Map clientId -> { token, platform }
     this.isConfigured = false;
+    this.badTokens = new Set(); // Track bad tokens
+    this.tokenRetryCount = new Map(); // Track retry attempts per token
   }
 
   /**
@@ -85,6 +88,93 @@ class PushNotificationService {
   }
 
   /**
+   * Send a notification with retry logic
+   * @param {string} deviceToken - The device token
+   * @param {Object} notification - The notification object
+   * @param {Object} options - Options for retry
+   * @returns {Object} - Result of the send operation
+   */
+  async sendNotification(deviceToken, notification, options = {}) {
+    const maxRetries = options.retries || 3;
+    const retryDelay = options.retryDelay || 1000;
+
+    // TODO: [OPTIMIZE] Implement exponential backoff?
+    // Current implementation uses linear delay
+    // May need: retryDelay * Math.pow(2, attempt - 1)
+
+    // Check if token is known bad
+    if (this.badTokens.has(deviceToken)) {
+      console.log(`⚠️ Skipping known bad token: ${deviceToken.substring(0, 10)}...`);
+      return { success: false, error: 'BadDeviceToken' };
+    }
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const result = await this.provider.send(notification, deviceToken);
+
+        if (result.sent.length > 0) {
+          // Reset retry count on success
+          this.tokenRetryCount.delete(deviceToken);
+          return { success: true, result };
+        }
+
+        // Handle specific error cases
+        if (result.failed.length > 0) {
+          const failure = result.failed[0];
+
+          if (failure.response?.reason === 'BadDeviceToken') {
+            // TODO: [QUESTION] Define token cleanup policy
+            // Should we immediately remove bad tokens?
+            // Or mark them and retry later?
+            await this.handleBadToken(deviceToken);
+            return { success: false, error: 'BadDeviceToken' };
+          }
+
+          if (failure.response?.reason === 'ExpiredProviderToken') {
+            console.error('⚠️ Provider token expired - requires service restart');
+            return { success: false, error: 'ExpiredProviderToken' };
+          }
+
+          // For other errors, continue retrying
+          console.warn(`Push notification attempt ${attempt} failed:`, failure.response);
+        }
+
+        if (attempt < maxRetries) {
+          await new Promise((resolve) => setTimeout(resolve, retryDelay));
+        }
+      } catch (error) {
+        console.error(`Push notification attempt ${attempt} failed:`, error);
+        if (attempt === maxRetries) {
+          throw error;
+        }
+        await new Promise((resolve) => setTimeout(resolve, retryDelay));
+      }
+    }
+
+    return { success: false, error: 'MaxRetriesExceeded' };
+  }
+
+  /**
+   * Handle bad device token
+   * @param {string} deviceToken - The bad device token
+   */
+  async handleBadToken(deviceToken) {
+    this.badTokens.add(deviceToken);
+
+    // Find and remove client with this token
+    for (const [clientId, device] of this.deviceTokens) {
+      if (device.token === deviceToken) {
+        this.deviceTokens.delete(clientId);
+        console.log(`🗑️ Removed bad token for client ${clientId}`);
+        break;
+      }
+    }
+
+    // TODO: [OPTIMIZE] Persist bad tokens to avoid re-registration?
+    // Could store in Redis or file system
+  }
+
+  /**
    * Send a push notification for a Claude response
    * @param {string} clientId - The WebSocket client ID
    * @param {Object} data - Notification data
@@ -149,15 +239,17 @@ class PushNotificationService {
         notification.category = 'TASK_COMPLETE';
       }
 
-      // Send the notification
-      const result = await this.provider.send(notification, device.token);
+      // Send the notification with retry logic
+      const result = await this.sendNotification(device.token, notification);
 
-      if (result.sent.length > 0) {
+      if (result.success) {
         console.log(`✅ Push notification sent to client ${clientId}`);
-      }
-
-      if (result.failed.length > 0) {
-        console.error('❌ Push notification failed:', result.failed[0]);
+        // Record telemetry
+        getTelemetryService().recordMessageSent(clientId, 'push_notification', true);
+      } else {
+        console.error(`❌ Push notification failed for client ${clientId}:`, result.error);
+        // Record telemetry
+        getTelemetryService().recordMessageSent(clientId, 'push_notification', false);
       }
     } catch (error) {
       console.error('❌ Error sending push notification:', error);
@@ -195,10 +287,69 @@ class PushNotificationService {
         error: true,
       };
 
-      await this.provider.send(notification, device.token);
+      const result = await this.sendNotification(device.token, notification);
+
+      if (!result.success) {
+        console.error(`❌ Error notification failed for client ${clientId}:`, result.error);
+      }
     } catch (error) {
       console.error('Error sending error notification:', error);
     }
+  }
+
+  /**
+   * Send notification to multiple clients (e.g., for long-running task completion)
+   * @param {Array<string>} clientIds - Array of client IDs
+   * @param {Object} data - Notification data
+   * @returns {Object} - Summary of send results
+   */
+  async sendToMultipleClients(clientIds, data) {
+    if (!this.isConfigured || !clientIds || clientIds.length === 0) {
+      return { sent: 0, failed: 0 };
+    }
+
+    const results = { sent: 0, failed: 0 };
+
+    // Send notifications in parallel with concurrency limit
+    const concurrencyLimit = 10;
+    const chunks = [];
+
+    for (let i = 0; i < clientIds.length; i += concurrencyLimit) {
+      chunks.push(clientIds.slice(i, i + concurrencyLimit));
+    }
+
+    for (const chunk of chunks) {
+      const promises = chunk.map(async (clientId) => {
+        try {
+          await this.sendClaudeResponseNotification(clientId, data);
+          results.sent++;
+        } catch (error) {
+          console.error(`Failed to send notification to ${clientId}:`, error);
+          results.failed++;
+        }
+      });
+
+      await Promise.all(promises);
+    }
+
+    console.log(
+      `🔔 Sent push notifications to ${results.sent} devices for ${data.isLongRunningCompletion ? 'long-running task completion' : 'Claude response'}`
+    );
+
+    return results;
+  }
+
+  /**
+   * Get notification statistics
+   * @returns {Object} - Statistics about notifications
+   */
+  getStats() {
+    return {
+      configuredDevices: this.deviceTokens.size,
+      badTokens: this.badTokens.size,
+      isConfigured: this.isConfigured,
+      retryingTokens: this.tokenRetryCount.size,
+    };
   }
 
   /**
@@ -227,3 +378,6 @@ class PushNotificationService {
 
 // Export singleton instance
 export const pushNotificationService = new PushNotificationService();
+
+// Export class for testing
+export { PushNotificationService };

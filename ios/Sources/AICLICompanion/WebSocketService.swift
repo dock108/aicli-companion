@@ -15,11 +15,9 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
     private var webSocket: WebSocket?
     private var cancellables = Set<AnyCancellable>()
     private var pendingMessages: [WebSocketMessage] = []
-    private var reconnectTimer: Timer?
     private var heartbeatTimer: Timer?
-    private var reconnectAttempts = 0
-    private let maxReconnectAttempts = 5
     private let heartbeatInterval: TimeInterval = 30
+    private let reliabilityManager = ConnectionReliabilityManager.shared
 
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
@@ -85,30 +83,43 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
         print("🌙 App will resign active - preserving WebSocket state")
         wasConnectedBeforeBackground = isConnected
         
-        // Send a graceful disconnect message if connected
-        if isConnected {
-            let disconnectMessage: [String: Any] = [
-                "type": "client_backgrounding",
-                "sessionId": activeSessionId ?? "",
-                "timestamp": ISO8601DateFormatter().string(from: Date())
-            ]
-            if let data = try? JSONSerialization.data(withJSONObject: disconnectMessage),
-               let message = String(data: data, encoding: .utf8) {
-                webSocket?.write(string: message)
+        // Don't disconnect immediately - wait a few seconds to see if this is just a brief navigation
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+            guard let self = self else { return }
+            
+            // Only disconnect if the app is still in background after delay
+            if UIApplication.shared.applicationState != .active && self.isConnected {
+                print("🌙 App still in background after delay - sending backgrounding message")
+                
+                // Send a graceful backgrounding message
+                let disconnectMessage: [String: Any] = [
+                    "type": "client_backgrounding",
+                    "sessionId": self.activeSessionId ?? "",
+                    "timestamp": ISO8601DateFormatter().string(from: Date())
+                ]
+                if let data = try? JSONSerialization.data(withJSONObject: disconnectMessage),
+                   let message = String(data: data, encoding: .utf8) {
+                    self.webSocket?.write(string: message)
+                }
+                
+                // Pause heartbeat but don't disconnect the WebSocket
+                self.heartbeatTimer?.invalidate()
+                self.heartbeatTimer = nil
             }
         }
-        
-        // Stop heartbeat timer
-        heartbeatTimer?.invalidate()
-        heartbeatTimer = nil
     }
     
     @objc private func appDidBecomeActive() {
-        print("☀️ App did become active - restoring WebSocket connection")
+        print("☀️ App did become active - checking WebSocket state")
         
-        // Only reconnect if we were connected before
-        if wasConnectedBeforeBackground, let url = currentURL {
-            print("🔄 Restoring previous WebSocket connection")
+        // If we have a connection but heartbeat is stopped, restart it
+        if isConnected && heartbeatTimer == nil {
+            print("🔄 Restarting heartbeat for existing connection")
+            startHeartbeat()
+        }
+        // Only create new connection if we don't have one and were connected before
+        else if !isConnected && wasConnectedBeforeBackground, let url = currentURL {
+            print("🔄 Restoring WebSocket connection")
             connect(to: url, authToken: authToken)
         }
     }
@@ -173,7 +184,7 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
         }
 
         var request = URLRequest(url: wsURL)
-        request.timeoutInterval = 10
+        request.timeoutInterval = 30
 
         webSocket = WebSocket(request: request)
         webSocket?.delegate = self
@@ -183,8 +194,7 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
     }
 
     func disconnect() {
-        reconnectTimer?.invalidate()
-        reconnectTimer = nil
+        reliabilityManager.cancelReconnection()
         heartbeatTimer?.invalidate()
         heartbeatTimer = nil
 
@@ -192,28 +202,39 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
         webSocket = nil
 
         updateConnectionState(.disconnected)
-        reconnectAttempts = 0
     }
 
     private func attemptReconnect() {
-        guard reconnectAttempts < maxReconnectAttempts,
-              let url = currentURL else {
-            updateConnectionState(.error("Max reconnection attempts reached"))
+        guard let url = currentURL else {
+            updateConnectionState(.error("No URL available for reconnection"))
             return
         }
 
-        reconnectAttempts += 1
-        let delay = min(pow(2.0, Double(reconnectAttempts)), 30.0) // Exponential backoff, max 30s
-
-        reconnectTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
+        reliabilityManager.scheduleReconnection { [weak self] in
             self?.connect(to: url, authToken: self?.authToken)
         }
     }
 
     private func updateConnectionState(_ state: WebSocketConnectionState) {
+        print("🔄 WebSocket: Updating connection state to \(state)")
         DispatchQueue.main.async {
+            let oldState = self.connectionState
+            let oldConnected = self.isConnected
+            
             self.connectionState = state
             self.isConnected = (state == .connected)
+            
+            print("   State changed: \(oldState) → \(state)")
+            print("   Connected changed: \(oldConnected) → \(self.isConnected)")
+            
+            // Update connection reliability manager
+            if state == .connected {
+                print("   Notifying reliability manager: connection established")
+                self.reliabilityManager.handleConnectionEstablished()
+            } else if state == .disconnected {
+                print("   Notifying reliability manager: connection lost")
+                self.reliabilityManager.handleConnectionLost()
+            }
         }
     }
 
@@ -359,6 +380,11 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
     }
     
     func subscribeToSessions(_ sessionIds: [String]? = nil) {
+        guard isConnected else {
+            print("⚠️ Cannot subscribe to sessions - not connected")
+            return
+        }
+        
         let sessionsToSubscribe = sessionIds ?? Array(activeSessions)
         
         guard !sessionsToSubscribe.isEmpty else {
@@ -366,7 +392,7 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
             return
         }
         
-        print("📬 Subscribing to \(sessionsToSubscribe.count) session(s)")
+        print("📬 Subscribing to \(sessionsToSubscribe.count) session(s): \(sessionsToSubscribe)")
         
         let request = SubscribeRequest(
             events: ["streamData", "streamComplete", "toolUse", "toolResult", "assistantMessage"],
@@ -382,6 +408,13 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
                 }
             case .failure(let error):
                 print("❌ Failed to subscribe to sessions: \(error)")
+                // Retry subscription after a delay if connection is still active
+                if self.isConnected {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                        print("🔄 Retrying session subscription after failure")
+                        self.subscribeToSessions(sessionsToSubscribe)
+                    }
+                }
             }
         }
     }
@@ -405,6 +438,12 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
 
             let requestId = json?["requestId"] as? String
             let message = try decoder.decode(WebSocketMessage.self, from: data)
+
+            // Validate message before processing
+            guard MessageValidator.isValidWebSocketMessage(message) else {
+                print("🚫 Dropping invalid message of type: \(type)")
+                return
+            }
 
             // Handle request/response correlation
             if let requestId = requestId, let callback = requestCallbacks.removeValue(forKey: requestId) {
@@ -469,15 +508,25 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
 
     private func handleWelcomeMessage(_ message: WebSocketMessage) {
         if case .welcome(let welcome) = message.data {
-            print("Connected to server \(welcome.serverVersion), Claude Code \(welcome.claudeCodeVersion ?? "unknown")")
+            print("🎉 WebSocket: Received welcome message from server \(welcome.serverVersion)")
+            print("   Setting connection state to CONNECTED")
             updateConnectionState(.connected)
-            reconnectAttempts = 0
+            print("   Resetting reliability manager reconnection state")
+            reliabilityManager.resetReconnectionState()
 
             // Send any pending messages
             sendPendingMessages()
 
             // Start heartbeat
             startHeartbeat()
+            
+            // Subscribe to active sessions immediately after connection
+            if !activeSessions.isEmpty {
+                print("🔄 Auto-subscribing to \(activeSessions.count) active session(s) after connection")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                    self?.subscribeToSessions()
+                }
+            }
             
             // Send device token if we have one
             #if os(iOS)
@@ -659,6 +708,7 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
         case .disconnected(let reason, let code):
             print("WebSocket disconnected: \(reason) with code: \(code)")
             updateConnectionState(.disconnected)
+            reliabilityManager.recordDisconnection()
 
             // Attempt reconnection if not manually disconnected
             if code != CloseCode.normal.rawValue && currentURL != nil {
@@ -666,6 +716,7 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
             }
 
         case .text(let string):
+            print("📨 WebSocket: Received text message: \(string.prefix(200))...")
             handleReceivedMessage(string)
 
         case .binary(let data):

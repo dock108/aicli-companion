@@ -16,14 +16,33 @@ export class SessionPersistenceService {
     // In-memory cache for performance
     this.sessionsCache = new Map();
     this.isInitialized = false;
+    this.initializePromise = null; // Guard against concurrent initialization
   }
 
   /**
    * Initialize the persistence service - create directories and load existing sessions
    */
   async initialize() {
+    // If already initialized, return immediately
     if (this.isInitialized) return;
 
+    // If initialization is in progress, return the existing promise
+    if (this.initializePromise) {
+      return this.initializePromise;
+    }
+
+    // Start initialization and store the promise
+    this.initializePromise = this._doInitialize();
+
+    try {
+      await this.initializePromise;
+    } finally {
+      // Clear the promise after completion (success or failure)
+      this.initializePromise = null;
+    }
+  }
+
+  async _doInitialize() {
     try {
       // Ensure storage directory exists
       await fs.mkdir(this.storageDir, { recursive: true });
@@ -45,11 +64,34 @@ export class SessionPersistenceService {
   async loadSessions() {
     try {
       const data = await fs.readFile(this.sessionsFile, 'utf8');
-      const sessions = JSON.parse(data);
+
+      // Validate JSON before parsing
+      let sessions;
+      try {
+        sessions = JSON.parse(data);
+      } catch (parseError) {
+        console.error('❌ Failed to parse sessions.json - file is corrupted:', parseError.message);
+        // Attempt recovery from backup
+        await this.loadFromBackup();
+        return;
+      }
+
+      // Validate the structure
+      if (!Array.isArray(sessions)) {
+        console.error('❌ Invalid sessions format - expected array');
+        await this.loadFromBackup();
+        return;
+      }
 
       // Convert array to Map for efficient lookups
       this.sessionsCache.clear();
       for (const session of sessions) {
+        // Basic validation of session structure
+        if (!session.sessionId || typeof session.sessionId !== 'string') {
+          console.warn('⚠️ Skipping invalid session entry - missing sessionId');
+          continue;
+        }
+
         this.sessionsCache.set(session.sessionId, {
           ...session,
           // Parse timestamps back to numbers
@@ -61,7 +103,7 @@ export class SessionPersistenceService {
         });
       }
 
-      console.log(`📖 Loaded ${sessions.length} persisted sessions from disk`);
+      console.log(`📖 Loaded ${this.sessionsCache.size} valid sessions from disk`);
     } catch (error) {
       if (error.code === 'ENOENT') {
         // File doesn't exist yet - this is normal for first run
@@ -70,8 +112,14 @@ export class SessionPersistenceService {
       } else {
         console.error('❌ Error loading sessions from disk:', error);
         // Try to load from backup
-        await this.loadFromBackup();
-        throw error;
+        try {
+          await this.loadFromBackup();
+          // If backup loaded successfully, don't throw the original error
+          console.log('✅ Successfully recovered from backup file');
+        } catch (backupError) {
+          // Both main and backup files failed - throw original error
+          throw error;
+        }
       }
     }
   }
@@ -174,6 +222,20 @@ export class SessionPersistenceService {
    */
   getAllSessions() {
     return Array.from(this.sessionsCache.values());
+  }
+
+  /**
+   * Get session by working directory
+   * @param {string} workingDirectory - The working directory path
+   * @returns {Object|null} Session object with sessionId if found
+   */
+  getSessionByWorkingDirectory(workingDirectory) {
+    for (const [sessionId, session] of this.sessionsCache) {
+      if (session.workingDirectory === workingDirectory) {
+        return { sessionId, session };
+      }
+    }
+    return null;
   }
 
   /**

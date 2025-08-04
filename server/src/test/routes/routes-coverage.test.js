@@ -13,11 +13,12 @@ function createTestApp() {
   const originalUse = app.use.bind(app);
 
   // Capture routers when they're registered
-  app.use = (path, router) => {
-    const result = originalUse(path, router);
+  app.use = function (...args) {
+    const result = originalUse.apply(this, args);
 
-    if (typeof path === 'string' && router) {
-      routers.push({ path, router });
+    // Check if this is a router registration (path + router)
+    if (args.length === 2 && typeof args[0] === 'string' && args[1] && args[1].stack) {
+      routers.push({ path: args[0], router: args[1] });
     }
     return result;
   };

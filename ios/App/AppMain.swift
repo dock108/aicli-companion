@@ -13,9 +13,13 @@ struct AppMain: App {
     @StateObject private var pushNotificationService = AICLICompanion.PushNotificationService.shared
     
     init() {
-        // Request push notification authorization on app launch
+        // Request enhanced push notification authorization on app launch
         Task {
-            await AICLICompanion.PushNotificationService.shared.requestAuthorization()
+            do {
+                _ = try await AICLICompanion.EnhancedPushNotificationService.shared.requestAuthorizationWithOptions()
+            } catch {
+                print("Failed to request notification authorization: \(error)")
+            }
         }
     }
     

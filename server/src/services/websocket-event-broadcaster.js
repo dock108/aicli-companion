@@ -291,6 +291,12 @@ export class WebSocketEventBroadcaster extends EventEmitter {
   handleStreamChunkEvent(data) {
     if (!this.validateEventData(data, 'streamChunk')) return;
 
+    // Validate the chunk before broadcasting
+    if (!WebSocketUtilities.validateStreamChunk(data.chunk)) {
+      console.log('🚫 Filtering invalid stream chunk from broadcast');
+      return;
+    }
+
     const message = {
       type: 'streamChunk',
       requestId: null,

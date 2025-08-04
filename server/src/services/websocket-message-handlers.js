@@ -1,6 +1,6 @@
 import { WebSocketUtilities } from './websocket-utilities.js';
 import { pushNotificationService } from './push-notification.js';
-import { messageQueueService } from './message-queue.js';
+import { getMessageQueueService } from './message-queue.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -89,30 +89,12 @@ export class WebSocketMessageHandlers {
 
         // Check for any queued messages for this session
         // Track this client for the session
-        messageQueueService.trackSessionClient(sessionId, clientId);
+        getMessageQueueService().trackSessionClient(sessionId, clientId);
 
-        const queuedMessages = messageQueueService.getUndeliveredMessages(sessionId, clientId);
-        if (queuedMessages.length > 0) {
-          console.log(
-            `📬 Delivering ${queuedMessages.length} queued messages for session ${sessionId}`
-          );
-
-          const deliveredMessageIds = [];
-          for (const queuedMessage of queuedMessages) {
-            const success = WebSocketUtilities.sendMessage(
-              clientId,
-              queuedMessage.message,
-              clients
-            );
-            if (success) {
-              deliveredMessageIds.push(queuedMessage.id);
-            }
-          }
-
-          if (deliveredMessageIds.length > 0) {
-            messageQueueService.markAsDelivered(deliveredMessageIds, clientId);
-          }
-        }
+        // Use the new delivery method with proper validation and spacing
+        getMessageQueueService().deliverQueuedMessages(sessionId, clientId, (message) => {
+          return WebSocketUtilities.sendMessage(clientId, message, clients);
+        });
       } else {
         throw new Error(sessionResult.message || 'Failed to create session');
       }
@@ -188,16 +170,9 @@ export class WebSocketMessageHandlers {
       // Mark the client as no longer active for this session, but don't close the session
       console.log(`📝 Session ${sessionId} paused - can be continued later`);
 
-      WebSocketUtilities.sendMessage(
-        clientId,
-        WebSocketUtilities.createResponse('streamClose', requestId, {
-          success: true,
-          sessionId,
-          message: 'Session paused - can be continued later',
-          timestamp: new Date().toISOString(),
-        }),
-        clients
-      );
+      // Note: Not sending response message for 'streamClose' as iOS client doesn't expect it
+      // and fails to parse it. The session was successfully paused if we reach this point.
+      console.log(`✅ Successfully paused session ${sessionId} for client ${clientId}`);
     } catch (error) {
       console.error(`❌ Stream close failed:`, error);
       WebSocketUtilities.sendErrorMessage(
@@ -295,10 +270,10 @@ export class WebSocketMessageHandlers {
           connectionManager.addSessionToClient(clientId, sessionId);
 
           // Track this client for the session in message queue
-          messageQueueService.trackSessionClient(sessionId, clientId);
+          getMessageQueueService().trackSessionClient(sessionId, clientId);
 
           // Check for and deliver any queued messages
-          const undeliveredMessages = messageQueueService.getUndeliveredMessages(
+          const undeliveredMessages = getMessageQueueService().getUndeliveredMessages(
             sessionId,
             clientId
           );
@@ -327,7 +302,7 @@ export class WebSocketMessageHandlers {
 
             // Mark messages as delivered
             if (deliveredMessageIds.length > 0) {
-              messageQueueService.markAsDelivered(deliveredMessageIds, clientId);
+              getMessageQueueService().markAsDelivered(deliveredMessageIds, clientId);
               console.log(
                 `📨 Delivered ${deliveredMessageIds.length} queued messages for session ${sessionId}`
               );
@@ -336,16 +311,10 @@ export class WebSocketMessageHandlers {
         }
       }
 
-      WebSocketUtilities.sendMessage(
-        clientId,
-        WebSocketUtilities.createResponse('subscribe', requestId, {
-          success: true,
-          subscribedEvents: events,
-          sessionIds: sessionIds || [],
-          message: `Subscribed to ${events.length} events${sessionIds ? ` and ${sessionIds.length} sessions` : ''}`,
-          timestamp: new Date().toISOString(),
-        }),
-        clients
+      // Note: Not sending response message for 'subscribe' as iOS client doesn't expect it
+      // and fails to parse it. The subscription was successful if we reach this point.
+      console.log(
+        `✅ Successfully subscribed client ${clientId} to ${events.length} events${sessionIds ? ` and ${sessionIds.length} sessions` : ''}`
       );
     } catch (error) {
       console.error(`❌ Subscription failed:`, error);

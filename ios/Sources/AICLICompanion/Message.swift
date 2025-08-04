@@ -123,12 +123,18 @@ struct AICLIMessageMetadata: Codable {
     let duration: TimeInterval
     let cost: Double?
     let tools: [String]?
+    let queuedAt: Date?
+    let deliveredAt: Date?
+    let queuePriority: Int?
 
-    init(sessionId: String, duration: TimeInterval, cost: Double? = nil, tools: [String]? = nil) {
+    init(sessionId: String, duration: TimeInterval, cost: Double? = nil, tools: [String]? = nil, queuedAt: Date? = nil, deliveredAt: Date? = nil, queuePriority: Int? = nil) {
         self.sessionId = sessionId
         self.duration = duration
         self.cost = cost
         self.tools = tools
+        self.queuedAt = queuedAt
+        self.deliveredAt = deliveredAt
+        self.queuePriority = queuePriority
     }
 }
 

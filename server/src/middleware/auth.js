@@ -66,3 +66,9 @@ export function authMiddleware(expectedToken) {
     next();
   };
 }
+
+// Export a default authenticate middleware for routes that need individual authentication
+// This assumes AUTH_TOKEN is set in environment
+export const authenticate = process.env.AUTH_TOKEN
+  ? authMiddleware(process.env.AUTH_TOKEN)
+  : (req, res, next) => next(); // No-op middleware if no token is set

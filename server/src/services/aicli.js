@@ -449,12 +449,27 @@ export class AICLIService extends EventEmitter {
     const validatedWorkingDir = await InputValidator.validateWorkingDirectory(workingDirectory);
     const sessionKey = sessionId || `session_${Date.now()}`;
 
-    // Check if session already exists
+    console.log(`🌊 sendStreamingPrompt called with sessionId: ${sessionKey}`);
+
+    // Check if session already exists (including persistence check)
     if (this.sessionManager.hasSession(sessionKey)) {
+      console.log(`📋 Found existing session ${sessionKey}, sending to existing session`);
       return this.sendToExistingSession(sessionKey, sanitizedPrompt);
     }
 
+    // If sessionId was provided but session doesn't exist, log this as it may indicate an issue
+    if (sessionId && sessionId !== sessionKey) {
+      console.warn(
+        `⚠️ Session ${sessionId} was requested but not found, creating new session ${sessionKey}`
+      );
+    } else if (sessionId) {
+      console.log(
+        `⚠️ Session ${sessionId} not found in active sessions or persistence, creating new session`
+      );
+    }
+
     // Create new interactive session
+    console.log(`🚀 Creating new interactive session ${sessionKey}`);
     return this.createInteractiveSession(
       sessionKey,
       sanitizedPrompt,
@@ -486,7 +501,7 @@ export class AICLIService extends EventEmitter {
       throw new Error('Invalid session ID');
     }
 
-    const session = this.sessionManager.getSession(sanitizedSessionId);
+    const session = await this.sessionManager.getSession(sanitizedSessionId);
 
     if (!session || !session.isActive) {
       throw new Error(`Session ${sanitizedSessionId} not found or inactive`);

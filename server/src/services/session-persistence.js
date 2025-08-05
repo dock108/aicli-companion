@@ -502,7 +502,7 @@ export class SessionPersistenceService {
    */
   async removeMessageBuffer(sessionId) {
     if (!isValidSessionId(sessionId)) {
-      console.warn(`⚠️ Invalid sessionId for message buffer removal: ${sessionId}`);
+      console.warn('⚠️ Invalid sessionId for message buffer removal');
       return;
     }
     try {

@@ -1,21 +1,21 @@
 # Claude Companion Server
 
-The Node.js companion server that bridges the Claude Companion iOS app with Claude Code CLI.
+The Node.js backend server that bridges the Claude Companion iOS app with AICLI, providing real-time communication, session management, and intelligent message handling.
 
 ## Overview
 
 This server provides:
 - WebSocket connection for real-time communication with iOS clients
-- REST API for one-time queries and project management
-- Claude Code CLI integration with streaming support
+- REST API for project management and configuration
+- AICLI integration with streaming support
 - Service discovery via Bonjour/mDNS
 - TLS encryption and token-based authentication
 - Push notification support for iOS devices
-- Session deduplication and persistence
+- Session persistence with message history
 - Message queue with reliable delivery
 - WebSocket reconnection support
 - Comprehensive telemetry and monitoring
-- Connection state persistence
+- Connection state management
 
 ## Installation
 
@@ -32,21 +32,21 @@ Create a `.env` file in the server directory:
 
 ```env
 # Server Configuration
-PORT=8765                    # Server port (default: 8765)
+PORT=3001                    # Server port (default: 3001)
 HOST=0.0.0.0                # Host to bind to
 NODE_ENV=development        # Environment (development/production)
+CONFIG_PATH=/path/to/projects  # Base path for project directories
 
 # Security
-REQUIRE_AUTH=true           # Require authentication token
-ENABLE_TLS=true            # Enable TLS/SSL
+AUTH_REQUIRED=true          # Require authentication token
+AUTH_TOKEN=your-token-here  # Authentication token
+ENABLE_TLS=false           # Enable TLS/SSL (set true for production)
 TLS_CERT_PATH=./certs/server.crt
 TLS_KEY_PATH=./certs/server.key
 
-# Claude Code Configuration
-CLAUDE_CLI_PATH=/usr/local/bin/claude    # Path to Claude CLI
-CLAUDE_PERMISSION_MODE=relaxed           # Permission mode: strict/relaxed/custom
-CLAUDE_ALLOWED_TOOLS=read,write,list     # Allowed tools (comma-separated)
+# AICLI Configuration
 CLAUDE_SKIP_PERMISSIONS=false            # Skip permission prompts
+CLAUDE_ALLOWED_TOOLS=Read,Write,Edit,Bash # Allowed tools (comma-separated)
 
 # Service Discovery
 ENABLE_BONJOUR=true         # Enable Bonjour/mDNS broadcasting
@@ -80,13 +80,16 @@ APNS_PASSPHRASE=your-passphrase
 APNS_BUNDLE_ID=com.yourcompany.claudecompanion
 ```
 
-### Permission Modes
+### AICLI Tool Permissions
 
-Configure how Claude Code handles permissions:
+Configure which tools AICLI can use:
 
-- **`strict`**: All operations require explicit approval
-- **`relaxed`**: Basic file operations auto-approved
-- **`custom`**: Use CLAUDE_ALLOWED_TOOLS to specify
+- **`Read`**: Read file contents
+- **`Write`**: Create new files
+- **`Edit`**: Modify existing files
+- **`Bash`**: Execute shell commands
+
+Set `CLAUDE_SKIP_PERMISSIONS=true` to auto-approve all tool use (use with caution).
 
 ### TLS Setup
 
@@ -121,12 +124,8 @@ npm start
 PORT=3000 REQUIRE_AUTH=false npm start
 ```
 
-### Using the Desktop App
-```bash
-cd hostapp
-npm run tauri dev    # Development
-npm run tauri build  # Build desktop app
-```
+### Using the macOS Companion App
+The macOS companion app provides a convenient menu bar interface for managing the server. See the [macOS app documentation](../macos-app/README.md) for details.
 
 ## API Endpoints
 
@@ -145,12 +144,12 @@ npm run tauri build  # Build desktop app
 - `GET /api/projects` - List available projects
 - `POST /api/projects/:name/start` - Start Claude session in project
 
-#### Claude Interactions
-- `POST /api/claude/ask` - One-time Claude query
-- `GET /api/claude/sessions` - List active sessions
-- `DELETE /api/claude/sessions/:id` - Close a session
-- `GET /api/claude/status` - Check Claude Code availability
-- `POST /api/claude/test` - Test Claude with simple prompt
+#### AICLI Interactions
+- `POST /api/aicli/ask` - One-time AICLI query
+- `GET /api/aicli/sessions` - List active sessions
+- `DELETE /api/aicli/sessions/:id` - Close a session
+- `GET /api/aicli/status` - Check AICLI availability
+- `POST /api/aicli/test` - Test AICLI with simple prompt
 
 #### Telemetry
 - `GET /api/telemetry` - Get comprehensive metrics
@@ -239,29 +238,29 @@ server/
 │   │   ├── projects.js      # Project management
 │   │   └── aicli-status.js  # Claude status
 │   ├── services/            # Core services
-│   │   ├── aicli.js         # Claude Code integration
+│   │   ├── aicli.js         # AICLI integration
 │   │   ├── websocket.js     # WebSocket handling
 │   │   ├── discovery.js     # Bonjour/mDNS
 │   │   ├── stream-parser.js # Response streaming
-│   │   ├── push-notification.js
+│   │   ├── push-notification.js # iOS notifications
 │   │   ├── message-queue.js # Message queue management
-│   │   ├── session-persistence.js # Session persistence
+│   │   ├── session-persistence.js # Session & message persistence
 │   │   ├── connection-state-manager.js # Connection state
 │   │   └── telemetry.js     # Performance monitoring
 │   └── utils/               # Utility functions
 ├── test/                    # Test files
-├── certs/                   # TLS certificates
-└── hostapp/                # Tauri desktop app
+└── certs/                   # TLS certificates
 ```
 
 ## Core Services
 
 ### AICLI Service
-Manages Claude Code CLI processes and sessions:
+Manages AICLI processes and sessions:
 - Process lifecycle management
-- Session state tracking
-- Permission handling
-- Output streaming
+- Session state tracking with persistence
+- Tool permission handling
+- Output streaming with parsing
+- Message buffer management
 
 ### WebSocket Service
 Real-time communication with iOS clients:
@@ -302,11 +301,12 @@ Reliable message delivery:
 - Metadata enrichment
 
 ### Session Persistence Service
-Session state management:
-- In-memory session cache
-- Session deduplication by working directory
-- Activity tracking
+Session and message persistence:
+- In-memory session cache with disk backup
+- Message buffer persistence for conversation history
+- Session metadata tracking
 - Automatic cleanup of expired sessions
+- Message history API for client sync
 
 ### Connection State Manager
 WebSocket connection persistence:
@@ -377,10 +377,12 @@ node manual-tests/test-streaming.js
 
 ### Common Issues
 
-1. **Claude Code not found**
+1. **AICLI not found**
    ```bash
-   # Set path explicitly
-   export CLAUDE_CLI_PATH=/usr/local/bin/claude
+   # Ensure AICLI is installed and in PATH
+   which aicli
+   # or
+   which claude
    ```
 
 2. **WebSocket connection fails**
@@ -419,17 +421,17 @@ node manual-tests/test-streaming.js
 ### Debug Commands
 
 ```bash
-# Check Claude Code installation
-which claude
+# Check AICLI installation
+which aicli || which claude
 
-# Test Claude directly
-claude --version
+# Test AICLI directly
+aicli --version || claude --version
 
 # Check server logs
-pm2 logs claude-companion-server
+npm run dev  # For development logs
 
 # Monitor processes
-ps aux | grep claude
+ps aux | grep -E "aicli|claude|node"
 
 # View telemetry
 curl -H "Authorization: Bearer YOUR_TOKEN" http://localhost:3001/api/telemetry | jq

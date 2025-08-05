@@ -126,6 +126,9 @@ class ChatSessionManager: ObservableObject {
                 // Touch the session to update last active time
                 sessionStatePersistence.touchSession(sessionState.id)
                 
+                // Request message history from server
+                requestMessageHistory(for: sessionState.id)
+                
                 isRestoring = false
                 completion(.success(restoredSession))
                 return
@@ -161,6 +164,9 @@ class ChatSessionManager: ObservableObject {
         
         setActiveSession(restoredSession)
         webSocketService.subscribeToSessions([sessionId])
+        
+        // Request message history from server
+        requestMessageHistory(for: sessionId)
         
         // Migrate to new session state persistence
         sessionStatePersistence.saveSessionState(
@@ -215,6 +221,27 @@ class ChatSessionManager: ObservableObject {
            activeSession.sessionId == status.sessionId {
             // Update session status
             print("📊 Session status update: \(status.status)")
+        }
+    }
+    
+    private func requestMessageHistory(for sessionId: String) {
+        print("🔷 SessionManager: Requesting message history for session \(sessionId)")
+        
+        // Create the request
+        let request = GetMessageHistoryRequest(
+            sessionId: sessionId,
+            limit: nil,  // Get all messages
+            offset: nil
+        )
+        
+        // Send via WebSocket
+        webSocketService.sendMessage(request, type: .getMessageHistory) { result in
+            switch result {
+            case .success:
+                print("✅ Message history request sent for session \(sessionId)")
+            case .failure(let error):
+                print("❌ Failed to request message history: \(error)")
+            }
         }
     }
     

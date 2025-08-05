@@ -491,6 +491,10 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
             // Stream chunk for sophisticated streaming
             case .streamChunk:
                 handleStreamChunk(message)
+            
+            // Message history response
+            case .getMessageHistory:
+                handleGetMessageHistory(message)
 
             default:
                 break
@@ -696,6 +700,21 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
             }
         }
         // This will be handled by registered handlers in the UI
+    }
+    
+    private func handleGetMessageHistory(_ message: WebSocketMessage) {
+        if case .getMessageHistoryResponse(let historyResponse) = message.data {
+            print("📜 Received message history for session \(historyResponse.sessionId)")
+            print("   Total messages: \(historyResponse.totalCount)")
+            print("   Messages in response: \(historyResponse.messages.count)")
+            print("   Has more: \(historyResponse.hasMore)")
+            
+            // Log each message for debugging
+            for (index, msg) in historyResponse.messages.enumerated() {
+                print("   Message \(index + 1): \(msg.type) - \(msg.id)")
+            }
+        }
+        // This will be handled by registered handlers
     }
 
     // MARK: - WebSocketDelegate

@@ -47,6 +47,9 @@ export class AICLISessionManager extends EventEmitter {
     const persistedSessions = sessionPersistence.getAllSessions();
     console.log(`🔄 Restoring ${persistedSessions.length} persisted sessions`);
 
+    // Load all message buffers first
+    const messageBuffers = await sessionPersistence.loadAllMessageBuffers();
+
     for (const persistedSession of persistedSessions) {
       const { sessionId } = persistedSession;
 
@@ -69,8 +72,17 @@ export class AICLISessionManager extends EventEmitter {
 
       this.activeSessions.set(sessionId, session);
 
-      // Initialize message buffer for restored session
-      this.sessionMessageBuffers.set(sessionId, AICLIMessageHandler.createSessionBuffer());
+      // Restore message buffer from disk or create new one
+      const restoredBuffer = messageBuffers.get(sessionId);
+      if (restoredBuffer) {
+        console.log(
+          `   📚 Restored message buffer for session ${sessionId} (${restoredBuffer.assistantMessages.length} messages)`
+        );
+        this.sessionMessageBuffers.set(sessionId, restoredBuffer);
+      } else {
+        // Initialize empty message buffer for restored session
+        this.sessionMessageBuffers.set(sessionId, AICLIMessageHandler.createSessionBuffer());
+      }
 
       // Set up timeout for restored session
       const timeoutId = setTimeout(() => {
@@ -317,8 +329,17 @@ export class AICLISessionManager extends EventEmitter {
 
       this.activeSessions.set(sessionId, session);
 
-      // Initialize message buffer for restored session
-      this.sessionMessageBuffers.set(sessionId, AICLIMessageHandler.createSessionBuffer());
+      // Restore message buffer from disk or create new one
+      const restoredBuffer = await sessionPersistence.loadMessageBuffer(sessionId);
+      if (restoredBuffer) {
+        console.log(
+          `   📚 Restored message buffer for session ${sessionId} (${restoredBuffer.assistantMessages.length} messages)`
+        );
+        this.sessionMessageBuffers.set(sessionId, restoredBuffer);
+      } else {
+        // Initialize empty message buffer for restored session
+        this.sessionMessageBuffers.set(sessionId, AICLIMessageHandler.createSessionBuffer());
+      }
 
       // Set up timeout for restored session
       const timeoutId = setTimeout(() => {
@@ -582,6 +603,16 @@ export class AICLISessionManager extends EventEmitter {
    */
   getSessionBuffer(sessionId) {
     return this.sessionMessageBuffers.get(sessionId);
+  }
+
+  /**
+   * Set session message buffer (used when restoring from persistence)
+   */
+  setSessionBuffer(sessionId, buffer) {
+    this.sessionMessageBuffers.set(sessionId, buffer);
+    console.log(
+      `📝 Set message buffer for session ${sessionId} with ${buffer.assistantMessages?.length || 0} assistant messages`
+    );
   }
 
   /**

@@ -247,7 +247,7 @@ class PushNotificationService {
         // Record telemetry
         getTelemetryService().recordMessageSent(clientId, 'push_notification', true);
       } else {
-        console.error(`❌ Push notification failed for client ${clientId}:`, result.error);
+        console.error('❌ Push notification failed for client %s:', clientId, result.error);
         // Record telemetry
         getTelemetryService().recordMessageSent(clientId, 'push_notification', false);
       }

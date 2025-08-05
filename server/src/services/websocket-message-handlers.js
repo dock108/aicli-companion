@@ -585,6 +585,128 @@ export class WebSocketMessageHandlers {
   }
 
   /**
+   * Handle 'getMessageHistory' message - retrieve message history for a session
+   */
+  static async handleGetMessageHistoryMessage(
+    clientId,
+    requestId,
+    data,
+    aicliService,
+    clients,
+    _connectionManager
+  ) {
+    const { sessionId, limit, offset } = data;
+
+    console.log(`📜 Client ${clientId} requesting message history for session ${sessionId}`);
+    console.log(`   Limit: ${limit || 'all'}, Offset: ${offset || 0}`);
+
+    try {
+      // Validate session exists
+      const session = await aicliService.getSession(sessionId);
+      if (!session) {
+        throw new Error(`Session ${sessionId} not found`);
+      }
+
+      // Get message buffer from session manager
+      let buffer = aicliService.sessionManager.getSessionBuffer(sessionId);
+
+      // If no buffer exists in memory, try to load from persistence
+      if (!buffer) {
+        console.log(
+          `⚠️ No message buffer in memory for session ${sessionId}, attempting to load from persistence`
+        );
+        const { sessionPersistence } = await import('./session-persistence.js');
+        const persistedBuffer = await sessionPersistence.loadMessageBuffer(sessionId);
+
+        if (persistedBuffer) {
+          console.log(`✅ Loaded message buffer from persistence for session ${sessionId}`);
+          // Restore the buffer to session manager
+          aicliService.sessionManager.setSessionBuffer(sessionId, persistedBuffer);
+          buffer = persistedBuffer;
+        } else {
+          console.log(
+            `📝 No persisted message buffer found for session ${sessionId} - this may be a new session`
+          );
+        }
+      }
+
+      // Get user prompts and assistant messages
+      const messages = [];
+
+      // Add user prompts with type 'user'
+      if (buffer && buffer.userPrompts) {
+        buffer.userPrompts.forEach((prompt, index) => {
+          messages.push({
+            id: `user-${index}`,
+            type: 'user',
+            content: prompt,
+            timestamp: null, // User prompts don't have timestamps in current implementation
+          });
+        });
+      }
+
+      // Add assistant messages with full content
+      if (buffer && buffer.assistantMessages) {
+        buffer.assistantMessages.forEach((message) => {
+          messages.push({
+            id: message.id,
+            type: 'assistant',
+            content: message.content,
+            model: message.model,
+            usage: message.usage,
+            timestamp: message.timestamp || new Date().toISOString(),
+          });
+        });
+      }
+
+      // Sort messages by timestamp (if available)
+      // TODO: [OPTIMIZE] Better message ordering based on actual conversation flow
+      // Current implementation may not preserve exact conversation order
+
+      // Apply pagination if requested
+      const totalMessages = messages.length;
+      const startIndex = offset || 0;
+      const endIndex = limit ? startIndex + limit : totalMessages;
+      const paginatedMessages = messages.slice(startIndex, endIndex);
+
+      WebSocketUtilities.sendMessage(
+        clientId,
+        WebSocketUtilities.createResponse('getMessageHistory', requestId, {
+          success: true,
+          sessionId,
+          messages: paginatedMessages,
+          totalCount: totalMessages,
+          offset: startIndex,
+          limit: limit || null,
+          hasMore: endIndex < totalMessages,
+          sessionMetadata: {
+            workingDirectory: session.workingDirectory,
+            conversationStarted: session.conversationStarted,
+            createdAt: session.createdAt,
+            lastActivity: session.lastActivity,
+          },
+          timestamp: new Date().toISOString(),
+        }),
+        clients
+      );
+
+      console.log(
+        `✅ Sent ${paginatedMessages.length} of ${totalMessages} messages for session ${sessionId}`
+      );
+    } catch (error) {
+      console.error(`❌ Get message history failed:`, error);
+      WebSocketUtilities.sendErrorMessage(
+        clientId,
+        requestId,
+        'GET_HISTORY_FAILED',
+        error.message,
+        clients,
+        { sessionId }
+      );
+    }
+  }
+
+  /**
    * Handle 'registerDevice' message - register device for push notifications
    */
   static handleRegisterDeviceMessage(clientId, requestId, data, clients) {
@@ -642,6 +764,7 @@ export class WebSocketMessageHandlers {
       setWorkingDirectory: this.handleSetWorkingDirectoryMessage,
       claudeCommand: this.handleClaudeCommandMessage,
       client_backgrounding: this.handleClientBackgroundingMessage,
+      getMessageHistory: this.handleGetMessageHistoryMessage,
       registerDevice: this.handleRegisterDeviceMessage,
     };
   }

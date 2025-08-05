@@ -382,7 +382,7 @@ struct ProjectSelectionView: View {
         }.resume()
     }
     
-    private func continueExistingSession(_ project: Project, metadata: SessionMetadata) {
+    private func continueExistingSession(_ project: Project, metadata: PersistedSessionMetadata) {
         print("🟢 ProjectSelection: Continuing existing session for '\(project.name)'")
         print("   - Session ID: \(metadata.sessionId)")
         print("   - AICLI Session ID: \(metadata.aicliSessionId ?? "nil")")
@@ -416,7 +416,7 @@ struct ProjectSelectionView: View {
 struct ProjectRowView: View {
     let project: Project
     let hasSession: Bool
-    let sessionMetadata: SessionMetadata?
+    let sessionMetadata: PersistedSessionMetadata?
     let onTap: () -> Void
     
     @Environment(\.colorScheme) var colorScheme
@@ -518,7 +518,7 @@ struct ProjectRowView: View {
         isProjectSelected: .constant(false)
     )
     .environmentObject(SettingsManager())
-    .preferredColorScheme(.dark)
+    .preferredColorScheme(ColorScheme.dark)
 }
 
 @available(iOS 17.0, macOS 14.0, *)
@@ -526,7 +526,7 @@ struct ProjectRowView: View {
     ProjectRowView(
         project: Project(name: "my-awesome-app", path: "/path/to/project", type: "folder"),
         hasSession: true,
-        sessionMetadata: SessionMetadata(
+        sessionMetadata: PersistedSessionMetadata(
             sessionId: "test-session",
             projectId: "my-awesome-app",
             projectName: "my-awesome-app",
@@ -541,5 +541,5 @@ struct ProjectRowView: View {
     }
     .padding()
     .background(Color.black)
-    .preferredColorScheme(.dark)
+    .preferredColorScheme(ColorScheme.dark)
 }

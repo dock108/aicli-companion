@@ -291,6 +291,17 @@ class ChatViewModel: ObservableObject {
     
     // MARK: - WebSocket Event Handling
     func setupWebSocketListeners() {
+        // Listen for message history
+        webSocketService.setMessageHandler(for: .getMessageHistory) { [weak self] message in
+            guard let self = self else { return }
+            
+            if case .getMessageHistoryResponse(let historyResponse) = message.data {
+                Task { @MainActor in
+                    self.handleMessageHistory(historyResponse)
+                }
+            }
+        }
+        
         // Listen for stream data
         webSocketService.setMessageHandler(for: .streamData) { [weak self] message in
             guard let self = self else { return }
@@ -452,14 +463,96 @@ class ChatViewModel: ObservableObject {
     private func handleQueueProgress(_ progress: ProgressResponse) {
         // Update progress info with queue status
         progressInfo = ProgressInfo(from: progress)
+    }
+    
+    private func handleMessageHistory(_ historyResponse: GetMessageHistoryResponse) {
+        print("📜 Processing message history for session \(historyResponse.sessionId)")
         
-        // Track queued messages
-        if progress.message.contains("Message queued") {
-            queueManager.trackQueuedMessage(
-                messageId: UUID().uuidString,
-                sessionId: progress.sessionId
-            )
+        // Only process if this is for our active session
+        guard let activeSession = activeSession,
+              activeSession.sessionId == historyResponse.sessionId else {
+            print("⚠️ Received history for different session, ignoring")
+            return
         }
+        
+        // Convert server messages to our Message format
+        var serverMessages: [Message] = []
+        
+        for historyMessage in historyResponse.messages {
+            let sender: MessageSender = historyMessage.type == "user" ? .user : .assistant
+            
+            // Extract text content from message content array
+            var combinedContent = ""
+            if let contents = historyMessage.content {
+                for content in contents {
+                    if let text = content.text {
+                        combinedContent += text + "\n"
+                    }
+                }
+            } else {
+                // Fallback for user messages that might not have content array
+                combinedContent = historyMessage.id.replacingOccurrences(of: "user-", with: "User prompt ")
+            }
+            
+            let message = Message(
+                content: combinedContent.trimmingCharacters(in: .whitespacesAndNewlines),
+                sender: sender,
+                type: .text,
+                metadata: historyMessage.model != nil ? AICLIMessageMetadata(
+                    sessionId: historyResponse.sessionId,
+                    duration: 0,
+                    cost: nil,
+                    tools: nil
+                ) : nil
+            )
+            
+            serverMessages.append(message)
+        }
+        
+        print("📜 Converted \(serverMessages.count) server messages")
+        
+        // Merge with existing messages
+        mergeServerMessages(serverMessages, for: activeSession)
+    }
+    
+    private func mergeServerMessages(_ serverMessages: [Message], for session: ProjectSession) {
+        print("🔄 Merging \(serverMessages.count) server messages with \(messages.count) local messages")
+        
+        // If we have no local messages, just use server messages
+        if messages.isEmpty {
+            messages = serverMessages
+            print("✅ Using all server messages (no local messages)")
+            return
+        }
+        
+        // Create a set of existing message content for deduplication
+        let existingContent = Set(messages.map { $0.content })
+        
+        // Add server messages that don't already exist locally
+        var addedCount = 0
+        for serverMessage in serverMessages {
+            if !existingContent.contains(serverMessage.content) {
+                messages.append(serverMessage)
+                addedCount += 1
+            }
+        }
+        
+        // Sort messages by timestamp to maintain chronological order
+        messages.sort { $0.timestamp < $1.timestamp }
+        
+        print("✅ Added \(addedCount) new messages from server")
+        print("📊 Total messages now: \(messages.count)")
+        
+        // Save the merged messages
+        if let project = getCurrentProject() {
+            saveMessages(for: project)
+        }
+    }
+    
+    private func getCurrentProject() -> Project? {
+        // TODO: [QUESTION] How to get current project from ChatViewModel?
+        // May need to pass project to view model or store it
+        return nil
     }
     
     // MARK: - Activity Helpers

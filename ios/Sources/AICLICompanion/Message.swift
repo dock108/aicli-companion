@@ -264,6 +264,7 @@ struct WebSocketMessage: Codable {
         case setWorkingDirectory(SetWorkingDirectoryRequest)
         case claudeCommand(ClaudeCommandRequest)
         case registerDevice(RegisterDeviceRequest)
+        case getMessageHistory(GetMessageHistoryRequest)
         case welcome(WelcomeResponse)
         case askResponse(AskResponseData)
         case streamStarted(StreamStartedResponse)
@@ -287,6 +288,7 @@ struct WebSocketMessage: Codable {
         case progress(ProgressResponse)
         case streamChunk(StreamChunkResponse)
         case deviceRegistered(DeviceRegisteredResponse)
+        case getMessageHistoryResponse(GetMessageHistoryResponse)
     }
     
     // Custom decoding to handle server message format
@@ -343,6 +345,8 @@ struct WebSocketMessage: Codable {
             self.data = .streamChunk(try StreamChunkResponse(from: dataDecoder))
         case .deviceRegistered:
             self.data = .deviceRegistered(try DeviceRegisteredResponse(from: dataDecoder))
+        case .getMessageHistory:
+            self.data = .getMessageHistoryResponse(try GetMessageHistoryResponse(from: dataDecoder))
         default:
             throw DecodingError.dataCorruptedError(forKey: .data, in: container, debugDescription: "Unsupported message type for decoding: \(type)")
         }
@@ -423,6 +427,10 @@ struct WebSocketMessage: Codable {
             try container.encode(response, forKey: .data)
         case .deviceRegistered(let response):
             try container.encode(response, forKey: .data)
+        case .getMessageHistory(let request):
+            try container.encode(request, forKey: .data)
+        case .getMessageHistoryResponse(let response):
+            try container.encode(response, forKey: .data)
         }
     }
 }
@@ -439,6 +447,7 @@ enum WebSocketMessageType: String, Codable {
     case setWorkingDirectory = "setWorkingDirectory"
     case claudeCommand = "claudeCommand"
     case registerDevice = "registerDevice"
+    case getMessageHistory = "getMessageHistory"
 
     // Server → Client
     case welcome = "welcome"
@@ -527,6 +536,12 @@ struct ClaudeCommandRequest: Codable {
     let command: String
     let projectPath: String
     let sessionId: String?
+}
+
+struct GetMessageHistoryRequest: Codable {
+    let sessionId: String
+    let limit: Int?
+    let offset: Int?
 }
 
 // MARK: - Server Response Models
@@ -727,6 +742,39 @@ struct ClaudeCommandResponse: Codable {
     let success: Bool
     let sessionId: String?
     let error: String?
+}
+
+struct GetMessageHistoryResponse: Codable {
+    let success: Bool
+    let sessionId: String
+    let messages: [HistoryMessage]
+    let totalCount: Int
+    let offset: Int
+    let limit: Int?
+    let hasMore: Bool
+    let sessionMetadata: SessionMetadata
+    let timestamp: String
+}
+
+struct HistoryMessage: Codable {
+    let id: String
+    let type: String
+    let content: [MessageContent]?
+    let timestamp: String?
+    let model: String?
+    let usage: Usage?
+}
+
+struct MessageContent: Codable {
+    let type: String
+    let text: String?
+}
+
+struct SessionMetadata: Codable {
+    let workingDirectory: String
+    let conversationStarted: Bool
+    let createdAt: TimeInterval
+    let lastActivity: TimeInterval
 }
 
 struct ProgressResponse: Codable {

@@ -4,7 +4,7 @@ import SwiftUI
 // MARK: - Session Metadata
 
 @available(iOS 16.0, macOS 13.0, *)
-struct SessionMetadata: Codable {
+struct PersistedSessionMetadata: Codable {
     let sessionId: String
     let projectId: String
     let projectName: String
@@ -65,7 +65,7 @@ class MessagePersistenceService: ObservableObject {
     private let decoder = JSONDecoder()
     private let fileManager = FileManager.default
     
-    @Published var savedSessions: [String: SessionMetadata] = [:]
+    @Published var savedSessions: [String: PersistedSessionMetadata] = [:]
     
     private init() {
         // Setup directories
@@ -99,7 +99,7 @@ class MessagePersistenceService: ObservableObject {
         }
         
         // Update metadata
-        let metadata = SessionMetadata(
+        let metadata = PersistedSessionMetadata(
             sessionId: sessionId,
             projectId: projectId,
             projectName: project.name,
@@ -154,7 +154,7 @@ class MessagePersistenceService: ObservableObject {
         }
     }
     
-    func getSessionMetadata(for projectId: String) -> SessionMetadata? {
+    func getSessionMetadata(for projectId: String) -> PersistedSessionMetadata? {
         guard let metadata = savedSessions[projectId] else {
             print("🗂️ MessagePersistence: No session metadata found for project '\(projectId)'")
             return nil
@@ -170,7 +170,7 @@ class MessagePersistenceService: ObservableObject {
         return metadata
     }
     
-    private func isValidSessionMetadata(_ metadata: SessionMetadata, for projectId: String) -> Bool {
+    private func isValidSessionMetadata(_ metadata: PersistedSessionMetadata, for projectId: String) -> Bool {
         print("🗂️ MessagePersistence: Validating session metadata for '\(projectId)'")
         
         // Check basic metadata fields
@@ -254,7 +254,7 @@ class MessagePersistenceService: ObservableObject {
         for projectDir in projectDirs {
             let metadataFile = projectDir.appendingPathComponent("metadata.json")
             if let data = try? Data(contentsOf: metadataFile),
-               let metadata = try? decoder.decode(SessionMetadata.self, from: data) {
+               let metadata = try? decoder.decode(PersistedSessionMetadata.self, from: data) {
                 savedSessions[metadata.projectId] = metadata
             }
         }

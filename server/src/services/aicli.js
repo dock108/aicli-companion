@@ -10,6 +10,7 @@ import { AICLISessionManager } from './aicli-session-manager.js';
 import { AICLIProcessRunner } from './aicli-process-runner.js';
 // Long-running task manager removed - trusting Claude CLI timeouts
 import { AICLIValidationService } from './aicli-validation-service.js';
+import { sessionPersistence } from './session-persistence.js';
 
 const execAsync = promisify(exec);
 
@@ -66,8 +67,8 @@ export class AICLIService extends EventEmitter {
       this.emit('processStderr', data);
     });
 
-    this.processRunner.on('aicliResponse', (data) => {
-      this.emitAICLIResponse(data.sessionId, data.response, data.isLast);
+    this.processRunner.on('aicliResponse', async (data) => {
+      await this.emitAICLIResponse(data.sessionId, data.response, data.isLast);
     });
 
     // Event handlers removed with long-running task manager
@@ -590,7 +591,7 @@ export class AICLIService extends EventEmitter {
     return AICLIValidationService.extractCompleteObjectsFromArray(arrayText);
   }
 
-  emitAICLIResponse(sessionId, response, _isComplete = false, options = {}) {
+  async emitAICLIResponse(sessionId, response, _isComplete = false, options = {}) {
     const buffer = this.sessionManager.getSessionBuffer(sessionId);
     if (!buffer) {
       console.warn(`No message buffer found for session ${sessionId}`);
@@ -599,6 +600,12 @@ export class AICLIService extends EventEmitter {
 
     // Use extracted message handler for pure business logic
     const result = AICLIMessageHandler.processResponse(response, buffer, options);
+
+    // Persist buffer after processing if messages were added
+    if (result.action === 'buffer' || result.action === 'tool_use') {
+      // Messages were added to buffer, persist them
+      await sessionPersistence.saveMessageBuffer(sessionId, buffer);
+    }
 
     // Handle the processing result and emit appropriate events
     switch (result.action) {
@@ -639,7 +646,7 @@ export class AICLIService extends EventEmitter {
         break;
 
       case 'final_result':
-        this.handleFinalResultEmission(sessionId, result.data, options);
+        await this.handleFinalResultEmission(sessionId, result.data, options);
         break;
 
       case 'buffer':
@@ -660,7 +667,7 @@ export class AICLIService extends EventEmitter {
     }
   }
 
-  handleFinalResultEmission(sessionId, resultData, _options = {}) {
+  async handleFinalResultEmission(sessionId, resultData, _options = {}) {
     const { response, buffer, aggregatedContent, sendAggregated, embeddedPermission } = resultData;
 
     if (sendAggregated && aggregatedContent) {
@@ -704,6 +711,9 @@ export class AICLIService extends EventEmitter {
         },
       });
     }
+
+    // Persist buffer one final time before clearing
+    await sessionPersistence.saveMessageBuffer(sessionId, buffer);
 
     // Clear the buffer for next command
     AICLIMessageHandler.clearSessionBuffer(buffer);

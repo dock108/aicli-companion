@@ -304,6 +304,8 @@ export class SessionPersistenceService {
     const existed = this.sessionsCache.delete(sessionId);
     if (existed) {
       await this.saveSessions();
+      // Also remove associated message buffer
+      await this.removeMessageBuffer(sessionId);
       console.log(`🗑️ Removed session ${sessionId} from persistence`);
     }
     return existed;
@@ -386,6 +388,135 @@ export class SessionPersistenceService {
     };
 
     return stats;
+  }
+
+  /**
+   * Save message buffer for a session
+   * @param {string} sessionId - The session ID
+   * @param {Object} messageBuffer - The message buffer to persist
+   */
+  async saveMessageBuffer(sessionId, messageBuffer) {
+    if (!this.isInitialized) {
+      console.warn('⚠️ Session persistence not initialized - skipping message buffer save');
+      return;
+    }
+
+    try {
+      const bufferFile = path.join(this.storageDir, `buffer-${sessionId}.json`);
+      const bufferData = {
+        sessionId,
+        assistantMessages: messageBuffer.assistantMessages || [],
+        userPrompts: messageBuffer.userPrompts || [],
+        lastUpdated: new Date().toISOString(),
+      };
+
+      // IMPLEMENTATION NOTE: Using atomic write to prevent corruption
+      // Write to temp file first, then rename for atomicity
+      const tempFile = `${bufferFile}.tmp`;
+      await fs.writeFile(tempFile, JSON.stringify(bufferData, null, 2), 'utf8');
+      await fs.rename(tempFile, bufferFile);
+
+      console.log(
+        `💾 Saved message buffer for session ${sessionId} (${bufferData.assistantMessages.length} assistant messages)`
+      );
+    } catch (error) {
+      console.error(`❌ Failed to save message buffer for session ${sessionId}:`, error);
+      // Don't throw - persistence failures shouldn't break message flow
+    }
+  }
+
+  /**
+   * Load message buffer for a session
+   * @param {string} sessionId - The session ID
+   * @returns {Object|null} The loaded message buffer or null if not found
+   */
+  async loadMessageBuffer(sessionId) {
+    if (!this.isInitialized) {
+      console.warn('⚠️ Session persistence not initialized - skipping message buffer load');
+      return null;
+    }
+
+    try {
+      const bufferFile = path.join(this.storageDir, `buffer-${sessionId}.json`);
+      const data = await fs.readFile(bufferFile, 'utf8');
+
+      let bufferData;
+      try {
+        bufferData = JSON.parse(data);
+      } catch (parseError) {
+        console.error(
+          `❌ Failed to parse message buffer for session ${sessionId} - file corrupted:`,
+          parseError
+        );
+        // Try to backup corrupted file
+        const backupFile = `${bufferFile}.corrupted.${Date.now()}`;
+        try {
+          await fs.rename(bufferFile, backupFile);
+          console.log(`📦 Backed up corrupted buffer file to: ${backupFile}`);
+        } catch (renameError) {
+          console.error('Failed to backup corrupted file:', renameError);
+        }
+        return null;
+      }
+
+      console.log(
+        `📖 Loaded message buffer for session ${sessionId} (${bufferData.assistantMessages?.length || 0} assistant messages)`
+      );
+      return {
+        assistantMessages: bufferData.assistantMessages || [],
+        userPrompts: bufferData.userPrompts || [],
+      };
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        console.error(`❌ Failed to load message buffer for session ${sessionId}:`, error);
+      }
+      // Return null for not found or corrupted files
+      return null;
+    }
+  }
+
+  /**
+   * Remove message buffer when session is removed
+   * @param {string} sessionId - The session ID
+   */
+  async removeMessageBuffer(sessionId) {
+    try {
+      const bufferFile = path.join(this.storageDir, `buffer-${sessionId}.json`);
+      await fs.unlink(bufferFile);
+      console.log(`🗑️ Removed message buffer for session ${sessionId}`);
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        console.error(`❌ Failed to remove message buffer for session ${sessionId}:`, error);
+      }
+    }
+  }
+
+  /**
+   * Load all message buffers for restored sessions
+   * Used during server startup to restore in-memory buffers
+   * @returns {Map<string, Object>} Map of sessionId to message buffer
+   */
+  async loadAllMessageBuffers() {
+    const buffers = new Map();
+
+    try {
+      const files = await fs.readdir(this.storageDir);
+      const bufferFiles = files.filter((f) => f.startsWith('buffer-') && f.endsWith('.json'));
+
+      for (const file of bufferFiles) {
+        const sessionId = file.replace('buffer-', '').replace('.json', '');
+        const buffer = await this.loadMessageBuffer(sessionId);
+        if (buffer) {
+          buffers.set(sessionId, buffer);
+        }
+      }
+
+      console.log(`📚 Loaded ${buffers.size} message buffers from disk`);
+    } catch (error) {
+      console.error('❌ Failed to load message buffers:', error);
+    }
+
+    return buffers;
   }
 }
 

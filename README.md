@@ -1,26 +1,44 @@
 # Claude Companion
 
-A mobile companion app for Anthropic's Claude Code CLI, enabling iOS users to interact with Claude Code remotely through an intuitive chat interface.
+A comprehensive AI assistant integration system that brings Claude's capabilities to iOS through a modern, native experience. The system consists of three core components working seamlessly together.
 
-## Overview
+## 🎯 Overview
 
-Claude Companion consists of three main components:
-- **iOS App**: Native SwiftUI application for iPhone and iPad
-- **Companion Server**: Node.js server that bridges the iOS app with Claude Code CLI
-- **Host App**: Tauri-based desktop application for easy server management
+Claude Companion enables iOS users to interact with Claude (via AICLI) from their mobile devices, with full project context, streaming responses, and persistent conversations. Perfect for developers who want to leverage AI assistance on the go.
 
-## Features
+### Core Components
 
-- 📱 **Native iOS Experience**: Built with SwiftUI for smooth, responsive interactions
-- 🔄 **Real-time Streaming**: See Claude's responses as they're generated
-- 📂 **Project Management**: Switch between different coding projects seamlessly
-- 🔔 **Push Notifications**: Get notified when Claude completes a response
-- 💾 **Session Persistence**: Continue conversations across app launches
-- 🔒 **Secure Communication**: TLS encryption and token-based authentication
-- 🔍 **Service Discovery**: Automatic server detection via Bonjour/mDNS
-- 🌐 **WebSocket Support**: Real-time bidirectional communication
+1. **📱 iOS App** - Native SwiftUI application with modern chat interface
+2. **🖥️ macOS Companion** - Menu bar app for server lifecycle management  
+3. **🚀 Server** - Node.js backend bridging iOS app with AICLI
 
-## Project Structure
+## ✨ Key Features
+
+### iOS App
+- **Modern Chat Interface**: Clean, intuitive design following iOS Human Interface Guidelines
+- **Real-time Streaming**: See Claude's responses character-by-character as they're generated
+- **Project Management**: Organize conversations by project with full context preservation
+- **Message Persistence**: Never lose a conversation - all messages are synced with the server
+- **Push Notifications**: Get notified when Claude completes long-running tasks
+- **Rich Content Rendering**: Beautiful rendering of code blocks, markdown, and tool outputs
+- **Offline Support**: Browse previous conversations even without connection
+
+### macOS Companion
+- **Menu Bar Integration**: Always accessible from your menu bar
+- **One-Click Server Control**: Start/stop server with a single click
+- **Real-time Monitoring**: See active sessions, memory usage, and server health
+- **Auto-Start Options**: Launch at login and auto-start server
+- **Native Performance**: Built with SwiftUI for optimal macOS experience
+
+### Server
+- **AICLI Integration**: Seamless bridge to Claude via AICLI CLI
+- **WebSocket Communication**: Real-time bidirectional messaging
+- **Session Management**: Intelligent session handling with persistence
+- **Security First**: Token authentication, TLS support, configurable permissions
+- **Service Discovery**: Automatic discovery via Bonjour/mDNS
+- **RESTful API**: Clean API for project management and configuration
+
+## 🏗️ Architecture
 
 ```
 claude-companion/
@@ -28,164 +46,164 @@ claude-companion/
 │   ├── Sources/           # Swift source code
 │   ├── Tests/             # Unit tests
 │   └── App/               # App configuration
-├── server/                # Companion server (Node.js)
+├── macos-app/             # macOS companion app
+│   ├── ClaudeCompanionHost/
+│   └── Assets.xcassets/
+├── server/                # Node.js backend
 │   ├── src/               # Server source code
-│   ├── test/              # Server tests
-│   └── hostapp/           # Tauri desktop app
-├── docs/                  # Documentation
-│   ├── api/               # API documentation
-│   ├── architecture/      # Architecture guides
-│   ├── development/       # Development guides
-│   └── getting-started/   # Quick start guides
-└── tests/                 # Integration tests
+│   └── test/              # Server tests
+└── docs/                  # Documentation
 ```
 
-## Requirements
+## 🚀 Quick Start
 
-- **iOS Development**: 
-  - Xcode 15+
-  - iOS 17.0+ deployment target
-  - macOS 13+ for development
-- **Server Development**: 
-  - Node.js 18+
-  - npm or yarn
-- **Claude Code CLI**: 
-  - Version 1.0.55 or later
-  - Valid API key
+### Prerequisites
 
-## Quick Start
+- **macOS 14.0+** (for development)
+- **Xcode 15.0+**
+- **Node.js 18+**
+- **AICLI CLI** installed and configured
+- **iOS 16.0+** device or simulator
 
-### 1. Clone the Repository
+### 1. Clone and Setup
+
 ```bash
-git clone https://github.com/your-repo/claude-companion.git
+git clone https://github.com/your-username/claude-companion.git
 cd claude-companion
-npm install
 ```
 
-### 2. Start the Companion Server
+### 2. Start the Server
+
 ```bash
 cd server
 npm install
 npm start
 ```
 
-The server will:
-- Generate an authentication token
-- Start on port 8765 (configurable)
-- Enable TLS if certificates are available
-- Broadcast via Bonjour for iOS discovery
+The server will display:
+- Port number (default: 3001)
+- Authentication token (if auth enabled)
+- Service discovery status
 
-### 3. Build and Run the iOS App
+### 3. Launch macOS Companion
+
+Open `macos-app/ClaudeCompanionHost.xcodeproj` in Xcode and run.
+
+Or build from command line:
 ```bash
-cd ios
-open AICLICompanion.xcodeproj
+cd macos-app
+swift build -c release
+open .build/release/ClaudeCompanionHost.app
 ```
 
-In Xcode:
+### 4. Run iOS App
+
+Open `ios/AICLICompanion.xcodeproj` in Xcode:
 1. Select your development team
-2. Choose your target device/simulator
+2. Choose target device/simulator
 3. Build and run (⌘R)
 
-### 4. Connect and Start Coding
-1. The iOS app will automatically discover the server
-2. Enter the authentication token displayed by the server
-3. Select a project directory
-4. Start chatting with Claude!
-
-## Configuration
+## ⚙️ Configuration
 
 ### Server Configuration
-Create a `.env` file in the `server` directory:
+
+Create `.env` file in `server/` directory:
 
 ```env
-# Server settings
-PORT=8765
+# Server
+PORT=3001
 HOST=0.0.0.0
-NODE_ENV=development
+AUTH_REQUIRED=true
+AUTH_TOKEN=your-secure-token
 
-# Security
-REQUIRE_AUTH=true
-ENABLE_TLS=true
+# AICLI
+CLAUDE_SKIP_PERMISSIONS=false
+CLAUDE_ALLOWED_TOOLS=Read,Write,Edit,Bash
 
-# Claude Code settings
-CLAUDE_CLI_PATH=/usr/local/bin/claude
-CLAUDE_PERMISSION_MODE=relaxed
-CLAUDE_ALLOWED_TOOLS=read,write,list
-
-# Service discovery
+# Features
 ENABLE_BONJOUR=true
+ENABLE_TLS=false
+
+# Paths
+CONFIG_PATH=/path/to/projects
 ```
 
-### iOS App Settings
-Configure in the Settings tab:
-- Server connection preferences
-- Notification settings
-- Session persistence options
-- UI customization
+### macOS Companion Settings
 
-## Development
+Configure via the app's preferences:
+- Server port
+- Auto-start preferences
+- Authentication settings
+- Project directory path
 
-### Running Tests
+### iOS App Configuration
 
-```bash
-# All tests
-npm test
+In-app settings include:
+- Server connection
+- Notification preferences
+- Appearance (light/dark/system)
+- Message persistence options
 
-# Server tests only
-npm run test:server
-
-# iOS tests
-npm run test:ios
-
-# Integration tests
-cd tests/integration
-npm test
-```
-
-### Code Quality
+## 🧪 Testing
 
 ```bash
-# Linting
+# Run all tests
+cd server && npm test
+
+# Run with coverage
+npm run test:coverage
+
+# Lint code
 npm run lint
 
-# Format code
-npm run format
-
-# Type checking (TypeScript)
-npm run typecheck
+# iOS tests (in Xcode)
+⌘U or Product → Test
 ```
 
-## Documentation
+## 📚 Documentation
 
-- [Installation Guide](./docs/getting-started/installation.md)
-- [API Reference](./docs/api/rest-api.md)
-- [Architecture Overview](./docs/architecture/overview.md)
-- [Contributing Guide](./docs/development/contributing.md)
-- [Troubleshooting](./docs/getting-started/troubleshooting.md)
+- [API Reference](./server/API.md)
+- [Architecture Overview](./server/ARCHITECTURE.md)
+- [iOS Integration Guide](./server/IOS_INTEGRATION_GUIDE.md)
+- [Deployment Guide](./server/DEPLOYMENT.md)
+- [Troubleshooting](./server/TROUBLESHOOTING.md)
 
-## Security
+## 🔒 Security
 
-- All communication is encrypted with TLS
-- Token-based authentication required by default
-- No data stored on third-party servers
-- API keys remain on the host machine
-- Configurable permission modes for Claude Code access
+- **Authentication**: Token-based authentication for all connections
+- **Encryption**: Optional TLS support for production deployments
+- **Permissions**: Configurable AICLI tool permissions
+- **Local First**: All data stays on your devices
+- **No Telemetry**: Zero tracking or analytics
 
-## License
+## 🤝 Contributing
 
-MIT License - See [LICENSE](LICENSE) file for details
+We welcome contributions! Please see our [Contributing Guide](./CONTRIBUTING.md) for details.
 
-## Contributing
+### Development Workflow
 
-We welcome contributions! Please see our [Contributing Guide](./docs/development/contributing.md) for details.
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-## Support
+## 📄 License
 
-- **Issues**: [GitHub Issues](https://github.com/your-repo/claude-companion/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-repo/claude-companion/discussions)
-- **Documentation**: [Full Documentation](./docs/README.md)
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- Built for use with [Anthropic's Claude](https://www.anthropic.com)
+- Uses AICLI for Claude integration
+- Inspired by the need for mobile AI assistance
+
+## 📊 Status
+
+- **Current Version**: 1.0.0
+- **Status**: Production Ready
+- **Last Updated**: January 2025
 
 ---
 
-**Current Version**: 1.0.0  
-**Last Updated**: 2025-07-30
+Made with ❤️ by the Claude Companion team

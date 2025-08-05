@@ -3,6 +3,15 @@ import path from 'path';
 import os from 'os';
 
 /**
+ * Validate sessionId to prevent path traversal and injection
+ * Only allow UUIDs or alphanumeric/dash/underscore
+ */
+function isValidSessionId(sessionId) {
+  // Accept UUIDs or simple alphanumeric/dash/underscore
+  return typeof sessionId === 'string' && /^[a-zA-Z0-9-_]{1,64}$/.test(sessionId);
+}
+
+/**
  * Handles persistent storage of AICLI CLI session metadata
  * Ensures sessions survive server restarts and maintain consistency with AICLI CLI
  */
@@ -431,6 +440,10 @@ export class SessionPersistenceService {
    * @returns {Object|null} The loaded message buffer or null if not found
    */
   async loadMessageBuffer(sessionId) {
+    if (!isValidSessionId(sessionId)) {
+      console.warn(`⚠️ Invalid sessionId for message buffer load: ${sessionId}`);
+      return null;
+    }
     if (!this.isInitialized) {
       console.warn('⚠️ Session persistence not initialized - skipping message buffer load');
       return null;
@@ -480,6 +493,10 @@ export class SessionPersistenceService {
    * @param {string} sessionId - The session ID
    */
   async removeMessageBuffer(sessionId) {
+    if (!isValidSessionId(sessionId)) {
+      console.warn(`⚠️ Invalid sessionId for message buffer removal: ${sessionId}`);
+      return;
+    }
     try {
       const bufferFile = path.join(this.storageDir, `buffer-${sessionId}.json`);
       await fs.unlink(bufferFile);

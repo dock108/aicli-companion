@@ -137,6 +137,8 @@ jobs:
   # iOS App Build and Tests
   ios:
     name: iOS Build & Test
+    permissions:
+      contents: read
     runs-on: macos-15
     
     steps:

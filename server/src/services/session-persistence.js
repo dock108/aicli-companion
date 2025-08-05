@@ -443,7 +443,13 @@ export class SessionPersistenceService {
    */
   async loadMessageBuffer(sessionId) {
     if (!isValidSessionId(sessionId)) {
-      console.warn(`⚠️ Invalid sessionId for message buffer load: ${sessionId}`);
+      // Log only the first 6 safe characters to avoid log injection
+      const safeSessionId = typeof sessionId === 'string'
+        ? sessionId.replace(/[^a-zA-Z0-9-_]/g, '').slice(0, 6)
+        : '';
+      console.warn(
+        `⚠️ Invalid sessionId for message buffer load: (${safeSessionId ? 'id starts with: ' + safeSessionId : 'unusable id'})`
+      );
       return null;
     }
     if (!this.isInitialized) {

@@ -831,7 +831,7 @@ describe('WebSocketMessageHandlers', () => {
         assert.ok(types.includes('streamStart'));
         assert.ok(types.includes('ping'));
         assert.ok(types.includes('subscribe'));
-        assert.strictEqual(types.length, 11);
+        assert.strictEqual(types.length, 12);
       });
     });
   });

@@ -269,6 +269,7 @@ struct WebSocketMessage: Codable {
         case askResponse(AskResponseData)
         case streamStarted(StreamStartedResponse)
         case streamData(StreamDataResponse)
+        case streamChunk(StreamChunkResponse)
         case streamToolUse(StreamToolUseResponse)
         case permissionRequest(PermissionRequestData)
         case streamComplete(StreamCompleteResponse)
@@ -454,6 +455,7 @@ enum WebSocketMessageType: String, Codable {
     case askResponse = "askResponse"
     case streamStarted = "streamStarted"
     case streamData = "streamData"
+    case streamChunk = "streamChunk"
     case streamToolUse = "streamToolUse"
     case permissionRequest = "permissionRequest"
     case streamComplete = "streamComplete"

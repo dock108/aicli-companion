@@ -375,6 +375,11 @@ class ServerManager: ObservableObject {
         }
     }
     
+    func clearLogs() {
+        logs.removeAll()
+        addLog(.info, "Logs cleared by user")
+    }
+    
     private func addLog(_ level: LogLevel, _ message: String) {
         let entry = LogEntry(
             id: UUID(),

@@ -7,8 +7,10 @@ import os from 'os';
  * Only allow UUIDs or alphanumeric/dash/underscore
  */
 function isValidSessionId(sessionId) {
-  // Accept UUIDs or simple alphanumeric/dash/underscore
-  return typeof sessionId === 'string' && /^[a-zA-Z0-9-_]{1,64}$/.test(sessionId);
+  // Accept UUIDs (v1-v5) or simple alphanumeric/dash (no underscore)
+  const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
+  const simpleIdRegex = /^[a-zA-Z0-9-]{1,64}$/;
+  return typeof sessionId === 'string' && (uuidRegex.test(sessionId) || simpleIdRegex.test(sessionId));
 }
 
 /**

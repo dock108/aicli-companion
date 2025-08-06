@@ -667,7 +667,7 @@ export class SessionPersistenceService {
       console.log(`🗑️ Removed message queue for session ${sessionId}`);
     } catch (error) {
       if (error.code !== 'ENOENT') {
-        console.error(`❌ Failed to remove message queue for session ${sessionId}:`, error);
+        console.error('❌ Failed to remove message queue for session %s:', sessionId, error);
       }
     }
   }

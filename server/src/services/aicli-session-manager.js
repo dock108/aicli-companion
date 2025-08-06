@@ -488,7 +488,7 @@ export class AICLISessionManager extends EventEmitter {
           console.log(`💾 Session ${sessionId} conversation start persisted`);
         } catch (error) {
           console.warn(
-            '⚠️ Failed to persist conversation start for session %s:',
+            '⚠️ Failed to persist conversation start for session %s: %s',
             sessionId,
             error.message
           );

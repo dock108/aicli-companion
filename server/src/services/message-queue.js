@@ -1,6 +1,7 @@
 // Message queue service for persisting messages to disconnected clients
 // This handles the case where long-running tasks complete after the client disconnects
 
+import crypto from 'crypto';
 import { getTelemetryService } from './telemetry.js';
 import { sessionPersistence } from './session-persistence.js';
 

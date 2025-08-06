@@ -970,9 +970,9 @@ export class AICLIService extends EventEmitter {
 
   /**
    * Startup cleanup to handle stale Claude CLI sessions and orphaned processes.
-   * 
+   *
    * Error handling policy:
-   * - If cleanup fails (e.g., unable to clear stale sessions or orphaned processes), 
+   * - If cleanup fails (e.g., unable to clear stale sessions or orphaned processes),
    *   the application will continue to start normally.
    * - Failures are logged as warnings, but do not prevent startup.
    * - If cleanup fails, there may be a risk of session ID conflicts or leftover processes,

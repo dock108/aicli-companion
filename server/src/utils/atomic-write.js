@@ -9,13 +9,29 @@ import crypto from 'crypto';
  */
 export async function atomicWriteFile(filePath, data, options = {}) {
   const encoding = options.encoding || 'utf8';
+  // Determine root directory for containment check
+  const rootDir = options.rootDir || path.dirname(filePath);
+
+  // Sanitize filename to prevent path traversal
+  const fileName = path.basename(filePath);
+  // Only allow alphanumeric, dash, underscore, and dot in filename
+  if (!/^[a-zA-Z0-9._-]+$/.test(fileName)) {
+    throw new Error('Invalid filename: Only alphanumeric, dash, underscore, and dot are allowed');
+  }
+
+  // Resolve and normalize the file path
+  const resolvedFilePath = path.resolve(rootDir, fileName);
+  const normalizedRoot = path.normalize(rootDir);
+  if (!resolvedFilePath.startsWith(normalizedRoot)) {
+    throw new Error('Invalid file path: Access denied');
+  }
 
   // Generate unique temp file name with random suffix to avoid collisions
-  const tempFile = `${filePath}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
+  const tempFile = `${resolvedFilePath}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
 
   try {
     // Ensure directory exists
-    const dir = path.dirname(filePath);
+    const dir = path.dirname(resolvedFilePath);
     await fs.mkdir(dir, { recursive: true });
 
     // Write to temp file with fsync to ensure data is flushed to disk
@@ -39,13 +55,13 @@ export async function atomicWriteFile(filePath, data, options = {}) {
 
     // Atomic rename - this is atomic on POSIX systems
     try {
-      await fs.rename(tempFile, filePath);
+      await fs.rename(tempFile, resolvedFilePath);
     } catch (renameError) {
       // On Windows, rename might fail if target exists, try unlink + rename
       if (renameError.code === 'EEXIST' || renameError.code === 'EPERM') {
         try {
-          await fs.unlink(filePath);
-          await fs.rename(tempFile, filePath);
+          await fs.unlink(resolvedFilePath);
+          await fs.rename(tempFile, resolvedFilePath);
         } catch (retryError) {
           throw new Error(`Rename failed after unlink: ${retryError.message}`);
         }

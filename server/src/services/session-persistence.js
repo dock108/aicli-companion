@@ -652,7 +652,13 @@ export class SessionPersistenceService {
 
     try {
       const queueFile = path.join(this.storageDir, `queue-${sessionId}.json`);
-      await fs.unlink(queueFile);
+      const resolvedQueueFile = path.resolve(queueFile);
+      const resolvedStorageDir = path.resolve(this.storageDir);
+      if (!resolvedQueueFile.startsWith(resolvedStorageDir + path.sep)) {
+        console.warn(`⚠️ Attempted path traversal in sessionId: ${sessionId}`);
+        return;
+      }
+      await fs.unlink(resolvedQueueFile);
       console.log(`🗑️ Removed message queue for session ${sessionId}`);
     } catch (error) {
       if (error.code !== 'ENOENT') {

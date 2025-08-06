@@ -758,3 +758,86 @@ When all tasks are complete:
 - Could optimize by batching persistence writes
 - WebSocket message size limits may require pagination for very large histories
 - Swift CI should match JavaScript coverage requirements (>80%)
+
+---
+
+## 🚨 URGENT: Phase 9 - Fix Server Resource Issues (Critical Performance Fix)
+**Duration**: 2 hours  
+**Priority**: CRITICAL - IMMEDIATE  
+**Started**: January 2025
+**Status**: Ready to execute
+
+### Problem Statement
+Server has major CPU/RAM consumption issues with zombie Claude processes:
+- Multiple Claude CLI processes running and not terminating (47% CPU usage observed)
+- Sessions persist when they shouldn't with `--print` mode
+- Incompatible use of `--print` with `--session-id`/`--resume` flags
+- Memory leaks from uncleaned intervals and event listeners
+- No process termination on session close/timeout
+
+### Root Cause Analysis
+The server is using Claude CLI incorrectly:
+1. **Mixing `--print` with session flags**: `claude --print --session-id` keeps processes alive
+2. **Wrong mode for our use case**: `--print` is for one-shot operations, not sessions
+3. **Process management issues**: No cleanup when sessions end
+
+### Solution: Remove --print Flag Completely
+
+#### Option 1 Architecture (Chosen):
+Use Claude CLI **without** `--print` mode for proper session management:
+- `claude --session-id <id> --output-format stream-json "prompt"` 
+- Process runs, outputs response, and **exits naturally**
+- Claude CLI internally maintains conversation history
+- No process persistence needed on server side
+
+### Implementation Tasks
+
+#### 9.1 Remove --print Flag from All Commands
+**File**: `server/src/services/aicli-process-runner.js`
+- Line 75: Remove `'--print'` from args array
+- Remove all stdin handling logic (lines 242-253) since --print uses stdin
+- Simplify command execution without stdin complexity
+
+#### 9.2 Simplify Process Management
+**Files to modify**:
+- `server/src/services/aicli-process-runner.js`:
+  - Remove health monitor intervals that never get cleaned
+  - Remove complex process monitoring
+  - Let processes exit naturally after response
+  
+#### 9.3 Clean Up Session Management
+**Files to modify**:
+- `server/src/services/aicli-session-manager.js`:
+  - Remove process tracking (processes don't persist)
+  - Keep only session ID mapping for routing
+  - Remove health checks and timeouts for processes
+
+#### 9.4 Kill Existing Zombie Processes
+**Immediate action**:
+```bash
+# Kill all existing Claude processes
+pkill -f claude
+# Restart server fresh
+npm start
+```
+
+### Expected Outcomes
+1. **No zombie processes** - each command completes and exits
+2. **Minimal CPU/RAM usage** - processes don't linger
+3. **Proper session isolation** - Claude CLI manages contexts internally
+4. **Simpler codebase** - remove 80% of process management complexity
+5. **Natural cleanup** - processes clean themselves up
+
+### Success Criteria
+- [ ] No Claude processes remain after responses complete
+- [ ] CPU usage returns to idle after operations
+- [ ] Memory usage stable over time
+- [ ] Sessions work correctly without --print flag
+- [ ] No process monitoring intervals left running
+
+### Testing Plan
+1. Send message and verify process exits after response
+2. Check `ps aux | grep claude` shows no lingering processes
+3. Monitor CPU/RAM over multiple operations
+4. Test session continuity without --print flag
+5. Verify no intervals or event listeners leak

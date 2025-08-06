@@ -72,7 +72,8 @@ export class AICLIProcessRunner extends EventEmitter {
     const sessionLogger = logger.child({ sessionId });
 
     // Build AICLI CLI arguments - use stream-json to avoid buffer limits
-    const args = ['--print', '--output-format', 'stream-json', '--verbose'];
+    // REMOVED --print flag to fix process persistence issues
+    const args = ['--output-format', 'stream-json', '--verbose'];
 
     // Only add session arguments if we have a valid sessionId
     if (sessionId) {
@@ -168,14 +169,12 @@ export class AICLIProcessRunner extends EventEmitter {
 
       try {
         // Build the complete command arguments
-        // When using --print with stdin, don't include prompt in args
-        const useStdin = prompt && args.includes('--print');
-        const fullArgs = useStdin ? args : prompt ? [...args, prompt] : args;
+        // Always include prompt as argument (no --print mode)
+        const fullArgs = prompt ? [...args, prompt] : args;
 
         processLogger.debug('Spawning AICLI process', {
           command: this.aicliCommand,
-          fullArgCount: fullArgs.length,
-          useStdin
+          fullArgCount: fullArgs.length
         });
 
         aicliProcess = this.spawnFunction(this.aicliCommand, fullArgs, {
@@ -195,7 +194,7 @@ export class AICLIProcessRunner extends EventEmitter {
       processLogger.info('Process started', { pid: aicliProcess.pid });
 
       // Handle stdin input
-      this.handleStdinInput(aicliProcess, prompt, args);
+      this.handleStdinInput(aicliProcess);
 
       // Start monitoring this process
       this.startProcessMonitoring(aicliProcess.pid);
@@ -239,17 +238,10 @@ export class AICLIProcessRunner extends EventEmitter {
   /**
    * Handle stdin input for the process
    */
-  handleStdinInput(aicliProcess, prompt, args) {
-    // When using --print, AICLI CLI might expect input from stdin
-    // Try writing the prompt to stdin instead of passing as argument
-    if (prompt && args.includes('--print')) {
-      logger.debug('Writing prompt to stdin');
-      aicliProcess.stdin.write(prompt);
-      aicliProcess.stdin.end();
-    } else {
-      // Close stdin immediately if no prompt
-      aicliProcess.stdin.end();
-    }
+  handleStdinInput(aicliProcess) {
+    // No stdin input needed without --print mode
+    // Just close stdin immediately
+    aicliProcess.stdin.end();
   }
 
   /**
@@ -504,10 +496,11 @@ export class AICLIProcessRunner extends EventEmitter {
   createHealthMonitor(aicliProcess, sessionId) {
     const startTime = Date.now();
     let lastActivityTime = Date.now();
+    let intervalCleared = false;
 
-    // Simple status logging every 10 seconds
+    // Simple status logging every 30 seconds (reduced frequency)
     const statusInterval = setInterval(() => {
-      if (aicliProcess && aicliProcess.pid) {
+      if (aicliProcess && aicliProcess.pid && !intervalCleared) {
         const runtime = Math.round((Date.now() - startTime) / 1000);
         const timeSinceActivity = Math.round((Date.now() - lastActivityTime) / 1000);
         logger.debug('AICLI process status', {
@@ -517,16 +510,17 @@ export class AICLIProcessRunner extends EventEmitter {
           lastActivity: timeSinceActivity
         });
       }
-    }, 10000); // Log status every 10 seconds
+    }, 30000); // Log status every 30 seconds (reduced frequency)
 
     return {
       recordActivity: () => {
         lastActivityTime = Date.now();
-        logger.debug('AICLI activity detected', { sessionId });
       },
       cleanup: () => {
-        if (statusInterval) {
+        if (statusInterval && !intervalCleared) {
           clearInterval(statusInterval);
+          intervalCleared = true;
+          logger.debug('Health monitor cleaned up', { sessionId });
         }
       },
     };

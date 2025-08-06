@@ -89,7 +89,7 @@ export class WebSocketUtilities {
     }
 
     // Then queue the message and mark it as delivered to the live clients
-    if (messagesToQueue.includes(message.type)) {
+    if (messagesToQueue.includes(message.type) && sessionClients.length > 0) {
       import('./message-queue.js')
         .then(({ messageQueueService }) => {
           const messageId = messageQueueService.queueMessage(sessionId, message);

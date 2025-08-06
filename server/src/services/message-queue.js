@@ -544,15 +544,9 @@ class MessageQueueService {
 
     if (!hashContent) return null;
 
-    // Simple hash function (could use crypto.createHash for production)
-    let hash = 0;
-    for (let i = 0; i < hashContent.length; i++) {
-      const char = hashContent.charCodeAt(i);
-      hash = (hash << 5) - hash + char;
-      hash = hash & hash; // Convert to 32-bit integer
-    }
-
-    return hash.toString(36);
+    // Use crypto.createHash for collision-resistant deduplication
+    const hash = crypto.createHash('sha256').update(hashContent).digest('hex');
+    return hash;
   }
 
   /**

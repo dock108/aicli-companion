@@ -505,7 +505,7 @@ export class SessionPersistenceService {
       console.log(`🗑️ Removed message buffer for session ${sessionId}`);
     } catch (error) {
       if (error.code !== 'ENOENT') {
-        console.error(`❌ Failed to remove message buffer for session ${sessionId}:`, error);
+        console.error('❌ Failed to remove message buffer for session %s:', sessionId, error);
       }
     }
   }

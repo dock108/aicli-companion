@@ -31,10 +31,10 @@ struct ToolActivity: Identifiable, Equatable {
 
 @available(iOS 16.0, macOS 13.0, *)
 enum ToolActivityStatus: String, CaseIterable {
-    case running = "running"
-    case completed = "completed"
-    case failed = "failed"
-    case cancelled = "cancelled"
+    case running
+    case completed
+    case failed
+    case cancelled
 
     var color: Color {
         switch self {

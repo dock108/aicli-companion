@@ -340,16 +340,18 @@ describe('AICLIProcessRunner - Additional Coverage', () => {
       await assert.rejects(promise, /No valid JSON objects found/);
     });
 
-    it('should close stdin immediately (no --print mode)', async () => {
+    it('should write prompt to stdin and close (with --print mode)', async () => {
       let stdinWritten = false;
       let stdinEnded = false;
+      let writtenData = '';
 
       spawnedProcess = null;
       mockSpawn = (_command, _args, _options) => {
         const proc = new MockChildProcess();
         proc.stdin = {
-          write: (_data) => {
+          write: (data) => {
             stdinWritten = true;
+            writtenData = data;
           },
           end: () => {
             stdinEnded = true;
@@ -374,8 +376,9 @@ describe('AICLIProcessRunner - Additional Coverage', () => {
       });
 
       await promise;
-      assert.ok(!stdinWritten); // Should NOT write to stdin
-      assert.ok(stdinEnded); // Should close stdin
+      assert.ok(stdinWritten); // Should write to stdin with prompt
+      assert.strictEqual(writtenData, 'test prompt'); // Should write the prompt
+      assert.ok(stdinEnded); // Should close stdin after writing
     });
   });
 });

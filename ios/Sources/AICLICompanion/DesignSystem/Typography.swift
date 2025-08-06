@@ -7,32 +7,32 @@ public struct Typography {
     public enum FontStyle {
         // Navigation
         case navTitle
-        
+
         // Hero/Headings (SF Mono)
         case hero
         case heading1
         case heading2
         case heading3
-        
+
         // Body text (SF Pro)
         case body
         case bodyLarge
         case bodySmall
         case caption
         case footnote
-        
+
         // Code/Terminal
         case code
         case terminal
     }
-    
+
     // MARK: - Font Factory
     public static func font(_ style: FontStyle) -> Font {
         switch style {
         // Navigation - SF Mono Semibold
         case .navTitle:
             return .custom("SFMono-Semibold", size: 17)
-            
+
         // Headings - SF Mono for terminal vibe
         case .hero:
             return .custom("SFMono-Bold", size: 28)
@@ -42,7 +42,7 @@ public struct Typography {
             return .custom("SFMono-Semibold", size: 20)
         case .heading3:
             return .custom("SFMono-Medium", size: 17)
-            
+
         // Body text - SF Pro
         case .body:
             return .system(size: 17)
@@ -54,7 +54,7 @@ public struct Typography {
             return .system(size: 12)
         case .footnote:
             return .system(size: 13)
-            
+
         // Code/Terminal - SF Mono
         case .code:
             return .custom("SFMono-Regular", size: 14)
@@ -62,7 +62,7 @@ public struct Typography {
             return .custom("SFMono-Medium", size: 16)
         }
     }
-    
+
     // MARK: - Line Heights
     public static func lineHeight(for style: FontStyle) -> CGFloat {
         switch style {
@@ -79,7 +79,7 @@ public struct Typography {
         case .code: return 20
         }
     }
-    
+
     // MARK: - Legacy Support
     public enum TextStyle {
         case title
@@ -90,11 +90,11 @@ public struct Typography {
         case caption
         case footnote
     }
-    
+
     @available(*, deprecated, message: "Use font(_:) with FontStyle instead")
     public static func font(_ style: TextStyle, size: CGFloat? = nil, weight: Font.Weight = .regular) -> Font {
         let baseFont: Font
-        
+
         switch style {
         case .title:
             baseFont = .system(size: size ?? 28, weight: weight, design: .rounded)
@@ -111,7 +111,7 @@ public struct Typography {
         case .footnote:
             baseFont = .system(size: size ?? 13, weight: weight, design: .rounded)
         }
-        
+
         return baseFont
     }
 }

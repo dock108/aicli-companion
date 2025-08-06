@@ -81,8 +81,8 @@ export class AICLIProcessRunner extends EventEmitter {
     const sessionLogger = logger.child({ sessionId });
 
     // Build AICLI CLI arguments - use stream-json to avoid buffer limits
-    // REMOVED --print flag to fix process persistence issues
-    const args = ['--output-format', 'stream-json', '--verbose'];
+    // Include --print flag as required by AICLI CLI for stdin input
+    const args = ['--print', '--output-format', 'stream-json', '--verbose'];
 
     // Only add session arguments if we have a valid sessionId
     if (sessionId) {
@@ -178,8 +178,8 @@ export class AICLIProcessRunner extends EventEmitter {
 
       try {
         // Build the complete command arguments
-        // Always include prompt as argument (no --print mode)
-        const fullArgs = prompt ? [...args, prompt] : args;
+        // With --print flag, prompt is sent via stdin, not as argument
+        const fullArgs = args;
 
         processLogger.debug('Spawning AICLI process', {
           command: this.aicliCommand,
@@ -213,8 +213,8 @@ export class AICLIProcessRunner extends EventEmitter {
 
       processLogger.info('Process started', { pid: aicliProcess.pid });
 
-      // Handle stdin input
-      this.handleStdinInput(aicliProcess);
+      // Handle stdin input - pass the prompt
+      this.handleStdinInput(aicliProcess, prompt);
 
       // Start monitoring this process
       this.startProcessMonitoring(aicliProcess.pid);
@@ -259,9 +259,11 @@ export class AICLIProcessRunner extends EventEmitter {
   /**
    * Handle stdin input for the process
    */
-  handleStdinInput(aicliProcess) {
-    // No stdin input needed without --print mode
-    // Just close stdin immediately
+  handleStdinInput(aicliProcess, prompt) {
+    // With --print mode, send prompt via stdin
+    if (prompt) {
+      aicliProcess.stdin.write(prompt);
+    }
     aicliProcess.stdin.end();
   }
 

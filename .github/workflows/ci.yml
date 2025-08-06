@@ -154,7 +154,6 @@ jobs:
       run: |
         cd ios
         swiftlint lint --strict --reporter github-actions-logging
-      continue-on-error: true
     
     - name: Resolve Swift Package Dependencies
       run: |
@@ -220,7 +219,6 @@ jobs:
       run: |
         cd macos-app
         swiftlint lint --strict --reporter github-actions-logging
-      continue-on-error: true
     
     - name: Build macOS App
       run: |

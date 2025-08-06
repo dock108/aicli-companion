@@ -11,7 +11,7 @@ class Logger {
       debug: 0,
       info: 1,
       warn: 2,
-      error: 3
+      error: 3,
     };
   }
 
@@ -21,20 +21,21 @@ class Logger {
 
   formatMessage(level, message, context = {}) {
     const timestamp = new Date().toISOString();
-    const levelEmoji = {
-      debug: '🔍',
-      info: '📘',
-      warn: '⚠️',
-      error: '❌'
-    }[level] || '';
+    const levelEmoji =
+      {
+        debug: '🔍',
+        info: '📘',
+        warn: '⚠️',
+        error: '❌',
+      }[level] || '';
 
     let output = `${timestamp} ${levelEmoji} [${level.toUpperCase()}] [${this.module}]`;
-    
+
     // Add session context if available
     if (context.sessionId) {
       output += ` [Session: ${context.sessionId.substring(0, 8)}]`;
     }
-    
+
     // Add request ID if available
     if (context.requestId) {
       output += ` [Req: ${context.requestId.substring(0, 8)}]`;
@@ -43,7 +44,7 @@ class Logger {
     output += ` ${message}`;
 
     // Add any additional context as JSON
-    const { sessionId, requestId, ...extraContext } = context;
+    const { sessionId: _sessionId, requestId: _requestId, ...extraContext } = context;
     if (Object.keys(extraContext).length > 0) {
       output += ` ${JSON.stringify(extraContext)}`;
     }
@@ -80,7 +81,7 @@ class Logger {
     const sessionShort = sessionId ? sessionId.substring(0, 8) : 'no-session';
     this.info(`Session ${operation}: ${sessionShort}`, {
       sessionId,
-      ...details
+      ...details,
     });
   }
 
@@ -89,7 +90,7 @@ class Logger {
     // Only log stream operations at debug level to reduce noise
     this.debug(`Stream ${operation}`, {
       sessionId,
-      ...details
+      ...details,
     });
   }
 
@@ -100,7 +101,7 @@ class Logger {
       this.debug(`Stream chunk #${chunkCount}${chunk.isFinal ? ' (final)' : ''}`, {
         sessionId,
         size: chunk.content?.length || 0,
-        type: chunk.type
+        type: chunk.type,
       });
     }
   }
@@ -108,10 +109,10 @@ class Logger {
   // Create a child logger with default context
   child(defaultContext) {
     const childLogger = new Logger(this.module);
-    
+
     // Wrap all methods to include default context
     const methods = ['debug', 'info', 'warn', 'error', 'session', 'stream'];
-    methods.forEach(method => {
+    methods.forEach((method) => {
       const originalMethod = childLogger[method].bind(childLogger);
       childLogger[method] = (message, context = {}) => {
         originalMethod(message, { ...defaultContext, ...context });

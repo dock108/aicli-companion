@@ -85,9 +85,9 @@ describe('UAT: Performance & Load Testing', () => {
         const req = http.get(`${baseUrl}/health`, (res) => {
           const responseTime = Date.now() - startTime;
 
-          let data = '';
+          let _data = '';
           res.on('data', (chunk) => {
-            data += chunk;
+            _data += chunk;
           });
           res.on('end', () => {
             try {
@@ -217,9 +217,9 @@ describe('UAT: Performance & Load Testing', () => {
             const req = http.get(`${baseUrl}/health`, (res) => {
               const requestTime = Date.now() - requestStart;
 
-              let data = '';
+              let _data = '';
               res.on('data', (chunk) => {
-                data += chunk;
+                _data += chunk;
               });
               res.on('end', () => {
                 try {
@@ -431,7 +431,7 @@ describe('UAT: Performance & Load Testing', () => {
 
     it('should handle rapid message bursts', async () => {
       const numMessages = 50;
-      const messages = [];
+      const _messages = [];
       const startTime = Date.now();
 
       return new Promise((resolve, reject) => {

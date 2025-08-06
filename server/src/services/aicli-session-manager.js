@@ -19,6 +19,7 @@ export class AICLISessionManager extends EventEmitter {
     // Configuration
     this.maxSessions = options.maxSessions || 10;
     this.sessionTimeout = options.sessionTimeout || 30 * 60 * 1000; // 30 minutes
+    this.backgroundedSessionTimeout = options.backgroundedSessionTimeout || 2 * 60 * 60 * 1000; // 2 hours for backgrounded sessions
     this.minTimeoutCheckInterval = options.minTimeoutCheckInterval || 60000; // 1 minute default
 
     // Persistence will be initialized by the server after startup
@@ -31,7 +32,7 @@ export class AICLISessionManager extends EventEmitter {
    */
   async trackSessionForRouting(sessionId, workingDirectory) {
     if (!sessionId) return;
-    
+
     // Create minimal session entry for routing only
     const session = {
       sessionId,
@@ -40,16 +41,16 @@ export class AICLISessionManager extends EventEmitter {
       isProcessing: false,
       createdAt: new Date(),
       lastActivity: new Date(),
-      conversationStarted: true,  // Assume it's an existing conversation
+      conversationStarted: true, // Assume it's an existing conversation
       timeoutId: null,
-      isTemporary: true  // Mark as temporary routing session
+      isTemporary: true, // Mark as temporary routing session
     };
-    
+
     this.activeSessions.set(sessionId, session);
-    
+
     // Create empty message buffer
     this.sessionMessageBuffers.set(sessionId, AICLIMessageHandler.createSessionBuffer());
-    
+
     console.log(`🔄 Temporarily tracking session ${sessionId} for response routing`);
   }
 
@@ -518,7 +519,6 @@ export class AICLISessionManager extends EventEmitter {
     return false;
   }
 
-
   /**
    * Check if session should timeout
    */
@@ -661,6 +661,55 @@ export class AICLISessionManager extends EventEmitter {
    */
   async cleanupOldSessions(maxAgeMs) {
     return sessionPersistence.cleanup(maxAgeMs);
+  }
+
+  /**
+   * Mark session as backgrounded (mobile app went to background)
+   */
+  async markSessionBackgrounded(sessionId) {
+    const session = this.activeSessions.get(sessionId);
+    if (session) {
+      session.isBackgrounded = true;
+      session.backgroundedAt = Date.now();
+      console.log(`📱 Session ${sessionId} marked as backgrounded`);
+
+      // Update timeout for backgrounded session
+      if (session.timeoutId) {
+        clearTimeout(session.timeoutId);
+      }
+
+      // Set longer timeout for backgrounded sessions
+      session.timeoutId = setTimeout(() => {
+        console.log(`⏰ Backgrounded session ${sessionId} timed out`);
+        this.closeSession(sessionId);
+      }, this.backgroundedSessionTimeout);
+    } else {
+      console.warn(`⚠️ Cannot mark non-existent session ${sessionId} as backgrounded`);
+    }
+  }
+
+  /**
+   * Mark session as foregrounded (mobile app returned to foreground)
+   */
+  async markSessionForegrounded(sessionId) {
+    const session = this.activeSessions.get(sessionId);
+    if (session) {
+      session.isBackgrounded = false;
+      session.backgroundedAt = null;
+      console.log(`📱 Session ${sessionId} marked as foregrounded`);
+
+      // Reset to normal timeout
+      if (session.timeoutId) {
+        clearTimeout(session.timeoutId);
+      }
+
+      session.timeoutId = setTimeout(() => {
+        console.log(`⏰ Session ${sessionId} timed out`);
+        this.closeSession(sessionId);
+      }, this.sessionTimeout);
+    } else {
+      console.warn(`⚠️ Cannot mark non-existent session ${sessionId} as foregrounded`);
+    }
   }
 
   /**

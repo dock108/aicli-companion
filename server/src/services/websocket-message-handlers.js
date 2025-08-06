@@ -46,7 +46,7 @@ export class WebSocketMessageHandlers {
 
       logger.debug('Successfully acknowledged messages', {
         acknowledgedCount,
-        clientId
+        clientId,
       });
     } catch (error) {
       logger.error('Failed to acknowledge messages', { clientId, error: error.message });
@@ -68,8 +68,8 @@ export class WebSocketMessageHandlers {
 
     logger.info('Processing ask message', {
       clientId,
-      prompt: prompt.substring(0, 50) + '...',
-      workingDirectory: workingDirectory || process.cwd()
+      prompt: `${prompt.substring(0, 50)}...`,
+      workingDirectory: workingDirectory || process.cwd(),
     });
 
     try {
@@ -117,7 +117,7 @@ export class WebSocketMessageHandlers {
     logger.info('Starting stream session', {
       clientId,
       sessionId,
-      workingDirectory: workingDirectory || process.cwd()
+      workingDirectory: workingDirectory || process.cwd(),
     });
 
     try {
@@ -217,19 +217,19 @@ export class WebSocketMessageHandlers {
     if (clearChat) {
       // User is clearing the chat - fully close the session
       logger.info('Clearing chat - closing session completely', { sessionId, clientId });
-      
+
       try {
         // Close the session in AICLI service
         await aicliService.closeSession(sessionId);
-        
+
         // Clear all queued messages for this session
         await getMessageQueueService().clearSession(sessionId);
-        
+
         // Remove session from client
         connectionManager.removeSessionFromClient(clientId, sessionId);
-        
+
         logger.info('Session fully closed and cleared', { sessionId });
-        
+
         // Send response with instruction to generate new session ID
         WebSocketUtilities.sendMessage(
           clientId,
@@ -255,7 +255,10 @@ export class WebSocketMessageHandlers {
       }
     } else {
       // Normal close - just pause the session
-      logger.info('Pausing stream session (will remain active for continuation)', { sessionId, clientId });
+      logger.info('Pausing stream session (will remain active for continuation)', {
+        sessionId,
+        clientId,
+      });
 
       try {
         // Instead of closing the session, just remove it from the client's active sessions
@@ -348,7 +351,11 @@ export class WebSocketMessageHandlers {
 
     logger.info('Client subscribing to events', { clientId, events });
     if (sessionIds) {
-      logger.info('Client subscribing to sessions', { clientId, sessionIds, count: sessionIds.length });
+      logger.info('Client subscribing to sessions', {
+        clientId,
+        sessionIds,
+        count: sessionIds.length,
+      });
     }
 
     try {
@@ -380,7 +387,7 @@ export class WebSocketMessageHandlers {
       logger.info('Successfully subscribed client', {
         clientId,
         eventCount: events.length,
-        sessionCount: sessionIds?.length || 0
+        sessionCount: sessionIds?.length || 0,
       });
     } catch (error) {
       logger.error('Subscription failed', { clientId, error: error.message });
@@ -457,11 +464,11 @@ export class WebSocketMessageHandlers {
 
     // Create logger with session context for this request
     const sessionLogger = logger.child({ sessionId, clientId, requestId });
-    
+
     sessionLogger.info('Executing Claude command', {
       command: command.substring(0, 50),
       hasArgs: !!args,
-      projectPath
+      projectPath,
     });
 
     try {
@@ -493,7 +500,9 @@ export class WebSocketMessageHandlers {
         }
       } else {
         // Treat as agent prompt - send to Claude for autonomous interaction
-        sessionLogger.info('Processing as agent prompt', { prompt: command.substring(0, 50) + '...' });
+        sessionLogger.info('Processing as agent prompt', {
+          prompt: `${command.substring(0, 50)}...`,
+        });
 
         result = await aicliService.sendPrompt(command, {
           sessionId,
@@ -524,7 +533,7 @@ export class WebSocketMessageHandlers {
           sessionLogger.debug('No buffer found for session');
         } else {
           sessionLogger.debug('Buffer found', {
-            assistantMessageCount: buffer.assistantMessages?.length || 0
+            assistantMessageCount: buffer.assistantMessages?.length || 0,
           });
         }
 
@@ -544,12 +553,12 @@ export class WebSocketMessageHandlers {
           content = textBlocks.join('\n\n');
           sessionLogger.debug('Aggregated assistant messages', {
             messageCount: buffer.assistantMessages.length,
-            textBlockCount: textBlocks.length
+            textBlockCount: textBlocks.length,
           });
         } else {
           // Fallback to result object
           sessionLogger.debug('No buffered messages, using result object', {
-            resultKeys: Object.keys(result)
+            resultKeys: Object.keys(result),
           });
 
           // The result object from sendPrompt contains the final response
@@ -613,7 +622,6 @@ export class WebSocketMessageHandlers {
     }
   }
 
-
   /**
    * Handle 'getMessageHistory' message - retrieve message history for a session
    */
@@ -631,7 +639,7 @@ export class WebSocketMessageHandlers {
       clientId,
       sessionId,
       limit: limit || 'all',
-      offset: offset || 0
+      offset: offset || 0,
     });
 
     try {
@@ -723,7 +731,7 @@ export class WebSocketMessageHandlers {
       logger.debug('Sent message history', {
         sent: paginatedMessages.length,
         total: totalMessages,
-        sessionId
+        sessionId,
       });
     } catch (error) {
       logger.error('Get message history failed', { clientId, sessionId, error: error.message });
@@ -756,19 +764,19 @@ export class WebSocketMessageHandlers {
     try {
       // Close the session completely
       await aicliService.closeSession(sessionId);
-      
+
       // Clear all queued messages
       await getMessageQueueService().clearSession(sessionId);
-      
+
       // Remove session from client
       connectionManager.removeSessionFromClient(clientId, sessionId);
-      
+
       // Generate a new session ID for the client to use
       const { v4: uuidv4 } = await import('uuid');
       const newSessionId = uuidv4();
-      
+
       logger.info('Chat cleared successfully', { oldSessionId: sessionId, newSessionId });
-      
+
       WebSocketUtilities.sendMessage(
         clientId,
         WebSocketUtilities.createResponse('clearChat', requestId, {
@@ -801,8 +809,8 @@ export class WebSocketMessageHandlers {
 
     logger.info('Registering device', {
       clientId,
-      tokenPrefix: deviceToken?.substring(0, 20) + '...',
-      platform: deviceInfo?.platform
+      tokenPrefix: `${deviceToken?.substring(0, 20)}...`,
+      platform: deviceInfo?.platform,
     });
 
     try {
@@ -839,6 +847,65 @@ export class WebSocketMessageHandlers {
   }
 
   /**
+   * Handle client backgrounding/foregrounding
+   */
+  static async handleClientBackgroundingMessage(
+    clientId,
+    data,
+    requestId,
+    clients,
+    claudeService,
+    _connectionManager
+  ) {
+    const { isBackgrounded, sessionId } = data;
+
+    logger.info('Client backgrounding state change', {
+      clientId,
+      sessionId,
+      isBackgrounded,
+    });
+
+    try {
+      const client = clients.get(clientId);
+      if (!client) {
+        throw new Error('Client not found');
+      }
+
+      // Update client state
+      client.isBackgrounded = isBackgrounded;
+
+      // Update session state if session exists
+      if (sessionId && claudeService.hasSession(sessionId)) {
+        if (isBackgrounded) {
+          await claudeService.markSessionBackgrounded(sessionId);
+        } else {
+          await claudeService.markSessionForegrounded(sessionId);
+        }
+      }
+
+      WebSocketUtilities.sendMessage(
+        clientId,
+        WebSocketUtilities.createResponse('client_backgrounding', requestId, {
+          success: true,
+          isBackgrounded,
+          sessionId,
+          timestamp: new Date().toISOString(),
+        }),
+        clients
+      );
+    } catch (error) {
+      logger.error('Client backgrounding update failed', { clientId, error: error.message });
+      WebSocketUtilities.sendErrorMessage(
+        clientId,
+        requestId,
+        'BACKGROUNDING_UPDATE_FAILED',
+        error.message,
+        clients
+      );
+    }
+  }
+
+  /**
    * Get all available message handlers
    */
   static getAllHandlers() {
@@ -856,6 +923,7 @@ export class WebSocketMessageHandlers {
       registerDevice: this.handleRegisterDeviceMessage,
       acknowledgeMessages: this.handleAcknowledgeMessagesMessage,
       clearChat: this.handleClearChatMessage,
+      client_backgrounding: this.handleClientBackgroundingMessage,
     };
   }
 

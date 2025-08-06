@@ -169,6 +169,16 @@ export class TelemetryService {
   }
 
   /**
+   * Record message acknowledged
+   */
+  recordMessageAcknowledged() {
+    // Track acknowledged messages (can be added to metrics if needed)
+    if (this.metrics.messages.acknowledged !== undefined) {
+      this.metrics.messages.acknowledged++;
+    }
+  }
+
+  /**
    * Record message expired
    */
   recordMessageExpired() {

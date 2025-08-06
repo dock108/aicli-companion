@@ -68,26 +68,26 @@ export class WebSocketUtilities {
     // Skip process status messages that don't need to be persisted
     const messagesToQueue = [
       'conversationResult',
-      'assistantMessage', 
+      'assistantMessage',
       'streamData',
       'streamComplete',
-      'systemInit'
+      'systemInit',
     ];
-    
+
     // Track successfully delivered clients
     const deliveredClients = [];
-    
+
     // First, send to all connected clients if any
     if (sessionClients.length > 0) {
       console.log(`📤 Broadcasting to ${sessionClients.length} clients for session ${sessionId}`);
-      
+
       sessionClients.forEach((clientId) => {
         if (this.sendMessage(clientId, message, clients)) {
           deliveredClients.push(clientId);
         }
       });
     }
-    
+
     // Then queue the message and mark it as delivered to the live clients
     if (messagesToQueue.includes(message.type)) {
       import('./message-queue.js')
@@ -95,14 +95,16 @@ export class WebSocketUtilities {
           const messageId = messageQueueService.queueMessage(sessionId, message);
           if (messageId) {
             console.log(`📥 Queued message ${messageId} (type: ${message.type}) for persistence`);
-            
+
             // If we delivered to any live clients, mark them immediately
             if (deliveredClients.length > 0) {
               // Mark as delivered to each client that received it live
-              deliveredClients.forEach(clientId => {
+              deliveredClients.forEach((clientId) => {
                 messageQueueService.markAsDelivered([messageId], clientId);
               });
-              console.log(`📨 Marked message ${messageId} as delivered to ${deliveredClients.length} live clients`);
+              console.log(
+                `📨 Marked message ${messageId} as delivered to ${deliveredClients.length} live clients`
+              );
             }
           }
         })
@@ -120,7 +122,7 @@ export class WebSocketUtilities {
       return;
     }
 
-    let successCount = deliveredClients.length;
+    const successCount = deliveredClients.length;
 
     // Log delivery stats for debugging
     if (message.type !== 'ping' && message.type !== 'pong') {

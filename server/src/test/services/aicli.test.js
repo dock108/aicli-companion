@@ -10,13 +10,79 @@ function createMockEventEmitter(additionalProps = {}) {
   return emitter;
 }
 
+// Helper to create a properly mocked AICLIService
+function createMockAICLIService(overrides = {}) {
+  const mockProcessRunner = createMockEventEmitter({
+    executeCommand: mock.fn(() => Promise.resolve({ content: 'test response' })),
+    cleanup: mock.fn(),
+    aicliCommand: 'claude',
+    permissionMode: 'default',
+    allowedTools: ['Read', 'Write', 'Edit'],
+    disallowedTools: [],
+    skipPermissions: false,
+    setPermissionMode: mock.fn(),
+    setAllowedTools: mock.fn(),
+    setDisallowedTools: mock.fn(),
+    setSkipPermissions: mock.fn(),
+  });
+
+  const mockSessionManager = createMockEventEmitter({
+    createSession: mock.fn(() => Promise.resolve('test-session-id')),
+    getSession: mock.fn(),
+    getAllSessions: mock.fn(() => []),
+    clearSession: mock.fn(),
+    closeSession: mock.fn(async (sessionId) => {
+      if (!mockSessionManager.activeSessions.has(sessionId)) {
+        return { success: false, message: 'Session not found' };
+      }
+      mockSessionManager.activeSessions.delete(sessionId);
+      return { success: true };
+    }),
+    clearAllSessions: mock.fn(),
+    cleanup: mock.fn(),
+    cleanupDeadSession: mock.fn((sessionId) => {
+      const session = mockSessionManager.activeSessions.get(sessionId);
+      if (session) {
+        session.isActive = false;
+      }
+      mockSessionManager.activeSessions.delete(sessionId);
+      mockSessionManager.sessionMessageBuffers.delete(sessionId);
+      return Promise.resolve();
+    }),
+    hasSession: mock.fn((sessionId) => {
+      // Check activeSessions Map for the test
+      return mockSessionManager.activeSessions?.has(sessionId) || false;
+    }),
+    getActiveSessions: mock.fn(() => {
+      // Return array of session IDs from activeSessions Map
+      return mockSessionManager.activeSessions
+        ? Array.from(mockSessionManager.activeSessions.keys())
+        : [];
+    }),
+    activeSessions: new Map(),
+    sessionMessageBuffers: new Map(),
+    clearSessionBuffer: mock.fn(),
+    markSessionBackgrounded: mock.fn(async () => {}),
+    markSessionForegrounded: mock.fn(async () => {}),
+  });
+
+  const mockSpawnFunction = mock.fn();
+
+  return new AICLIService({
+    processRunner: mockProcessRunner,
+    sessionManager: mockSessionManager,
+    processRunnerOptions: { spawnFunction: mockSpawnFunction },
+    ...overrides,
+  });
+}
+
 // Unit tests for AICLIService that don't require process spawning
 describe('AICLIService Unit Tests', () => {
   let service;
 
   beforeEach(() => {
-    // Create a fresh service instance for each test
-    service = new AICLIService();
+    // Create a fresh service instance with mocks for each test
+    service = createMockAICLIService();
   });
 
   afterEach(async () => {
@@ -562,7 +628,7 @@ describe('AICLIService Unit Tests', () => {
 
     it('should log error and return false when execAsync throws', async () => {
       // Create a new service instance to test the actual implementation
-      const testService = new AICLIService();
+      const testService = createMockAICLIService();
 
       // Mock the execAsync module function by replacing the checkAvailability method
       const originalCheckAvailability = testService.checkAvailability;
@@ -1289,6 +1355,10 @@ describe('AICLIService Unit Tests', () => {
         const mockProcessRunner = createMockEventEmitter({
           setPermissionMode: mock.fn(),
           permissionMode: 'acceptEdits',
+          aicliCommand: 'claude',
+          allowedTools: ['Read', 'Write', 'Edit'],
+          disallowedTools: [],
+          skipPermissions: false,
         });
         const mockSessionManager = createMockEventEmitter();
         const testService = new AICLIService({
@@ -1312,6 +1382,10 @@ describe('AICLIService Unit Tests', () => {
         const mockProcessRunner = createMockEventEmitter({
           setAllowedTools: mock.fn(),
           allowedTools: ['Read', 'Write'],
+          aicliCommand: 'claude',
+          permissionMode: 'default',
+          disallowedTools: [],
+          skipPermissions: false,
         });
         const mockSessionManager = createMockEventEmitter();
         const testService = new AICLIService({
@@ -1335,6 +1409,10 @@ describe('AICLIService Unit Tests', () => {
         const mockProcessRunner = createMockEventEmitter({
           setDisallowedTools: mock.fn(),
           disallowedTools: ['Bash', 'System'],
+          aicliCommand: 'claude',
+          permissionMode: 'default',
+          allowedTools: ['Read', 'Write', 'Edit'],
+          skipPermissions: false,
         });
         const mockSessionManager = createMockEventEmitter();
         const testService = new AICLIService({
@@ -1355,7 +1433,7 @@ describe('AICLIService Unit Tests', () => {
 
     describe('setSafeRootDirectory', () => {
       it('should set safe root directory', () => {
-        const testService = new AICLIService();
+        const testService = createMockAICLIService();
 
         testService.setSafeRootDirectory('/safe/root');
 
@@ -1363,7 +1441,7 @@ describe('AICLIService Unit Tests', () => {
       });
 
       it('should handle null value', () => {
-        const testService = new AICLIService();
+        const testService = createMockAICLIService();
         testService.safeRootDirectory = '/old/path';
 
         testService.setSafeRootDirectory(null);
@@ -1377,6 +1455,10 @@ describe('AICLIService Unit Tests', () => {
         const mockProcessRunner = createMockEventEmitter({
           setSkipPermissions: mock.fn(),
           skipPermissions: true,
+          aicliCommand: 'claude',
+          permissionMode: 'default',
+          allowedTools: ['Read', 'Write', 'Edit'],
+          disallowedTools: [],
         });
         const mockSessionManager = createMockEventEmitter();
         const testService = new AICLIService({
@@ -1395,6 +1477,10 @@ describe('AICLIService Unit Tests', () => {
         const mockProcessRunner = createMockEventEmitter({
           setSkipPermissions: mock.fn(),
           skipPermissions: false,
+          aicliCommand: 'claude',
+          permissionMode: 'default',
+          allowedTools: ['Read', 'Write', 'Edit'],
+          disallowedTools: [],
         });
         const mockSessionManager = createMockEventEmitter();
         const testService = new AICLIService({
@@ -1417,7 +1503,7 @@ describe('AICLIService Unit Tests', () => {
         const originalEnv = process.env.NODE_ENV;
         process.env.NODE_ENV = 'test';
 
-        const testService = new AICLIService();
+        const testService = createMockAICLIService();
         testService.startProcessHealthMonitoring();
 
         assert.strictEqual(testService.processHealthCheckInterval, null);
@@ -1435,6 +1521,11 @@ describe('AICLIService Unit Tests', () => {
           setAllowedTools: mock.fn(),
           setDisallowedTools: mock.fn(),
           setSkipPermissions: mock.fn(),
+          aicliCommand: 'claude',
+          permissionMode: 'default',
+          allowedTools: ['Read', 'Write', 'Edit'],
+          disallowedTools: [],
+          skipPermissions: false,
         });
 
         const testService = new AICLIService({
@@ -1454,7 +1545,7 @@ describe('AICLIService Unit Tests', () => {
 
     describe('stopProcessHealthMonitoring', () => {
       it('should clear interval if exists', () => {
-        const testService = new AICLIService();
+        const testService = createMockAICLIService();
         testService.processHealthCheckInterval = setInterval(() => {}, 1000);
 
         testService.stopProcessHealthMonitoring();
@@ -1463,7 +1554,7 @@ describe('AICLIService Unit Tests', () => {
       });
 
       it('should handle null interval gracefully', () => {
-        const testService = new AICLIService();
+        const testService = createMockAICLIService();
         testService.processHealthCheckInterval = null;
 
         assert.doesNotThrow(() => {
@@ -1481,7 +1572,13 @@ describe('AICLIService Unit Tests', () => {
         const mockSessionManager = createMockEventEmitter({
           activeSessions: new Map([['session1', mockSession]]),
         });
-        const mockProcessRunner = createMockEventEmitter();
+        const mockProcessRunner = createMockEventEmitter({
+          aicliCommand: 'claude',
+          permissionMode: 'default',
+          allowedTools: ['Read', 'Write', 'Edit'],
+          disallowedTools: [],
+          skipPermissions: false,
+        });
         const testService = new AICLIService({
           sessionManager: mockSessionManager,
           processRunner: mockProcessRunner,
@@ -1499,7 +1596,13 @@ describe('AICLIService Unit Tests', () => {
         const mockSessionManager = createMockEventEmitter({
           activeSessions: new Map([['session1', mockSession]]),
         });
-        const mockProcessRunner = createMockEventEmitter();
+        const mockProcessRunner = createMockEventEmitter({
+          aicliCommand: 'claude',
+          permissionMode: 'default',
+          allowedTools: ['Read', 'Write', 'Edit'],
+          disallowedTools: [],
+          skipPermissions: false,
+        });
         const testService = new AICLIService({
           sessionManager: mockSessionManager,
           processRunner: mockProcessRunner,
@@ -1515,7 +1618,13 @@ describe('AICLIService Unit Tests', () => {
         const mockSessionManager = createMockEventEmitter({
           cleanupDeadSession: mock.fn(async () => {}),
         });
-        const mockProcessRunner = createMockEventEmitter();
+        const mockProcessRunner = createMockEventEmitter({
+          aicliCommand: 'claude',
+          permissionMode: 'default',
+          allowedTools: ['Read', 'Write', 'Edit'],
+          disallowedTools: [],
+          skipPermissions: false,
+        });
         const testService = new AICLIService({
           sessionManager: mockSessionManager,
           processRunner: mockProcessRunner,
@@ -1535,7 +1644,7 @@ describe('AICLIService Unit Tests', () => {
   describe('JSON Processing Methods', () => {
     describe('isValidCompleteJSON', () => {
       it('should delegate to AICLIMessageHandler', () => {
-        const testService = new AICLIService();
+        const testService = createMockAICLIService();
         const result = testService.isValidCompleteJSON('{"test": true}');
 
         assert.strictEqual(typeof result, 'boolean');
@@ -1544,7 +1653,7 @@ describe('AICLIService Unit Tests', () => {
 
     describe('parseStreamJsonOutput', () => {
       it('should delegate to AICLIMessageHandler', () => {
-        const testService = new AICLIService();
+        const testService = createMockAICLIService();
         const result = testService.parseStreamJsonOutput('{"type": "test"}');
 
         assert.ok(result);
@@ -1553,7 +1662,7 @@ describe('AICLIService Unit Tests', () => {
 
     describe('extractCompleteObjectsFromLine', () => {
       it('should delegate to AICLIMessageHandler', () => {
-        const testService = new AICLIService();
+        const testService = createMockAICLIService();
         const result = testService.extractCompleteObjectsFromLine('{"type": "test"}');
 
         assert.ok(Array.isArray(result));
@@ -1562,7 +1671,7 @@ describe('AICLIService Unit Tests', () => {
 
     describe('extractLastCompleteJSON', () => {
       it('should delegate to AICLIMessageHandler', () => {
-        const testService = new AICLIService();
+        const testService = createMockAICLIService();
         const result = testService.extractLastCompleteJSON('{"partial": "json');
 
         assert.ok(result !== undefined);
@@ -1571,7 +1680,7 @@ describe('AICLIService Unit Tests', () => {
 
     describe('findLastCompleteJSONStart', () => {
       it('should delegate to AICLIMessageHandler', () => {
-        const testService = new AICLIService();
+        const testService = createMockAICLIService();
         const result = testService.findLastCompleteJSONStart('some text {"json": true}');
 
         assert.strictEqual(typeof result, 'number');
@@ -1580,7 +1689,7 @@ describe('AICLIService Unit Tests', () => {
 
     describe('extractCompleteObjectsFromArray', () => {
       it('should delegate to AICLIMessageHandler', () => {
-        const testService = new AICLIService();
+        const testService = createMockAICLIService();
         const result = testService.extractCompleteObjectsFromArray('[{"test": true}]');
 
         assert.ok(Array.isArray(result));
@@ -1599,7 +1708,13 @@ describe('AICLIService Unit Tests', () => {
         const mockSessionManager = createMockEventEmitter({
           getSessionBuffer: mock.fn(() => mockBuffer),
         });
-        const mockProcessRunner = createMockEventEmitter();
+        const mockProcessRunner = createMockEventEmitter({
+          aicliCommand: 'claude',
+          permissionMode: 'default',
+          allowedTools: ['Read', 'Write', 'Edit'],
+          disallowedTools: [],
+          skipPermissions: false,
+        });
         const testService = new AICLIService({
           sessionManager: mockSessionManager,
           processRunner: mockProcessRunner,
@@ -1626,7 +1741,13 @@ describe('AICLIService Unit Tests', () => {
           getSessionBuffer: mock.fn(() => null),
           createSessionBuffer: mock.fn(),
         });
-        const mockProcessRunner = createMockEventEmitter();
+        const mockProcessRunner = createMockEventEmitter({
+          aicliCommand: 'claude',
+          permissionMode: 'default',
+          allowedTools: ['Read', 'Write', 'Edit'],
+          disallowedTools: [],
+          skipPermissions: false,
+        });
         const testService = new AICLIService({
           sessionManager: mockSessionManager,
           processRunner: mockProcessRunner,
@@ -1645,7 +1766,13 @@ describe('AICLIService Unit Tests', () => {
         const mockSessionManager = createMockEventEmitter({
           clearSessionBuffer: mock.fn(),
         });
-        const mockProcessRunner = createMockEventEmitter();
+        const mockProcessRunner = createMockEventEmitter({
+          aicliCommand: 'claude',
+          permissionMode: 'default',
+          allowedTools: ['Read', 'Write', 'Edit'],
+          disallowedTools: [],
+          skipPermissions: false,
+        });
         const testService = new AICLIService({
           sessionManager: mockSessionManager,
           processRunner: mockProcessRunner,
@@ -1665,7 +1792,7 @@ describe('AICLIService Unit Tests', () => {
   describe('Content Analysis Methods', () => {
     describe('containsPermissionRequest', () => {
       it('should detect permission requests', () => {
-        const testService = new AICLIService();
+        const testService = createMockAICLIService();
 
         // The method expects Claude message format (array of content blocks)
         assert.strictEqual(
@@ -1691,7 +1818,7 @@ describe('AICLIService Unit Tests', () => {
 
     describe('containsToolUse', () => {
       it('should detect tool use patterns', () => {
-        const testService = new AICLIService();
+        const testService = createMockAICLIService();
 
         // The method expects Claude message format and looks for tool_use content blocks
         assert.strictEqual(testService.containsToolUse([{ type: 'tool_use', name: 'Read' }]), true);
@@ -1710,7 +1837,7 @@ describe('AICLIService Unit Tests', () => {
 
     describe('extractCodeBlocks', () => {
       it('should extract code blocks from content', () => {
-        const testService = new AICLIService();
+        const testService = createMockAICLIService();
         const content = [
           {
             type: 'text',
@@ -1728,7 +1855,7 @@ describe('AICLIService Unit Tests', () => {
       });
 
       it('should handle content without code blocks', () => {
-        const testService = new AICLIService();
+        const testService = createMockAICLIService();
         // Non-array input returns empty array
         assert.deepStrictEqual(testService.extractCodeBlocks('string input'), []);
 
@@ -1747,7 +1874,7 @@ describe('AICLIService Unit Tests', () => {
 
     describe('aggregateBufferedContent', () => {
       it('should aggregate content from buffer', () => {
-        const testService = new AICLIService();
+        const testService = createMockAICLIService();
         const buffer = {
           assistantMessages: [
             { content: [{ type: 'text', text: 'Hello' }] },
@@ -1762,7 +1889,7 @@ describe('AICLIService Unit Tests', () => {
       });
 
       it('should handle empty buffer', () => {
-        const testService = new AICLIService();
+        const testService = createMockAICLIService();
         const result = testService.aggregateBufferedContent({});
 
         assert.ok(Array.isArray(result));
@@ -1777,7 +1904,13 @@ describe('AICLIService Unit Tests', () => {
         const mockSessionManager = createMockEventEmitter({
           hasSession: mock.fn(() => true),
         });
-        const mockProcessRunner = createMockEventEmitter();
+        const mockProcessRunner = createMockEventEmitter({
+          aicliCommand: 'claude',
+          permissionMode: 'default',
+          allowedTools: ['Read', 'Write', 'Edit'],
+          disallowedTools: [],
+          skipPermissions: false,
+        });
         const testService = new AICLIService({
           sessionManager: mockSessionManager,
           processRunner: mockProcessRunner,
@@ -1797,7 +1930,13 @@ describe('AICLIService Unit Tests', () => {
         const mockSessionManager = createMockEventEmitter({
           getSession: mock.fn(() => mockSession),
         });
-        const mockProcessRunner = createMockEventEmitter();
+        const mockProcessRunner = createMockEventEmitter({
+          aicliCommand: 'claude',
+          permissionMode: 'default',
+          allowedTools: ['Read', 'Write', 'Edit'],
+          disallowedTools: [],
+          skipPermissions: false,
+        });
         const testService = new AICLIService({
           sessionManager: mockSessionManager,
           processRunner: mockProcessRunner,
@@ -1819,7 +1958,13 @@ describe('AICLIService Unit Tests', () => {
         const mockSessionManager = createMockEventEmitter({
           getSession: mock.fn(() => mockSession),
         });
-        const mockProcessRunner = createMockEventEmitter();
+        const mockProcessRunner = createMockEventEmitter({
+          aicliCommand: 'claude',
+          permissionMode: 'default',
+          allowedTools: ['Read', 'Write', 'Edit'],
+          disallowedTools: [],
+          skipPermissions: false,
+        });
         const testService = new AICLIService({
           sessionManager: mockSessionManager,
           processRunner: mockProcessRunner,
@@ -1837,7 +1982,13 @@ describe('AICLIService Unit Tests', () => {
         const mockSessionManager = createMockEventEmitter({
           getSession: mock.fn(() => mockSession),
         });
-        const mockProcessRunner = createMockEventEmitter();
+        const mockProcessRunner = createMockEventEmitter({
+          aicliCommand: 'claude',
+          permissionMode: 'default',
+          allowedTools: ['Read', 'Write', 'Edit'],
+          disallowedTools: [],
+          skipPermissions: false,
+        });
         const testService = new AICLIService({
           sessionManager: mockSessionManager,
           processRunner: mockProcessRunner,
@@ -1853,7 +2004,13 @@ describe('AICLIService Unit Tests', () => {
         const mockSessionManager = createMockEventEmitter({
           getSession: mock.fn(() => null),
         });
-        const mockProcessRunner = createMockEventEmitter();
+        const mockProcessRunner = createMockEventEmitter({
+          aicliCommand: 'claude',
+          permissionMode: 'default',
+          allowedTools: ['Read', 'Write', 'Edit'],
+          disallowedTools: [],
+          skipPermissions: false,
+        });
         const testService = new AICLIService({
           sessionManager: mockSessionManager,
           processRunner: mockProcessRunner,
@@ -1870,7 +2027,13 @@ describe('AICLIService Unit Tests', () => {
         const mockSessionManager = createMockEventEmitter({
           markSessionBackgrounded: mock.fn(async () => {}),
         });
-        const mockProcessRunner = createMockEventEmitter();
+        const mockProcessRunner = createMockEventEmitter({
+          aicliCommand: 'claude',
+          permissionMode: 'default',
+          allowedTools: ['Read', 'Write', 'Edit'],
+          disallowedTools: [],
+          skipPermissions: false,
+        });
         const testService = new AICLIService({
           sessionManager: mockSessionManager,
           processRunner: mockProcessRunner,
@@ -1891,7 +2054,13 @@ describe('AICLIService Unit Tests', () => {
         const mockSessionManager = createMockEventEmitter({
           markSessionForegrounded: mock.fn(async () => {}),
         });
-        const mockProcessRunner = createMockEventEmitter();
+        const mockProcessRunner = createMockEventEmitter({
+          aicliCommand: 'claude',
+          permissionMode: 'default',
+          allowedTools: ['Read', 'Write', 'Edit'],
+          disallowedTools: [],
+          skipPermissions: false,
+        });
         const testService = new AICLIService({
           sessionManager: mockSessionManager,
           processRunner: mockProcessRunner,
@@ -1915,6 +2084,11 @@ describe('AICLIService Unit Tests', () => {
         };
         const mockProcessRunner = createMockEventEmitter({
           executeAICLICommand: mock.fn(async () => ({ success: true })),
+          aicliCommand: 'claude',
+          permissionMode: 'default',
+          allowedTools: ['Read', 'Write', 'Edit'],
+          disallowedTools: [],
+          skipPermissions: false,
         });
         const mockSessionManager = createMockEventEmitter();
         const testService = new AICLIService({
@@ -1942,6 +2116,11 @@ describe('AICLIService Unit Tests', () => {
         };
         const mockProcessRunner = createMockEventEmitter({
           executeAICLICommand: mock.fn(async () => ({ success: true })),
+          aicliCommand: 'claude',
+          permissionMode: 'default',
+          allowedTools: ['Read', 'Write', 'Edit'],
+          disallowedTools: [],
+          skipPermissions: false,
         });
         const mockSessionManager = createMockEventEmitter({
           markConversationStarted: mock.fn(async () => {}),
@@ -1968,7 +2147,13 @@ describe('AICLIService Unit Tests', () => {
         const mockSessionManager = createMockEventEmitter({
           shutdown: mock.fn(async () => {}),
         });
-        const mockProcessRunner = createMockEventEmitter();
+        const mockProcessRunner = createMockEventEmitter({
+          aicliCommand: 'claude',
+          permissionMode: 'default',
+          allowedTools: ['Read', 'Write', 'Edit'],
+          disallowedTools: [],
+          skipPermissions: false,
+        });
         const testService = new AICLIService({
           sessionManager: mockSessionManager,
           processRunner: mockProcessRunner,

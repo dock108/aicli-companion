@@ -90,7 +90,7 @@ describe('UAT: Message Flow', () => {
     it('should receive welcome message on connection', async () => {
       return new Promise((resolve, reject) => {
         const ws = new WebSocket(wsUrl);
-        let welcomeReceived = false;
+        let _welcomeReceived = false;
 
         const timeout = setTimeout(() => {
           ws.close();
@@ -101,7 +101,7 @@ describe('UAT: Message Flow', () => {
           try {
             const message = JSON.parse(data.toString());
             if (message.type === 'welcome') {
-              welcomeReceived = true;
+              _welcomeReceived = true;
               assert.ok(message.data, 'Welcome message should have data');
               assert.ok(message.data.message, 'Welcome message should have message text');
               clearTimeout(timeout);
@@ -217,7 +217,7 @@ describe('UAT: Message Flow', () => {
 
   describe('Session Management', () => {
     let ws;
-    let sessionId;
+    let _sessionId;
 
     beforeEach(async () => {
       // Establish WebSocket connection

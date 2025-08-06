@@ -3,10 +3,9 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { ServerConfig } from '../config/server-config.js';
 import rateLimit from 'express-rate-limit';
-export function setupProjectRoutes(app, aicliService) {
+export function setupProjectRoutes(app, _aicliService) {
   const router = express.Router();
   const config = new ServerConfig();
-
 
   // Get the configured project directory from config
   const getProjectsDir = () => {
@@ -63,7 +62,6 @@ export function setupProjectRoutes(app, aicliService) {
       message: 'Please try again later.',
     },
   });
-
 
   // Get specific project info
   router.get('/projects/:name', projectInfoLimiter, async (req, res) => {
@@ -124,8 +122,6 @@ export function setupProjectRoutes(app, aicliService) {
       });
     }
   });
-
-
 
   // Mount routes
   app.use('/api', router);

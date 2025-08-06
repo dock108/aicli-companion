@@ -54,7 +54,7 @@ export class ClaudeStreamParser {
                   metadata: {
                     system: parsed.system,
                     sessionId: parsed.session_id,
-                    isClaudeGenerated: true
+                    isClaudeGenerated: true,
                   },
                 })
               );

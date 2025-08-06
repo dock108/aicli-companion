@@ -679,24 +679,25 @@ describe('WebSocketMessageHandlers', () => {
   describe('handleClientBackgroundingMessage', () => {
     it('should handle client backgrounding', async () => {
       const data = {
+        isBackgrounded: true,
         sessionId: 'session123',
-        timestamp: '2023-01-01T00:00:00Z',
       };
 
+      mockAicliService.hasSession = mock.fn(() => true);
       mockAicliService.markSessionBackgrounded = mock.fn(async () => {});
 
       await WebSocketMessageHandlers.handleClientBackgroundingMessage(
         'client1',
-        'req123',
         data,
-        mockAicliService,
+        'req123',
         mockClients,
+        mockAicliService,
         mockConnectionManager
       );
 
       const client = mockClients.get('client1');
       assert.strictEqual(client.isBackgrounded, true);
-      assert.strictEqual(client.backgroundedSessionId, 'session123');
+      assert.strictEqual(mockAicliService.markSessionBackgrounded.mock.calls.length, 1);
       assert.strictEqual(WebSocketUtilities.sendMessage.mock.calls.length, 1);
 
       const response = WebSocketUtilities.sendMessage.mock.calls[0].arguments[1];
@@ -705,41 +706,44 @@ describe('WebSocketMessageHandlers', () => {
 
     it('should handle client without session', async () => {
       const data = {
+        isBackgrounded: true,
         // No sessionId
-        timestamp: '2023-01-01T00:00:00Z',
       };
 
       await WebSocketMessageHandlers.handleClientBackgroundingMessage(
         'client1',
-        'req123',
         data,
-        mockAicliService,
+        'req123',
         mockClients,
+        mockAicliService,
         mockConnectionManager
       );
 
       const client = mockClients.get('client1');
       assert.strictEqual(client.isBackgrounded, true);
-      assert.strictEqual(client.backgroundedSessionId, undefined);
       assert.strictEqual(WebSocketUtilities.sendMessage.mock.calls.length, 1);
     });
 
     it('should handle non-existent client gracefully', async () => {
       const data = {
+        isBackgrounded: true,
         sessionId: 'session123',
-        timestamp: '2023-01-01T00:00:00Z',
       };
 
       await WebSocketMessageHandlers.handleClientBackgroundingMessage(
         'nonexistent',
-        'req123',
         data,
-        mockAicliService,
+        'req123',
         mockClients,
+        mockAicliService,
         mockConnectionManager
       );
 
-      assert.strictEqual(WebSocketUtilities.sendMessage.mock.calls.length, 1);
+      assert.strictEqual(WebSocketUtilities.sendErrorMessage.mock.calls.length, 1);
+      assert.strictEqual(
+        WebSocketUtilities.sendErrorMessage.mock.calls[0].arguments[2],
+        'BACKGROUNDING_UPDATE_FAILED'
+      );
     });
   });
 
@@ -831,7 +835,8 @@ describe('WebSocketMessageHandlers', () => {
         assert.ok(types.includes('streamStart'));
         assert.ok(types.includes('ping'));
         assert.ok(types.includes('subscribe'));
-        assert.strictEqual(types.length, 12);
+        assert.ok(types.includes('client_backgrounding'));
+        assert.strictEqual(types.length, 14);
       });
     });
   });

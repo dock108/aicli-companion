@@ -226,7 +226,7 @@ describe('UAT: Edge Cases & Error Recovery', () => {
       ];
 
       for (const testPath of testPaths) {
-        await new Promise((resolve, reject) => {
+        await new Promise((resolve, _reject) => {
           const req = http.get(`${baseUrl}${testPath}`, (res) => {
             // Should get 404, 400, or 403 - not crash or expose files
             assert.ok(res.statusCode >= 400, `Path ${testPath} should return error status`);
@@ -251,7 +251,7 @@ describe('UAT: Edge Cases & Error Recovery', () => {
       const invalidNames = ['../../../etc', 'project\x00name', 'project%2e%2ename', '..', '.', ''];
 
       for (const invalidName of invalidNames) {
-        await new Promise((resolve, reject) => {
+        await new Promise((resolve, _reject) => {
           const postData = JSON.stringify({});
 
           const req = http.request(
@@ -312,7 +312,9 @@ describe('UAT: Edge Cases & Error Recovery', () => {
               errorCount++;
               try {
                 ws.close();
-              } catch (e) {}
+              } catch (e) {
+                // Ignore close error
+              }
               resolve();
             }, 2000);
 
@@ -349,7 +351,9 @@ describe('UAT: Edge Cases & Error Recovery', () => {
           if (ws.readyState === WebSocket.OPEN) {
             ws.close();
           }
-        } catch (e) {}
+        } catch (e) {
+          // Ignore cleanup error
+        }
       });
 
       // Verify server is still responsive
@@ -524,7 +528,9 @@ describe('UAT: Edge Cases & Error Recovery', () => {
         // Restore permissions for cleanup
         try {
           await fs.chmod(inaccessibleDir, 0o755);
-        } catch (e) {}
+        } catch (e) {
+          // Ignore cleanup error
+        }
       }
     });
   });
@@ -662,7 +668,9 @@ describe('UAT: Edge Cases & Error Recovery', () => {
         overloadConnections.forEach((ws) => {
           try {
             ws.terminate();
-          } catch (e) {}
+          } catch (e) {
+            // Ignore cleanup error
+          }
         });
       }
     });

@@ -175,7 +175,7 @@ export class AICLIMessageHandler {
       conversationResult: {
         type: 'final_result',
         success: !response.is_error,
-        sessionId: sessionId,
+        sessionId,
         claudeSessionId: sessionId,
         duration: response.duration_ms,
         cost: response.total_cost_usd,

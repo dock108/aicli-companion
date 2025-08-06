@@ -196,6 +196,11 @@ export class AICLIService extends EventEmitter {
   }
 
   async checkAvailability() {
+    // Skip real execution in test environment
+    if (process.env.NODE_ENV === 'test') {
+      return true;
+    }
+
     try {
       console.log(`Checking AICLI CLI availability at: ${this.aicliCommand}`);
       const { stdout, _stderr } = await execAsync(`${this.aicliCommand} --version`);
@@ -273,7 +278,7 @@ export class AICLIService extends EventEmitter {
     );
     console.log(`   Format: ${validatedFormat}`);
 
-    const args = ['--print', '--output-format', validatedFormat];
+    const args = ['--output-format', validatedFormat];
 
     // Add permission flags before the prompt
     if (skipPermissions || this.skipPermissions) {
@@ -454,7 +459,9 @@ export class AICLIService extends EventEmitter {
     const sanitizedPrompt = InputValidator.sanitizePrompt(prompt);
     const validatedWorkingDir = await InputValidator.validateWorkingDirectory(workingDirectory);
 
-    console.log(`🌊 sendStreamingPrompt called with sessionId: ${sessionId || 'none (fresh chat)'}`);
+    console.log(
+      `🌊 sendStreamingPrompt called with sessionId: ${sessionId || 'none (fresh chat)'}`
+    );
 
     // If sessionId provided, check if it exists
     if (sessionId && this.sessionManager.hasSession(sessionId)) {
@@ -471,7 +478,9 @@ export class AICLIService extends EventEmitter {
     }
 
     // For fresh chats (no sessionId) or unknown sessions, let Claude handle session creation
-    console.log(`🚀 Sending prompt to Claude CLI ${sessionId ? `with session ${sessionId}` : 'without session (fresh chat)'}`);
+    console.log(
+      `🚀 Sending prompt to Claude CLI ${sessionId ? `with session ${sessionId}` : 'without session (fresh chat)'}`
+    );
     return this.sendPromptToClaude(
       sanitizedPrompt,
       validatedWorkingDir,
@@ -480,19 +489,14 @@ export class AICLIService extends EventEmitter {
     );
   }
 
-  async sendPromptToClaude(
-    prompt,
-    workingDirectory,
-    skipPermissions = false,
-    sessionId = null
-  ) {
+  async sendPromptToClaude(prompt, workingDirectory, _skipPermissions = false, sessionId = null) {
     // Create a minimal session object for Claude CLI
     const session = {
-      sessionId: sessionId || null,  // null for fresh chats
+      sessionId: sessionId || null, // null for fresh chats
       workingDirectory,
-      conversationStarted: !!sessionId,  // true if we have a session ID
-      initialPrompt: sessionId ? null : prompt,  // Only set for new sessions
-      isRestoredSession: false
+      conversationStarted: !!sessionId, // true if we have a session ID
+      initialPrompt: sessionId ? null : prompt, // Only set for new sessions
+      isRestoredSession: false,
     };
 
     // If we have a session ID, register it temporarily for response routing
@@ -506,26 +510,26 @@ export class AICLIService extends EventEmitter {
       if (sessionId) {
         this.sessionManager.setSessionProcessing(sessionId, true);
       }
-      
+
       // Execute the command - Claude will handle session creation/continuation
       const response = await this.executeAICLICommand(session, prompt);
-      
+
       // Mark processing as complete if tracked
       if (sessionId) {
         this.sessionManager.setSessionProcessing(sessionId, false);
       }
-      
+
       // Extract session ID from Claude's response if available
       let extractedSessionId = sessionId;
       if (!sessionId && response && response.session_id) {
         extractedSessionId = response.session_id;
         console.log(`🔑 Extracted session ID from Claude response: ${extractedSessionId}`);
       }
-      
+
       if (!extractedSessionId) {
         console.warn(`⚠️ No session ID available - messages may not persist`);
       }
-      
+
       return {
         sessionId: extractedSessionId || null,
         success: true,
@@ -536,7 +540,7 @@ export class AICLIService extends EventEmitter {
       if (sessionId) {
         this.sessionManager.setSessionProcessing(sessionId, false);
       }
-      
+
       return {
         sessionId: sessionId || null,
         success: false,
@@ -562,20 +566,20 @@ export class AICLIService extends EventEmitter {
     // If session was created successfully, execute the initial prompt
     if (sessionResult.success && initialPrompt) {
       console.log(`🚀 Executing initial prompt for new session ${sessionId}`);
-      
+
       // Get the created session
       const session = await this.sessionManager.getSession(sessionId);
       if (session) {
         try {
           // Mark session as processing
           this.sessionManager.setSessionProcessing(sessionId, true);
-          
+
           // Execute the initial prompt
           const response = await this.executeAICLICommand(session, initialPrompt);
-          
+
           // Mark processing as complete
           this.sessionManager.setSessionProcessing(sessionId, false);
-          
+
           return {
             sessionId,
             success: true,
@@ -584,7 +588,7 @@ export class AICLIService extends EventEmitter {
         } catch (error) {
           console.error(`❌ Failed to execute initial prompt:`, error);
           this.sessionManager.setSessionProcessing(sessionId, false);
-          
+
           return {
             sessionId,
             success: false,
@@ -593,7 +597,7 @@ export class AICLIService extends EventEmitter {
         }
       }
     }
-    
+
     // Return original result if no prompt to execute
     return sessionResult;
   }
@@ -673,26 +677,28 @@ export class AICLIService extends EventEmitter {
     } catch (error) {
       // Check if this is a "No conversation found" error
       if (error.message && error.message.includes('No conversation found with session ID')) {
-        console.log(`⚠️ Claude CLI doesn't have session ${session.sessionId}, creating new session`);
-        
+        console.log(
+          `⚠️ Claude CLI doesn't have session ${session.sessionId}, creating new session`
+        );
+
         // Mark conversation as not started to force new session creation
         session.conversationStarted = false;
         session.isRestoredSession = false;
-        
+
         // Retry without session ID (will create new session in Claude)
         try {
           const result = await this.processRunner.executeAICLICommand(session, prompt);
-          
+
           // Mark conversation as started after successful creation
           await this.sessionManager.markConversationStarted(session.sessionId);
-          
+
           return result;
         } catch (retryError) {
           console.error(`❌ Failed to create new session after retry:`, retryError);
           throw retryError;
         }
       }
-      
+
       // Re-throw other errors
       throw error;
     }
@@ -804,9 +810,11 @@ export class AICLIService extends EventEmitter {
 
     // Extract Claude's session ID from buffer if available
     const claudeSessionId = buffer.claudeSessionId || response.session_id;
-    
+
     if (claudeSessionId && claudeSessionId !== sessionId) {
-      console.log(`🔄 Claude CLI returned different session ID: ${claudeSessionId} (was: ${sessionId})`);
+      console.log(
+        `🔄 Claude CLI returned different session ID: ${claudeSessionId} (was: ${sessionId})`
+      );
     }
 
     if (sendAggregated && aggregatedContent) {
@@ -821,7 +829,7 @@ export class AICLIService extends EventEmitter {
           aggregated: true,
           messageCount: buffer.assistantMessages.length,
           timestamp: new Date().toISOString(),
-          claudeSessionId: claudeSessionId,
+          claudeSessionId,
         },
         isComplete: true,
       });
@@ -844,7 +852,7 @@ export class AICLIService extends EventEmitter {
           type: 'final_result',
           success: !response.is_error,
           sessionId: claudeSessionId || response.session_id,
-          claudeSessionId: claudeSessionId,
+          claudeSessionId,
           duration: response.duration_ms,
           cost: response.total_cost_usd,
           usage: response.usage,
@@ -865,7 +873,22 @@ export class AICLIService extends EventEmitter {
   // Message handling methods moved to AICLIMessageHandler - using proxy methods below for backward compatibility
 
   clearSessionBuffer(sessionId) {
-    this.sessionManager.clearSessionBuffer(sessionId);
+    // Clear in session manager's buffer
+    if (this.sessionManager?.sessionMessageBuffers?.has(sessionId)) {
+      const buffer = this.sessionManager.sessionMessageBuffers.get(sessionId);
+      if (buffer && typeof buffer === 'object') {
+        buffer.assistantMessages = [];
+        buffer.permissionRequestSent = false;
+        buffer.toolUseInProgress = false;
+        buffer.permissionRequests = [];
+        buffer.deliverables = [];
+      }
+    }
+    
+    // Also delegate to session manager's method if it exists
+    if (this.sessionManager?.clearSessionBuffer) {
+      this.sessionManager.clearSessionBuffer(sessionId);
+    }
   }
 
   // Proxy methods for message handler functionality (for backward compatibility and testing)
@@ -937,9 +960,26 @@ export class AICLIService extends EventEmitter {
     return this.sessionManager.getActiveSessions();
   }
 
+  async markSessionBackgrounded(sessionId) {
+    return this.sessionManager.markSessionBackgrounded(sessionId);
+  }
+
+  async markSessionForegrounded(sessionId) {
+    return this.sessionManager.markSessionForegrounded(sessionId);
+  }
+
+  cleanupDeadSession(sessionId) {
+    return this.sessionManager.cleanupDeadSession(sessionId);
+  }
 
   // Startup cleanup to handle stale Claude CLI sessions
   async performStartupCleanup() {
+    // Skip real execution in test environment
+    if (process.env.NODE_ENV === 'test') {
+      console.log('🧹 Skipping startup cleanup in test environment');
+      return;
+    }
+
     console.log('🧹 Performing startup cleanup...');
 
     try {
@@ -1168,7 +1208,7 @@ export class AICLIService extends EventEmitter {
         data: {
           type: 'system_init',
           sessionId: message.session_id,
-          claudeSessionId: message.session_id,  // Claude's actual session ID
+          claudeSessionId: message.session_id, // Claude's actual session ID
           workingDirectory: message.cwd,
           availableTools: message.tools || [],
           mcpServers: message.mcp_servers || [],

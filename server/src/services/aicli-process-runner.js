@@ -18,12 +18,21 @@ export class AICLIProcessRunner extends EventEmitter {
     this.spawnFunction = options.spawnFunction || spawn;
 
     // Configuration
-    // Skip command detection in test environment to avoid spawning processes
-    this.aicliCommand = process.env.NODE_ENV === 'test' ? 'claude' : this.findAICLICommand();
+    // Lazy initialization - command will be detected on first use
+    this._aicliCommand = null;
     this.permissionMode = 'default';
     this.allowedTools = ['Read', 'Write', 'Edit'];
     this.disallowedTools = [];
     this.skipPermissions = false;
+  }
+
+  // Lazy getter for AICLI command
+  get aicliCommand() {
+    if (!this._aicliCommand) {
+      // Skip command detection in test environment to avoid spawning processes
+      this._aicliCommand = process.env.NODE_ENV === 'test' ? 'claude' : this.findAICLICommand();
+    }
+    return this._aicliCommand;
   }
 
   /**
@@ -67,7 +76,7 @@ export class AICLIProcessRunner extends EventEmitter {
   async executeAICLICommand(session, prompt) {
     const { sessionId, workingDirectory, conversationStarted, initialPrompt, isRestoredSession } =
       session;
-    
+
     // Create logger with session context
     const sessionLogger = logger.child({ sessionId });
 
@@ -110,12 +119,12 @@ export class AICLIProcessRunner extends EventEmitter {
       promptLength: finalPrompt?.length,
       conversationStarted,
       isRestoredSession: isRestoredSession || false,
-      cliFlag: conversationStarted || isRestoredSession ? '--resume' : '--session-id'
+      cliFlag: conversationStarted || isRestoredSession ? '--resume' : '--session-id',
     });
-    
+
     sessionLogger.debug('Command details', {
       argCount: args.length,
-      promptPreview: finalPrompt?.substring(0, 100) + (finalPrompt?.length > 100 ? '...' : '')
+      promptPreview: finalPrompt?.substring(0, 100) + (finalPrompt?.length > 100 ? '...' : ''),
     });
 
     // No more timeout calculations - trust Claude CLI
@@ -156,12 +165,12 @@ export class AICLIProcessRunner extends EventEmitter {
    */
   async runAICLIProcess(args, prompt, workingDirectory, sessionId) {
     const processLogger = logger.child({ sessionId });
-    
+
     processLogger.debug('Running AICLI process', {
       argCount: args.length,
       hasPrompt: !!prompt,
       promptLength: prompt?.length || 0,
-      workingDirectory
+      workingDirectory,
     });
 
     return new Promise((promiseResolve, reject) => {
@@ -174,15 +183,26 @@ export class AICLIProcessRunner extends EventEmitter {
 
         processLogger.debug('Spawning AICLI process', {
           command: this.aicliCommand,
-          fullArgCount: fullArgs.length
+          fullArgCount: fullArgs.length,
         });
+
+        // Safety check for test environment
+        if (process.env.NODE_ENV === 'test' && this.spawnFunction === spawn) {
+          console.error(
+            'WARNING: Using real spawn in test environment! This will create real processes.'
+          );
+          console.trace('Stack trace for real spawn call:');
+        }
 
         aicliProcess = this.spawnFunction(this.aicliCommand, fullArgs, {
           cwd: workingDirectory,
           stdio: ['pipe', 'pipe', 'pipe'],
         });
       } catch (spawnError) {
-        processLogger.error('Failed to spawn AICLI CLI', { error: spawnError.message, code: spawnError.code });
+        processLogger.error('Failed to spawn AICLI CLI', {
+          error: spawnError.message,
+          code: spawnError.code,
+        });
         const errorMsg =
           spawnError.code === 'ENOENT'
             ? 'AICLI CLI not found. Please ensure AICLI CLI is installed and in your PATH.'
@@ -218,7 +238,8 @@ export class AICLIProcessRunner extends EventEmitter {
         aicliProcess,
         promiseResolve,
         reject,
-        healthMonitor
+        healthMonitor,
+        processLogger
       );
 
       // Handle process events
@@ -255,7 +276,7 @@ export class AICLIProcessRunner extends EventEmitter {
           logger.debug('Initial process metrics', {
             pid,
             memoryMB: (info.rss / 1024 / 1024).toFixed(2),
-            cpuPercent: info.cpu
+            cpuPercent: info.cpu,
           });
         }
       } catch (err) {
@@ -267,7 +288,14 @@ export class AICLIProcessRunner extends EventEmitter {
   /**
    * Create output handler for process stdout/stderr
    */
-  createOutputHandler(sessionId, aicliProcess, promiseResolve, reject, healthMonitor) {
+  createOutputHandler(
+    sessionId,
+    aicliProcess,
+    promiseResolve,
+    reject,
+    healthMonitor,
+    processLogger
+  ) {
     let stdout = '';
     let stderr = '';
     const stdoutBuffers = []; // Store raw buffers to prevent encoding issues
@@ -286,7 +314,7 @@ export class AICLIProcessRunner extends EventEmitter {
       if (logger.shouldLog('debug')) {
         processLogger.debug('STDOUT chunk received', {
           chunkLength: chunk.length,
-          totalLength: stdout.length
+          totalLength: stdout.length,
         });
       }
 
@@ -324,25 +352,25 @@ export class AICLIProcessRunner extends EventEmitter {
 
       const chunk = data.toString();
       stderr += chunk;
+
+      // Emit stderr event for monitoring
+      this.emit('processStderr', {
+        sessionId,
+        data: chunk,
+        timestamp: new Date().toISOString(),
+      });
+
       // Log stderr at warn level since it might indicate issues
       if (chunk.trim()) {
         processLogger.warn('STDERR output', {
           length: chunk.length,
-          content: chunk.substring(0, 200)
+          content: chunk.substring(0, 200),
         });
       }
 
       if (healthMonitor) {
         healthMonitor.recordActivity();
       }
-
-      // Emit stderr for logging
-      this.emit('processStderr', {
-        sessionId,
-        pid: aicliProcess.pid,
-        data: chunk,
-        timestamp: new Date().toISOString(),
-      });
     });
 
     return {
@@ -360,7 +388,7 @@ export class AICLIProcessRunner extends EventEmitter {
             logger.debug('STDOUT reconstructed', {
               sessionId,
               length: completeStdout.length,
-              chunks: stdoutBuffers.length
+              chunks: stdoutBuffers.length,
             });
           }
 
@@ -370,7 +398,7 @@ export class AICLIProcessRunner extends EventEmitter {
             logger.debug('STDERR reconstructed', {
               sessionId,
               length: completeStderr.length,
-              chunks: stderrBuffers.length
+              chunks: stderrBuffers.length,
             });
           }
         } catch (bufferError) {
@@ -383,7 +411,7 @@ export class AICLIProcessRunner extends EventEmitter {
         logger.debug('Final output lengths', {
           sessionId,
           stdout: completeStdout.length,
-          stderr: completeStderr.length
+          stderr: completeStderr.length,
         });
 
         // Emit any remaining chunks with final flag
@@ -442,7 +470,7 @@ export class AICLIProcessRunner extends EventEmitter {
       const responses = MessageProcessor.parseStreamJsonOutput(trimmedOutput);
       logger.info('AICLI command completed', {
         sessionId,
-        responseCount: responses.length
+        responseCount: responses.length,
       });
 
       if (responses.length === 0) {
@@ -460,7 +488,7 @@ export class AICLIProcessRunner extends EventEmitter {
           sessionId,
           index: index + 1,
           type: response.type,
-          subtype: response.subtype || 'none'
+          subtype: response.subtype || 'none',
         });
         this.emit('aicliResponse', {
           sessionId,
@@ -476,7 +504,7 @@ export class AICLIProcessRunner extends EventEmitter {
         error: error.message,
         stdoutLength: completeStdout.length,
         firstChars: completeStdout.substring(0, 200),
-        lastChars: completeStdout.substring(Math.max(0, completeStdout.length - 200))
+        lastChars: completeStdout.substring(Math.max(0, completeStdout.length - 200)),
       });
 
       // Try to provide more helpful error information
@@ -507,7 +535,7 @@ export class AICLIProcessRunner extends EventEmitter {
           pid: aicliProcess.pid,
           sessionId,
           runtime,
-          lastActivity: timeSinceActivity
+          lastActivity: timeSinceActivity,
         });
       }
     }, 30000); // Log status every 30 seconds (reduced frequency)
@@ -530,6 +558,11 @@ export class AICLIProcessRunner extends EventEmitter {
    * Find the Claude CLI command
    */
   findAICLICommand() {
+    // CRITICAL: Never spawn real processes in test environment
+    if (process.env.NODE_ENV === 'test') {
+      return 'claude';
+    }
+
     // Try different command names
     const commandNames = ['claude', 'aicli'];
 
@@ -556,7 +589,7 @@ export class AICLIProcessRunner extends EventEmitter {
     logger.info('Testing AICLI command', { testType });
 
     let args = [];
-    const prompt = null;
+    let prompt = null;
 
     switch (testType) {
       case 'version':
@@ -566,10 +599,12 @@ export class AICLIProcessRunner extends EventEmitter {
         args = ['--help'];
         break;
       case 'simple':
-        args = ['--print', 'Hello world'];
+        args = ['--output-format', 'stream-json'];
+        prompt = 'Hello world';
         break;
       case 'json':
-        args = ['--print', '--output-format', 'json', 'Hello world'];
+        args = ['--output-format', 'json'];
+        prompt = 'Hello world';
         break;
       default:
         throw new Error(`Unknown test type: ${testType}`);

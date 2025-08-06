@@ -384,6 +384,7 @@ export class SessionPersistenceService {
     const stats = {
       total: sessions.length,
       withConversation: sessions.filter((s) => s.conversationStarted).length,
+      backgrounded: sessions.filter((s) => s.isBackgrounded).length,
       recentlyActive: sessions.filter((s) => now - s.lastActivity < 60 * 60 * 1000).length, // Active in last hour
       oldest: sessions.length > 0 ? Math.min(...sessions.map((s) => s.createdAt)) : null,
       newest: sessions.length > 0 ? Math.max(...sessions.map((s) => s.createdAt)) : null,

@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
+import { atomicWriteFile } from '../utils/atomic-write.js';
 
 /**
  * Validate sessionId to prevent path traversal and injection
@@ -8,9 +9,12 @@ import os from 'os';
  */
 function isValidSessionId(sessionId) {
   // Accept UUIDs (v1-v5) or simple alphanumeric/dash (no underscore)
-  const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
+  const uuidRegex =
+    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
   const simpleIdRegex = /^[a-zA-Z0-9-]{1,64}$/;
-  return typeof sessionId === 'string' && (uuidRegex.test(sessionId) || simpleIdRegex.test(sessionId));
+  return (
+    typeof sessionId === 'string' && (uuidRegex.test(sessionId) || simpleIdRegex.test(sessionId))
+  );
 }
 
 /**
@@ -108,9 +112,6 @@ export class SessionPersistenceService {
           // Parse timestamps back to numbers
           createdAt: new Date(session.createdAt).getTime(),
           lastActivity: new Date(session.lastActivity).getTime(),
-          backgroundedAt: session.backgroundedAt
-            ? new Date(session.backgroundedAt).getTime()
-            : null,
         });
       }
 
@@ -150,9 +151,6 @@ export class SessionPersistenceService {
           ...session,
           createdAt: new Date(session.createdAt).getTime(),
           lastActivity: new Date(session.lastActivity).getTime(),
-          backgroundedAt: session.backgroundedAt
-            ? new Date(session.backgroundedAt).getTime()
-            : null,
         });
       }
 
@@ -178,9 +176,6 @@ export class SessionPersistenceService {
         // Convert timestamps to ISO strings for JSON serialization
         createdAt: new Date(session.createdAt).toISOString(),
         lastActivity: new Date(session.lastActivity).toISOString(),
-        backgroundedAt: session.backgroundedAt
-          ? new Date(session.backgroundedAt).toISOString()
-          : null,
       }));
 
       const data = JSON.stringify(sessions, null, 2);
@@ -195,10 +190,8 @@ export class SessionPersistenceService {
         }
       }
 
-      // Atomic write: write to temp file first, then rename
-      const tempFile = `${this.sessionsFile}.tmp`;
-      await fs.writeFile(tempFile, data, 'utf8');
-      await fs.rename(tempFile, this.sessionsFile);
+      // Use our robust atomic write implementation
+      await atomicWriteFile(this.sessionsFile, data);
 
       console.log(`💾 Saved ${sessions.length} sessions to disk`);
     } catch (error) {
@@ -264,8 +257,6 @@ export class SessionPersistenceService {
       createdAt: sessionData.createdAt || Date.now(),
       lastActivity: sessionData.lastActivity || Date.now(),
       initialPrompt: sessionData.initialPrompt || '',
-      isBackgrounded: sessionData.isBackgrounded || false,
-      backgroundedAt: sessionData.backgroundedAt || null,
       skipPermissions: sessionData.skipPermissions || false,
     };
 
@@ -315,8 +306,9 @@ export class SessionPersistenceService {
     const existed = this.sessionsCache.delete(sessionId);
     if (existed) {
       await this.saveSessions();
-      // Also remove associated message buffer
+      // Also remove associated message buffer and queue
       await this.removeMessageBuffer(sessionId);
+      await this.removeMessageQueue(sessionId);
       console.log(`🗑️ Removed session ${sessionId} from persistence`);
     }
     return existed;
@@ -392,7 +384,6 @@ export class SessionPersistenceService {
     const stats = {
       total: sessions.length,
       withConversation: sessions.filter((s) => s.conversationStarted).length,
-      backgrounded: sessions.filter((s) => s.isBackgrounded).length,
       recentlyActive: sessions.filter((s) => now - s.lastActivity < 60 * 60 * 1000).length, // Active in last hour
       oldest: sessions.length > 0 ? Math.min(...sessions.map((s) => s.createdAt)) : null,
       newest: sessions.length > 0 ? Math.max(...sessions.map((s) => s.createdAt)) : null,
@@ -421,11 +412,9 @@ export class SessionPersistenceService {
         lastUpdated: new Date().toISOString(),
       };
 
-      // IMPLEMENTATION NOTE: Using atomic write to prevent corruption
-      // Write to temp file first, then rename for atomicity
-      const tempFile = `${bufferFile}.tmp`;
-      await fs.writeFile(tempFile, JSON.stringify(bufferData, null, 2), 'utf8');
-      await fs.rename(tempFile, bufferFile);
+      // Use our robust atomic write implementation
+      const jsonData = JSON.stringify(bufferData, null, 2);
+      await atomicWriteFile(bufferFile, jsonData);
 
       console.log(
         `💾 Saved message buffer for session ${sessionId} (${bufferData.assistantMessages.length} assistant messages)`
@@ -444,11 +433,10 @@ export class SessionPersistenceService {
   async loadMessageBuffer(sessionId) {
     if (!isValidSessionId(sessionId)) {
       // Log only the first 6 safe characters to avoid log injection
-      const safeSessionId = typeof sessionId === 'string'
-        ? sessionId.replace(/[^a-zA-Z0-9-_]/g, '').slice(0, 6)
-        : '';
+      const safeSessionId =
+        typeof sessionId === 'string' ? sessionId.replace(/[^a-zA-Z0-9-_]/g, '').slice(0, 6) : '';
       console.warn(
-        `⚠️ Invalid sessionId for message buffer load: (${safeSessionId ? 'id starts with: ' + safeSessionId : 'unusable id'})`
+        `⚠️ Invalid sessionId for message buffer load: (${safeSessionId ? `id starts with: ${safeSessionId}` : 'unusable id'})`
       );
       return null;
     }
@@ -542,6 +530,134 @@ export class SessionPersistenceService {
     }
 
     return buffers;
+  }
+
+  /**
+   * Save message queue for a session
+   * @param {string} sessionId - The session ID
+   * @param {Array} messages - Array of queued messages
+   */
+  async saveMessageQueue(sessionId, messages) {
+    if (!this.isInitialized) {
+      console.warn('⚠️ Session persistence not initialized - skipping message queue save');
+      return;
+    }
+
+    try {
+      const queueFile = path.join(this.storageDir, `queue-${sessionId}.json`);
+      const queueData = {
+        sessionId,
+        messages: messages || [],
+        lastUpdated: new Date().toISOString(),
+      };
+
+      // Use our robust atomic write implementation
+      const jsonData = JSON.stringify(queueData, null, 2);
+
+      await atomicWriteFile(queueFile, jsonData);
+
+      console.log(`💾 Saved message queue for session ${sessionId} (${messages.length} messages)`);
+    } catch (error) {
+      console.error(`❌ Failed to save message queue for session ${sessionId}:`, error);
+      // Don't throw - persistence failures shouldn't break message flow
+    }
+  }
+
+  /**
+   * Load message queue for a session
+   * @param {string} sessionId - The session ID
+   * @returns {Array|null} Array of queued messages or null if not found
+   */
+  async loadMessageQueue(sessionId) {
+    if (!isValidSessionId(sessionId)) {
+      console.warn('⚠️ Invalid sessionId for message queue load');
+      return null;
+    }
+
+    if (!this.isInitialized) {
+      console.warn('⚠️ Session persistence not initialized - skipping message queue load');
+      return null;
+    }
+
+    try {
+      const queueFile = path.join(this.storageDir, `queue-${sessionId}.json`);
+      const data = await fs.readFile(queueFile, 'utf8');
+
+      let queueData;
+      try {
+        queueData = JSON.parse(data);
+      } catch (parseError) {
+        console.error(`❌ Failed to parse message queue for session ${sessionId}:`, parseError);
+        return null;
+      }
+
+      // Convert Arrays back to Sets for deliveredTo and acknowledgedBy
+      const messages = queueData.messages.map((msg) => ({
+        ...msg,
+        timestamp: new Date(msg.timestamp),
+        expiresAt: new Date(msg.expiresAt),
+        deliveredAt: msg.deliveredAt ? new Date(msg.deliveredAt) : null,
+        acknowledgedAt: msg.acknowledgedAt ? new Date(msg.acknowledgedAt) : null,
+        deliveredTo: new Set(msg.deliveredTo || []),
+        acknowledgedBy: new Set(msg.acknowledgedBy || []),
+      }));
+
+      console.log(`📖 Loaded message queue for session ${sessionId} (${messages.length} messages)`);
+      return messages;
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        console.error(`❌ Failed to load message queue for session ${sessionId}:`, error);
+      }
+      return null;
+    }
+  }
+
+  /**
+   * Load all message queues for restored sessions
+   * @returns {Map<string, Array>} Map of sessionId to message array
+   */
+  async loadAllMessageQueues() {
+    const queues = new Map();
+
+    try {
+      const files = await fs.readdir(this.storageDir);
+      const queueFiles = files.filter((f) => f.startsWith('queue-') && f.endsWith('.json'));
+
+      for (const file of queueFiles) {
+        const sessionId = file.replace('queue-', '').replace('.json', '');
+        const messages = await this.loadMessageQueue(sessionId);
+        if (messages && messages.length > 0) {
+          queues.set(sessionId, messages);
+        }
+      }
+
+      console.log(`📚 Loaded ${queues.size} message queues from disk`);
+    } catch (error) {
+      console.error('❌ Failed to load message queues:', error);
+    }
+
+    return queues;
+  }
+
+  /**
+   * Remove message queue when session is removed
+   * @param {string} sessionId - The session ID
+   */
+  async removeMessageQueue(sessionId) {
+    if (!isValidSessionId(sessionId)) {
+      console.warn('⚠️ Invalid sessionId for message queue removal');
+      return;
+    }
+
+    try {
+      const queueFile = path.join(this.storageDir, `queue-${sessionId}.json`);
+      await fs.unlink(queueFile);
+      console.log(`🗑️ Removed message queue for session ${sessionId}`);
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        console.error(`❌ Failed to remove message queue for session ${sessionId}:`, error);
+      }
+    }
   }
 }
 

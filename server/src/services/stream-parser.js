@@ -11,6 +11,7 @@ export class ClaudeStreamParser {
     this.codeBlockBuffer = '';
     this.codeBlockLanguage = '';
     this.jsonBuffer = '';
+    this.lastStatusMessage = null;
   }
 
   /**
@@ -42,8 +43,25 @@ export class ClaudeStreamParser {
         try {
           const parsed = JSON.parse(trimmedLine);
 
+          // Process system messages to extract session IDs
+          if (parsed.type === 'system') {
+            console.log('🔐 Found system message:', parsed);
+            if (parsed.session_id) {
+              console.log(`🔑 Claude CLI session ID detected: ${parsed.session_id}`);
+              // Emit a special chunk for session ID
+              chunks.push(
+                this.createChunk('session_id', parsed.session_id, {
+                  metadata: {
+                    system: parsed.system,
+                    sessionId: parsed.session_id,
+                    isClaudeGenerated: true
+                  },
+                })
+              );
+            }
+          }
           // Process tool_use messages for activity updates
-          if (parsed.type === 'tool_use' && parsed.tool_name) {
+          else if (parsed.type === 'tool_use' && parsed.tool_name) {
             console.log('🔧 Found tool use:', parsed.tool_name);
             chunks.push(
               this.createChunk('tool_use', '', {
@@ -184,6 +202,29 @@ export class ClaudeStreamParser {
         continue;
       }
 
+      // Check for Claude CLI status messages
+      const statusMatch = this.detectClaudeStatusMessage(trimmedLine);
+      if (statusMatch) {
+        // If we have accumulated content, emit it first
+        if (this.hasAccumulatedContent()) {
+          chunks.push(this.createChunk('text', this.getAccumulatedContent()));
+        }
+
+        // Emit status chunk
+        chunks.push(
+          this.createChunk('status', statusMatch.originalText, {
+            statusType: statusMatch.type,
+            duration: statusMatch.duration,
+            tokens: statusMatch.tokens,
+            stage: statusMatch.stage,
+            canInterrupt: statusMatch.canInterrupt,
+          })
+        );
+
+        this.lastStatusMessage = statusMatch;
+        continue;
+      }
+
       // Regular content - accumulate
       if (trimmedLine.length > 0) {
         this.accumulateContent(line);
@@ -254,6 +295,107 @@ export class ClaudeStreamParser {
   }
 
   /**
+   * Detect Claude CLI status messages like "Creating… (1096s · ⚒ 27.7k tokens · esc to interrupt)"
+   */
+  detectClaudeStatusMessage(line) {
+    // Pattern for Claude CLI status messages
+    const patterns = [
+      // "Creating… (1096s · ⚒ 27.7k tokens · esc to interrupt)"
+      {
+        regex:
+          /(Creating|Thinking|Working|Processing)…?\s*\((\d+(?:\.\d+)?)s\s*·\s*⚒\s*([\d.]+k?)\s*tokens?\s*·\s*esc to interrupt\)/,
+        type: 'progress',
+        extractData: (match) => ({
+          stage: match[1].toLowerCase(),
+          duration: parseFloat(match[2]),
+          tokens: this.parseTokenCount(match[3]),
+          canInterrupt: true,
+        }),
+      },
+      // "Thinking… (45.2s)"
+      {
+        regex: /(Creating|Thinking|Working|Processing)…?\s*\((\d+(?:\.\d+)?)s\)/,
+        type: 'progress',
+        extractData: (match) => ({
+          stage: match[1].toLowerCase(),
+          duration: parseFloat(match[2]),
+          tokens: null,
+          canInterrupt: false,
+        }),
+      },
+      // "⚒ Using tools: Read, Write, Edit"
+      {
+        regex: /⚒\s*Using tools?:\s*(.+)/,
+        type: 'tools',
+        extractData: (match) => ({
+          stage: 'tool_use',
+          duration: null,
+          tokens: null,
+          tools: match[1].split(',').map((t) => t.trim()),
+          canInterrupt: false,
+        }),
+      },
+      // "✓ Task completed in 45.2s"
+      {
+        regex: /[✓✅]?\s*(Task completed|Finished|Done)\s*(?:in\s*(\d+(?:\.\d+)?)s)?/,
+        type: 'completion',
+        extractData: (match) => ({
+          stage: 'completed',
+          duration: match[2] ? parseFloat(match[2]) : null,
+          tokens: null,
+          canInterrupt: false,
+        }),
+      },
+      // "⏹ Interrupted by user"
+      {
+        regex: /[⏹⏸]\s*(Interrupted|Stopped|Cancelled)\s*(?:by user)?/,
+        type: 'interruption',
+        extractData: (_match) => ({
+          stage: 'interrupted',
+          duration: null,
+          tokens: null,
+          canInterrupt: false,
+        }),
+      },
+    ];
+
+    for (const pattern of patterns) {
+      const match = line.match(pattern.regex);
+      if (match) {
+        const data = pattern.extractData(match);
+        return {
+          type: pattern.type,
+          originalText: line,
+          stage: data.stage,
+          duration: data.duration,
+          tokens: data.tokens,
+          tools: data.tools,
+          canInterrupt: data.canInterrupt,
+          timestamp: new Date().toISOString(),
+        };
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Parse token count from strings like "27.7k", "1234", "1.5k"
+   */
+  parseTokenCount(tokenStr) {
+    if (!tokenStr) return null;
+
+    const cleanStr = tokenStr.toLowerCase().replace(/[^\d.k]/g, '');
+
+    if (cleanStr.includes('k')) {
+      const num = parseFloat(cleanStr.replace('k', ''));
+      return Math.round(num * 1000);
+    }
+
+    return parseInt(cleanStr) || null;
+  }
+
+  /**
    * Create a chunk object
    */
   createChunk(type, content, metadata = {}) {
@@ -311,6 +453,7 @@ export class ClaudeStreamParser {
     this.codeBlockLanguage = '';
     this.accumulatedContent = [];
     this.jsonBuffer = '';
+    this.lastStatusMessage = null;
   }
 }
 
@@ -338,6 +481,57 @@ export function formatChunkForDisplay(chunk) {
 
     case 'complete':
       return '';
+
+    case 'status':
+      // Format status messages for display
+      return formatStatusMessage(chunk);
+
+    default:
+      return chunk.content;
+  }
+}
+
+/**
+ * Format a status chunk for display
+ */
+export function formatStatusMessage(chunk) {
+  const { statusType, stage, duration, tokens, tools, canInterrupt } = chunk;
+
+  switch (statusType) {
+    case 'progress': {
+      let message = `${stage.charAt(0).toUpperCase() + stage.slice(1)}`;
+
+      if (duration !== null) {
+        message += ` (${duration}s`;
+
+        if (tokens) {
+          const tokenStr = tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}k` : tokens.toString();
+          message += ` · ⚒ ${tokenStr} tokens`;
+        }
+
+        if (canInterrupt) {
+          message += ' · esc to interrupt';
+        }
+
+        message += ')';
+      }
+
+      return message;
+    }
+
+    case 'tools':
+      return `⚒ Using tools: ${tools ? tools.join(', ') : 'unknown'}`;
+
+    case 'completion': {
+      let completionMsg = '✅ Task completed';
+      if (duration !== null) {
+        completionMsg += ` in ${duration}s`;
+      }
+      return completionMsg;
+    }
+
+    case 'interruption':
+      return '⏹ Interrupted by user';
 
     default:
       return chunk.content;

@@ -8,8 +8,8 @@ import { AICLICompanionServer } from '../index.js';
 
 /**
  * UAT Test Suite: Edge Cases & Error Recovery
- * 
- * Tests the system's resilience to various edge cases and error conditions:  
+ *
+ * Tests the system's resilience to various edge cases and error conditions:
  * - Network interruption recovery
  * - Invalid input handling
  * - Resource exhaustion scenarios
@@ -29,11 +29,11 @@ describe('UAT: Edge Cases & Error Recovery', () => {
   beforeEach(async () => {
     // Use a random port to avoid conflicts
     testPort = 3000 + Math.floor(Math.random() * 1000);
-    
+
     // Create temporary directory for testing
     tempDir = path.join(process.cwd(), `test-temp-${Date.now()}`);
     await fs.mkdir(tempDir, { recursive: true });
-    
+
     // Set test environment
     process.env.NODE_ENV = 'test';
     process.env.PORT = testPort.toString();
@@ -41,12 +41,12 @@ describe('UAT: Edge Cases & Error Recovery', () => {
     process.env.ENABLE_BONJOUR = 'false';
     process.env.ENABLE_TLS = 'false';
     process.env.CONFIG_PATH = tempDir;
-    
+
     baseUrl = `http://localhost:${testPort}`;
     wsUrl = `ws://localhost:${testPort}/ws`;
-    
+
     server = new AICLICompanionServer();
-    
+
     // Start server and wait for it to be ready
     await new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
@@ -54,7 +54,7 @@ describe('UAT: Edge Cases & Error Recovery', () => {
       }, 10000);
 
       const originalStart = server.start.bind(server);
-      server.start = async function() {
+      server.start = async function () {
         try {
           await originalStart();
           clearTimeout(timeout);
@@ -66,7 +66,7 @@ describe('UAT: Edge Cases & Error Recovery', () => {
       };
       server.start();
     });
-    
+
     serverInstance = server;
   });
 
@@ -78,7 +78,7 @@ describe('UAT: Edge Cases & Error Recovery', () => {
         });
       });
     }
-    
+
     // Clean up temporary directory
     if (tempDir) {
       try {
@@ -87,7 +87,7 @@ describe('UAT: Edge Cases & Error Recovery', () => {
         console.warn(`Failed to clean up temp dir: ${error.message}`);
       }
     }
-    
+
     // Clean up environment
     delete process.env.PORT;
     delete process.env.AUTH_REQUIRED;
@@ -99,17 +99,17 @@ describe('UAT: Edge Cases & Error Recovery', () => {
   describe('Invalid Input Handling', () => {
     it('should handle malformed JSON in WebSocket messages', async () => {
       const ws = new WebSocket(wsUrl);
-      
+
       await new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
           reject(new Error('WebSocket connection timeout'));
         }, 5000);
-        
+
         ws.on('open', () => {
           clearTimeout(timeout);
           resolve();
         });
-        
+
         ws.on('error', (error) => {
           clearTimeout(timeout);
           reject(error);
@@ -145,7 +145,7 @@ describe('UAT: Edge Cases & Error Recovery', () => {
 
     it('should handle oversized WebSocket messages', async () => {
       const ws = new WebSocket(wsUrl);
-      
+
       await new Promise((resolve, reject) => {
         ws.on('open', resolve);
         ws.on('error', reject);
@@ -201,10 +201,12 @@ describe('UAT: Edge Cases & Error Recovery', () => {
         try {
           // Create very large message (5MB)
           const largePayload = 'x'.repeat(5 * 1024 * 1024);
-          ws.send(JSON.stringify({
-            type: 'testMessage',
-            data: { payload: largePayload }
-          }));
+          ws.send(
+            JSON.stringify({
+              type: 'testMessage',
+              data: { payload: largePayload },
+            })
+          );
         } catch (error) {
           // Send might fail immediately for very large messages
           resolved = true;
@@ -220,7 +222,7 @@ describe('UAT: Edge Cases & Error Recovery', () => {
         '/api/../../../etc/passwd',
         '/api/projects/../../secrets',
         '/api/\x00\x01\x02',
-        '/api/projects/%2e%2e%2f%2e%2e%2fpasswd'
+        '/api/projects/%2e%2e%2f%2e%2e%2fpasswd',
       ];
 
       for (const testPath of testPaths) {
@@ -231,12 +233,12 @@ describe('UAT: Edge Cases & Error Recovery', () => {
             assert.ok(res.statusCode < 500 || res.statusCode === 500, 'Should handle gracefully');
             resolve();
           });
-          
+
           req.on('error', () => {
             // Connection error is also acceptable
             resolve();
           });
-          
+
           req.setTimeout(5000, () => {
             req.destroy();
             resolve();
@@ -246,44 +248,43 @@ describe('UAT: Edge Cases & Error Recovery', () => {
     });
 
     it('should handle invalid project names', async () => {
-      const invalidNames = [
-        '../../../etc',
-        'project\x00name',
-        'project%2e%2ename',
-        '..',
-        '.',
-        ''
-      ];
+      const invalidNames = ['../../../etc', 'project\x00name', 'project%2e%2ename', '..', '.', ''];
 
       for (const invalidName of invalidNames) {
         await new Promise((resolve, reject) => {
           const postData = JSON.stringify({});
-          
-          const req = http.request({
-            hostname: 'localhost',
-            port: testPort,
-            path: `/api/projects/${encodeURIComponent(invalidName)}/start`,
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Content-Length': Buffer.byteLength(postData)
+
+          const req = http.request(
+            {
+              hostname: 'localhost',
+              port: testPort,
+              path: `/api/projects/${encodeURIComponent(invalidName)}/start`,
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(postData),
+              },
+            },
+            (res) => {
+              // Should get error response, not crash
+              assert.ok(
+                res.statusCode >= 400,
+                `Invalid project name ${invalidName} should return error`
+              );
+              resolve();
             }
-          }, (res) => {
-            // Should get error response, not crash
-            assert.ok(res.statusCode >= 400, `Invalid project name ${invalidName} should return error`);
-            resolve();
-          });
-          
+          );
+
           req.on('error', () => {
             // Connection error is also acceptable
             resolve();
           });
-          
+
           req.setTimeout(5000, () => {
             req.destroy();
             resolve();
           });
-          
+
           req.write(postData);
           req.end();
         });
@@ -300,46 +301,50 @@ describe('UAT: Edge Cases & Error Recovery', () => {
 
       // Create many connections rapidly
       const connectionPromises = [];
-      
+
       for (let i = 0; i < numAttempts; i++) {
-        connectionPromises.push(new Promise((resolve) => {
-          const ws = new WebSocket(wsUrl);
-          rapidConnections.push(ws);
-          
-          const timeout = setTimeout(() => {
-            errorCount++;
-            try { ws.close(); } catch (e) {}
-            resolve();
-          }, 2000);
+        connectionPromises.push(
+          new Promise((resolve) => {
+            const ws = new WebSocket(wsUrl);
+            rapidConnections.push(ws);
 
-          ws.on('open', () => {
-            successCount++;
-            clearTimeout(timeout);
-            resolve();
-          });
+            const timeout = setTimeout(() => {
+              errorCount++;
+              try {
+                ws.close();
+              } catch (e) {}
+              resolve();
+            }, 2000);
 
-          ws.on('error', () => {
-            errorCount++;
-            clearTimeout(timeout);
-            resolve();
-          });
+            ws.on('open', () => {
+              successCount++;
+              clearTimeout(timeout);
+              resolve();
+            });
 
-          ws.on('close', () => {
-            clearTimeout(timeout);
-            resolve();
-          });
-        }));
+            ws.on('error', () => {
+              errorCount++;
+              clearTimeout(timeout);
+              resolve();
+            });
+
+            ws.on('close', () => {
+              clearTimeout(timeout);
+              resolve();
+            });
+          })
+        );
       }
 
       await Promise.all(connectionPromises);
-      
+
       console.log(`Rapid connections: ${successCount} successful, ${errorCount} failed/timeout`);
-      
+
       // Server should handle this gracefully - some connections may fail but server should not crash
       assert.ok(successCount > 0, 'At least some connections should succeed');
-      
+
       // Clean up
-      rapidConnections.forEach(ws => {
+      rapidConnections.forEach((ws) => {
         try {
           if (ws.readyState === WebSocket.OPEN) {
             ws.close();
@@ -372,48 +377,57 @@ describe('UAT: Edge Cases & Error Recovery', () => {
 
       // Create concurrent project start requests
       for (let i = 0; i < numOperations; i++) {
-        concurrentOperations.push(new Promise((resolve) => {
-          const postData = JSON.stringify({});
-          
-          const req = http.request({
-            hostname: 'localhost',
-            port: testPort,
-            path: '/api/projects/test-project/start',
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Content-Length': Buffer.byteLength(postData)
-            }
-          }, (res) => {
-            let data = '';
-            res.on('data', (chunk) => { data += chunk; });
-            res.on('end', () => {
-              resolve({ statusCode: res.statusCode, data });
+        concurrentOperations.push(
+          new Promise((resolve) => {
+            const postData = JSON.stringify({});
+
+            const req = http.request(
+              {
+                hostname: 'localhost',
+                port: testPort,
+                path: '/api/projects/test-project/start',
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Content-Length': Buffer.byteLength(postData),
+                },
+              },
+              (res) => {
+                let data = '';
+                res.on('data', (chunk) => {
+                  data += chunk;
+                });
+                res.on('end', () => {
+                  resolve({ statusCode: res.statusCode, data });
+                });
+              }
+            );
+
+            req.on('error', (error) => {
+              resolve({ error: error.message });
             });
-          });
-          
-          req.on('error', (error) => {
-            resolve({ error: error.message });
-          });
-          
-          req.setTimeout(10000, () => {
-            req.destroy();
-            resolve({ error: 'timeout' });
-          });
-          
-          req.write(postData);
-          req.end();
-        }));
+
+            req.setTimeout(10000, () => {
+              req.destroy();
+              resolve({ error: 'timeout' });
+            });
+
+            req.write(postData);
+            req.end();
+          })
+        );
       }
 
       const results = await Promise.all(concurrentOperations);
-      
+
       // Server should handle concurrent requests gracefully
-      const successCount = results.filter(r => r.statusCode && r.statusCode < 500).length;
-      const errorCount = results.filter(r => r.error || (r.statusCode && r.statusCode >= 500)).length;
-      
+      const successCount = results.filter((r) => r.statusCode && r.statusCode < 500).length;
+      const errorCount = results.filter(
+        (r) => r.error || (r.statusCode && r.statusCode >= 500)
+      ).length;
+
       console.log(`Concurrent operations: ${successCount} handled, ${errorCount} errors`);
-      
+
       // Server should remain responsive (some operations may fail due to resource limits)
       assert.ok(successCount + errorCount === numOperations, 'All operations should complete');
     });
@@ -423,38 +437,43 @@ describe('UAT: Edge Cases & Error Recovery', () => {
     it('should handle non-existent project directories', async () => {
       return new Promise((resolve, reject) => {
         const postData = JSON.stringify({});
-        
-        const req = http.request({
-          hostname: 'localhost',
-          port: testPort,
-          path: '/api/projects/non-existent-project/start',
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(postData)
+
+        const req = http.request(
+          {
+            hostname: 'localhost',
+            port: testPort,
+            path: '/api/projects/non-existent-project/start',
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Content-Length': Buffer.byteLength(postData),
+            },
+          },
+          (res) => {
+            let data = '';
+            res.on('data', (chunk) => {
+              data += chunk;
+            });
+            res.on('end', () => {
+              try {
+                // Should get 404 for non-existent project
+                assert.strictEqual(res.statusCode, 404);
+                const response = JSON.parse(data);
+                assert.ok(response.error);
+                resolve();
+              } catch (error) {
+                reject(error);
+              }
+            });
           }
-        }, (res) => {
-          let data = '';
-          res.on('data', (chunk) => { data += chunk; });
-          res.on('end', () => {
-            try {
-              // Should get 404 for non-existent project
-              assert.strictEqual(res.statusCode, 404);
-              const response = JSON.parse(data);
-              assert.ok(response.error);
-              resolve();
-            } catch (error) {
-              reject(error);
-            }
-          });
-        });
-        
+        );
+
         req.on('error', reject);
         req.setTimeout(5000, () => {
           req.destroy();
           reject(new Error('Non-existent project test timeout'));
         });
-        
+
         req.write(postData);
         req.end();
       });
@@ -464,7 +483,7 @@ describe('UAT: Edge Cases & Error Recovery', () => {
       // Create a test directory structure
       const inaccessibleDir = path.join(tempDir, 'inaccessible');
       await fs.mkdir(inaccessibleDir, { recursive: true });
-      
+
       // Try to make it inaccessible (this may not work on all systems)
       try {
         await fs.chmod(inaccessibleDir, 0o000);
@@ -477,7 +496,9 @@ describe('UAT: Edge Cases & Error Recovery', () => {
         return new Promise((resolve, reject) => {
           const req = http.get(`${baseUrl}/api/projects`, (res) => {
             let data = '';
-            res.on('data', (chunk) => { data += chunk; });
+            res.on('data', (chunk) => {
+              data += chunk;
+            });
             res.on('end', () => {
               try {
                 // Should handle inaccessible directories gracefully
@@ -492,7 +513,7 @@ describe('UAT: Edge Cases & Error Recovery', () => {
               }
             });
           });
-          
+
           req.on('error', reject);
           req.setTimeout(5000, () => {
             req.destroy();
@@ -511,7 +532,7 @@ describe('UAT: Edge Cases & Error Recovery', () => {
   describe('Connection Recovery', () => {
     it('should handle WebSocket connection interruption', async () => {
       const ws = new WebSocket(wsUrl);
-      
+
       // Establish connection
       await new Promise((resolve, reject) => {
         ws.on('open', resolve);
@@ -538,21 +559,23 @@ describe('UAT: Edge Cases & Error Recovery', () => {
           }
         });
 
-        ws.send(JSON.stringify({
-          type: 'ping',
-          data: { timestamp: Date.now() }
-        }));
+        ws.send(
+          JSON.stringify({
+            type: 'ping',
+            data: { timestamp: Date.now() },
+          })
+        );
       });
 
       // Simulate network interruption by terminating connection
       ws.terminate();
 
       // Wait a moment
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       // Create new connection (simulating reconnection)
       const newWs = new WebSocket(wsUrl);
-      
+
       return new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
           newWs.close();
@@ -576,10 +599,12 @@ describe('UAT: Edge Cases & Error Recovery', () => {
             }
           });
 
-          newWs.send(JSON.stringify({
-            type: 'ping',
-            data: { timestamp: Date.now() }
-          }));
+          newWs.send(
+            JSON.stringify({
+              type: 'ping',
+              data: { timestamp: Date.now() },
+            })
+          );
         });
 
         newWs.on('error', (error) => {
@@ -592,17 +617,17 @@ describe('UAT: Edge Cases & Error Recovery', () => {
     it('should recover from temporary server overload', async () => {
       // Create many connections to simulate overload
       const overloadConnections = [];
-      
+
       try {
         // Create connections rapidly to stress the server
         for (let i = 0; i < 30; i++) {
           try {
             const ws = new WebSocket(wsUrl);
             overloadConnections.push(ws);
-            
+
             // Don't wait for connection to complete - simulate rapid attempts
             if (i % 10 === 0) {
-              await new Promise(resolve => setTimeout(resolve, 10));
+              await new Promise((resolve) => setTimeout(resolve, 10));
             }
           } catch (e) {
             // Some connections may fail - that's expected
@@ -610,11 +635,11 @@ describe('UAT: Edge Cases & Error Recovery', () => {
         }
 
         // Wait for connections to settle
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 1000));
 
         // Try to establish a normal connection after overload
         const normalWs = new WebSocket(wsUrl);
-        
+
         return new Promise((resolve, reject) => {
           const timeout = setTimeout(() => {
             normalWs.close();
@@ -632,10 +657,9 @@ describe('UAT: Edge Cases & Error Recovery', () => {
             reject(error);
           });
         });
-
       } finally {
         // Clean up overload connections
-        overloadConnections.forEach(ws => {
+        overloadConnections.forEach((ws) => {
           try {
             ws.terminate();
           } catch (e) {}
@@ -652,52 +676,59 @@ describe('UAT: Edge Cases & Error Recovery', () => {
       await fs.writeFile(path.join(testProjectDir, 'test.txt'), 'test content');
 
       const operations = [];
-      
+
       // Concurrent session start requests
       for (let i = 0; i < 5; i++) {
-        operations.push(new Promise((resolve) => {
-          const postData = JSON.stringify({});
-          
-          const req = http.request({
-            hostname: 'localhost',
-            port: testPort,
-            path: '/api/projects/concurrent-test/start',
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Content-Length': Buffer.byteLength(postData)
-            }
-          }, (res) => {
-            let data = '';
-            res.on('data', (chunk) => { data += chunk; });
-            res.on('end', () => {
-              resolve({ statusCode: res.statusCode, data });
+        operations.push(
+          new Promise((resolve) => {
+            const postData = JSON.stringify({});
+
+            const req = http.request(
+              {
+                hostname: 'localhost',
+                port: testPort,
+                path: '/api/projects/concurrent-test/start',
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Content-Length': Buffer.byteLength(postData),
+                },
+              },
+              (res) => {
+                let data = '';
+                res.on('data', (chunk) => {
+                  data += chunk;
+                });
+                res.on('end', () => {
+                  resolve({ statusCode: res.statusCode, data });
+                });
+              }
+            );
+
+            req.on('error', (error) => {
+              resolve({ error: error.message });
             });
-          });
-          
-          req.on('error', (error) => {
-            resolve({ error: error.message });
-          });
-          
-          req.setTimeout(10000, () => {
-            req.destroy();
-            resolve({ error: 'timeout' });
-          });
-          
-          req.write(postData);
-          req.end();
-        }));
+
+            req.setTimeout(10000, () => {
+              req.destroy();
+              resolve({ error: 'timeout' });
+            });
+
+            req.write(postData);
+            req.end();
+          })
+        );
       }
 
       const results = await Promise.all(operations);
-      
+
       // Check that operations completed without corruption
-      const validResults = results.filter(r => r.statusCode && r.statusCode < 500);
+      const validResults = results.filter((r) => r.statusCode && r.statusCode < 500);
       console.log(`Concurrent session operations: ${validResults.length} valid results`);
-      
+
       // At least some operations should succeed
       assert.ok(validResults.length > 0, 'Some concurrent operations should succeed');
-      
+
       // Server should remain responsive
       await new Promise((resolve, reject) => {
         const req = http.get(`${baseUrl}/health`, (res) => {

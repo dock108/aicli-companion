@@ -189,22 +189,22 @@ export function setupRoutes(app, aicliService) {
   router.get('/status', (req, res) => {
     try {
       const sessions = aicliService.getActiveSessions();
-      const sessionInfo = sessions.map(session => ({
+      const sessionInfo = sessions.map((session) => ({
         id: session.sessionId || session.id,
-        name: session.sessionName || session.name || 'Unnamed Session'
+        name: session.sessionName || session.name || 'Unnamed Session',
       }));
 
       res.json({
         running: true,
         port: process.env.PORT || 3001,
-        sessions: sessionInfo
+        sessions: sessionInfo,
       });
     } catch (error) {
       res.status(500).json({
         running: false,
         port: process.env.PORT || 3001,
         sessions: [],
-        error: error.message
+        error: error.message,
       });
     }
   });
@@ -214,7 +214,7 @@ export function setupRoutes(app, aicliService) {
     console.log('🛑 Shutdown requested by macOS companion app');
     res.json({
       success: true,
-      message: 'Server shutdown initiated'
+      message: 'Server shutdown initiated',
     });
 
     // Graceful shutdown after response

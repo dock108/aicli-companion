@@ -23,18 +23,16 @@ struct ProjectsResponse: Codable {
     let projects: [Project]
 }
 
+// MARK: - Local Session Models
+
+/// Minimal local session representation for iOS state management only
+/// No longer tied to server session creation - just tracks local state
 struct ProjectSession: Codable {
     let sessionId: String
     let projectName: String
     let projectPath: String
     let status: String
     let startedAt: String
-}
-
-struct ProjectStartResponse: Codable {
-    let success: Bool
-    let session: ProjectSession
-    let message: String
 }
 
 
@@ -45,23 +43,19 @@ struct ProjectSelectionView: View {
     @Binding var selectedProject: Project?
     @Binding var isProjectSelected: Bool
     let onDisconnect: (() -> Void)?
-    let onSessionStarted: ((ProjectSession) -> Void)?
     @State private var projects: [Project] = []
     @State private var isLoading = true
     @State private var errorMessage: String?
-    @State private var isStartingProject = false
-    @State private var cancellables = Set<AnyCancellable>()
     @State private var lastSelectionTime: Date = .distantPast
     
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject var settings: SettingsManager
     @StateObject private var persistenceService = MessagePersistenceService.shared
     
-    init(selectedProject: Binding<Project?>, isProjectSelected: Binding<Bool>, onDisconnect: (() -> Void)? = nil, onSessionStarted: ((ProjectSession) -> Void)? = nil) {
+    init(selectedProject: Binding<Project?>, isProjectSelected: Binding<Bool>, onDisconnect: (() -> Void)? = nil) {
         self._selectedProject = selectedProject
         self._isProjectSelected = isProjectSelected
         self.onDisconnect = onDisconnect
-        self.onSessionStarted = onSessionStarted
     }
     
     var body: some View {
@@ -155,36 +149,7 @@ struct ProjectSelectionView: View {
         .background(Colors.bgBase(for: colorScheme))
         .onAppear {
             loadProjects()
-            // No need to observe persistence service changes here as we manually
-            // check session state when needed via hasSession() and getSessionMetadata()
         }
-        .disabled(isStartingProject)
-        .overlay(
-            // Loading overlay when starting project
-            Group {
-                if isStartingProject {
-                    ZStack {
-                        Color.black.opacity(0.3)
-                            .ignoresSafeArea()
-                        
-                        VStack(spacing: Spacing.md) {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                .scaleEffect(1.2)
-                            
-                            Text("Starting AICLI...")
-                                .font(Typography.font(.body))
-                                .foregroundColor(.white)
-                        }
-                        .padding(Spacing.xl)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.black.opacity(0.8))
-                        )
-                    }
-                }
-            }
-        )
     }
     
     // MARK: - Private Methods
@@ -269,136 +234,10 @@ struct ProjectSelectionView: View {
         }
         lastSelectionTime = now
         
-        // Check if there's an existing session for this project
-        let hasSession = persistenceService.hasSession(for: project.path)
-        print("🔵 ProjectSelection: Project '\(project.name)' hasSession: \(hasSession)")
-        
-        if hasSession {
-            if let metadata = persistenceService.getSessionMetadata(for: project.path) {
-                print("🔵 ProjectSelection: Session metadata for '\(project.name)':")
-                print("   - Session ID: \(metadata.sessionId)")
-                print("   - AICLI Session ID: \(metadata.aicliSessionId ?? "nil")")
-                print("   - Message Count: \(metadata.messageCount)")
-                print("   - Last Used: \(metadata.formattedLastUsed)")
-                
-                // Automatically continue existing session
-                print("🟢 ProjectSelection: Automatically continuing session for '\(project.name)'")
-                continueExistingSession(project, metadata: metadata)
-            } else {
-                print("⚠️ ProjectSelection: No metadata found for '\(project.name)' despite hasSession = true")
-                // Fall back to starting fresh session
-                print("🔵 ProjectSelection: Falling back to fresh session for '\(project.name)'")
-                startProjectSession(project, continueExisting: false)
-            }
-        } else {
-            print("🔵 ProjectSelection: Starting fresh session for '\(project.name)'")
-            startProjectSession(project, continueExisting: false)
-        }
-    }
-    
-    private func startProjectSession(_ project: Project, continueExisting: Bool) {
-        isStartingProject = true
-        
-        guard let serverURL = settings.serverURL else {
-            isStartingProject = false
-            errorMessage = "Server connection not configured"
-            return
-        }
-        
-        let url = serverURL.appendingPathComponent("api/projects/\(project.name)/start")
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        // Add auth token if available
-        if let token = settings.authToken {
-            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        
-        // Add continue session info if applicable
-        if continueExisting,
-           let metadata = persistenceService.getSessionMetadata(for: project.path),
-           let sessionId = metadata.aicliSessionId {
-            let body = [
-                "continueSession": true,
-                "sessionId": sessionId
-            ] as [String : Any]
-            
-            request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-        }
-        
-        URLSession.shared.dataTask(with: request) { data, response, error in
-            DispatchQueue.main.async {
-                isStartingProject = false
-                
-                if let error = error {
-                    errorMessage = "Failed to start project: \(error.localizedDescription)"
-                    return
-                }
-                
-                guard let data = data else {
-                    errorMessage = "No response from server"
-                    return
-                }
-                
-                do {
-                    let response = try JSONDecoder().decode(ProjectStartResponse.self, from: data)
-                    print("🟢 ProjectSelection: Server response for '\(project.name)': success=\(response.success)")
-                    
-                    if response.success {
-                        print("🟢 ProjectSelection: Successfully started session for '\(project.name)'")
-                        print("   - Session ID: \(response.session.sessionId)")
-                        print("   - Status: \(response.session.status)")
-                        
-                        // Success! Store the selected project and session info
-                        selectedProject = project
-                        
-                        // Pass session info to parent
-                        if let onSessionStarted = onSessionStarted {
-                            onSessionStarted(response.session)
-                        }
-                        
-                        print("🟢 ProjectSelection: Transitioning to chat view for '\(project.name)'")
-                        // Add a small delay to ensure state propagates properly
-                        DispatchQueue.main.async {
-                            print("🟢 ProjectSelection: Setting isProjectSelected = true for '\(project.name)'")
-                            isProjectSelected = true
-                        }
-                    } else {
-                        print("❌ ProjectSelection: Server failed to start project '\(project.name)': \(response.message)")
-                        errorMessage = "Failed to start project: \(response.message)"
-                    }
-                } catch {
-                    // Check if we got an error response
-                    if let errorResponse = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                       let serverError = errorResponse["error"] as? String,
-                       let serverMessage = errorResponse["message"] as? String {
-                        errorMessage = "\(serverError): \(serverMessage)"
-                    } else {
-                        errorMessage = "Failed to parse server response"
-                    }
-                }
-            }
-        }.resume()
-    }
-    
-    private func continueExistingSession(_ project: Project, metadata: PersistedSessionMetadata) {
-        print("🟢 ProjectSelection: Continuing existing session for '\(project.name)'")
-        print("   - Session ID: \(metadata.sessionId)")
-        print("   - AICLI Session ID: \(metadata.aicliSessionId ?? "nil")")
-        print("   - Project Path: \(project.path)")
-        
-        // TODO: Add server endpoint to continue with existing session ID
-        startProjectSession(project, continueExisting: true)
-    }
-    
-    private func startFreshSession(_ project: Project) {
-        // Archive the old session
-        persistenceService.archiveCurrentSession(for: project.path)
-        // Clear current messages
-        persistenceService.clearMessages(for: project.path)
-        // Start new session
-        startProjectSession(project, continueExisting: false)
+        // Simply select the project - no server notification needed
+        selectedProject = project
+        print("🟢 ProjectSelection: Selected project '\(project.name)', navigating to chat")
+        isProjectSelected = true
     }
     
     private func disconnectFromServer() {
@@ -433,55 +272,28 @@ struct ProjectRowView: View {
             }
         }) {
             HStack(spacing: Spacing.md) {
-                // Project icon with session indicator
-                ZStack(alignment: .topTrailing) {
-                    Image(systemName: "folder.fill")
-                        .font(.title2)
-                        .foregroundColor(Colors.accentPrimaryEnd)
-                        .frame(width: 40, height: 40)
-                        .background(
-                            Circle()
-                                .fill(Colors.accentPrimaryEnd.opacity(0.1))
-                        )
-                    
-                    // Session indicator dot
-                    if hasSession {
+                // Project icon
+                Image(systemName: "folder.fill")
+                    .font(.title2)
+                    .foregroundColor(Colors.accentPrimaryEnd)
+                    .frame(width: 40, height: 40)
+                    .background(
                         Circle()
-                            .fill(Color.green)
-                            .frame(width: 10, height: 10)
-                            .overlay(
-                                Circle()
-                                    .stroke(Colors.bgCard(for: colorScheme), lineWidth: 2)
-                            )
-                            .offset(x: 4, y: -4)
-                    }
-                }
+                            .fill(Colors.accentPrimaryEnd.opacity(0.1))
+                    )
                 
                 // Project info
                 VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text(project.name)
-                            .font(Typography.font(.heading3))
-                            .foregroundColor(Colors.textPrimary(for: colorScheme))
-                            .lineLimit(1)
-                        
-                        if hasSession {
-                            Text("• Active")
-                                .font(Typography.font(.caption))
-                                .foregroundColor(.green)
-                        }
-                    }
+                    Text(project.name)
+                        .font(Typography.font(.heading3))
+                        .foregroundColor(Colors.textPrimary(for: colorScheme))
+                        .lineLimit(1)
                     
                     if let metadata = sessionMetadata {
-                        Text("\(metadata.messageCount) messages • \(metadata.formattedLastUsed)")
+                        Text(metadata.formattedLastUsed)
                             .font(Typography.font(.caption))
                             .foregroundColor(Colors.textSecondary(for: colorScheme))
                             .lineLimit(1)
-                    } else {
-                        Text("Tap to start AICLI in this project")
-                            .font(Typography.font(.caption))
-                            .foregroundColor(Colors.textSecondary(for: colorScheme))
-                            .lineLimit(2)
                     }
                 }
                 

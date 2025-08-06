@@ -6,10 +6,10 @@ import { AICLICompanionServer } from '../index.js';
 
 /**
  * UAT Test Suite: Multi-Component Integration
- * 
+ *
  * Tests the integration between different components of the system:
  * - HTTP API endpoints (used by macOS app)
- * - WebSocket connections (used by iOS app) 
+ * - WebSocket connections (used by iOS app)
  * - Project management and session handling
  * - Cross-component state synchronization
  */
@@ -24,7 +24,7 @@ describe('UAT: Multi-Component Integration', () => {
   beforeEach(async () => {
     // Use a random port to avoid conflicts
     testPort = 3000 + Math.floor(Math.random() * 1000);
-    
+
     // Set test environment
     process.env.NODE_ENV = 'test';
     process.env.PORT = testPort.toString();
@@ -32,12 +32,12 @@ describe('UAT: Multi-Component Integration', () => {
     process.env.ENABLE_BONJOUR = 'false';
     process.env.ENABLE_TLS = 'false';
     process.env.CONFIG_PATH = process.cwd(); // Use current directory for testing
-    
+
     baseUrl = `http://localhost:${testPort}`;
     wsUrl = `ws://localhost:${testPort}/ws`;
-    
+
     server = new AICLICompanionServer();
-    
+
     // Start server and wait for it to be ready
     await new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
@@ -45,7 +45,7 @@ describe('UAT: Multi-Component Integration', () => {
       }, 10000);
 
       const originalStart = server.start.bind(server);
-      server.start = async function() {
+      server.start = async function () {
         try {
           await originalStart();
           clearTimeout(timeout);
@@ -57,7 +57,7 @@ describe('UAT: Multi-Component Integration', () => {
       };
       server.start();
     });
-    
+
     serverInstance = server;
   });
 
@@ -69,7 +69,7 @@ describe('UAT: Multi-Component Integration', () => {
         });
       });
     }
-    
+
     // Clean up environment
     delete process.env.PORT;
     delete process.env.AUTH_REQUIRED;
@@ -83,11 +83,11 @@ describe('UAT: Multi-Component Integration', () => {
       return new Promise((resolve, reject) => {
         const req = http.get(`${baseUrl}/health`, (res) => {
           let data = '';
-          
+
           res.on('data', (chunk) => {
             data += chunk;
           });
-          
+
           res.on('end', () => {
             try {
               assert.strictEqual(res.statusCode, 200);
@@ -101,7 +101,7 @@ describe('UAT: Multi-Component Integration', () => {
             }
           });
         });
-        
+
         req.on('error', reject);
         req.setTimeout(5000, () => {
           req.destroy();
@@ -114,11 +114,11 @@ describe('UAT: Multi-Component Integration', () => {
       return new Promise((resolve, reject) => {
         const req = http.get(`${baseUrl}/`, (res) => {
           let data = '';
-          
+
           res.on('data', (chunk) => {
             data += chunk;
           });
-          
+
           res.on('end', () => {
             try {
               assert.strictEqual(res.statusCode, 200);
@@ -132,7 +132,7 @@ describe('UAT: Multi-Component Integration', () => {
             }
           });
         });
-        
+
         req.on('error', reject);
         req.setTimeout(5000, () => {
           req.destroy();
@@ -145,11 +145,11 @@ describe('UAT: Multi-Component Integration', () => {
       return new Promise((resolve, reject) => {
         const req = http.get(`${baseUrl}/api/status`, (res) => {
           let data = '';
-          
+
           res.on('data', (chunk) => {
             data += chunk;
           });
-          
+
           res.on('end', () => {
             try {
               assert.strictEqual(res.statusCode, 200);
@@ -163,7 +163,7 @@ describe('UAT: Multi-Component Integration', () => {
             }
           });
         });
-        
+
         req.on('error', reject);
         req.setTimeout(5000, () => {
           req.destroy();
@@ -176,11 +176,11 @@ describe('UAT: Multi-Component Integration', () => {
       return new Promise((resolve, reject) => {
         const req = http.get(`${baseUrl}/api/projects`, (res) => {
           let data = '';
-          
+
           res.on('data', (chunk) => {
             data += chunk;
           });
-          
+
           res.on('end', () => {
             try {
               assert.strictEqual(res.statusCode, 200);
@@ -193,7 +193,7 @@ describe('UAT: Multi-Component Integration', () => {
             }
           });
         });
-        
+
         req.on('error', reject);
         req.setTimeout(5000, () => {
           req.destroy();
@@ -209,16 +209,16 @@ describe('UAT: Multi-Component Integration', () => {
     beforeEach(async () => {
       return new Promise((resolve, reject) => {
         ws = new WebSocket(wsUrl);
-        
+
         const timeout = setTimeout(() => {
           reject(new Error('WebSocket connection timeout'));
         }, 5000);
-        
+
         ws.on('open', () => {
           clearTimeout(timeout);
           resolve();
         });
-        
+
         ws.on('error', (error) => {
           clearTimeout(timeout);
           reject(error);
@@ -237,7 +237,9 @@ describe('UAT: Multi-Component Integration', () => {
       const initialSessions = await new Promise((resolve, reject) => {
         const req = http.get(`${baseUrl}/api/sessions`, (res) => {
           let data = '';
-          res.on('data', (chunk) => { data += chunk; });
+          res.on('data', (chunk) => {
+            data += chunk;
+          });
           res.on('end', () => {
             try {
               const response = JSON.parse(data);
@@ -273,20 +275,24 @@ describe('UAT: Multi-Component Integration', () => {
           }
         });
 
-        ws.send(JSON.stringify({
-          type: 'subscribe',
-          data: {
-            events: ['streamData', 'streamComplete'],
-            sessions: []
-          }
-        }));
+        ws.send(
+          JSON.stringify({
+            type: 'subscribe',
+            data: {
+              events: ['streamData', 'streamComplete'],
+              sessions: [],
+            },
+          })
+        );
       });
 
       // Verify that both HTTP and WebSocket see consistent state
       const finalSessions = await new Promise((resolve, reject) => {
         const req = http.get(`${baseUrl}/api/sessions`, (res) => {
           let data = '';
-          res.on('data', (chunk) => { data += chunk; });
+          res.on('data', (chunk) => {
+            data += chunk;
+          });
           res.on('end', () => {
             try {
               const response = JSON.parse(data);
@@ -314,7 +320,9 @@ describe('UAT: Multi-Component Integration', () => {
       const httpSessions = await new Promise((resolve, reject) => {
         const req = http.get(`${baseUrl}/api/sessions`, (res) => {
           let data = '';
-          res.on('data', (chunk) => { data += chunk; });
+          res.on('data', (chunk) => {
+            data += chunk;
+          });
           res.on('end', () => {
             try {
               const response = JSON.parse(data);
@@ -335,7 +343,9 @@ describe('UAT: Multi-Component Integration', () => {
       const serverStatus = await new Promise((resolve, reject) => {
         const req = http.get(`${baseUrl}/api/status`, (res) => {
           let data = '';
-          res.on('data', (chunk) => { data += chunk; });
+          res.on('data', (chunk) => {
+            data += chunk;
+          });
           res.on('end', () => {
             try {
               const response = JSON.parse(data);
@@ -361,65 +371,73 @@ describe('UAT: Multi-Component Integration', () => {
 
       // Simulate macOS app requests
       for (let i = 0; i < 3; i++) {
-        promises.push(new Promise((resolve, reject) => {
-          const req = http.get(`${baseUrl}/api/status`, (res) => {
-            let data = '';
-            res.on('data', (chunk) => { data += chunk; });
-            res.on('end', () => {
-              try {
-                const response = JSON.parse(data);
-                resolve(response);
-              } catch (error) {
-                reject(error);
-              }
+        promises.push(
+          new Promise((resolve, reject) => {
+            const req = http.get(`${baseUrl}/api/status`, (res) => {
+              let data = '';
+              res.on('data', (chunk) => {
+                data += chunk;
+              });
+              res.on('end', () => {
+                try {
+                  const response = JSON.parse(data);
+                  resolve(response);
+                } catch (error) {
+                  reject(error);
+                }
+              });
             });
-          });
-          req.on('error', reject);
-          req.setTimeout(5000, () => {
-            req.destroy();
-            reject(new Error(`Concurrent request ${i} timeout`));
-          });
-        }));
+            req.on('error', reject);
+            req.setTimeout(5000, () => {
+              req.destroy();
+              reject(new Error(`Concurrent request ${i} timeout`));
+            });
+          })
+        );
       }
 
       // Simulate iOS app WebSocket connections
       for (let i = 0; i < 2; i++) {
-        promises.push(new Promise((resolve, reject) => {
-          const testWs = new WebSocket(wsUrl);
-          
-          const timeout = setTimeout(() => {
-            testWs.close();
-            reject(new Error(`WebSocket ${i} timeout`));
-          }, 5000);
+        promises.push(
+          new Promise((resolve, reject) => {
+            const testWs = new WebSocket(wsUrl);
 
-          testWs.on('open', () => {
-            // Send ping and wait for pong
-            testWs.on('message', (data) => {
-              try {
-                const message = JSON.parse(data.toString());
-                if (message.type === 'pong') {
+            const timeout = setTimeout(() => {
+              testWs.close();
+              reject(new Error(`WebSocket ${i} timeout`));
+            }, 5000);
+
+            testWs.on('open', () => {
+              // Send ping and wait for pong
+              testWs.on('message', (data) => {
+                try {
+                  const message = JSON.parse(data.toString());
+                  if (message.type === 'pong') {
+                    clearTimeout(timeout);
+                    testWs.close();
+                    resolve(message);
+                  }
+                } catch (error) {
                   clearTimeout(timeout);
                   testWs.close();
-                  resolve(message);
+                  reject(error);
                 }
-              } catch (error) {
-                clearTimeout(timeout);
-                testWs.close();
-                reject(error);
-              }
+              });
+
+              testWs.send(
+                JSON.stringify({
+                  type: 'ping',
+                  data: { timestamp: Date.now() },
+                })
+              );
             });
 
-            testWs.send(JSON.stringify({
-              type: 'ping',
-              data: { timestamp: Date.now() }
-            }));
-          });
-
-          testWs.on('error', (error) => {
-            clearTimeout(timeout);
-            reject(error);
-          });
-        }));
+            testWs.on('error', (error) => {
+              clearTimeout(timeout);
+              reject(error);
+            });
+          })
+        );
       }
 
       // All requests should succeed
@@ -431,23 +449,26 @@ describe('UAT: Multi-Component Integration', () => {
   describe('Error Recovery and Resilience', () => {
     it('should handle malformed HTTP requests gracefully', async () => {
       return new Promise((resolve, reject) => {
-        const req = http.request({
-          hostname: 'localhost',
-          port: testPort,
-          path: '/api/invalid-endpoint',
-          method: 'GET'
-        }, (res) => {
-          // Should get 404 or similar error response, not crash
-          assert.ok(res.statusCode >= 400);
-          resolve();
-        });
-        
+        const req = http.request(
+          {
+            hostname: 'localhost',
+            port: testPort,
+            path: '/api/invalid-endpoint',
+            method: 'GET',
+          },
+          (res) => {
+            // Should get 404 or similar error response, not crash
+            assert.ok(res.statusCode >= 400);
+            resolve();
+          }
+        );
+
         req.on('error', reject);
         req.setTimeout(5000, () => {
           req.destroy();
           reject(new Error('Malformed request timeout'));
         });
-        
+
         req.end();
       });
     });
@@ -466,7 +487,9 @@ describe('UAT: Multi-Component Integration', () => {
       return new Promise((resolve, reject) => {
         const req = http.get(`${baseUrl}/health`, (res) => {
           let data = '';
-          res.on('data', (chunk) => { data += chunk; });
+          res.on('data', (chunk) => {
+            data += chunk;
+          });
           res.on('end', () => {
             try {
               assert.strictEqual(res.statusCode, 200);
@@ -493,7 +516,9 @@ describe('UAT: Multi-Component Integration', () => {
       const projects = await new Promise((resolve, reject) => {
         const req = http.get(`${baseUrl}/api/projects`, (res) => {
           let data = '';
-          res.on('data', (chunk) => { data += chunk; });
+          res.on('data', (chunk) => {
+            data += chunk;
+          });
           res.on('end', () => {
             try {
               assert.strictEqual(res.statusCode, 200);
@@ -513,9 +538,9 @@ describe('UAT: Multi-Component Integration', () => {
 
       // Projects should be an array (might be empty in test environment)
       assert.ok(Array.isArray(projects));
-      
+
       // Each project should have required fields
-      projects.forEach(project => {
+      projects.forEach((project) => {
         assert.ok(project.name);
         assert.ok(project.path);
         assert.ok(project.type);
@@ -527,7 +552,9 @@ describe('UAT: Multi-Component Integration', () => {
       const projects = await new Promise((resolve, reject) => {
         const req = http.get(`${baseUrl}/api/projects`, (res) => {
           let data = '';
-          res.on('data', (chunk) => { data += chunk; });
+          res.on('data', (chunk) => {
+            data += chunk;
+          });
           res.on('end', () => {
             try {
               const response = JSON.parse(data);
@@ -547,39 +574,44 @@ describe('UAT: Multi-Component Integration', () => {
       // If we have projects, test session creation
       if (projects.length > 0) {
         const testProject = projects[0];
-        
+
         // Try to start a session for the first project
         const sessionResult = await new Promise((resolve, reject) => {
           const postData = JSON.stringify({});
-          
-          const req = http.request({
-            hostname: 'localhost',
-            port: testPort,
-            path: `/api/projects/${encodeURIComponent(testProject.name)}/start`,
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Content-Length': Buffer.byteLength(postData)
+
+          const req = http.request(
+            {
+              hostname: 'localhost',
+              port: testPort,
+              path: `/api/projects/${encodeURIComponent(testProject.name)}/start`,
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(postData),
+              },
+            },
+            (res) => {
+              let data = '';
+              res.on('data', (chunk) => {
+                data += chunk;
+              });
+              res.on('end', () => {
+                try {
+                  const response = JSON.parse(data);
+                  resolve({ statusCode: res.statusCode, response });
+                } catch (error) {
+                  reject(error);
+                }
+              });
             }
-          }, (res) => {
-            let data = '';
-            res.on('data', (chunk) => { data += chunk; });
-            res.on('end', () => {
-              try {
-                const response = JSON.parse(data);
-                resolve({ statusCode: res.statusCode, response });
-              } catch (error) {
-                reject(error);
-              }
-            });
-          });
-          
+          );
+
           req.on('error', reject);
           req.setTimeout(10000, () => {
             req.destroy();
             reject(new Error('Project session start timeout'));
           });
-          
+
           req.write(postData);
           req.end();
         });

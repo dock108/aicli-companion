@@ -3,6 +3,7 @@ import { InputValidator } from './aicli-utils.js';
 import { AICLIMessageHandler } from './aicli-message-handler.js';
 import { sessionPersistence } from './session-persistence.js';
 import { getTelemetryService } from './telemetry.js';
+import { getMessageQueueService } from './message-queue.js';
 
 /**
  * Manages AICLI CLI session lifecycle, timeout handling, and cleanup
@@ -18,11 +19,38 @@ export class AICLISessionManager extends EventEmitter {
     // Configuration
     this.maxSessions = options.maxSessions || 10;
     this.sessionTimeout = options.sessionTimeout || 30 * 60 * 1000; // 30 minutes
-    this.backgroundedSessionTimeout = options.backgroundedSessionTimeout || 4 * 60 * 60 * 1000; // 4 hours
     this.minTimeoutCheckInterval = options.minTimeoutCheckInterval || 60000; // 1 minute default
 
     // Persistence will be initialized by the server after startup
     // This prevents race conditions from multiple initialization attempts
+  }
+
+  /**
+   * Track a session temporarily for response routing only
+   * This is used when iOS sends a session ID that we don't know about
+   */
+  async trackSessionForRouting(sessionId, workingDirectory) {
+    if (!sessionId) return;
+    
+    // Create minimal session entry for routing only
+    const session = {
+      sessionId,
+      workingDirectory,
+      isActive: true,
+      isProcessing: false,
+      createdAt: new Date(),
+      lastActivity: new Date(),
+      conversationStarted: true,  // Assume it's an existing conversation
+      timeoutId: null,
+      isTemporary: true  // Mark as temporary routing session
+    };
+    
+    this.activeSessions.set(sessionId, session);
+    
+    // Create empty message buffer
+    this.sessionMessageBuffers.set(sessionId, AICLIMessageHandler.createSessionBuffer());
+    
+    console.log(`🔄 Temporarily tracking session ${sessionId} for response routing`);
   }
 
   /**
@@ -31,6 +59,11 @@ export class AICLISessionManager extends EventEmitter {
   async initializePersistence() {
     try {
       await sessionPersistence.initialize();
+
+      // Also initialize message queue service
+      const messageQueueService = getMessageQueueService();
+      await messageQueueService.initialize();
+
       await this.restorePersistedSessions();
     } catch (error) {
       console.error('❌ Failed to initialize session persistence:', error);
@@ -65,8 +98,6 @@ export class AICLISessionManager extends EventEmitter {
         conversationStarted: persistedSession.conversationStarted,
         timeoutId: null,
         skipPermissions: persistedSession.skipPermissions,
-        isBackgrounded: persistedSession.isBackgrounded,
-        backgroundedAt: persistedSession.backgroundedAt,
         isRestoredSession: true, // Mark this session as restored from persistence
       };
 
@@ -162,8 +193,6 @@ export class AICLISessionManager extends EventEmitter {
       conversationStarted: false,
       timeoutId: null,
       skipPermissions, // Store permission setting for this session
-      isBackgrounded: false, // Track if client is backgrounded
-      backgroundedAt: null, // Track when client was backgrounded
     };
 
     this.activeSessions.set(sanitizedSessionId, session);
@@ -322,8 +351,6 @@ export class AICLISessionManager extends EventEmitter {
         conversationStarted: persistedSession.conversationStarted,
         timeoutId: null,
         skipPermissions: persistedSession.skipPermissions,
-        isBackgrounded: persistedSession.isBackgrounded,
-        backgroundedAt: persistedSession.backgroundedAt,
         isRestoredSession: true,
       };
 
@@ -491,74 +518,6 @@ export class AICLISessionManager extends EventEmitter {
     return false;
   }
 
-  /**
-   * Mark session as backgrounded
-   */
-  async markSessionBackgrounded(sessionId) {
-    const session = this.activeSessions.get(sessionId);
-    if (session) {
-      session.isBackgrounded = true;
-      session.backgroundedAt = Date.now();
-      console.log(`📱 Session ${sessionId} marked as backgrounded`);
-
-      // Update persistence (skip in test environment)
-      if (process.env.NODE_ENV !== 'test') {
-        try {
-          await sessionPersistence.updateSession(sessionId, {
-            isBackgrounded: true,
-            backgroundedAt: session.backgroundedAt,
-          });
-        } catch (error) {
-          console.warn(
-            `⚠️ Failed to persist background state for session ${sessionId}:`,
-            error.message
-          );
-        }
-      }
-    }
-  }
-
-  /**
-   * Mark a session as foregrounded (not backgrounded)
-   */
-  async markSessionForegrounded(sessionId) {
-    const session = await this.getSession(sessionId);
-    if (!session) {
-      console.warn(`Cannot mark non-existent session as foregrounded: ${sessionId}`);
-      return;
-    }
-
-    session.isBackgrounded = false;
-    session.backgroundedAt = null;
-    session.lastActivity = Date.now();
-
-    // Reset timeout since session is active again
-    if (session.timeoutId) {
-      clearTimeout(session.timeoutId);
-    }
-    const timeoutId = setTimeout(() => {
-      this.checkSessionTimeout(sessionId);
-    }, this.sessionTimeout);
-    session.timeoutId = timeoutId;
-
-    // Update persistence (skip in test environment)
-    if (process.env.NODE_ENV !== 'test') {
-      try {
-        await sessionPersistence.updateSession(sessionId, {
-          isBackgrounded: false,
-          backgroundedAt: null,
-          lastActivity: session.lastActivity,
-        });
-      } catch (error) {
-        console.warn(
-          `⚠️ Failed to persist foreground state for session ${sessionId}:`,
-          error.message
-        );
-      }
-    }
-
-    console.log(`☀️ Session ${sessionId} marked as foregrounded`);
-  }
 
   /**
    * Check if session should timeout
@@ -573,11 +532,9 @@ export class AICLISessionManager extends EventEmitter {
     const now = Date.now();
     const inactiveTime = now - session.lastActivity;
 
-    // Determine appropriate timeout based on background state
-    const timeoutToUse = session.isBackgrounded
-      ? this.backgroundedSessionTimeout
-      : this.sessionTimeout;
-    const timeoutName = session.isBackgrounded ? 'backgrounded timeout' : 'regular timeout';
+    // Use standard timeout for all sessions
+    const timeoutToUse = this.sessionTimeout;
+    const timeoutName = 'session timeout';
 
     // Only timeout if truly inactive for longer than timeout period
     if (

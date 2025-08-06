@@ -37,24 +37,12 @@ struct ProjectContextHeader: View {
             .padding(.trailing, 12)
             
             // Project info
-            HStack(spacing: 8) {
-                Text(project.name)
-                    .font(Typography.font(.body))
-                    .fontWeight(.semibold)
-                    .foregroundColor(Colors.textPrimary(for: colorScheme))
-                
-                if session != nil {
-                    Circle()
-                        .fill(Color.green)
-                        .frame(width: 6, height: 6)
-                }
-            }
+            Text(project.name)
+                .font(Typography.font(.body))
+                .fontWeight(.semibold)
+                .foregroundColor(Colors.textPrimary(for: colorScheme))
             
             Spacer()
-            
-            // Connection indicator
-            ConnectionQualityIndicator()
-                .padding(.trailing, 8)
             
             // Session menu
             ChatSessionMenu(

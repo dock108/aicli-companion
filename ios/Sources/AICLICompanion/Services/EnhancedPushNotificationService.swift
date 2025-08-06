@@ -272,16 +272,48 @@ extension EnhancedPushNotificationService: UNUserNotificationCenterDelegate {
         // Clear notifications for this project
         clearProjectNotifications(projectId)
         
-        // Post notification to open the project
-        NotificationCenter.default.post(
-            name: .openProject,
-            object: nil,
-            userInfo: [
-                "projectId": projectId,
-                "projectName": projectName,
-                "sessionId": userInfo["sessionId"] as? String
-            ]
-        )
+        // Sync messages before opening project
+        if let sessionId = userInfo["sessionId"] as? String {
+            Task {
+                print("🔄 Syncing messages before opening project")
+                let syncSuccess = await BackgroundMessageSyncService.shared.syncMessagesForSession(
+                    sessionId,
+                    projectId: projectId,
+                    projectName: projectName
+                )
+                
+                if syncSuccess {
+                    print("✅ Messages synced successfully, opening project")
+                } else {
+                    print("⚠️ Message sync failed, opening project anyway")
+                }
+                
+                // Post notification to open the project after sync attempt
+                await MainActor.run {
+                    NotificationCenter.default.post(
+                        name: .openProject,
+                        object: nil,
+                        userInfo: [
+                            "projectId": projectId,
+                            "projectName": projectName,
+                            "sessionId": sessionId,
+                            "messagesSynced": syncSuccess
+                        ]
+                    )
+                }
+            }
+        } else {
+            // No session ID, open project directly
+            NotificationCenter.default.post(
+                name: .openProject,
+                object: nil,
+                userInfo: [
+                    "projectId": projectId,
+                    "projectName": projectName,
+                    "sessionId": userInfo["sessionId"] as? String
+                ]
+            )
+        }
     }
     
     private func handleDismissAction(userInfo: [AnyHashable: Any]) {

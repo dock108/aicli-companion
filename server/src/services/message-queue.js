@@ -2,6 +2,7 @@
 // This handles the case where long-running tasks complete after the client disconnects
 
 import { getTelemetryService } from './telemetry.js';
+import { sessionPersistence } from './session-persistence.js';
 
 class MessageQueueService {
   constructor() {
@@ -9,6 +10,7 @@ class MessageQueueService {
     this.messageQueue = new Map(); // sessionId -> Array of queued messages
     this.messageMetadata = new Map(); // messageId -> metadata (timestamp, delivered, etc)
     this.sessionClientMap = new Map(); // sessionId -> Set of clientIds that have accessed this session
+    this.isInitialized = false;
 
     // Cleanup old messages every hour (disabled in test environment)
     if (process.env.NODE_ENV !== 'test') {
@@ -17,6 +19,35 @@ class MessageQueueService {
       }, 3600000); // 1 hour
     } else {
       this.cleanupInterval = null;
+    }
+  }
+
+  /**
+   * Initialize the message queue service and load persisted messages
+   */
+  async initialize() {
+    if (this.isInitialized) return;
+
+    try {
+      // Load persisted message queues
+      const persistedQueues = await sessionPersistence.loadAllMessageQueues();
+
+      for (const [sessionId, messages] of persistedQueues) {
+        this.messageQueue.set(sessionId, messages);
+
+        // Rebuild metadata index
+        for (const message of messages) {
+          this.messageMetadata.set(message.id, message);
+        }
+      }
+
+      this.isInitialized = true;
+      console.log(
+        `📚 Message queue initialized: ${this.messageQueue.size} sessions with queued messages`
+      );
+    } catch (error) {
+      console.error('❌ Failed to initialize message queue:', error);
+      this.isInitialized = true; // Continue without persisted data
     }
   }
 
@@ -40,9 +71,12 @@ class MessageQueueService {
       return null;
     }
 
-    // TODO: [QUESTION] Should we filter other message types?
-    // Currently only filtering empty streamChunks
-    // Potential candidates: empty commandProgress, duplicate assistantMessage
+    // Check for duplicate messages based on content
+    if (this.isDuplicateMessage(sessionId, message)) {
+      console.log(`🚫 Filtering duplicate ${message.type} message for session ${sessionId}`);
+      getTelemetryService().recordMessageFiltered('duplicate_content');
+      return null;
+    }
 
     const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const timestamp = new Date();
@@ -71,6 +105,9 @@ class MessageQueueService {
       delivered: false,
       deliveredAt: null,
       deliveredTo: new Set(),
+      acknowledged: false,
+      acknowledgedAt: null,
+      acknowledgedBy: new Set(),
     };
 
     this.messageQueue.get(sessionId).push(queuedMessage);
@@ -80,6 +117,9 @@ class MessageQueueService {
     console.log(`   Message type: ${message.type}`);
     console.log(`   Expires at: ${expiresAt.toISOString()}`);
     console.log(`   Queue size for session: ${this.messageQueue.get(sessionId).length}`);
+
+    // Persist the message queue
+    this.persistMessageQueue(sessionId);
 
     // Record telemetry
     getTelemetryService().recordMessageQueued();
@@ -118,6 +158,36 @@ class MessageQueueService {
   }
 
   /**
+   * Get all unacknowledged messages for a session
+   * @param {string} sessionId - The session ID
+   * @param {string} clientId - The client ID requesting messages
+   * @returns {Array} Array of unacknowledged messages
+   */
+  getUnacknowledgedMessages(sessionId, clientId) {
+    const messages = this.messageQueue.get(sessionId) || [];
+    const unacknowledged = [];
+
+    for (const queuedMessage of messages) {
+      // Skip if expired
+      if (new Date() > queuedMessage.expiresAt) {
+        continue;
+      }
+
+      // Skip if already acknowledged by this client
+      if (queuedMessage.acknowledgedBy.has(clientId)) {
+        continue;
+      }
+
+      unacknowledged.push(queuedMessage);
+    }
+
+    console.log(
+      `📤 Found ${unacknowledged.length} unacknowledged messages for session ${sessionId}, client ${clientId}`
+    );
+    return unacknowledged;
+  }
+
+  /**
    * Mark messages as delivered to a specific client
    * @param {Array} messageIds - Array of message IDs
    * @param {string} clientId - The client ID
@@ -141,6 +211,53 @@ class MessageQueueService {
         getTelemetryService().recordMessageDelivered();
       }
     }
+  }
+
+  /**
+   * Mark messages as acknowledged by a specific client
+   * @param {Array} messageIds - Array of message IDs
+   * @param {string} clientId - The client ID
+   */
+  acknowledgeMessages(messageIds, clientId) {
+    let acknowledgedCount = 0;
+
+    for (const messageId of messageIds) {
+      const metadata = this.messageMetadata.get(messageId);
+      if (metadata) {
+        metadata.acknowledgedBy.add(clientId);
+        metadata.acknowledgedAt = new Date();
+
+        // Check if acknowledged by all clients that have accessed this session
+        const sessionClients = this.sessionClientMap.get(metadata.sessionId) || new Set();
+        if (sessionClients.size > 0 && metadata.acknowledgedBy.size >= sessionClients.size) {
+          metadata.acknowledged = true;
+        }
+
+        acknowledgedCount++;
+        console.log(`✅ Message ${messageId} acknowledged by client ${clientId}`);
+
+        // Record telemetry
+        getTelemetryService().recordMessageAcknowledged();
+      }
+    }
+
+    // Clean up fully acknowledged messages after a delay
+    if (acknowledgedCount > 0) {
+      // Persist the updated queue
+      for (const messageId of messageIds) {
+        const metadata = this.messageMetadata.get(messageId);
+        if (metadata) {
+          this.persistMessageQueue(metadata.sessionId);
+          break; // Only need to persist once per session
+        }
+      }
+
+      setTimeout(() => {
+        this.cleanupAcknowledgedMessages();
+      }, 60000); // Clean up after 1 minute
+    }
+
+    return acknowledgedCount;
   }
 
   /**
@@ -229,16 +346,65 @@ class MessageQueueService {
   }
 
   /**
+   * Clean up fully acknowledged messages
+   */
+  cleanupAcknowledgedMessages() {
+    let cleanedCount = 0;
+    const minAge = 60000; // Only clean up messages older than 1 minute
+    const now = new Date();
+
+    for (const [sessionId, messages] of this.messageQueue) {
+      const validMessages = messages.filter((msg) => {
+        // Keep if not fully acknowledged
+        if (!msg.acknowledged) return true;
+
+        // Keep if acknowledged recently (within minAge)
+        if (msg.acknowledgedAt && now - msg.acknowledgedAt < minAge) return true;
+
+        // Remove old acknowledged messages
+        this.messageMetadata.delete(msg.id);
+        cleanedCount++;
+        return false;
+      });
+
+      if (validMessages.length === 0) {
+        this.messageQueue.delete(sessionId);
+      } else {
+        this.messageQueue.set(sessionId, validMessages);
+      }
+    }
+
+    if (cleanedCount > 0) {
+      console.log(`🧹 Cleaned up ${cleanedCount} acknowledged messages`);
+
+      // Persist updated queues after cleanup
+      for (const [sessionId, messages] of this.messageQueue) {
+        if (messages.length > 0) {
+          this.persistMessageQueue(sessionId);
+        }
+      }
+    }
+  }
+
+  /**
    * Clear all messages for a session
    * @param {string} sessionId - The session ID
    */
-  clearSession(sessionId) {
+  async clearSession(sessionId) {
     const messages = this.messageQueue.get(sessionId) || [];
     for (const msg of messages) {
       this.messageMetadata.delete(msg.id);
     }
     this.messageQueue.delete(sessionId);
     this.sessionClientMap.delete(sessionId);
+
+    // Remove persisted queue
+    try {
+      await sessionPersistence.removeMessageQueue(sessionId);
+    } catch (error) {
+      console.error(`Failed to remove persisted queue for session ${sessionId}:`, error);
+    }
+
     console.log(`🗑️ Cleared all messages for session ${sessionId}`);
   }
 
@@ -250,7 +416,8 @@ class MessageQueueService {
    * @returns {Array} Array of delivered message IDs
    */
   deliverQueuedMessages(sessionId, clientId, sendMessageFn) {
-    const messages = this.getUndeliveredMessages(sessionId, clientId);
+    // Deliver unacknowledged messages instead of just undelivered
+    const messages = this.getUnacknowledgedMessages(sessionId, clientId);
 
     if (messages.length === 0) {
       return [];
@@ -277,9 +444,13 @@ class MessageQueueService {
     // Deliver with proper spacing to prevent flooding
     validMessages.forEach((msg, index) => {
       setTimeout(() => {
+        console.log(`📤 Attempting to deliver queued message ${msg.id} (${msg.message.type})`);
         const success = sendMessageFn(msg.message);
         if (success) {
+          console.log(`✅ Successfully delivered queued message ${msg.id}`);
           deliveredMessageIds.push(msg.id);
+        } else {
+          console.error(`❌ Failed to deliver queued message ${msg.id}`);
         }
       }, index * 50); // 50ms spacing
     });
@@ -298,6 +469,112 @@ class MessageQueueService {
       `📬 Delivering ${validMessages.length} messages to client ${clientId} for session ${sessionId}`
     );
     return deliveredMessageIds;
+  }
+
+  /**
+   * Check if a message is a duplicate based on content and timing
+   * @param {string} sessionId - The session ID
+   * @param {Object} message - The message to check
+   * @returns {boolean} True if message is duplicate
+   */
+  isDuplicateMessage(sessionId, message) {
+    const existingMessages = this.messageQueue.get(sessionId) || [];
+    const recentWindow = 30000; // 30 seconds
+    const now = Date.now();
+
+    // Generate content hash for comparison
+    const contentHash = this.generateContentHash(message);
+    if (!contentHash) return false;
+
+    // Check recent messages for duplicates
+    for (const queuedMessage of existingMessages) {
+      // Only check recent messages
+      if (now - queuedMessage.timestamp.getTime() > recentWindow) continue;
+
+      // Skip expired messages
+      if (new Date() > queuedMessage.expiresAt) continue;
+
+      // Compare content hashes
+      const existingHash = this.generateContentHash(queuedMessage.message);
+      if (existingHash === contentHash) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Generate a content hash for deduplication
+   * @param {Object} message - The message to hash
+   * @returns {string|null} Content hash or null if not hashable
+   */
+  generateContentHash(message) {
+    if (!message || !message.type) return null;
+
+    let hashContent = '';
+
+    switch (message.type) {
+      case 'assistantMessage':
+        hashContent = `${message.type}:${JSON.stringify(message.data)}`;
+        break;
+
+      case 'streamChunk':
+        if (message.data?.chunk?.content) {
+          hashContent = `${message.type}:${message.data.chunk.content}:${message.data.chunk.isFinal}`;
+        }
+        break;
+
+      case 'toolUse':
+        hashContent = `${message.type}:${message.data?.name}:${JSON.stringify(message.data?.parameters)}`;
+        break;
+
+      case 'toolResult':
+        hashContent = `${message.type}:${message.data?.toolName}:${JSON.stringify(message.data?.result)}`;
+        break;
+
+      case 'conversationResult':
+        hashContent = `${message.type}:${JSON.stringify(message.data)}`;
+        break;
+
+      default:
+        // For other message types, use the entire data object
+        hashContent = `${message.type}:${JSON.stringify(message.data)}`;
+    }
+
+    if (!hashContent) return null;
+
+    // Simple hash function (could use crypto.createHash for production)
+    let hash = 0;
+    for (let i = 0; i < hashContent.length; i++) {
+      const char = hashContent.charCodeAt(i);
+      hash = (hash << 5) - hash + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+
+    return hash.toString(36);
+  }
+
+  /**
+   * Persist message queue for a session
+   * @param {string} sessionId - The session ID
+   */
+  async persistMessageQueue(sessionId) {
+    try {
+      const messages = this.messageQueue.get(sessionId) || [];
+
+      // Convert Sets to Arrays for JSON serialization
+      const serializableMessages = messages.map((msg) => ({
+        ...msg,
+        deliveredTo: Array.from(msg.deliveredTo),
+        acknowledgedBy: Array.from(msg.acknowledgedBy),
+      }));
+
+      await sessionPersistence.saveMessageQueue(sessionId, serializableMessages);
+    } catch (error) {
+      console.error(`❌ Failed to persist message queue for session ${sessionId}:`, error);
+      // Don't throw - persistence failures shouldn't break message flow
+    }
   }
 
   /**

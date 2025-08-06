@@ -1,22 +1,76 @@
 import { WebSocketUtilities } from './websocket-utilities.js';
 import { pushNotificationService } from './push-notification.js';
 import { getMessageQueueService } from './message-queue.js';
+import { createLogger } from '../utils/logger.js';
 import fs from 'fs';
 import path from 'path';
+
+const logger = createLogger('WSHandlers');
 
 /**
  * Collection of WebSocket message handlers for different message types
  */
 export class WebSocketMessageHandlers {
   /**
+   * Handle 'acknowledgeMessages' message - acknowledge receipt of messages
+   */
+  static async handleAcknowledgeMessagesMessage(clientId, requestId, data, clients) {
+    const { messageIds } = data;
+
+    if (!messageIds || !Array.isArray(messageIds)) {
+      WebSocketUtilities.sendErrorMessage(
+        clientId,
+        requestId,
+        'INVALID_MESSAGE_IDS',
+        'messageIds must be an array',
+        clients
+      );
+      return;
+    }
+
+    logger.debug(`Client acknowledging ${messageIds.length} messages`, { clientId });
+
+    try {
+      const acknowledgedCount = getMessageQueueService().acknowledgeMessages(messageIds, clientId);
+
+      WebSocketUtilities.sendMessage(
+        clientId,
+        WebSocketUtilities.createResponse('acknowledgeMessages', requestId, {
+          success: true,
+          acknowledgedCount,
+          messageIds,
+          timestamp: new Date().toISOString(),
+        }),
+        clients
+      );
+
+      logger.debug('Successfully acknowledged messages', {
+        acknowledgedCount,
+        clientId
+      });
+    } catch (error) {
+      logger.error('Failed to acknowledge messages', { clientId, error: error.message });
+      WebSocketUtilities.sendErrorMessage(
+        clientId,
+        requestId,
+        'ACKNOWLEDGE_FAILED',
+        error.message,
+        clients
+      );
+    }
+  }
+
+  /**
    * Handle 'ask' message - one-time prompts
    */
   static async handleAskMessage(clientId, requestId, data, aicliService, clients) {
     const { prompt, workingDirectory, options } = data;
 
-    console.log(`🤖 Processing ask message for client ${clientId}`);
-    console.log(`   Prompt: "${prompt}"`);
-    console.log(`   Working dir: ${workingDirectory || process.cwd()}`);
+    logger.info('Processing ask message', {
+      clientId,
+      prompt: prompt.substring(0, 50) + '...',
+      workingDirectory: workingDirectory || process.cwd()
+    });
 
     try {
       const result = await aicliService.sendPrompt(prompt, {
@@ -35,7 +89,7 @@ export class WebSocketMessageHandlers {
         clients
       );
     } catch (error) {
-      console.error(`❌ Ask request failed:`, error);
+      logger.error('Ask request failed', { clientId, error: error.message });
       WebSocketUtilities.sendErrorMessage(
         clientId,
         requestId,
@@ -60,9 +114,11 @@ export class WebSocketMessageHandlers {
   ) {
     const { sessionId, initialPrompt, workingDirectory } = data;
 
-    console.log(`🌊 Starting stream session for client ${clientId}`);
-    console.log(`   Session ID: ${sessionId}`);
-    console.log(`   Working dir: ${workingDirectory || process.cwd()}`);
+    logger.info('Starting stream session', {
+      clientId,
+      sessionId,
+      workingDirectory: workingDirectory || process.cwd()
+    });
 
     try {
       // Create interactive session
@@ -99,7 +155,7 @@ export class WebSocketMessageHandlers {
         throw new Error(sessionResult.message || 'Failed to create session');
       }
     } catch (error) {
-      console.error(`❌ Stream start failed:`, error);
+      logger.error('Stream start failed', { clientId, sessionId, error: error.message });
       WebSocketUtilities.sendErrorMessage(
         clientId,
         requestId,
@@ -117,7 +173,7 @@ export class WebSocketMessageHandlers {
   static async handleStreamSendMessage(clientId, requestId, data, aicliService, clients) {
     const { sessionId, prompt } = data;
 
-    console.log(`📤 Sending to stream session ${sessionId} from client ${clientId}`);
+    logger.debug('Sending to stream session', { sessionId, clientId });
 
     try {
       const result = await aicliService.sendToExistingSession(sessionId, prompt);
@@ -133,7 +189,7 @@ export class WebSocketMessageHandlers {
         clients
       );
     } catch (error) {
-      console.error(`❌ Stream send failed:`, error);
+      logger.error('Stream send failed', { clientId, sessionId, error: error.message });
       WebSocketUtilities.sendErrorMessage(
         clientId,
         requestId,
@@ -156,33 +212,73 @@ export class WebSocketMessageHandlers {
     clients,
     connectionManager
   ) {
-    const { sessionId } = data;
+    const { sessionId, clearChat = false } = data;
 
-    console.log(
-      `⏸️ Pausing stream session ${sessionId} for client ${clientId} (session will remain active for continuation)`
-    );
+    if (clearChat) {
+      // User is clearing the chat - fully close the session
+      logger.info('Clearing chat - closing session completely', { sessionId, clientId });
+      
+      try {
+        // Close the session in AICLI service
+        await aicliService.closeSession(sessionId);
+        
+        // Clear all queued messages for this session
+        await getMessageQueueService().clearSession(sessionId);
+        
+        // Remove session from client
+        connectionManager.removeSessionFromClient(clientId, sessionId);
+        
+        logger.info('Session fully closed and cleared', { sessionId });
+        
+        // Send response with instruction to generate new session ID
+        WebSocketUtilities.sendMessage(
+          clientId,
+          WebSocketUtilities.createResponse('streamClose', requestId, {
+            success: true,
+            sessionId,
+            clearChat: true,
+            message: 'Session closed. Please generate a new session ID for the next chat.',
+            timestamp: new Date().toISOString(),
+          }),
+          clients
+        );
+      } catch (error) {
+        logger.error('Failed to clear chat session', { sessionId, error: error.message });
+        WebSocketUtilities.sendErrorMessage(
+          clientId,
+          requestId,
+          'CLEAR_CHAT_FAILED',
+          error.message,
+          clients,
+          { sessionId }
+        );
+      }
+    } else {
+      // Normal close - just pause the session
+      logger.info('Pausing stream session (will remain active for continuation)', { sessionId, clientId });
 
-    try {
-      // Instead of closing the session, just remove it from the client's active sessions
-      // but keep the session alive in the AICLI service for continuation
-      connectionManager.removeSessionFromClient(clientId, sessionId);
+      try {
+        // Instead of closing the session, just remove it from the client's active sessions
+        // but keep the session alive in the AICLI service for continuation
+        connectionManager.removeSessionFromClient(clientId, sessionId);
 
-      // Mark the client as no longer active for this session, but don't close the session
-      console.log(`📝 Session ${sessionId} paused - can be continued later`);
+        // Mark the client as no longer active for this session, but don't close the session
+        logger.debug('Session paused - can be continued later', { sessionId });
 
-      // Note: Not sending response message for 'streamClose' as iOS client doesn't expect it
-      // and fails to parse it. The session was successfully paused if we reach this point.
-      console.log(`✅ Successfully paused session ${sessionId} for client ${clientId}`);
-    } catch (error) {
-      console.error(`❌ Stream close failed:`, error);
-      WebSocketUtilities.sendErrorMessage(
-        clientId,
-        requestId,
-        'STREAM_CLOSE_FAILED',
-        error.message,
-        clients,
-        { sessionId }
-      );
+        // Note: Not sending response message for 'streamClose' as iOS client doesn't expect it
+        // and fails to parse it. The session was successfully paused if we reach this point.
+        logger.debug('Session pause complete', { sessionId, clientId });
+      } catch (error) {
+        logger.error('Stream close failed', { sessionId, clientId, error: error.message });
+        WebSocketUtilities.sendErrorMessage(
+          clientId,
+          requestId,
+          'STREAM_CLOSE_FAILED',
+          error.message,
+          clients,
+          { sessionId }
+        );
+      }
     }
   }
 
@@ -192,7 +288,7 @@ export class WebSocketMessageHandlers {
   static async handlePermissionMessage(clientId, requestId, data, aicliService, clients) {
     const { sessionId, response } = data;
 
-    console.log(`🔐 Processing permission response for session ${sessionId}: ${response}`);
+    logger.info('Processing permission response', { sessionId, response, clientId });
 
     try {
       const result = await aicliService.handlePermissionPrompt(sessionId, response);
@@ -209,7 +305,7 @@ export class WebSocketMessageHandlers {
         clients
       );
     } catch (error) {
-      console.error(`❌ Permission handling failed:`, error);
+      logger.error('Permission handling failed', { clientId, sessionId, error: error.message });
       WebSocketUtilities.sendErrorMessage(
         clientId,
         requestId,
@@ -250,9 +346,9 @@ export class WebSocketMessageHandlers {
   ) {
     const { events, sessionIds } = data;
 
-    console.log(`📡 Client ${clientId} subscribing to events:`, events);
+    logger.info('Client subscribing to events', { clientId, events });
     if (sessionIds) {
-      console.log(`📡 Client ${clientId} subscribing to sessions:`, sessionIds);
+      logger.info('Client subscribing to sessions', { clientId, sessionIds, count: sessionIds.length });
     }
 
     try {
@@ -272,52 +368,22 @@ export class WebSocketMessageHandlers {
           // Track this client for the session in message queue
           getMessageQueueService().trackSessionClient(sessionId, clientId);
 
-          // Check for and deliver any queued messages
-          const undeliveredMessages = getMessageQueueService().getUndeliveredMessages(
-            sessionId,
-            clientId
-          );
-
-          if (undeliveredMessages.length > 0) {
-            console.log(
-              `📬 Found ${undeliveredMessages.length} queued messages for session ${sessionId}`
-            );
-
-            // Send each queued message to the client
-            const deliveredMessageIds = [];
-            for (const queuedMessage of undeliveredMessages) {
-              const success = WebSocketUtilities.sendMessage(
-                clientId,
-                queuedMessage.message,
-                clients
-              );
-
-              if (success) {
-                deliveredMessageIds.push(queuedMessage.id);
-                console.log(
-                  `✅ Delivered queued message ${queuedMessage.id} to client ${clientId}`
-                );
-              }
-            }
-
-            // Mark messages as delivered
-            if (deliveredMessageIds.length > 0) {
-              getMessageQueueService().markAsDelivered(deliveredMessageIds, clientId);
-              console.log(
-                `📨 Delivered ${deliveredMessageIds.length} queued messages for session ${sessionId}`
-              );
-            }
-          }
+          // Use the improved delivery method with validation and deduplication
+          getMessageQueueService().deliverQueuedMessages(sessionId, clientId, (message) => {
+            return WebSocketUtilities.sendMessage(clientId, message, clients);
+          });
         }
       }
 
       // Note: Not sending response message for 'subscribe' as iOS client doesn't expect it
       // and fails to parse it. The subscription was successful if we reach this point.
-      console.log(
-        `✅ Successfully subscribed client ${clientId} to ${events.length} events${sessionIds ? ` and ${sessionIds.length} sessions` : ''}`
-      );
+      logger.info('Successfully subscribed client', {
+        clientId,
+        eventCount: events.length,
+        sessionCount: sessionIds?.length || 0
+      });
     } catch (error) {
-      console.error(`❌ Subscription failed:`, error);
+      logger.error('Subscription failed', { clientId, error: error.message });
       WebSocketUtilities.sendErrorMessage(
         clientId,
         requestId,
@@ -335,7 +401,7 @@ export class WebSocketMessageHandlers {
   static async handleSetWorkingDirectoryMessage(clientId, requestId, data, aicliService, clients) {
     const { workingDirectory } = data;
 
-    console.log(`📁 Setting working directory for client ${clientId}: ${workingDirectory}`);
+    logger.info('Setting working directory', { clientId, workingDirectory });
 
     try {
       // Validate the working directory exists
@@ -364,7 +430,7 @@ export class WebSocketMessageHandlers {
         clients
       );
     } catch (error) {
-      console.error(`❌ Set working directory failed:`, error);
+      logger.error('Set working directory failed', { clientId, error: error.message });
       WebSocketUtilities.sendErrorMessage(
         clientId,
         requestId,
@@ -389,21 +455,21 @@ export class WebSocketMessageHandlers {
   ) {
     const { sessionId, command, args, projectPath } = data;
 
-    console.log(`⚡ Executing Claude command for client ${clientId}:`);
-    console.log(`   Session: ${sessionId}`);
-    console.log(`   Command: ${command}`);
-    console.log(`   Args: ${JSON.stringify(args)}`);
-    console.log(`   Project Path: ${projectPath}`);
+    // Create logger with session context for this request
+    const sessionLogger = logger.child({ sessionId, clientId, requestId });
+    
+    sessionLogger.info('Executing Claude command', {
+      command: command.substring(0, 50),
+      hasArgs: !!args,
+      projectPath
+    });
 
     try {
       // Associate session with client if not already done
       if (sessionId) {
         connectionManager.addSessionToClient(clientId, sessionId);
 
-        // Check if this session was backgrounded and mark it as foregrounded
-        if (aicliService.hasSession(sessionId)) {
-          await aicliService.markSessionForegrounded(sessionId);
-        }
+        // Session tracking removed - server is now message-driven, not state-driven
       }
 
       let result;
@@ -427,7 +493,7 @@ export class WebSocketMessageHandlers {
         }
       } else {
         // Treat as agent prompt - send to Claude for autonomous interaction
-        console.log(`🤖 Processing as agent prompt: "${command}"`);
+        sessionLogger.info('Processing as agent prompt', { prompt: command.substring(0, 50) + '...' });
 
         result = await aicliService.sendPrompt(command, {
           sessionId,
@@ -450,22 +516,22 @@ export class WebSocketMessageHandlers {
         };
       } else {
         // Agent response - get aggregated content from session buffer
-        console.log(`🔍 Checking session buffer for sessionId: ${sessionId}`);
+        sessionLogger.debug('Checking session buffer');
         const buffer = aicliService.sessionManager.getSessionBuffer(sessionId);
         let content = '';
 
         if (!buffer) {
-          console.log(`⚠️ No buffer found for session ${sessionId}`);
+          sessionLogger.debug('No buffer found for session');
         } else {
-          console.log(
-            `📋 Buffer found with ${buffer.assistantMessages?.length || 0} assistant messages`
-          );
+          sessionLogger.debug('Buffer found', {
+            assistantMessageCount: buffer.assistantMessages?.length || 0
+          });
         }
 
         if (buffer && buffer.assistantMessages && buffer.assistantMessages.length > 0) {
           // Aggregate all assistant messages from the session
           const aggregatedContent = aicliService.aggregateBufferedContent(buffer);
-          console.log(`🔗 Aggregated content has ${aggregatedContent.length} blocks`);
+          sessionLogger.debug('Aggregated content', { blockCount: aggregatedContent.length });
 
           // Convert aggregated content blocks to text
           const textBlocks = [];
@@ -476,44 +542,52 @@ export class WebSocketMessageHandlers {
           });
 
           content = textBlocks.join('\n\n');
-          console.log(
-            `📝 Aggregated ${buffer.assistantMessages.length} assistant messages into response with ${textBlocks.length} text blocks`
-          );
+          sessionLogger.debug('Aggregated assistant messages', {
+            messageCount: buffer.assistantMessages.length,
+            textBlockCount: textBlocks.length
+          });
         } else {
           // Fallback to result object
-          console.log(`⚠️ No buffered messages, falling back to result object`);
-          console.log(`📦 Result object keys:`, Object.keys(result));
-          console.log(`📦 Result object:`, JSON.stringify(result, null, 2));
+          sessionLogger.debug('No buffered messages, using result object', {
+            resultKeys: Object.keys(result)
+          });
 
           // The result object from sendPrompt contains the final response
           if (result && result.response) {
             // Check if response is the final result object from AICLI
             if (typeof result.response === 'object' && result.response.result) {
               content = result.response.result;
-              console.log(`📄 Using result.response.result field (${content.length} chars)`);
+              sessionLogger.debug('Using result.response.result', { length: content.length });
             } else if (result.response.text) {
               content = result.response.text;
-              console.log(`📄 Using result.response.text field (${content.length} chars)`);
+              sessionLogger.debug('Using result.response.text', { length: content.length });
             } else if (typeof result.response === 'string') {
               content = result.response;
-              console.log(`📄 Using result.response as string (${content.length} chars)`);
+              sessionLogger.debug('Using result.response as string', { length: content.length });
             }
           } else if (result && result.result) {
             content = result.result;
-            console.log(`📄 Using result.result field (${content.length} chars)`);
+            sessionLogger.debug('Using result.result field', { length: content.length });
           }
 
           if (!content) {
             // Last resort fallback
             content = result.text || result.content || JSON.stringify(result);
-            console.log(`📄 Using final fallback extraction (${content.length} chars)`);
+            sessionLogger.debug('Using final fallback extraction', { length: content.length });
           }
+        }
+
+        // Extract Claude's session ID from the response
+        let claudeSessionId = sessionId; // Use provided sessionId if available
+        if (!claudeSessionId && result && result.response && result.response.session_id) {
+          claudeSessionId = result.response.session_id;
+          sessionLogger.info('Extracted Claude session ID from response', { claudeSessionId });
         }
 
         responseData = {
           content,
           success: result.success !== false, // Default to true unless explicitly false
-          sessionId,
+          sessionId: claudeSessionId, // Use Claude's session ID
           error: result.error || null,
         };
       }
@@ -522,12 +596,12 @@ export class WebSocketMessageHandlers {
 
       const messageSent = WebSocketUtilities.sendMessage(clientId, response, clients);
       if (messageSent) {
-        console.log(`✅ Claude response sent successfully to client ${clientId}`);
+        sessionLogger.debug('Claude response sent successfully');
       } else {
-        console.warn(`⚠️ Failed to send Claude response to client ${clientId}`);
+        sessionLogger.warn('Failed to send Claude response');
       }
     } catch (error) {
-      console.error(`❌ Claude command failed:`, error);
+      sessionLogger.error('Claude command failed', { error: error.message });
       WebSocketUtilities.sendErrorMessage(
         clientId,
         requestId,
@@ -539,50 +613,6 @@ export class WebSocketMessageHandlers {
     }
   }
 
-  /**
-   * Handle 'client_backgrounding' message - client going to background
-   */
-  static async handleClientBackgroundingMessage(
-    clientId,
-    requestId,
-    data,
-    aicliService,
-    clients,
-    _connectionManager
-  ) {
-    // Handle the case where data might be undefined or the message structure is different
-    const sessionId = data?.sessionId || '';
-    const timestamp = data?.timestamp || new Date().toISOString();
-
-    console.log(`📱 Client ${clientId} entering background mode (session: ${sessionId})`);
-
-    // Update client state (this would typically be stored in connection manager)
-    const client = clients.get(clientId);
-    if (client) {
-      client.isBackgrounded = true;
-      client.lastActivity = new Date();
-      client.backgroundTimestamp = timestamp;
-
-      // If there's an active session, mark it as backgrounded but don't kill it
-      if (sessionId && sessionId !== '') {
-        console.log(`⏸️ Marking session ${sessionId} as backgrounded`);
-        // Mark session as backgrounded in the AICLI service to extend timeout
-        await aicliService.markSessionBackgrounded(sessionId);
-        client.backgroundedSessionId = sessionId;
-      }
-    }
-
-    WebSocketUtilities.sendMessage(
-      clientId,
-      WebSocketUtilities.createResponse('client_backgrounding', requestId, {
-        success: true,
-        isBackgrounding: true,
-        message: 'Client backgrounded, session preserved',
-        timestamp: new Date().toISOString(),
-      }),
-      clients
-    );
-  }
 
   /**
    * Handle 'getMessageHistory' message - retrieve message history for a session
@@ -597,8 +627,12 @@ export class WebSocketMessageHandlers {
   ) {
     const { sessionId, limit, offset } = data;
 
-    console.log(`📜 Client ${clientId} requesting message history for session ${sessionId}`);
-    console.log(`   Limit: ${limit || 'all'}, Offset: ${offset || 0}`);
+    logger.info('Client requesting message history', {
+      clientId,
+      sessionId,
+      limit: limit || 'all',
+      offset: offset || 0
+    });
 
     try {
       // Validate session exists
@@ -612,21 +646,17 @@ export class WebSocketMessageHandlers {
 
       // If no buffer exists in memory, try to load from persistence
       if (!buffer) {
-        console.log(
-          `⚠️ No message buffer in memory for session ${sessionId}, attempting to load from persistence`
-        );
+        logger.debug('No message buffer in memory, loading from persistence', { sessionId });
         const { sessionPersistence } = await import('./session-persistence.js');
         const persistedBuffer = await sessionPersistence.loadMessageBuffer(sessionId);
 
         if (persistedBuffer) {
-          console.log(`✅ Loaded message buffer from persistence for session ${sessionId}`);
+          logger.debug('Loaded message buffer from persistence', { sessionId });
           // Restore the buffer to session manager
           aicliService.sessionManager.setSessionBuffer(sessionId, persistedBuffer);
           buffer = persistedBuffer;
         } else {
-          console.log(
-            `📝 No persisted message buffer found for session ${sessionId} - this may be a new session`
-          );
+          logger.debug('No persisted message buffer found - may be new session', { sessionId });
         }
       }
 
@@ -690,15 +720,72 @@ export class WebSocketMessageHandlers {
         clients
       );
 
-      console.log(
-        `✅ Sent ${paginatedMessages.length} of ${totalMessages} messages for session ${sessionId}`
-      );
+      logger.debug('Sent message history', {
+        sent: paginatedMessages.length,
+        total: totalMessages,
+        sessionId
+      });
     } catch (error) {
-      console.error(`❌ Get message history failed:`, error);
+      logger.error('Get message history failed', { clientId, sessionId, error: error.message });
       WebSocketUtilities.sendErrorMessage(
         clientId,
         requestId,
         'GET_HISTORY_FAILED',
+        error.message,
+        clients,
+        { sessionId }
+      );
+    }
+  }
+
+  /**
+   * Handle 'clearChat' message - clear current chat and start fresh
+   */
+  static async handleClearChatMessage(
+    clientId,
+    requestId,
+    data,
+    aicliService,
+    clients,
+    connectionManager
+  ) {
+    const { sessionId } = data;
+
+    logger.info('Clear chat requested', { sessionId, clientId });
+
+    try {
+      // Close the session completely
+      await aicliService.closeSession(sessionId);
+      
+      // Clear all queued messages
+      await getMessageQueueService().clearSession(sessionId);
+      
+      // Remove session from client
+      connectionManager.removeSessionFromClient(clientId, sessionId);
+      
+      // Generate a new session ID for the client to use
+      const { v4: uuidv4 } = await import('uuid');
+      const newSessionId = uuidv4();
+      
+      logger.info('Chat cleared successfully', { oldSessionId: sessionId, newSessionId });
+      
+      WebSocketUtilities.sendMessage(
+        clientId,
+        WebSocketUtilities.createResponse('clearChat', requestId, {
+          success: true,
+          oldSessionId: sessionId,
+          newSessionId,
+          message: 'Chat cleared successfully',
+          timestamp: new Date().toISOString(),
+        }),
+        clients
+      );
+    } catch (error) {
+      logger.error('Failed to clear chat', { sessionId, clientId, error: error.message });
+      WebSocketUtilities.sendErrorMessage(
+        clientId,
+        requestId,
+        'CLEAR_CHAT_FAILED',
         error.message,
         clients,
         { sessionId }
@@ -712,9 +799,11 @@ export class WebSocketMessageHandlers {
   static handleRegisterDeviceMessage(clientId, requestId, data, clients) {
     const { deviceToken, deviceInfo } = data;
 
-    console.log(`📱 Registering device for client ${clientId}`);
-    console.log(`   Device token: ${deviceToken?.substring(0, 20)}...`);
-    console.log(`   Device info:`, deviceInfo);
+    logger.info('Registering device', {
+      clientId,
+      tokenPrefix: deviceToken?.substring(0, 20) + '...',
+      platform: deviceInfo?.platform
+    });
 
     try {
       // Store device token with client
@@ -737,7 +826,7 @@ export class WebSocketMessageHandlers {
         clients
       );
     } catch (error) {
-      console.error(`❌ Device registration failed:`, error);
+      logger.error('Device registration failed', { clientId, error: error.message });
       WebSocketUtilities.sendErrorMessage(
         clientId,
         requestId,
@@ -763,9 +852,10 @@ export class WebSocketMessageHandlers {
       subscribe: this.handleSubscribeMessage,
       setWorkingDirectory: this.handleSetWorkingDirectoryMessage,
       claudeCommand: this.handleClaudeCommandMessage,
-      client_backgrounding: this.handleClientBackgroundingMessage,
       getMessageHistory: this.handleGetMessageHistoryMessage,
       registerDevice: this.handleRegisterDeviceMessage,
+      acknowledgeMessages: this.handleAcknowledgeMessagesMessage,
+      clearChat: this.handleClearChatMessage,
     };
   }
 

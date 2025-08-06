@@ -24,6 +24,7 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
 
     // Message handlers
     private var messageHandlers: [WebSocketMessageType: (WebSocketMessage) -> Void] = [:]
+    private var globalMessageHandlers: [WebSocketMessageType: [(WebSocketMessage) -> Void]] = [:]
     private var requestCallbacks: [String: (Result<WebSocketMessage, AICLICompanionError>) -> Void] = [:]
     
     // Track active sessions for resubscription
@@ -39,6 +40,12 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
     // Session tracking
     private var activeSessionId: String?
     private var wasConnectedBeforeBackground = false
+    
+    // Background connection support
+    private var backgroundWebSocket: WebSocket?
+    private var backgroundConnectionCompletion: CheckedContinuation<Bool, Never>?
+    private var backgroundMessageCompletion: CheckedContinuation<[Message], Never>?
+    private var backgroundMessages: [Message] = []
 
     init() {
         setupDateFormatters()
@@ -202,6 +209,38 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
         webSocket = nil
 
         updateConnectionState(.disconnected)
+    }
+    
+    /// Acknowledge receipt of messages
+    func acknowledgeMessages(_ messageIds: [String], completion: @escaping (Result<Void, AICLICompanionError>) -> Void) {
+        let request = AcknowledgeMessagesRequest(messageIds: messageIds)
+        
+        sendMessage(request, type: .acknowledgeMessages) { result in
+            switch result {
+            case .success:
+                completion(.success(()))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+    
+    /// Send clear chat message to server
+    func sendClearChat(sessionId: String, completion: @escaping (Result<String, AICLICompanionError>) -> Void) {
+        let request = ClearChatRequest(sessionId: sessionId)
+        
+        sendMessage(request, type: .clearChat) { result in
+            switch result {
+            case .success(let message):
+                if case .clearChatResponse(let response) = message.data {
+                    completion(.success(response.newSessionId))
+                } else {
+                    completion(.failure(.invalidResponse))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
     }
 
     private func attemptReconnect() {
@@ -424,6 +463,14 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
     func setMessageHandler(for type: WebSocketMessageType, handler: @escaping (WebSocketMessage) -> Void) {
         messageHandlers[type] = handler
     }
+    
+    /// Set a global message handler that will be called for all messages of a type, regardless of view state
+    func setGlobalMessageHandler(for type: WebSocketMessageType, handler: @escaping (WebSocketMessage) -> Void) {
+        if globalMessageHandlers[type] == nil {
+            globalMessageHandlers[type] = []
+        }
+        globalMessageHandlers[type]?.append(handler)
+    }
 
     private func handleReceivedMessage(_ messageString: String) {
         guard let data = messageString.data(using: .utf8) else { return }
@@ -465,8 +512,6 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
                 handleStreamComplete(message)
             case .error:
                 handleErrorMessage(message)
-            case .sessionStatus:
-                handleSessionStatus(message)
             case .pong:
                 handlePongMessage(message)
 
@@ -505,6 +550,13 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
             
             // Call registered handler if available
             messageHandlers[type]?(message)
+            
+            // Call global handlers (these run regardless of view state)
+            if let globalHandlers = globalMessageHandlers[type] {
+                for handler in globalHandlers {
+                    handler(message)
+                }
+            }
         } catch {
             print("Failed to parse WebSocket message: \(error)")
         }
@@ -572,9 +624,6 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
         }
     }
 
-    private func handleSessionStatus(_ message: WebSocketMessage) {
-        // This will be handled by registered handlers in the UI
-    }
 
     private func handlePongMessage(_ message: WebSocketMessage) {
         // Heartbeat acknowledged
@@ -720,6 +769,13 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
     // MARK: - WebSocketDelegate
 
     func didReceive(event: Starscream.WebSocketEvent, client: Starscream.WebSocketClient) {
+        // Check if this is a background connection event
+        if client === backgroundWebSocket {
+            handleBackgroundWebSocketEvent(event)
+            return
+        }
+        
+        // Handle regular connection events
         switch event {
         case .connected(let headers):
             print("WebSocket connected: \(headers)")
@@ -773,6 +829,220 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
         case .peerClosed:
             print("WebSocket peer closed connection")
             updateConnectionState(.disconnected)
+        }
+    }
+    
+    // MARK: - Background Connection Support
+    
+    /// Establish a temporary connection for background message sync
+    func establishBackgroundConnection(to url: URL) async -> Bool {
+        print("🔄 Establishing background WebSocket connection")
+        
+        return await withCheckedContinuation { continuation in
+            self.backgroundConnectionCompletion = continuation
+            
+            var urlComponents = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+            urlComponents.scheme = url.scheme == "https" ? "wss" : "ws"
+            urlComponents.path = "/ws"
+            
+            if let token = authToken {
+                urlComponents.queryItems = [URLQueryItem(name: "token", value: token)]
+            }
+            
+            guard let wsURL = urlComponents.url else {
+                print("❌ Invalid background WebSocket URL")
+                continuation.resume(returning: false)
+                return
+            }
+            
+            var request = URLRequest(url: wsURL)
+            request.timeoutInterval = 10 // Shorter timeout for background
+            
+            backgroundWebSocket = WebSocket(request: request)
+            backgroundWebSocket?.delegate = self
+            backgroundWebSocket?.connect()
+            
+            // Set timeout for connection
+            DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+                if self.backgroundConnectionCompletion != nil {
+                    print("⏰ Background connection timeout")
+                    self.backgroundConnectionCompletion?.resume(returning: false)
+                    self.backgroundConnectionCompletion = nil
+                    self.backgroundWebSocket?.disconnect()
+                    self.backgroundWebSocket = nil
+                }
+            }
+        }
+    }
+    
+    /// Close the background connection
+    func closeBackgroundConnection() async {
+        print("🔄 Closing background WebSocket connection")
+        
+        backgroundWebSocket?.disconnect()
+        backgroundWebSocket = nil
+        backgroundConnectionCompletion = nil
+        backgroundMessageCompletion = nil
+        backgroundMessages.removeAll()
+    }
+    
+    /// Fetch queued messages for a specific session via background connection
+    func fetchQueuedMessages(for sessionId: String) async -> [Message] {
+        print("🔄 Fetching queued messages for session: \(sessionId)")
+        
+        guard backgroundWebSocket != nil else {
+            print("❌ No background connection available")
+            return []
+        }
+        
+        return await withCheckedContinuation { continuation in
+            self.backgroundMessageCompletion = continuation
+            self.backgroundMessages.removeAll()
+            
+            // Send message history request
+            let request = GetMessageHistoryRequest(
+                sessionId: sessionId,
+                limit: 50, // Fetch last 50 messages
+                offset: 0
+            )
+            
+            do {
+                let data = try encoder.encode(request)
+                let dataDict = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+                
+                let message = [
+                    "type": WebSocketMessageType.getMessageHistory.rawValue,
+                    "requestId": UUID().uuidString,
+                    "timestamp": ISO8601DateFormatter().string(from: Date()),
+                    "data": dataDict
+                ] as [String: Any]
+                
+                let messageData = try JSONSerialization.data(withJSONObject: message)
+                let messageString = String(data: messageData, encoding: .utf8)!
+                
+                print("📨 Sending background message history request")
+                backgroundWebSocket?.write(string: messageString)
+                
+                // Set timeout for message fetch
+                DispatchQueue.main.asyncAfter(deadline: .now() + 15) {
+                    if self.backgroundMessageCompletion != nil {
+                        print("⏰ Background message fetch timeout")
+                        self.backgroundMessageCompletion?.resume(returning: [])
+                        self.backgroundMessageCompletion = nil
+                    }
+                }
+                
+            } catch {
+                print("❌ Failed to send background message history request: \(error)")
+                continuation.resume(returning: [])
+            }
+        }
+    }
+    
+    private func handleBackgroundWebSocketEvent(_ event: Starscream.WebSocketEvent) {
+        switch event {
+        case .connected:
+            print("✅ Background WebSocket connected")
+            backgroundConnectionCompletion?.resume(returning: true)
+            backgroundConnectionCompletion = nil
+            
+        case .disconnected(let reason, let code):
+            print("❌ Background WebSocket disconnected: \(reason) code: \(code)")
+            if let completion = backgroundConnectionCompletion {
+                completion.resume(returning: false)
+                backgroundConnectionCompletion = nil
+            }
+            
+        case .text(let string):
+            handleBackgroundMessage(string)
+            
+        case .error(let error):
+            print("❌ Background WebSocket error: \(String(describing: error))")
+            backgroundConnectionCompletion?.resume(returning: false)
+            backgroundConnectionCompletion = nil
+            
+        default:
+            break
+        }
+    }
+    
+    private func handleBackgroundMessage(_ messageString: String) {
+        guard let data = messageString.data(using: .utf8) else { return }
+        
+        do {
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            guard let typeString = json?["type"] as? String,
+                  let type = WebSocketMessageType(rawValue: typeString) else {
+                return
+            }
+            
+            let message = try decoder.decode(WebSocketMessage.self, from: data)
+            
+            // Handle message history response in background
+            if type == .getMessageHistory {
+                if case .getMessageHistoryResponse(let historyResponse) = message.data {
+                    print("📜 Received background message history: \(historyResponse.messages.count) messages")
+                    
+                    // Convert WebSocket messages to app Messages
+                    let appMessages = convertWebSocketMessagesToAppMessages(historyResponse.messages)
+                    backgroundMessages.append(contentsOf: appMessages)
+                    
+                    // Complete the fetch
+                    backgroundMessageCompletion?.resume(returning: backgroundMessages)
+                    backgroundMessageCompletion = nil
+                }
+            }
+        } catch {
+            print("❌ Failed to parse background message: \(error)")
+        }
+    }
+    
+    private func convertWebSocketMessagesToAppMessages(_ wsMessages: [HistoryMessage]) -> [Message] {
+        return wsMessages.compactMap { wsMessage in
+            // Convert WebSocket HistoryMessage to app Message
+            // Extract text content from MessageContent array
+            
+            let content: String
+            if let messageContents = wsMessage.content, !messageContents.isEmpty {
+                // Combine all text content from the content array
+                content = messageContents.compactMap { $0.text }.joined(separator: "\n")
+            } else {
+                content = "" // Empty content
+            }
+            
+            let messageType: MessageType
+            let messageSender: MessageSender
+            
+            switch wsMessage.type {
+            case "user":
+                messageType = .text // User messages are typically text
+                messageSender = .user
+            case "assistant":
+                messageType = .markdown // Assistant messages are typically markdown
+                messageSender = .assistant
+            case "system":
+                messageType = .system
+                messageSender = .system
+            default:
+                messageType = .text // Default to text type
+                messageSender = .assistant // Default to assistant
+            }
+            
+            return Message(
+                id: UUID(uuidString: wsMessage.id) ?? UUID(),
+                content: content,
+                sender: messageSender,
+                timestamp: ISO8601DateFormatter().date(from: wsMessage.timestamp ?? "") ?? Date(),
+                type: messageType,
+                metadata: AICLIMessageMetadata(
+                    sessionId: "", // Will be set by the sync service
+                    duration: 0,
+                    additionalInfo: [
+                        "backgroundSynced": true,
+                        "syncedAt": Date()
+                    ]
+                )
+            )
         }
     }
 }

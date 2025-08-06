@@ -5,7 +5,7 @@ import { AICLICompanionServer } from '../index.js';
 
 /**
  * UAT Test Suite: Message Flow
- * 
+ *
  * Tests the complete end-to-end message flow from WebSocket clients to server,
  * including session management, message persistence, and client synchronization.
  */
@@ -19,22 +19,22 @@ describe('UAT: Message Flow', () => {
   beforeEach(async () => {
     // Use a random port to avoid conflicts
     testPort = 3000 + Math.floor(Math.random() * 1000);
-    
+
     // Set test environment
     process.env.NODE_ENV = 'test';
     process.env.PORT = testPort.toString();
     process.env.AUTH_REQUIRED = 'false';
     process.env.ENABLE_BONJOUR = 'false';
     process.env.ENABLE_TLS = 'false';
-    
+
     wsUrl = `ws://localhost:${testPort}/ws`;
-    
+
     server = new AICLICompanionServer();
-    
+
     // Start server and wait for it to be ready
     await new Promise((resolve, reject) => {
       const originalStart = server.start.bind(server);
-      server.start = async function() {
+      server.start = async function () {
         try {
           await originalStart();
           resolve();
@@ -44,7 +44,7 @@ describe('UAT: Message Flow', () => {
       };
       server.start();
     });
-    
+
     serverInstance = server;
   });
 
@@ -56,7 +56,7 @@ describe('UAT: Message Flow', () => {
         });
       });
     }
-    
+
     // Clean up environment
     delete process.env.PORT;
     delete process.env.AUTH_REQUIRED;
@@ -68,18 +68,18 @@ describe('UAT: Message Flow', () => {
     it('should establish WebSocket connection successfully', async () => {
       return new Promise((resolve, reject) => {
         const ws = new WebSocket(wsUrl);
-        
+
         const timeout = setTimeout(() => {
           ws.close();
           reject(new Error('Connection timeout'));
         }, 5000);
-        
+
         ws.on('open', () => {
           clearTimeout(timeout);
           ws.close();
           resolve();
         });
-        
+
         ws.on('error', (error) => {
           clearTimeout(timeout);
           reject(error);
@@ -91,12 +91,12 @@ describe('UAT: Message Flow', () => {
       return new Promise((resolve, reject) => {
         const ws = new WebSocket(wsUrl);
         let welcomeReceived = false;
-        
+
         const timeout = setTimeout(() => {
           ws.close();
           reject(new Error('Welcome message not received within timeout'));
         }, 5000);
-        
+
         ws.on('message', (data) => {
           try {
             const message = JSON.parse(data.toString());
@@ -114,7 +114,7 @@ describe('UAT: Message Flow', () => {
             reject(error);
           }
         });
-        
+
         ws.on('error', (error) => {
           clearTimeout(timeout);
           reject(error);
@@ -129,16 +129,16 @@ describe('UAT: Message Flow', () => {
     beforeEach(async () => {
       return new Promise((resolve, reject) => {
         ws = new WebSocket(wsUrl);
-        
+
         const timeout = setTimeout(() => {
           reject(new Error('WebSocket connection timeout'));
         }, 5000);
-        
+
         ws.on('open', () => {
           clearTimeout(timeout);
           resolve();
         });
-        
+
         ws.on('error', (error) => {
           clearTimeout(timeout);
           reject(error);
@@ -172,10 +172,12 @@ describe('UAT: Message Flow', () => {
         });
 
         // Send ping message
-        ws.send(JSON.stringify({
-          type: 'ping',
-          data: { timestamp: Date.now() }
-        }));
+        ws.send(
+          JSON.stringify({
+            type: 'ping',
+            data: { timestamp: Date.now() },
+          })
+        );
       });
     });
 
@@ -200,13 +202,15 @@ describe('UAT: Message Flow', () => {
         });
 
         // Send subscribe message
-        ws.send(JSON.stringify({
-          type: 'subscribe',
-          data: {
-            events: ['streamData', 'streamComplete'],
-            sessions: []
-          }
-        }));
+        ws.send(
+          JSON.stringify({
+            type: 'subscribe',
+            data: {
+              events: ['streamData', 'streamComplete'],
+              sessions: [],
+            },
+          })
+        );
       });
     });
   });
@@ -219,16 +223,16 @@ describe('UAT: Message Flow', () => {
       // Establish WebSocket connection
       return new Promise((resolve, reject) => {
         ws = new WebSocket(wsUrl);
-        
+
         const timeout = setTimeout(() => {
           reject(new Error('WebSocket connection timeout'));
         }, 5000);
-        
+
         ws.on('open', () => {
           clearTimeout(timeout);
           resolve();
         });
-        
+
         ws.on('error', (error) => {
           clearTimeout(timeout);
           reject(error);
@@ -263,12 +267,14 @@ describe('UAT: Message Flow', () => {
         });
 
         // Send working directory message
-        ws.send(JSON.stringify({
-          type: 'setWorkingDirectory',
-          data: {
-            directory: process.cwd() // Use current working directory
-          }
-        }));
+        ws.send(
+          JSON.stringify({
+            type: 'setWorkingDirectory',
+            data: {
+              directory: process.cwd(), // Use current working directory
+            },
+          })
+        );
       });
     });
   });
@@ -279,16 +285,16 @@ describe('UAT: Message Flow', () => {
     beforeEach(async () => {
       return new Promise((resolve, reject) => {
         ws = new WebSocket(wsUrl);
-        
+
         const timeout = setTimeout(() => {
           reject(new Error('WebSocket connection timeout'));
         }, 5000);
-        
+
         ws.on('open', () => {
           clearTimeout(timeout);
           resolve();
         });
-        
+
         ws.on('error', (error) => {
           clearTimeout(timeout);
           reject(error);
@@ -338,8 +344,10 @@ describe('UAT: Message Flow', () => {
             const message = JSON.parse(data.toString());
             if (message.type === 'error') {
               clearTimeout(timeout);
-              assert.ok(message.data.error.includes('Unknown message type'), 
-                       'Should indicate unknown message type');
+              assert.ok(
+                message.data.error.includes('Unknown message type'),
+                'Should indicate unknown message type'
+              );
               resolve();
             }
           } catch (error) {
@@ -349,10 +357,12 @@ describe('UAT: Message Flow', () => {
         });
 
         // Send unknown message type
-        ws.send(JSON.stringify({
-          type: 'unknownMessageType',
-          data: {}
-        }));
+        ws.send(
+          JSON.stringify({
+            type: 'unknownMessageType',
+            data: {},
+          })
+        );
       });
     });
   });
@@ -369,7 +379,7 @@ describe('UAT: Message Flow', () => {
           const promise = new Promise((resolve, reject) => {
             const ws = new WebSocket(wsUrl);
             connections.push(ws);
-            
+
             const timeout = setTimeout(() => {
               reject(new Error(`Connection ${i} timeout`));
             }, 5000);
@@ -384,14 +394,17 @@ describe('UAT: Message Flow', () => {
               reject(error);
             });
           });
-          
+
           connectionPromises.push(promise);
         }
 
         // Wait for all connections to establish
         const establishedConnections = await Promise.all(connectionPromises);
-        assert.strictEqual(establishedConnections.length, numConnections, 
-                          'All connections should be established');
+        assert.strictEqual(
+          establishedConnections.length,
+          numConnections,
+          'All connections should be established'
+        );
 
         // Send ping from each connection
         const pingPromises = establishedConnections.map((ws, index) => {
@@ -413,18 +426,19 @@ describe('UAT: Message Flow', () => {
               }
             });
 
-            ws.send(JSON.stringify({
-              type: 'ping',
-              data: { timestamp: Date.now() }
-            }));
+            ws.send(
+              JSON.stringify({
+                type: 'ping',
+                data: { timestamp: Date.now() },
+              })
+            );
           });
         });
 
         await Promise.all(pingPromises);
-
       } finally {
         // Clean up all connections
-        connections.forEach(ws => {
+        connections.forEach((ws) => {
           if (ws.readyState === WebSocket.OPEN) {
             ws.close();
           }
@@ -435,7 +449,7 @@ describe('UAT: Message Flow', () => {
     it('should handle connection reconnection', async () => {
       // First connection
       let ws = new WebSocket(wsUrl);
-      
+
       await new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
           reject(new Error('First connection timeout'));
@@ -456,11 +470,11 @@ describe('UAT: Message Flow', () => {
       ws.close();
 
       // Wait a bit
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       // Second connection (reconnection)
       ws = new WebSocket(wsUrl);
-      
+
       await new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
           reject(new Error('Reconnection timeout'));

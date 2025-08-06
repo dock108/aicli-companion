@@ -1,3 +1,4 @@
+#if os(iOS)
 import UIKit
 import UserNotifications
 
@@ -6,6 +7,10 @@ public class AppDelegate: NSObject, UIApplicationDelegate {
     
     public func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
         // App launch setup
+        
+        // Initialize BackgroundSessionCoordinator early to capture session IDs
+        _ = BackgroundSessionCoordinator.shared
+        print("🎯 BackgroundSessionCoordinator initialized and listening for session IDs")
         
         // Perform session cleanup on app launch
         performSessionCleanup()
@@ -30,6 +35,9 @@ public class AppDelegate: NSObject, UIApplicationDelegate {
         
         // Clean up stale session deduplication entries
         SessionDeduplicationManager.shared.cleanupExpiredSessions()
+        
+        // Clean up old pending messages in BackgroundSessionCoordinator
+        BackgroundSessionCoordinator.shared.cleanupOldPendingMessages()
         
         // Log active sessions
         let activeSessions = SessionStatePersistenceService.shared.getActiveSessions()
@@ -66,19 +74,60 @@ public class AppDelegate: NSObject, UIApplicationDelegate {
         print("📨 Received remote notification: \(userInfo)")
         
         // Parse notification payload
-        if let projectId = userInfo["projectId"] as? String,
-           let projectName = userInfo["projectName"] as? String {
-            
-            // Schedule enhanced notification
-            EnhancedPushNotificationService.shared.scheduleProjectNotification(
-                title: userInfo["title"] as? String ?? "New Message",
-                body: userInfo["body"] as? String ?? "You have a new message in \(projectName)",
-                projectId: projectId,
-                projectName: projectName,
-                sessionId: userInfo["sessionId"] as? String
-            )
+        guard let projectId = userInfo["projectId"] as? String,
+              let projectName = userInfo["projectName"] as? String else {
+            print("⚠️ Push notification missing required project information")
+            completionHandler(.noData)
+            return
         }
         
-        completionHandler(.newData)
+        let sessionId = userInfo["sessionId"] as? String
+        let notificationTitle = userInfo["title"] as? String ?? "New Message"
+        let notificationBody = userInfo["body"] as? String ?? "You have a new message in \(projectName)"
+        
+        // Start background task to prevent app termination during sync
+        let taskId = application.beginBackgroundTask(withName: "BackgroundMessageSync") {
+            print("⏰ Background task expired during message sync")
+            completionHandler(.failed)
+        }
+        
+        // Perform background message sync
+        Task {
+            var syncSuccess = false
+            
+            if let sessionId = sessionId {
+                print("🔄 Starting background message sync for session: \(sessionId)")
+                syncSuccess = await BackgroundMessageSyncService.shared.syncMessagesForSession(
+                    sessionId,
+                    projectId: projectId,
+                    projectName: projectName
+                )
+            }
+            
+            // Schedule local notification after sync attempt
+            EnhancedPushNotificationService.shared.scheduleProjectNotification(
+                title: notificationTitle,
+                body: notificationBody,
+                projectId: projectId,
+                projectName: projectName,
+                sessionId: sessionId
+            )
+            
+            // Complete background task
+            application.endBackgroundTask(taskId)
+            
+            // Report result
+            if syncSuccess {
+                print("✅ Background message sync completed successfully")
+                completionHandler(.newData)
+            } else if sessionId == nil {
+                print("ℹ️ No session ID in notification, skipping sync")
+                completionHandler(.noData)
+            } else {
+                print("❌ Background message sync failed")
+                completionHandler(.failed)
+            }
+        }
     }
 }
+#endif

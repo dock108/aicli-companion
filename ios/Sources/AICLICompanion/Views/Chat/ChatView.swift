@@ -109,6 +109,7 @@ struct ChatView: View {
         }
         .copyConfirmationOverlay()
         .onAppear {
+            viewModel.currentProject = selectedProject
             setupView()
         }
         .onDisappear {
@@ -116,6 +117,13 @@ struct ChatView: View {
         }
         .onChange(of: selectedProject?.path) { oldPath, newPath in
             if let oldPath = oldPath, let newPath = newPath, oldPath != newPath {
+                // Save messages for the old project before switching
+                if let currentProject = viewModel.currentProject {
+                    viewModel.saveMessages(for: currentProject)
+                }
+                
+                // Update to new project
+                viewModel.currentProject = selectedProject
                 handleProjectChange()
             }
         }
@@ -158,18 +166,31 @@ struct ChatView: View {
             ) { result in
                 switch result {
                 case .success(let session):
+                    print("🔷 ChatView: Session restored: \(session.sessionId)")
+                    
+                    // Set the active session and current session ID for message persistence
                     self.viewModel.setActiveSession(session)
+                    self.viewModel.currentSessionId = session.sessionId
+                    
+                    // Load messages from persistence using the session ID
                     self.viewModel.loadMessages(for: project, sessionId: session.sessionId)
                     
-                    // If no messages were loaded locally but we have an active session,
-                    // this is a restored session with no local history - leave empty for clean start
-                    if self.viewModel.messages.isEmpty {
-                        print("🔍 Session exists but no local messages - clean start for restored session")
-                    }
+                    print("🔷 ChatView: Loaded \(self.viewModel.messages.count) messages for restored session")
                     
-                case .failure:
+                case .failure(let error):
                     // No existing session, user can start one when ready
-                    print("ℹ️ No existing session, waiting for user to start")
+                    print("ℹ️ No existing session (\(error.localizedDescription)), waiting for user to start")
+                    
+                    // Clear any stale session data
+                    self.viewModel.setActiveSession(nil)
+                    self.viewModel.currentSessionId = nil
+                    self.viewModel.messages.removeAll()
+                    
+                    // Check for pending messages that might have been saved without a session ID
+                    if let pendingMessages = BackgroundSessionCoordinator.shared.retrievePendingMessages(for: project.path) {
+                        print("🔄 ChatView: Found \(pendingMessages.count) pending messages for project")
+                        self.viewModel.messages = pendingMessages
+                    }
                 }
             }
         }
@@ -181,11 +202,10 @@ struct ChatView: View {
         // Save messages
         viewModel.saveMessages(for: project)
         
-        // Close session if needed
-        sessionManager.closeSession()
-        
         // Clean up keyboard observers
         NotificationCenter.default.removeObserver(self)
+        
+        // Note: Do NOT close session - let it continue in background
     }
     
     private func handleProjectChange() {
@@ -193,14 +213,14 @@ struct ChatView: View {
         
         print("🔄 ChatView: Project changed to '\(project.name)'")
         
-        // Save current messages
-        if let oldProject = selectedProject {
-            viewModel.saveMessages(for: oldProject)
-        }
+        // Note: At this point, selectedProject is already the NEW project
+        // We can't save messages for the old project here because we don't have a reference to it
+        // Messages should have been saved in cleanupView() when leaving the old project
         
         // Clear current state
         viewModel.messages.removeAll()
         viewModel.activeSession = nil
+        viewModel.currentSessionId = nil  // Clear Claude's session ID to prevent cross-project contamination
         messageText = ""
         
         // Set up for new project
@@ -214,30 +234,44 @@ struct ChatView: View {
         let text = messageText
         messageText = ""
         
-        // Check if we have a session
-        if viewModel.activeSession == nil {
-            // Start a new session first, then send the message
-            if let connection = settings.currentConnection {
-                viewModel.startSession(for: project, connection: connection) {
-                    // Once session is started, send the user's message
-                    self.viewModel.sendMessage(text, for: project)
-                }
-            } else {
-                let errorMessage = Message(
-                    content: "❌ No server connection configured",
-                    sender: .assistant,
-                    type: .text
-                )
-                viewModel.messages.append(errorMessage)
-            }
+        // Check if we have a server connection
+        guard settings.currentConnection != nil else {
+            let errorMessage = Message(
+                content: "❌ No server connection configured",
+                sender: .assistant,
+                type: .text
+            )
+            viewModel.messages.append(errorMessage)
             return
         }
         
+        // Send message directly - let Claude handle session creation
+        // For fresh chats: currentSessionId will be nil
+        // For continued chats: currentSessionId will have Claude's session ID
         viewModel.sendMessage(text, for: project)
     }
     
     private func clearCurrentSession() {
         guard let project = selectedProject else { return }
+        
+        // Send clearChat message to server if we have an active session
+        if let currentSessionId = viewModel.currentSessionId {
+            WebSocketService.shared.sendClearChat(
+                sessionId: currentSessionId,
+                completion: { result in
+                    switch result {
+                    case .success(let newSessionId):
+                        print("✅ Chat cleared, new session ID: \(newSessionId)")
+                        // Update the current session ID
+                        DispatchQueue.main.async {
+                            self.viewModel.currentSessionId = newSessionId
+                        }
+                    case .failure(let error):
+                        print("❌ Failed to clear chat: \(error)")
+                    }
+                }
+            )
+        }
         
         // Clear messages from UI
         viewModel.messages.removeAll()
@@ -249,13 +283,11 @@ struct ChatView: View {
         let persistenceService = MessagePersistenceService.shared
         persistenceService.clearMessages(for: project.path)
         
+        // Clear current session ID - next message will be a fresh chat
+        viewModel.currentSessionId = nil
+        
         // Clear WebSocket active session
         WebSocketService.shared.setActiveSession(nil)
-        
-        // Restart session fresh
-        if let connection = settings.currentConnection {
-            viewModel.startSession(for: project, connection: connection)
-        }
     }
     
     // MARK: - WebSocket Connection

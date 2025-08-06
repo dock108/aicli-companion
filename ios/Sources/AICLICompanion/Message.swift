@@ -126,8 +126,9 @@ struct AICLIMessageMetadata: Codable {
     let queuedAt: Date?
     let deliveredAt: Date?
     let queuePriority: Int?
+    var additionalInfo: [String: Any]?
 
-    init(sessionId: String, duration: TimeInterval, cost: Double? = nil, tools: [String]? = nil, queuedAt: Date? = nil, deliveredAt: Date? = nil, queuePriority: Int? = nil) {
+    init(sessionId: String, duration: TimeInterval, cost: Double? = nil, tools: [String]? = nil, queuedAt: Date? = nil, deliveredAt: Date? = nil, queuePriority: Int? = nil, additionalInfo: [String: Any]? = nil) {
         self.sessionId = sessionId
         self.duration = duration
         self.cost = cost
@@ -135,6 +136,69 @@ struct AICLIMessageMetadata: Codable {
         self.queuedAt = queuedAt
         self.deliveredAt = deliveredAt
         self.queuePriority = queuePriority
+        self.additionalInfo = additionalInfo
+    }
+    
+    // Custom coding to handle additionalInfo
+    enum CodingKeys: String, CodingKey {
+        case sessionId, duration, cost, tools, queuedAt, deliveredAt, queuePriority, additionalInfo
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        sessionId = try container.decode(String.self, forKey: .sessionId)
+        duration = try container.decode(TimeInterval.self, forKey: .duration)
+        cost = try container.decodeIfPresent(Double.self, forKey: .cost)
+        tools = try container.decodeIfPresent([String].self, forKey: .tools)
+        queuedAt = try container.decodeIfPresent(Date.self, forKey: .queuedAt)
+        deliveredAt = try container.decodeIfPresent(Date.self, forKey: .deliveredAt)
+        queuePriority = try container.decodeIfPresent(Int.self, forKey: .queuePriority)
+        
+        // Decode additionalInfo as AnyCodable
+        if let additionalData = try? container.decodeIfPresent([String: AnyCodable].self, forKey: .additionalInfo) {
+            additionalInfo = additionalData.mapValues { $0.value }
+        } else {
+            additionalInfo = nil
+        }
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(sessionId, forKey: .sessionId)
+        try container.encode(duration, forKey: .duration)
+        try container.encodeIfPresent(cost, forKey: .cost)
+        try container.encodeIfPresent(tools, forKey: .tools)
+        try container.encodeIfPresent(queuedAt, forKey: .queuedAt)
+        try container.encodeIfPresent(deliveredAt, forKey: .deliveredAt)
+        try container.encodeIfPresent(queuePriority, forKey: .queuePriority)
+        
+        // Encode additionalInfo as AnyCodable
+        if let additionalInfo = additionalInfo {
+            let encodableInfo = additionalInfo.mapValues { AnyCodable($0) }
+            try container.encode(encodableInfo, forKey: .additionalInfo)
+        }
+    }
+}
+
+// MARK: - Status Message Metadata
+
+struct StatusMetadata: Codable {
+    let statusType: String // "progress", "tools", "completion", "interruption"
+    let stage: String? // "creating", "thinking", "working", "completed", etc.
+    let duration: Double? // Duration in seconds
+    let tokens: Int? // Token count
+    let tools: [String]? // Tools being used
+    let canInterrupt: Bool // Whether the operation can be interrupted
+    let originalText: String // Original status text from Claude CLI
+    
+    init(statusType: String, stage: String? = nil, duration: Double? = nil, tokens: Int? = nil, tools: [String]? = nil, canInterrupt: Bool = false, originalText: String) {
+        self.statusType = statusType
+        self.stage = stage
+        self.duration = duration
+        self.tokens = tokens
+        self.tools = tools
+        self.canInterrupt = canInterrupt
+        self.originalText = originalText
     }
 }
 
@@ -188,6 +252,12 @@ struct ServerToolUse: Codable {
     enum CodingKeys: String, CodingKey {
         case webSearchRequests = "web_search_requests"
     }
+}
+
+struct Deliverable: Codable {
+    let type: String
+    let language: String?
+    let code: String?
 }
 
 // MARK: - Connection Models
@@ -265,6 +335,8 @@ struct WebSocketMessage: Codable {
         case claudeCommand(ClaudeCommandRequest)
         case registerDevice(RegisterDeviceRequest)
         case getMessageHistory(GetMessageHistoryRequest)
+        case acknowledgeMessages(AcknowledgeMessagesRequest)
+        case clearChat(ClearChatRequest)
         case welcome(WelcomeResponse)
         case askResponse(AskResponseData)
         case streamStarted(StreamStartedResponse)
@@ -287,9 +359,9 @@ struct WebSocketMessage: Codable {
         case conversationResult(ConversationResultResponse)
         case workingDirectorySet(WorkingDirectorySetResponse)
         case progress(ProgressResponse)
-        case streamChunk(StreamChunkResponse)
         case deviceRegistered(DeviceRegisteredResponse)
         case getMessageHistoryResponse(GetMessageHistoryResponse)
+        case clearChatResponse(ClearChatResponse)
     }
     
     // Custom decoding to handle server message format
@@ -347,7 +419,15 @@ struct WebSocketMessage: Codable {
         case .deviceRegistered:
             self.data = .deviceRegistered(try DeviceRegisteredResponse(from: dataDecoder))
         case .getMessageHistory:
+            self.data = .getMessageHistory(try GetMessageHistoryRequest(from: dataDecoder))
+        case .acknowledgeMessages:
+            self.data = .acknowledgeMessages(try AcknowledgeMessagesRequest(from: dataDecoder))
+        case .clearChat:
+            self.data = .clearChat(try ClearChatRequest(from: dataDecoder))
+        case .getMessageHistoryResponse:
             self.data = .getMessageHistoryResponse(try GetMessageHistoryResponse(from: dataDecoder))
+        case .clearChatResponse:
+            self.data = .clearChatResponse(try ClearChatResponse(from: dataDecoder))
         default:
             throw DecodingError.dataCorruptedError(forKey: .data, in: container, debugDescription: "Unsupported message type for decoding: \(type)")
         }
@@ -430,7 +510,13 @@ struct WebSocketMessage: Codable {
             try container.encode(response, forKey: .data)
         case .getMessageHistory(let request):
             try container.encode(request, forKey: .data)
+        case .acknowledgeMessages(let request):
+            try container.encode(request, forKey: .data)
+        case .clearChat(let request):
+            try container.encode(request, forKey: .data)
         case .getMessageHistoryResponse(let response):
+            try container.encode(response, forKey: .data)
+        case .clearChatResponse(let response):
             try container.encode(response, forKey: .data)
         }
     }
@@ -449,9 +535,12 @@ enum WebSocketMessageType: String, Codable {
     case claudeCommand = "claudeCommand"
     case registerDevice = "registerDevice"
     case getMessageHistory = "getMessageHistory"
+    case acknowledgeMessages = "acknowledgeMessages"
+    case clearChat = "clearChat"
 
     // Server → Client
     case welcome = "welcome"
+    case getMessageHistoryResponse = "getMessageHistoryResponse"
     case askResponse = "askResponse"
     case streamStarted = "streamStarted"
     case streamData = "streamData"
@@ -472,12 +561,10 @@ enum WebSocketMessageType: String, Codable {
     case toolResult = "toolResult"
     case conversationResult = "conversationResult"
     case workingDirectorySet = "workingDirectorySet"
+    case clearChatResponse = "clearChatResponse"
     
     // Progress and status message types
     case progress = "progress"
-    
-    // Stream chunk for sophisticated streaming
-    case streamChunk = "streamChunk"
     
     // Device registration
     case deviceRegistered = "deviceRegistered"
@@ -546,6 +633,21 @@ struct GetMessageHistoryRequest: Codable {
     let offset: Int?
 }
 
+struct AcknowledgeMessagesRequest: Codable {
+    let messageIds: [String]
+}
+
+struct ClearChatRequest: Codable {
+    let sessionId: String
+}
+
+struct ClearChatResponse: Codable {
+    let success: Bool
+    let oldSessionId: String
+    let newSessionId: String
+    let message: String
+}
+
 // MARK: - Server Response Models
 
 struct WelcomeResponse: Codable {
@@ -606,10 +708,24 @@ struct StreamChunkMetadata: Codable {
     let level: Int?
     let toolName: String?
     
-    init(language: String? = nil, level: Int? = nil, toolName: String? = nil) {
+    // Status-related metadata for Claude CLI status chunks
+    let statusType: String?
+    let stage: String?
+    let duration: Double?
+    let tokens: Int?
+    let tools: [String]?
+    let canInterrupt: Bool?
+    
+    init(language: String? = nil, level: Int? = nil, toolName: String? = nil, statusType: String? = nil, stage: String? = nil, duration: Double? = nil, tokens: Int? = nil, tools: [String]? = nil, canInterrupt: Bool? = nil) {
         self.language = language
         self.level = level
         self.toolName = toolName
+        self.statusType = statusType
+        self.stage = stage
+        self.duration = duration
+        self.tokens = tokens
+        self.tools = tools
+        self.canInterrupt = canInterrupt
     }
     
     init(from decoder: Decoder) throws {
@@ -617,6 +733,14 @@ struct StreamChunkMetadata: Codable {
         self.language = try container.decodeIfPresent(String.self, forKey: DynamicCodingKeys(stringValue: "language"))
         self.level = try container.decodeIfPresent(Int.self, forKey: DynamicCodingKeys(stringValue: "level"))
         self.toolName = try container.decodeIfPresent(String.self, forKey: DynamicCodingKeys(stringValue: "toolName"))
+        
+        // Decode status-related fields
+        self.statusType = try container.decodeIfPresent(String.self, forKey: DynamicCodingKeys(stringValue: "statusType"))
+        self.stage = try container.decodeIfPresent(String.self, forKey: DynamicCodingKeys(stringValue: "stage"))
+        self.duration = try container.decodeIfPresent(Double.self, forKey: DynamicCodingKeys(stringValue: "duration"))
+        self.tokens = try container.decodeIfPresent(Int.self, forKey: DynamicCodingKeys(stringValue: "tokens"))
+        self.tools = try container.decodeIfPresent([String].self, forKey: DynamicCodingKeys(stringValue: "tools"))
+        self.canInterrupt = try container.decodeIfPresent(Bool.self, forKey: DynamicCodingKeys(stringValue: "canInterrupt"))
     }
     
     struct DynamicCodingKeys: CodingKey {
@@ -674,6 +798,7 @@ struct SubscribedResponse: Codable {
 struct SystemInitResponse: Codable {
     let type: String
     let sessionId: String?
+    let claudeSessionId: String?  // Claude's actual session ID
     let workingDirectory: String?
     let availableTools: [String]
     let mcpServers: [String]
@@ -687,6 +812,11 @@ struct AssistantMessageResponse: Codable {
     let content: [MessageContentBlock]
     let model: String?
     let usage: Usage?
+    let claudeSessionId: String?  // Claude's actual session ID
+    let deliverables: [Deliverable]?
+    let aggregated: Bool?
+    let messageCount: Int?
+    let isComplete: Bool?
     let timestamp: Date
 }
 
@@ -728,6 +858,7 @@ struct ConversationResultResponse: Codable {
     let success: Bool
     let result: String?
     let sessionId: String?
+    let claudeSessionId: String?  // Claude's actual session ID
     let duration: TimeInterval?
     let cost: Double?
     let usage: Usage?

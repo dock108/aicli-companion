@@ -91,10 +91,7 @@ public struct AdaptiveContentView: View {
                     ProjectSelectionView(
                         selectedProject: $selectedProject,
                         isProjectSelected: $isProjectSelected,
-                        onDisconnect: disconnectFromServer,
-                        onSessionStarted: { session in
-                            currentSession = session
-                        }
+                        onDisconnect: disconnectFromServer
                     )
                     .allowsHitTesting(isInteractionEnabled)
                     .navigationTitle("Projects")
@@ -180,10 +177,7 @@ public struct AdaptiveContentView: View {
                             ProjectSelectionView(
                                 selectedProject: $selectedProject,
                                 isProjectSelected: $isProjectSelected,
-                                onDisconnect: disconnectFromServer,
-                                onSessionStarted: { session in
-                                    currentSession = session
-                                }
+                                onDisconnect: disconnectFromServer
                             )
                             .allowsHitTesting(isInteractionEnabled)
                             .transition(.asymmetric(

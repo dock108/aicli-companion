@@ -13,7 +13,8 @@ struct ChatSessionMenu: View {
     var body: some View {
         Menu {
             Section {
-                if let sessionId = sessionId {
+                // Only show session ID if we have both a session and messages
+                if let sessionId = sessionId, messageCount > 0 {
                     Label("Session ID: \(sessionId.prefix(8))...", systemImage: "number.circle")
                         .foregroundColor(Colors.textSecondary(for: colorScheme))
                 }
@@ -22,11 +23,14 @@ struct ChatSessionMenu: View {
                     .foregroundColor(Colors.textSecondary(for: colorScheme))
             }
             
-            Section {
-                Button(role: .destructive, action: {
-                    showingClearConfirmation = true
-                }) {
-                    Label("Clear Chat & Start Fresh", systemImage: "trash.circle")
+            // Only show clear option if we have messages to clear
+            if messageCount > 0 {
+                Section {
+                    Button(role: .destructive, action: {
+                        showingClearConfirmation = true
+                    }) {
+                        Label("Clear Chat & Start Fresh", systemImage: "trash.circle")
+                    }
                 }
             }
         } label: {

@@ -606,7 +606,8 @@ export class AICLISessionManager extends EventEmitter {
           console.log(`💾 Dead session ${sessionId} removed from persistent storage`);
         } catch (error) {
           console.warn(
-            `⚠️ Failed to remove dead session ${sessionId} from persistence:`,
+            '⚠️ Failed to remove dead session %s from persistence:',
+            sessionId,
             error.message
           );
         }

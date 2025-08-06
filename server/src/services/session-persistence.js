@@ -426,7 +426,7 @@ export class SessionPersistenceService {
         `💾 Saved message buffer for session ${sessionId} (${bufferData.assistantMessages.length} assistant messages)`
       );
     } catch (error) {
-      console.error(`❌ Failed to save message buffer for session ${sessionId}:`, error);
+      console.error('❌ Failed to save message buffer for session %s:', sessionId, error);
       // Don't throw - persistence failures shouldn't break message flow
     }
   }

@@ -57,7 +57,7 @@ export class AICLIService extends EventEmitter {
           `🧹 Cleaning up session ${data.sessionId} after process exit with code ${data.code}`
         );
         this.sessionManager.cleanupDeadSession(data.sessionId).catch((error) => {
-          console.warn(`⚠️ Failed to cleanup dead session ${data.sessionId}:`, error.message);
+          console.warn('⚠️ Failed to cleanup dead session %s:', data.sessionId, error.message);
         });
       }
       this.emit('processExit', data);

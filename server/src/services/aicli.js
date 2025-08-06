@@ -884,7 +884,7 @@ export class AICLIService extends EventEmitter {
         buffer.deliverables = [];
       }
     }
-    
+
     // Also delegate to session manager's method if it exists
     if (this.sessionManager?.clearSessionBuffer) {
       this.sessionManager.clearSessionBuffer(sessionId);
@@ -966,10 +966,6 @@ export class AICLIService extends EventEmitter {
 
   async markSessionForegrounded(sessionId) {
     return this.sessionManager.markSessionForegrounded(sessionId);
-  }
-
-  cleanupDeadSession(sessionId) {
-    return this.sessionManager.cleanupDeadSession(sessionId);
   }
 
   // Startup cleanup to handle stale Claude CLI sessions

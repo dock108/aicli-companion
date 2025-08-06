@@ -595,13 +595,20 @@ describe('AICLIProcessRunner', () => {
         debug: mock.fn(),
         error: mock.fn(),
         info: mock.fn(),
-        shouldLog: () => false
+        shouldLog: () => false,
       };
 
-      processRunner.createOutputHandler('session123', mockProcess, mock.fn(), mock.fn(), {
-        recordActivity: mock.fn(),
-        cleanup: mock.fn(),
-      }, mockLogger);
+      processRunner.createOutputHandler(
+        'session123',
+        mockProcess,
+        mock.fn(),
+        mock.fn(),
+        {
+          recordActivity: mock.fn(),
+          cleanup: mock.fn(),
+        },
+        mockLogger
+      );
 
       // Emit stdout data - the ClaudeStreamParser might need specific format
       // Let's emit actual Claude-style data
@@ -649,13 +656,20 @@ describe('AICLIProcessRunner', () => {
         debug: mock.fn(),
         error: mock.fn(),
         info: mock.fn(),
-        shouldLog: () => false
+        shouldLog: () => false,
       };
 
-      processRunner.createOutputHandler('session123', mockProcessForHandler, mock.fn(), mock.fn(), {
-        recordActivity: mock.fn(),
-        cleanup: mock.fn(),
-      }, mockLogger);
+      processRunner.createOutputHandler(
+        'session123',
+        mockProcessForHandler,
+        mock.fn(),
+        mock.fn(),
+        {
+          recordActivity: mock.fn(),
+          cleanup: mock.fn(),
+        },
+        mockLogger
+      );
 
       // Emit stderr data
       mockProcessForHandler.stderr.emit('data', Buffer.from('Warning message'));
@@ -676,7 +690,7 @@ describe('AICLIProcessRunner', () => {
         debug: mock.fn(),
         error: mock.fn(),
         info: mock.fn(),
-        shouldLog: () => false
+        shouldLog: () => false,
       };
 
       const handler = processRunner.createOutputHandler(

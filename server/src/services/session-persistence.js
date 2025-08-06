@@ -404,6 +404,11 @@ export class SessionPersistenceService {
       return;
     }
 
+    if (!isValidSessionId(sessionId)) {
+      console.warn(`⚠️ Invalid sessionId provided to saveMessageBuffer: ${sessionId}`);
+      return;
+    }
+
     try {
       const bufferFile = path.join(this.storageDir, `buffer-${sessionId}.json`);
       const bufferData = {

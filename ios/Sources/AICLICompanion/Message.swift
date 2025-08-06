@@ -87,35 +87,35 @@ struct MarkdownData: Codable {
 }
 
 enum MarkdownRenderMode: String, Codable {
-    case full = "full"
-    case inline = "inline"
-    case stripped = "stripped"
+    case full
+    case inline
+    case stripped
 }
 
 enum MessageSender: String, Codable, CaseIterable {
-    case user = "user"
-    case assistant = "assistant"
-    case system = "system"
+    case user
+    case assistant
+    case system
 }
 
 enum MessageType: String, Codable, CaseIterable {
-    case text = "text"
-    case markdown = "markdown"
-    case code = "code"
+    case text
+    case markdown
+    case code
     case fileContent = "file_content"
     case commandOutput = "command_output"
     case toolResult = "tool_result"
-    case error = "error"
-    case permission = "permission"
+    case error
+    case permission
     case toolUse = "tool_use"
-    case system = "system"
+    case system
 }
 
 enum StreamingState: String, Codable, CaseIterable {
-    case pending = "pending"
-    case streaming = "streaming"
-    case completed = "completed"
-    case failed = "failed"
+    case pending
+    case streaming
+    case completed
+    case failed
 }
 
 struct AICLIMessageMetadata: Codable {
@@ -524,50 +524,50 @@ struct WebSocketMessage: Codable {
 
 enum WebSocketMessageType: String, Codable {
     // Client → Server
-    case ask = "ask"
-    case streamStart = "streamStart"
-    case streamSend = "streamSend"
-    case permission = "permission"
-    case streamClose = "streamClose"
-    case ping = "ping"
-    case subscribe = "subscribe"
-    case setWorkingDirectory = "setWorkingDirectory"
-    case claudeCommand = "claudeCommand"
-    case registerDevice = "registerDevice"
-    case getMessageHistory = "getMessageHistory"
-    case acknowledgeMessages = "acknowledgeMessages"
-    case clearChat = "clearChat"
+    case ask
+    case streamStart
+    case streamSend
+    case permission
+    case streamClose
+    case ping
+    case subscribe
+    case setWorkingDirectory
+    case claudeCommand
+    case registerDevice
+    case getMessageHistory
+    case acknowledgeMessages
+    case clearChat
 
     // Server → Client
-    case welcome = "welcome"
-    case getMessageHistoryResponse = "getMessageHistoryResponse"
-    case askResponse = "askResponse"
-    case streamStarted = "streamStarted"
-    case streamData = "streamData"
-    case streamChunk = "streamChunk"
-    case streamToolUse = "streamToolUse"
-    case permissionRequest = "permissionRequest"
-    case streamComplete = "streamComplete"
-    case error = "error"
-    case sessionStatus = "sessionStatus"
-    case pong = "pong"
-    case claudeResponse = "claudeResponse"
-    case subscribed = "subscribed"
+    case welcome
+    case getMessageHistoryResponse
+    case askResponse
+    case streamStarted
+    case streamData
+    case streamChunk
+    case streamToolUse
+    case permissionRequest
+    case streamComplete
+    case error
+    case sessionStatus
+    case pong
+    case claudeResponse
+    case subscribed
 
     // New rich message types from enhanced server
-    case systemInit = "systemInit"
-    case assistantMessage = "assistantMessage"
-    case toolUse = "toolUse"
-    case toolResult = "toolResult"
-    case conversationResult = "conversationResult"
-    case workingDirectorySet = "workingDirectorySet"
-    case clearChatResponse = "clearChatResponse"
+    case systemInit
+    case assistantMessage
+    case toolUse
+    case toolResult
+    case conversationResult
+    case workingDirectorySet
+    case clearChatResponse
     
     // Progress and status message types
-    case progress = "progress"
+    case progress
     
     // Device registration
-    case deviceRegistered = "deviceRegistered"
+    case deviceRegistered
 }
 
 // MARK: - Client Request Models

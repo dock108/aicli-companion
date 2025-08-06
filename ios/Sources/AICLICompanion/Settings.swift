@@ -3,9 +3,9 @@ import Foundation
 // MARK: - App Settings
 
 enum Theme: String, CaseIterable, Codable {
-    case system = "system"
-    case light = "light"
-    case dark = "dark"
+    case system
+    case light
+    case dark
 
     var displayName: String {
         switch self {
@@ -17,9 +17,9 @@ enum Theme: String, CaseIterable, Codable {
 }
 
 enum FontSize: String, CaseIterable, Codable {
-    case small = "small"
-    case medium = "medium"
-    case large = "large"
+    case small
+    case medium
+    case large
 
     var displayName: String {
         switch self {

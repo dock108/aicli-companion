@@ -35,10 +35,7 @@ public struct ContentView: View {
                             ProjectSelectionView(
                                 selectedProject: $selectedProject,
                                 isProjectSelected: $isProjectSelected,
-                                onDisconnect: disconnectFromServer,
-                                onSessionStarted: { session in
-                                    currentSession = session
-                                }
+                                onDisconnect: disconnectFromServer
                             )
                             .transition(.asymmetric(
                                 insertion: .move(edge: .trailing).combined(with: .opacity),

@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 54;
+	objectVersion = 56;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -22,6 +22,7 @@
 		A7300E09237142957F8C8C1C /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E3211A638950CEC95209C22 /* NotificationManager.swift */; };
 		AB5EFEBA44864DC182FCD060 /* QRCodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AD86B7865A81456EF003A53 /* QRCodeView.swift */; };
 		B143A4E3EB5F3A12C2CED6ED /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFBDF2E46F9E61B2BB9D4DBC /* SettingsView.swift */; };
+		C35A0AB9A76FC99605C14640 /* LogsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5927820FC3467989423A23AD /* LogsView.swift */; };
 		C8F14409045C0752D3109812 /* UserNotifications.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B242D22E770B5EC0075F714F /* UserNotifications.framework */; };
 		CDF04B318995A84AA91C22CE /* MenuBarIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7534B1382D52E1F0FF12325B /* MenuBarIcon.swift */; };
 		F44C16FB9A9BAE598C659205 /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29E0360E0BE61428A55B99FA /* NetworkMonitor.swift */; };
@@ -36,6 +37,7 @@
 		4F590521C27792DFB38C3738 /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
 		507BD2219D728ED3A8A5CC40 /* SettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsManager.swift; sourceTree = "<group>"; };
 		5551CA47170A5C2379869D12 /* ActivityMonitorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityMonitorView.swift; sourceTree = "<group>"; };
+		5927820FC3467989423A23AD /* LogsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogsView.swift; sourceTree = "<group>"; };
 		5E3211A638950CEC95209C22 /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
 		65B9205909846D4C8AAB899C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		74BB01E7B6E6B04554438DEF /* Network.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Network.framework; path = System/Library/Frameworks/Network.framework; sourceTree = SDKROOT; };
@@ -123,6 +125,7 @@
 			isa = PBXGroup;
 			children = (
 				5551CA47170A5C2379869D12 /* ActivityMonitorView.swift */,
+				5927820FC3467989423A23AD /* LogsView.swift */,
 				7534B1382D52E1F0FF12325B /* MenuBarIcon.swift */,
 				4F590521C27792DFB38C3738 /* MenuBarView.swift */,
 				0AD86B7865A81456EF003A53 /* QRCodeView.swift */,
@@ -176,7 +179,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 1430;
+				LastUpgradeCheck = 1620;
 				TargetAttributes = {
 					4675535F2FCD0083CB5F445B = {
 						DevelopmentTeam = "";
@@ -221,6 +224,7 @@
 				05AEBFC4AC24B744ADEC851C /* AppDelegate.swift in Sources */,
 				39D0E900249608AF6B1FEEEA /* ClaudeCompanionApp.swift in Sources */,
 				3E13A74E80B1DAD7C2D541D9 /* KeychainManager.swift in Sources */,
+				C35A0AB9A76FC99605C14640 /* LogsView.swift in Sources */,
 				CDF04B318995A84AA91C22CE /* MenuBarIcon.swift in Sources */,
 				0FAAB01DDEDF7EF9BE58F506 /* MenuBarView.swift in Sources */,
 				F44C16FB9A9BAE598C659205 /* NetworkMonitor.swift in Sources */,
@@ -271,9 +275,11 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -329,9 +335,11 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -366,6 +374,7 @@
 				CODE_SIGN_ENTITLEMENTS = ClaudeCompanionHost/ClaudeCompanionHost.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = ClaudeCompanionHost/Info.plist;
@@ -388,6 +397,7 @@
 				CODE_SIGN_ENTITLEMENTS = ClaudeCompanionHost/ClaudeCompanionHost.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = ClaudeCompanionHost/Info.plist;

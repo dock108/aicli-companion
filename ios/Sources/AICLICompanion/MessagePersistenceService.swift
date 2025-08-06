@@ -217,6 +217,37 @@ class MessagePersistenceService: ObservableObject {
         savedSessions.removeValue(forKey: projectId)
     }
     
+    func updateSessionMetadata(for projectId: String, aicliSessionId: String) {
+        guard let metadata = savedSessions[projectId] else {
+            print("❌ MessagePersistence: No metadata to update for project '\(projectId)'")
+            return
+        }
+        
+        // Create new metadata with updated AICLI session ID
+        let updatedMetadata = PersistedSessionMetadata(
+            sessionId: metadata.sessionId,
+            projectId: metadata.projectId,
+            projectName: metadata.projectName,
+            projectPath: metadata.projectPath,
+            lastMessageDate: metadata.lastMessageDate,
+            messageCount: metadata.messageCount,
+            aicliSessionId: aicliSessionId,
+            createdAt: metadata.createdAt
+        )
+        savedSessions[projectId] = updatedMetadata
+        
+        // Save to disk
+        let projectDir = sessionsDirectory.appendingPathComponent(sanitizeFilename(projectId))
+        let metadataFile = projectDir.appendingPathComponent("metadata.json")
+        
+        if let data = try? encoder.encode(updatedMetadata) {
+            try? data.write(to: metadataFile)
+            print("✅ MessagePersistence: Updated AICLI session ID to '\(aicliSessionId)' for project '\(projectId)'")
+        } else {
+            print("❌ MessagePersistence: Failed to save updated metadata for project '\(projectId)'")
+        }
+    }
+    
     func archiveCurrentSession(for projectId: String) {
         guard let metadata = savedSessions[projectId] else { return }
         

@@ -185,6 +185,45 @@ export function setupRoutes(app, aicliService) {
     }
   });
 
+  // Get server status (for macOS companion app)
+  router.get('/status', (req, res) => {
+    try {
+      const sessions = aicliService.getActiveSessions();
+      const sessionInfo = sessions.map((session) => ({
+        id: session.sessionId || session.id,
+        name: session.sessionName || session.name || 'Unnamed Session',
+      }));
+
+      res.json({
+        running: true,
+        port: process.env.PORT || 3001,
+        sessions: sessionInfo,
+      });
+    } catch (error) {
+      res.status(500).json({
+        running: false,
+        port: process.env.PORT || 3001,
+        sessions: [],
+        error: error.message,
+      });
+    }
+  });
+
+  // Shutdown server (for macOS companion app)
+  router.post('/shutdown', (req, res) => {
+    console.log('🛑 Shutdown requested by macOS companion app');
+    res.json({
+      success: true,
+      message: 'Server shutdown initiated',
+    });
+
+    // Graceful shutdown after response
+    setTimeout(() => {
+      console.log('🛑 Shutting down server...');
+      process.exit(0);
+    }, 1000);
+  });
+
   // Get server info
   router.get('/info', (req, res) => {
     res.json({
@@ -199,6 +238,8 @@ export function setupRoutes(app, aicliService) {
         sessions: 'GET /api/sessions',
         permission: 'POST /api/permission/:sessionId',
         health: 'GET /api/health',
+        status: 'GET /api/status',
+        shutdown: 'POST /api/shutdown',
         projects: 'GET /api/projects',
         projectInfo: 'GET /api/projects/:name',
       },

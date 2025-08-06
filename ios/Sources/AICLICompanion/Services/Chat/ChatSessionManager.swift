@@ -39,65 +39,85 @@ class ChatSessionManager: ObservableObject {
             webSocketService.subscribeToSessions([passedSession.sessionId])
             
             completion(.success(passedSession))
+            return
+        }
+        
+        // NEW ARCHITECTURE: Check for existing persisted sessions
+        // If we have a session with messages, restore it
+        // If not, wait for user to start conversation
+        print("🔷 SessionManager: No session from parent, checking for existing session")
+        
+        // Check if we have session metadata with messages
+        if let metadata = persistenceService.getSessionMetadata(for: project.path),
+           let sessionId = metadata.aicliSessionId,
+           metadata.messageCount > 0 {
+            
+            print("🔷 SessionManager: Found existing session with messages: \(sessionId) (\(metadata.messageCount) messages)")
+            
+            // Create session using the ACTUAL Claude session ID from message persistence
+            let dateFormatter = ISO8601DateFormatter()
+            let restoredSession = ProjectSession(
+                sessionId: sessionId, // Use the actual session ID where messages are stored
+                projectName: project.name,
+                projectPath: project.path,
+                status: "ready",
+                startedAt: dateFormatter.string(from: metadata.createdAt)
+            )
+            
+            setActiveSession(restoredSession)
+            webSocketService.subscribeToSessions([sessionId])
+            
+            // Update session state persistence with the correct session ID
+            sessionStatePersistence.saveSessionState(
+                sessionId: sessionId,
+                projectId: project.path,
+                projectName: project.name,
+                projectPath: project.path,
+                messageCount: metadata.messageCount,
+                aicliSessionId: sessionId
+            )
+            
+            completion(.success(restoredSession))
         } else {
-            // Try to restore existing session
-            restoreSession(for: project, completion: completion)
+            // No existing session or session has no messages - wait for user to start
+            print("🔷 SessionManager: No session with messages found - waiting for user to start conversation")
+            completion(.failure(SessionError.noExistingSession))
         }
     }
     
-    func createSession(
+    // MARK: - Session Creation After Claude Response
+    func createSessionFromClaudeResponse(
+        sessionId: String,
         for project: Project,
-        connection: ServerConnection,
         completion: @escaping (Result<ProjectSession, Error>) -> Void
     ) {
-        Task {
-            do {
-                // Get or reuse existing session ID for this project
-                let sessionId = try await sessionDeduplicationManager.getOrCreateSession(
-                    for: project.path,
-                    verifySession: { sessionId in
-                        // Verify with server if session is valid
-                        // For now, we'll assume it's valid if we have metadata
-                        return self.persistenceService.getSessionMetadata(for: project.path)?.aicliSessionId == sessionId
-                    }
-                )
-                
-                // Start the project session with the deduplicated session ID
-                aicliService.startProjectSession(
-                    project: project,
-                    connection: connection,
-                    sessionId: sessionId
-                ) { result in
-                    switch result {
-                    case .success(let session):
-                        self.setActiveSession(session)
-                        self.webSocketService.subscribeToSessions([session.sessionId])
-                        
-                        // Update deduplication tracking
-                        self.sessionDeduplicationManager.touchSession(for: project.path)
-                        
-                        // Save session state
-                        self.sessionStatePersistence.saveSessionState(
-                            sessionId: session.sessionId,
-                            projectId: project.path,
-                            projectName: project.name,
-                            projectPath: project.path,
-                            messageCount: 0,
-                            aicliSessionId: session.sessionId
-                        )
-                        
-                        completion(.success(session))
-                        
-                    case .failure(let error):
-                        self.sessionError = error.localizedDescription
-                        completion(.failure(error))
-                    }
-                }
-            } catch {
-                completion(.failure(error))
-            }
-        }
+        print("🔷 SessionManager: Creating session from Claude response: \(sessionId)")
+        
+        let dateFormatter = ISO8601DateFormatter()
+        let newSession = ProjectSession(
+            sessionId: sessionId,
+            projectName: project.name,
+            projectPath: project.path,
+            status: "ready",
+            startedAt: dateFormatter.string(from: Date())
+        )
+        
+        setActiveSession(newSession)
+        webSocketService.subscribeToSessions([sessionId])
+        
+        // Save session state for future restoration
+        sessionStatePersistence.saveSessionState(
+            sessionId: sessionId,
+            projectId: project.path,
+            projectName: project.name,
+            projectPath: project.path,
+            messageCount: 1, // At least one message to create this session
+            aicliSessionId: sessionId
+        )
+        
+        completion(.success(newSession))
     }
+    
     
     func restoreSession(
         for project: Project,
@@ -203,26 +223,9 @@ class ChatSessionManager: ObservableObject {
     }
     
     private func setupWebSocketHandlers() {
-        // Handle session status updates
-        webSocketService.setMessageHandler(for: .sessionStatus) { [weak self] message in
-            guard let self = self else { return }
-            
-            if case .sessionStatus(let status) = message.data {
-                Task { @MainActor in
-                    self.handleSessionStatus(status)
-                }
-            }
-        }
+        // Session status handling removed - not needed in simplified architecture
     }
     
-    private func handleSessionStatus(_ status: SessionStatusResponse) {
-        // Update active session status if needed
-        if let activeSession = activeSession,
-           activeSession.sessionId == status.sessionId {
-            // Update session status
-            print("📊 Session status update: \(status.status)")
-        }
-    }
     
     private func requestMessageHistory(for sessionId: String) {
         print("🔷 SessionManager: Requesting message history for session \(sessionId)")

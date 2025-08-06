@@ -87,6 +87,11 @@ export class AICLIService extends EventEmitter {
     // Process monitoring
     this.processHealthCheckInterval = null;
     this.startProcessHealthMonitoring();
+
+    // Perform startup cleanup to handle stale sessions
+    this.performStartupCleanup().catch((error) => {
+      console.warn('⚠️ Startup cleanup failed:', error.message);
+    });
   }
 
   // Configure permission settings (delegated to process runner)
@@ -191,6 +196,11 @@ export class AICLIService extends EventEmitter {
   }
 
   async checkAvailability() {
+    // Skip real execution in test environment
+    if (process.env.NODE_ENV === 'test') {
+      return true;
+    }
+
     try {
       console.log(`Checking AICLI CLI availability at: ${this.aicliCommand}`);
       const { stdout, _stderr } = await execAsync(`${this.aicliCommand} --version`);
@@ -268,7 +278,7 @@ export class AICLIService extends EventEmitter {
     );
     console.log(`   Format: ${validatedFormat}`);
 
-    const args = ['--print', '--output-format', validatedFormat];
+    const args = ['--output-format', validatedFormat];
 
     // Add permission flags before the prompt
     if (skipPermissions || this.skipPermissions) {
@@ -448,35 +458,95 @@ export class AICLIService extends EventEmitter {
     // Validate inputs
     const sanitizedPrompt = InputValidator.sanitizePrompt(prompt);
     const validatedWorkingDir = await InputValidator.validateWorkingDirectory(workingDirectory);
-    const sessionKey = sessionId || `session_${Date.now()}`;
 
-    console.log(`🌊 sendStreamingPrompt called with sessionId: ${sessionKey}`);
+    console.log(
+      `🌊 sendStreamingPrompt called with sessionId: ${sessionId || 'none (fresh chat)'}`
+    );
 
-    // Check if session already exists (including persistence check)
-    if (this.sessionManager.hasSession(sessionKey)) {
-      console.log(`📋 Found existing session ${sessionKey}, sending to existing session`);
-      return this.sendToExistingSession(sessionKey, sanitizedPrompt);
+    // If sessionId provided, check if it exists
+    if (sessionId && this.sessionManager.hasSession(sessionId)) {
+      console.log(`📋 Found existing session ${sessionId}, sending to existing session`);
+      return this.sendToExistingSession(sessionId, sanitizedPrompt);
     }
 
-    // If sessionId was provided but session doesn't exist, log this as it may indicate an issue
-    if (sessionId && sessionId !== sessionKey) {
-      console.warn(
-        `⚠️ Session ${sessionId} was requested but not found, creating new session ${sessionKey}`
-      );
-    } else if (sessionId) {
+    // If sessionId was provided but session doesn't exist, it might be a Claude session
+    // that the server doesn't know about yet
+    if (sessionId) {
       console.log(
-        `⚠️ Session ${sessionId} not found in active sessions or persistence, creating new session`
+        `⚠️ Session ${sessionId} not found locally - will attempt to use with Claude CLI`
       );
     }
 
-    // Create new interactive session
-    console.log(`🚀 Creating new interactive session ${sessionKey}`);
-    return this.createInteractiveSession(
-      sessionKey,
+    // For fresh chats (no sessionId) or unknown sessions, let Claude handle session creation
+    console.log(
+      `🚀 Sending prompt to Claude CLI ${sessionId ? `with session ${sessionId}` : 'without session (fresh chat)'}`
+    );
+    return this.sendPromptToClaude(
       sanitizedPrompt,
       validatedWorkingDir,
-      skipPermissions
+      skipPermissions,
+      sessionId // Pass through the session ID if provided, or undefined for fresh chats
     );
+  }
+
+  async sendPromptToClaude(prompt, workingDirectory, _skipPermissions = false, sessionId = null) {
+    // Create a minimal session object for Claude CLI
+    const session = {
+      sessionId: sessionId || null, // null for fresh chats
+      workingDirectory,
+      conversationStarted: !!sessionId, // true if we have a session ID
+      initialPrompt: sessionId ? null : prompt, // Only set for new sessions
+      isRestoredSession: false,
+    };
+
+    // If we have a session ID, register it temporarily for response routing
+    if (sessionId) {
+      // Create minimal session tracking for response routing only
+      await this.sessionManager.trackSessionForRouting(sessionId, workingDirectory);
+    }
+
+    try {
+      // Mark session as processing if tracked
+      if (sessionId) {
+        this.sessionManager.setSessionProcessing(sessionId, true);
+      }
+
+      // Execute the command - Claude will handle session creation/continuation
+      const response = await this.executeAICLICommand(session, prompt);
+
+      // Mark processing as complete if tracked
+      if (sessionId) {
+        this.sessionManager.setSessionProcessing(sessionId, false);
+      }
+
+      // Extract session ID from Claude's response if available
+      let extractedSessionId = sessionId;
+      if (!sessionId && response && response.session_id) {
+        extractedSessionId = response.session_id;
+        console.log(`🔑 Extracted session ID from Claude response: ${extractedSessionId}`);
+      }
+
+      if (!extractedSessionId) {
+        console.warn(`⚠️ No session ID available - messages may not persist`);
+      }
+
+      return {
+        sessionId: extractedSessionId || null,
+        success: true,
+        response,
+      };
+    } catch (error) {
+      console.error(`❌ Failed to execute prompt:`, error);
+      if (sessionId) {
+        this.sessionManager.setSessionProcessing(sessionId, false);
+      }
+
+      return {
+        sessionId: sessionId || null,
+        success: false,
+        error: error.message,
+      };
+    }
   }
 
   async createInteractiveSession(
@@ -485,12 +555,51 @@ export class AICLIService extends EventEmitter {
     workingDirectory,
     skipPermissions = false
   ) {
-    return this.sessionManager.createInteractiveSession(
+    // First create the session metadata
+    const sessionResult = await this.sessionManager.createInteractiveSession(
       sessionId,
       initialPrompt,
       workingDirectory,
       { skipPermissions }
     );
+
+    // If session was created successfully, execute the initial prompt
+    if (sessionResult.success && initialPrompt) {
+      console.log(`🚀 Executing initial prompt for new session ${sessionId}`);
+
+      // Get the created session
+      const session = await this.sessionManager.getSession(sessionId);
+      if (session) {
+        try {
+          // Mark session as processing
+          this.sessionManager.setSessionProcessing(sessionId, true);
+
+          // Execute the initial prompt
+          const response = await this.executeAICLICommand(session, initialPrompt);
+
+          // Mark processing as complete
+          this.sessionManager.setSessionProcessing(sessionId, false);
+
+          return {
+            sessionId,
+            success: true,
+            response,
+          };
+        } catch (error) {
+          console.error(`❌ Failed to execute initial prompt:`, error);
+          this.sessionManager.setSessionProcessing(sessionId, false);
+
+          return {
+            sessionId,
+            success: false,
+            error: error.message,
+          };
+        }
+      }
+    }
+
+    // Return original result if no prompt to execute
+    return sessionResult;
   }
 
   async sendToExistingSession(sessionId, prompt) {
@@ -555,15 +664,44 @@ export class AICLIService extends EventEmitter {
   }
 
   async executeAICLICommand(session, prompt) {
-    // Delegate to process runner
-    const result = await this.processRunner.executeAICLICommand(session, prompt);
+    try {
+      // Delegate to process runner
+      const result = await this.processRunner.executeAICLICommand(session, prompt);
 
-    // Mark conversation as started AFTER successful first command
-    if (!session.conversationStarted) {
-      await this.sessionManager.markConversationStarted(session.sessionId);
+      // Mark conversation as started AFTER successful first command
+      if (!session.conversationStarted) {
+        await this.sessionManager.markConversationStarted(session.sessionId);
+      }
+
+      return result;
+    } catch (error) {
+      // Check if this is a "No conversation found" error
+      if (error.message && error.message.includes('No conversation found with session ID')) {
+        console.log(
+          `⚠️ Claude CLI doesn't have session ${session.sessionId}, creating new session`
+        );
+
+        // Mark conversation as not started to force new session creation
+        session.conversationStarted = false;
+        session.isRestoredSession = false;
+
+        // Retry without session ID (will create new session in Claude)
+        try {
+          const result = await this.processRunner.executeAICLICommand(session, prompt);
+
+          // Mark conversation as started after successful creation
+          await this.sessionManager.markConversationStarted(session.sessionId);
+
+          return result;
+        } catch (retryError) {
+          console.error(`❌ Failed to create new session after retry:`, retryError);
+          throw retryError;
+        }
+      }
+
+      // Re-throw other errors
+      throw error;
     }
-
-    return result;
   }
 
   // Delegate validation methods to AICLIValidationService
@@ -670,6 +808,15 @@ export class AICLIService extends EventEmitter {
   async handleFinalResultEmission(sessionId, resultData, _options = {}) {
     const { response, buffer, aggregatedContent, sendAggregated, embeddedPermission } = resultData;
 
+    // Extract Claude's session ID from buffer if available
+    const claudeSessionId = buffer.claudeSessionId || response.session_id;
+
+    if (claudeSessionId && claudeSessionId !== sessionId) {
+      console.log(
+        `🔄 Claude CLI returned different session ID: ${claudeSessionId} (was: ${sessionId})`
+      );
+    }
+
     if (sendAggregated && aggregatedContent) {
       // Send aggregated response
       console.log(`📱 Sending aggregated response to iOS for session ${sessionId}`);
@@ -682,6 +829,7 @@ export class AICLIService extends EventEmitter {
           aggregated: true,
           messageCount: buffer.assistantMessages.length,
           timestamp: new Date().toISOString(),
+          claudeSessionId,
         },
         isComplete: true,
       });
@@ -697,13 +845,14 @@ export class AICLIService extends EventEmitter {
         default: embeddedPermission.default,
       });
     } else {
-      // Send regular conversation result
+      // Send regular conversation result with Claude's session ID
       this.emit('conversationResult', {
         sessionId,
         data: {
           type: 'final_result',
           success: !response.is_error,
-          sessionId: response.session_id,
+          sessionId: claudeSessionId || response.session_id,
+          claudeSessionId,
           duration: response.duration_ms,
           cost: response.total_cost_usd,
           usage: response.usage,
@@ -724,7 +873,22 @@ export class AICLIService extends EventEmitter {
   // Message handling methods moved to AICLIMessageHandler - using proxy methods below for backward compatibility
 
   clearSessionBuffer(sessionId) {
-    this.sessionManager.clearSessionBuffer(sessionId);
+    // Clear in session manager's buffer
+    if (this.sessionManager?.sessionMessageBuffers?.has(sessionId)) {
+      const buffer = this.sessionManager.sessionMessageBuffers.get(sessionId);
+      if (buffer && typeof buffer === 'object') {
+        buffer.assistantMessages = [];
+        buffer.permissionRequestSent = false;
+        buffer.toolUseInProgress = false;
+        buffer.permissionRequests = [];
+        buffer.deliverables = [];
+      }
+    }
+
+    // Also delegate to session manager's method if it exists
+    if (this.sessionManager?.clearSessionBuffer) {
+      this.sessionManager.clearSessionBuffer(sessionId);
+    }
   }
 
   // Proxy methods for message handler functionality (for backward compatibility and testing)
@@ -804,17 +968,74 @@ export class AICLIService extends EventEmitter {
     return this.sessionManager.markSessionForegrounded(sessionId);
   }
 
+  /**
+   * Startup cleanup to handle stale Claude CLI sessions and orphaned processes.
+   *
+   * Error handling policy:
+   * - If cleanup fails (e.g., unable to clear stale sessions or orphaned processes),
+   *   the application will continue to start normally.
+   * - Failures are logged as warnings, but do not prevent startup.
+   * - If cleanup fails, there may be a risk of session ID conflicts or leftover processes,
+   *   but normal operation is not otherwise affected.
+   */
+  async performStartupCleanup() {
+    // Skip real execution in test environment
+    if (process.env.NODE_ENV === 'test') {
+      console.log('🧹 Skipping startup cleanup in test environment');
+      return;
+    }
+
+    console.log('🧹 Performing startup cleanup...');
+
+    try {
+      // Check if Claude CLI has any active sessions that might conflict
+      const { stdout } = await execAsync(
+        'claude --list-sessions 2>/dev/null || echo "no-sessions"'
+      );
+
+      if (stdout && stdout.trim() !== 'no-sessions' && !stdout.includes('No active sessions')) {
+        console.log('🔍 Found potential stale Claude CLI sessions, attempting cleanup...');
+
+        // Try to clear any stale sessions
+        try {
+          await execAsync('claude --clear-sessions 2>/dev/null || true');
+          console.log('✅ Cleared stale Claude CLI sessions');
+        } catch (clearError) {
+          console.warn('⚠️ Could not clear stale sessions, may cause session ID conflicts');
+        }
+      }
+
+      // Also cleanup any orphaned processes
+      await processMonitor.cleanup();
+
+      console.log('✅ Startup cleanup completed');
+    } catch (error) {
+      // Don't fail startup if cleanup fails
+      console.warn('⚠️ Startup cleanup encountered issues:', error.message);
+    }
+  }
+
   // Cleanup method for graceful shutdown
   async shutdown() {
     console.log('🔄 Shutting down AICLI Code Service...');
 
-    // Stop health monitoring
-    this.stopProcessHealthMonitoring();
+    try {
+      // Stop health monitoring
+      this.stopProcessHealthMonitoring();
 
-    // Shutdown session manager
-    await this.sessionManager.shutdown();
+      // Shutdown session manager with timeout
+      const shutdownPromise = this.sessionManager.shutdown();
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Shutdown timeout')), 10000)
+      );
 
-    console.log('✅ AICLI Code Service shut down complete');
+      await Promise.race([shutdownPromise, timeoutPromise]);
+
+      console.log('✅ AICLI Code Service shut down complete');
+    } catch (error) {
+      console.warn('⚠️ Shutdown completed with warnings:', error.message);
+      // Don't throw - we want shutdown to complete even if there are issues
+    }
   }
 
   async healthCheck() {
@@ -992,6 +1213,7 @@ export class AICLIService extends EventEmitter {
         data: {
           type: 'system_init',
           sessionId: message.session_id,
+          claudeSessionId: message.session_id, // Claude's actual session ID
           workingDirectory: message.cwd,
           availableTools: message.tools || [],
           mcpServers: message.mcp_servers || [],

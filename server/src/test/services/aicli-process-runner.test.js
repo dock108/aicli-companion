@@ -270,31 +270,17 @@ describe('AICLIProcessRunner', () => {
   });
 
   describe('handleStdinInput', () => {
-    it('should write prompt to stdin when using --print', () => {
-      const args = ['--print', '--output-format', 'json'];
-      const prompt = 'Test prompt';
-
-      processRunner.handleStdinInput(mockProcess, prompt, args);
-
-      assert.strictEqual(mockStdin.write.mock.calls.length, 1);
-      assert.strictEqual(mockStdin.write.mock.calls[0].arguments[0], 'Test prompt');
-      assert.strictEqual(mockStdin.end.mock.calls.length, 1);
-    });
-
-    it('should not write to stdin when not using --print', () => {
-      const args = ['--output-format', 'json'];
-      const prompt = 'Test prompt';
-
-      processRunner.handleStdinInput(mockProcess, prompt, args);
+    it('should always close stdin immediately (no --print mode)', () => {
+      // With --print removed, stdin is always closed immediately
+      processRunner.handleStdinInput(mockProcess);
 
       assert.strictEqual(mockStdin.write.mock.calls.length, 0);
       assert.strictEqual(mockStdin.end.mock.calls.length, 1);
     });
 
-    it('should close stdin when no prompt provided', () => {
-      const args = ['--print'];
-
-      processRunner.handleStdinInput(mockProcess, null, args);
+    it('should close stdin regardless of arguments', () => {
+      // No matter what, stdin should be closed
+      processRunner.handleStdinInput(mockProcess);
 
       assert.strictEqual(mockStdin.write.mock.calls.length, 0);
       assert.strictEqual(mockStdin.end.mock.calls.length, 1);
@@ -468,9 +454,25 @@ describe('AICLIProcessRunner', () => {
       await processRunner.testAICLICommand('simple');
 
       assert.strictEqual(runProcessMock.mock.calls.length, 1);
-      const args = runProcessMock.mock.calls[0].arguments[0];
-      assert.ok(args.includes('--print'));
-      assert.ok(args.includes('Hello world'));
+      const [args, prompt] = runProcessMock.mock.calls[0].arguments;
+      assert.ok(!args.includes('--print')); // --print should NOT be in args
+      assert.ok(args.includes('--output-format'));
+      assert.ok(args.includes('stream-json'));
+      assert.strictEqual(prompt, 'Hello world'); // Prompt should be passed as second arg
+    });
+
+    it('should handle json test type', async () => {
+      const runProcessMock = mock.fn(() => Promise.resolve({ type: 'result' }));
+      processRunner.runAICLIProcess = runProcessMock;
+
+      await processRunner.testAICLICommand('json');
+
+      assert.strictEqual(runProcessMock.mock.calls.length, 1);
+      const [args, prompt] = runProcessMock.mock.calls[0].arguments;
+      assert.ok(!args.includes('--print')); // --print should NOT be in args
+      assert.ok(args.includes('--output-format'));
+      assert.ok(args.includes('json'));
+      assert.strictEqual(prompt, 'Hello world'); // Prompt should be passed as second arg
     });
 
     it('should reject unknown test types', async () => {
@@ -486,7 +488,7 @@ describe('AICLIProcessRunner', () => {
       });
 
       const runPromise = processRunner.runAICLIProcess(
-        ['--print'],
+        ['--output-format', 'stream-json'],
         'Test prompt',
         '/test/dir',
         'session123'
@@ -516,7 +518,12 @@ describe('AICLIProcessRunner', () => {
       });
 
       await assert.rejects(
-        processRunner.runAICLIProcess(['--print'], 'Test', '/test/dir', 'session123'),
+        processRunner.runAICLIProcess(
+          ['--output-format', 'stream-json'],
+          'Test',
+          '/test/dir',
+          'session123'
+        ),
         /Failed to start AICLI CLI/
       );
 
@@ -526,7 +533,7 @@ describe('AICLIProcessRunner', () => {
 
     it('should handle process errors', async () => {
       const runPromise = processRunner.runAICLIProcess(
-        ['--print'],
+        ['--output-format', 'stream-json'],
         'Test prompt',
         '/test/dir',
         'session123'
@@ -542,8 +549,24 @@ describe('AICLIProcessRunner', () => {
     });
 
     it('should handle non-zero exit codes', async () => {
+      // Create an event emitter for the mock process
+      const processEmitter = new EventEmitter();
+      const mockProcessWithEvents = {
+        pid: 12345,
+        stdout: mockStdout,
+        stderr: mockStderr,
+        stdin: mockStdin,
+        on: (event, handler) => {
+          processEmitter.on(event, handler);
+        },
+        kill: mock.fn(),
+      };
+
+      // Override spawn to return our mock with event emitter
+      processRunner.spawnFunction = mock.fn(() => mockProcessWithEvents);
+
       const runPromise = processRunner.runAICLIProcess(
-        ['--print'],
+        ['--output-format', 'stream-json'],
         'Test prompt',
         '/test/dir',
         'session123'
@@ -553,7 +576,7 @@ describe('AICLIProcessRunner', () => {
 
       // Exit with error code
       mockStderr.emit('data', Buffer.from('Error occurred'));
-      mockProcess.on.mock.calls.find((call) => call.arguments[0] === 'close').arguments[1](1);
+      processEmitter.emit('close', 1);
 
       await assert.rejects(runPromise, /exited with code 1/);
     });
@@ -566,10 +589,26 @@ describe('AICLIProcessRunner', () => {
         streamChunks.push(data);
       });
 
-      processRunner.createOutputHandler('session123', mockProcess, mock.fn(), mock.fn(), {
-        recordActivity: mock.fn(),
-        cleanup: mock.fn(),
-      });
+      // Create a mock logger
+      const mockLogger = {
+        warn: mock.fn(),
+        debug: mock.fn(),
+        error: mock.fn(),
+        info: mock.fn(),
+        shouldLog: () => false,
+      };
+
+      processRunner.createOutputHandler(
+        'session123',
+        mockProcess,
+        mock.fn(),
+        mock.fn(),
+        {
+          recordActivity: mock.fn(),
+          cleanup: mock.fn(),
+        },
+        mockLogger
+      );
 
       // Emit stdout data - the ClaudeStreamParser might need specific format
       // Let's emit actual Claude-style data
@@ -601,13 +640,39 @@ describe('AICLIProcessRunner', () => {
         stderrEvents.push(data);
       });
 
-      processRunner.createOutputHandler('session123', mockProcess, mock.fn(), mock.fn(), {
-        recordActivity: mock.fn(),
-        cleanup: mock.fn(),
-      });
+      // Create mock process with event emitter functionality
+      const mockProcessForHandler = {
+        pid: 12345,
+        stdout: new EventEmitter(),
+        stderr: new EventEmitter(),
+        stdin: mockStdin,
+        on: mock.fn(),
+        kill: mock.fn(),
+      };
+
+      // Create a mock logger
+      const mockLogger = {
+        warn: mock.fn(),
+        debug: mock.fn(),
+        error: mock.fn(),
+        info: mock.fn(),
+        shouldLog: () => false,
+      };
+
+      processRunner.createOutputHandler(
+        'session123',
+        mockProcessForHandler,
+        mock.fn(),
+        mock.fn(),
+        {
+          recordActivity: mock.fn(),
+          cleanup: mock.fn(),
+        },
+        mockLogger
+      );
 
       // Emit stderr data
-      mockStderr.emit('data', Buffer.from('Warning message'));
+      mockProcessForHandler.stderr.emit('data', Buffer.from('Warning message'));
 
       await new Promise((resolve) => setTimeout(resolve, 10));
 
@@ -619,12 +684,22 @@ describe('AICLIProcessRunner', () => {
       const resolve = mock.fn();
       const reject = mock.fn();
 
+      // Create a mock logger
+      const mockLogger = {
+        warn: mock.fn(),
+        debug: mock.fn(),
+        error: mock.fn(),
+        info: mock.fn(),
+        shouldLog: () => false,
+      };
+
       const handler = processRunner.createOutputHandler(
         'session123',
         mockProcess,
         resolve,
         reject,
-        { recordActivity: mock.fn(), cleanup: mock.fn() }
+        { recordActivity: mock.fn(), cleanup: mock.fn() },
+        mockLogger
       );
 
       // Emit data in chunks
@@ -654,7 +729,7 @@ describe('AICLIProcessRunner', () => {
       });
 
       const runPromise = processRunner.runAICLIProcess(
-        ['--print'],
+        ['--output-format', 'stream-json'],
         'Test',
         '/test/dir',
         'session123'

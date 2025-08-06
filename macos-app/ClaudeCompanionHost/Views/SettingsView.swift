@@ -17,6 +17,7 @@ struct SettingsView: View {
         case general
         case server
         case security
+        case logs
         case advanced
     }
     
@@ -40,13 +41,19 @@ struct SettingsView: View {
                 }
                 .tag(Tabs.security)
             
+            LogsView()
+                .tabItem {
+                    Label("Logs", systemImage: "doc.text")
+                }
+                .tag(Tabs.logs)
+            
             AdvancedSettingsView()
                 .tabItem {
                     Label("Advanced", systemImage: "wrench.and.screwdriver")
                 }
                 .tag(Tabs.advanced)
         }
-        .frame(width: 500, height: 400)
+        .frame(width: 600, height: 500)
     }
 }
 

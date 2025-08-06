@@ -35,6 +35,12 @@ export class AICLIMessageHandler {
    * Process system response messages
    */
   static processSystemResponse(response, buffer) {
+    // Extract Claude's session ID if present
+    if (response.session_id) {
+      console.log(`🔑 Extracted Claude CLI session ID: ${response.session_id}`);
+      buffer.claudeSessionId = response.session_id;
+    }
+
     if (response.subtype === 'init') {
       // Store system init but don't send to iOS immediately
       buffer.systemInit = response;
@@ -153,6 +159,9 @@ export class AICLIMessageHandler {
   static generateAggregatedResponse(response, buffer) {
     const aggregatedContent = this.aggregateBufferedContent(buffer);
 
+    // Use Claude's session ID if available, otherwise fall back to response session_id
+    const sessionId = buffer.claudeSessionId || response.session_id;
+
     return {
       assistantMessage: {
         type: 'assistant_response',
@@ -161,11 +170,13 @@ export class AICLIMessageHandler {
         aggregated: true,
         messageCount: buffer.assistantMessages.length,
         timestamp: new Date().toISOString(),
+        claudeSessionId: sessionId,
       },
       conversationResult: {
         type: 'final_result',
         success: !response.is_error,
-        sessionId: response.session_id,
+        sessionId,
+        claudeSessionId: sessionId,
         duration: response.duration_ms,
         cost: response.total_cost_usd,
         usage: response.usage,
@@ -510,6 +521,7 @@ export class AICLIMessageHandler {
       permissionRequestSent: false,
       systemInit: null,
       pendingFinalResponse: null,
+      claudeSessionId: null,
     };
   }
 }

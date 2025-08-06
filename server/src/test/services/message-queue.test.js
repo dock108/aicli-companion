@@ -1,6 +1,7 @@
 import { describe, it, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert';
 import { MessageQueueService } from '../../services/message-queue.js';
+import { sessionPersistence } from '../../services/session-persistence.js';
 
 describe('MessageQueueService', () => {
   let messageQueue;
@@ -10,6 +11,12 @@ describe('MessageQueueService', () => {
   beforeEach(() => {
     // Set test environment
     process.env.NODE_ENV = 'test';
+
+    // Mock sessionPersistence methods
+    mock.method(sessionPersistence, 'removeMessageQueue', async () => {});
+    mock.method(sessionPersistence, 'saveMessageQueue', async () => {});
+    mock.method(sessionPersistence, 'loadMessageQueue', async () => null);
+    mock.method(sessionPersistence, 'loadAllMessageQueues', async () => new Map());
 
     // Create fresh instance
     messageQueue = new MessageQueueService();
@@ -24,6 +31,20 @@ describe('MessageQueueService', () => {
   afterEach(() => {
     // Clean up
     messageQueue.shutdown();
+
+    // Restore sessionPersistence mocks
+    if (sessionPersistence.removeMessageQueue.mock) {
+      sessionPersistence.removeMessageQueue.mock.restore();
+    }
+    if (sessionPersistence.saveMessageQueue.mock) {
+      sessionPersistence.saveMessageQueue.mock.restore();
+    }
+    if (sessionPersistence.loadMessageQueue.mock) {
+      sessionPersistence.loadMessageQueue.mock.restore();
+    }
+    if (sessionPersistence.loadAllMessageQueues.mock) {
+      sessionPersistence.loadAllMessageQueues.mock.restore();
+    }
 
     // Restore mocks
     mock.restoreAll();
@@ -414,7 +435,7 @@ describe('MessageQueueService', () => {
   });
 
   describe('clearSession', () => {
-    it('should clear all messages for a session', () => {
+    it('should clear all messages for a session', async () => {
       const sessionId = 'test-session-1';
 
       // Queue messages
@@ -425,7 +446,7 @@ describe('MessageQueueService', () => {
       messageQueue.trackSessionClient(sessionId, 'client1');
 
       consoleLogSpy.mock.resetCalls();
-      messageQueue.clearSession(sessionId);
+      await messageQueue.clearSession(sessionId);
 
       // Check everything is cleared
       assert.strictEqual(messageQueue.hasQueuedMessages(sessionId), false);
@@ -441,9 +462,9 @@ describe('MessageQueueService', () => {
       );
     });
 
-    it('should handle clearing non-existent session', () => {
+    it('should handle clearing non-existent session', async () => {
       // Should not throw
-      messageQueue.clearSession('non-existent');
+      await messageQueue.clearSession('non-existent');
       assert.ok(true);
     });
   });
@@ -552,6 +573,9 @@ describe('MessageQueueService', () => {
         delivered: false,
         deliveredAt: null,
         deliveredTo: new Set(),
+        acknowledged: false,
+        acknowledgedAt: null,
+        acknowledgedBy: new Set(),
       };
       messageQueue.messageQueue.get(sessionId).push(emptyChunk);
 

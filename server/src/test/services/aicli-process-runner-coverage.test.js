@@ -199,7 +199,7 @@ describe('AICLIProcessRunner - Additional Coverage', () => {
 
       await promise;
       assert.strictEqual(stderrEvents.length, 1);
-      assert.ok(stderrEvents[0].data.includes('Warning'));
+      assert.strictEqual(stderrEvents[0].data, 'Warning: test warning\n');
     });
   });
 
@@ -233,11 +233,11 @@ describe('AICLIProcessRunner - Additional Coverage', () => {
       const promise = runner.runAICLIProcess(['--test'], null, '/test/dir', 'test-session');
 
       process.nextTick(() => {
-        spawnedProcess.stderr.emit('data', Buffer.from('Error occurred\n'));
+        spawnedProcess.stderr.emit('data', Buffer.from('Error occurred'));
         spawnedProcess.emit('close', 1);
       });
 
-      await assert.rejects(promise, /exited with code 1/);
+      await assert.rejects(promise, /exited with code 1: Error occurred/);
     });
 
     it('should handle empty output', async () => {
@@ -340,7 +340,7 @@ describe('AICLIProcessRunner - Additional Coverage', () => {
       await assert.rejects(promise, /No valid JSON objects found/);
     });
 
-    it('should write prompt to stdin when using --print', async () => {
+    it('should close stdin immediately (no --print mode)', async () => {
       let stdinWritten = false;
       let stdinEnded = false;
 
@@ -362,7 +362,7 @@ describe('AICLIProcessRunner - Additional Coverage', () => {
       runner = new AICLIProcessRunner({ spawnFunction: mockSpawn });
 
       const promise = runner.runAICLIProcess(
-        ['--print', '--test'],
+        ['--output-format', 'stream-json'],
         'test prompt',
         '/test/dir',
         'test-session'
@@ -374,8 +374,8 @@ describe('AICLIProcessRunner - Additional Coverage', () => {
       });
 
       await promise;
-      assert.ok(stdinWritten);
-      assert.ok(stdinEnded);
+      assert.ok(!stdinWritten); // Should NOT write to stdin
+      assert.ok(stdinEnded); // Should close stdin
     });
   });
 });

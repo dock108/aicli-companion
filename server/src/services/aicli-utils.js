@@ -774,6 +774,11 @@ export class AICLIConfig {
       return process.env.CLAUDE_CLI_PATH;
     }
 
+    // CRITICAL: Never run execSync in test environment
+    if (process.env.NODE_ENV === 'test') {
+      return 'claude';
+    }
+
     // Try to use 'which' command to find claude
     try {
       const path = execSync('which claude', { encoding: 'utf8' }).trim();

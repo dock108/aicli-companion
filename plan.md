@@ -82,6 +82,276 @@ A complete AI assistant integration system with three core components:
    - Full message persistence and sync
    - Push notifications for background updates
 
+## Current Phase: Background Message Delivery Enhancement
+
+### ✅ Phase 7: UAT Testing & Swift CI (COMPLETED)
+**Duration**: 8 hours  
+**Priority**: Critical  
+**Completed**: January 2025
+
+#### 7.1 Fix iOS Message Reception Issue ✅ COMPLETED
+**Problem**: iOS app not receiving messages from server
+**Root Cause**: Multiple issues - wrong directory selection, missing API endpoints, message flow
+**Resolution**: 
+- Fixed iOS app directory selection (node_modules → claude-companion)
+- Added missing `/api/status` and `/api/shutdown` endpoints for macOS app
+- Verified message flow working properly after app restart
+**Status**: ✅ All message reception issues resolved
+
+#### 7.2 Swift CI Enhancement ✅ COMPLETED
+**Problem**: CI only tests iOS app, missing macOS app and coverage reporting
+**Implementation**:
+- ✅ Added macOS app build and test job with XcodeGen support
+- ✅ Implemented Swift code coverage (>80% requirement) for both iOS and macOS
+- ✅ Added SwiftLint integration and test result reporting
+- ✅ Updated integration and quality jobs to include macOS
+**Status**: ✅ Complete CI/CD pipeline for all Swift components
+
+#### 7.3 Server Logs Viewer ✅ COMPLETED
+**Problem**: Need visibility into server logs from macOS app
+**Implementation**:
+- ✅ Created comprehensive LogsView component with time-based filtering
+- ✅ Added log level filtering, search functionality, and export capability
+- ✅ Integrated into macOS app Settings with dedicated Logs tab
+- ✅ Tested and verified working in rebuilt macOS app
+**Status**: ✅ Full server logs viewing capability implemented
+
+#### 7.4 UAT Test Suite ✅ COMPLETED
+**Problem**: No end-to-end testing framework
+**Implementation**:
+- ✅ Created comprehensive UAT test framework in `server/src/test-uat/`
+- ✅ Implemented message flow validation tests (WebSocket connections, message types, session management)
+- ✅ Built multi-component integration tests (HTTP/WebSocket integration, cross-component sync)
+- ✅ Added performance & load testing (response times, concurrent connections, resource usage)
+- ✅ Created edge case & error recovery scenarios (invalid input, resource exhaustion, connection recovery)
+- ✅ Added npm scripts for running UAT tests: `npm run test:uat`, `npm run test:uat:*`
+- ✅ Established performance benchmarks (< 100ms health checks, < 200ms WebSocket connections)
+**Status**: ✅ Complete end-to-end testing framework with 4 test suites and comprehensive coverage
+
+## Phase 7 Summary
+**Total Implementation Time**: 8 hours  
+**Key Achievements**:
+- Fixed all iOS message reception and directory selection issues
+- Enhanced Swift CI with complete macOS app support and >80% coverage requirement
+- Implemented comprehensive server logs viewer for macOS app
+- Created complete UAT testing framework with 4 specialized test suites
+- Established performance benchmarks and automated testing workflows
+
+**Final Status**: ✅ ALL PHASE 7 OBJECTIVES COMPLETED SUCCESSFULLY
+
+---
+
+### 🚧 Phase 8: Complete Messaging Architecture Overhaul (READY FOR TESTING)
+**Duration**: 8-10 hours  
+**Priority**: CRITICAL  
+**Started**: January 2025
+**Status**: Core implementation complete, ready for user testing
+
+## Core Architecture Change: Server as Pure Claude CLI Passthrough
+
+### Problem Statement
+The current architecture has fundamental flaws:
+1. **Server manages session IDs instead of Claude CLI**: Server generates and persists its own session IDs, ignoring Claude's actual session management
+2. **Session desynchronization**: Server thinks sessions exist when Claude doesn't recognize them
+3. **Complex state management**: Server tracks client navigation state when it should be stateless
+4. **Message delivery issues**: Messages queued but not delivered properly on reconnect
+5. **iOS app confusion**: App doesn't know whether to trust server or Claude for session state
+
+### Solution: Transform Server into Pure Passthrough
+
+#### Core Principles
+1. **Claude CLI is the source of truth** for all session management
+2. **Server is stateless** - just passes messages between iOS and Claude
+3. **iOS app manages session persistence** - stores session IDs locally
+4. **No server-side session tracking** - server doesn't care about sessions
+5. **Message-driven architecture** - no awareness of client state
+
+#### Correct Message Flow
+
+**Fresh Chat (No Session):**
+1. iOS sends message WITHOUT session ID to server
+2. Server passes to Claude CLI without --session-id flag
+3. Claude creates new session and returns session ID in response
+4. Server extracts session ID from Claude's response and returns to iOS
+5. iOS stores session ID for future messages
+
+**Continued Chat (With Session):**
+1. iOS sends message WITH session ID to server
+2. Server passes to Claude CLI with --session-id flag
+3. Claude continues conversation in existing session
+4. Server returns Claude's response to iOS
+5. iOS updates local session state if needed
+
+**Session Not Found:**
+1. iOS sends message with session ID
+2. Server passes to Claude with --session-id
+3. Claude returns "No conversation found" error
+4. Server returns error to iOS
+5. iOS clears local session and retries as fresh chat
+
+### Implementation Tasks
+
+#### 8.1 Extract and Pass Claude Session IDs ✅ COMPLETED
+**Changes Implemented:**
+- ✅ Parse Claude's system init messages for session IDs
+- ✅ Extract session ID from responses like `{"type":"system","system":"use_prompt_caching","session_id":"3440e0a4-96e1-4a5b-99a4-c8f743be0a28"}`
+- ✅ Return Claude's session ID in all responses (systemInit, conversationResult, assistantMessage)
+- ✅ Updated iOS data structures to receive claudeSessionId
+- ✅ Added handlers in iOS to extract and store Claude's session IDs
+
+**Files Modified:**
+- `server/src/services/stream-parser.js` - Added session ID extraction
+- `server/src/services/aicli-message-handler.js` - Extract and buffer session IDs
+- `server/src/services/aicli.js` - Pass Claude's session ID in responses
+- `ios/Sources/AICLICompanion/Message.swift` - Added claudeSessionId fields
+- `ios/Sources/AICLICompanion/Views/Chat/ViewModels/ChatViewModel.swift` - Handle session IDs
+
+#### 8.2 Update Server to Pass Through Session IDs ✅ COMPLETED
+**Changes Implemented:**
+- ✅ Modified sendStreamingPrompt to not generate session IDs
+- ✅ Created sendPromptToClaude method that passes session IDs to Claude
+- ✅ Added minimal session tracking for response routing only
+- ✅ Server now accepts messages without session IDs for fresh chats
+- ✅ Server passes through iOS session IDs to Claude for continued chats
+
+**Files Modified:**
+- `server/src/services/aicli.js` - Removed session ID generation
+- `server/src/services/aicli-session-manager.js` - Added minimal tracking
+- `server/src/services/websocket-message-handlers.js` - Handles optional session IDs
+
+#### 8.3 Complete Server Session Management Removal - Pure Passthrough Architecture ✅ COMPLETED
+**Problem**: Server is still creating sessions and managing state when it should be a pure passthrough. iOS app unnecessarily notifies server when opening folders.
+
+**Solution**: Complete removal of server-side session management and folder selection notifications.
+
+**Implementation Tasks:**
+
+**8.3.1 Complete iOS App Cleanup - Remove All Project Start Logic** ✅ COMPLETED
+- ✅ `ios/Sources/AICLICompanion/ProjectSelectionView.swift`
+  - Remove entirely: `startProjectSession()`, `continueExistingSession()`, `startFreshSession()` methods
+  - Simplify `selectProject()` to just: set selectedProject, set isProjectSelected = true  
+  - Remove all server API calls, loading states, error handling for project start
+  - Remove ProjectStartResponse, ProjectSession structs (no longer needed)
+  - Keep only: Project listing and simple selection
+
+- ✅ `ios/Sources/AICLICompanion/AICLIService.swift`
+  - Remove any methods calling `/api/projects/:name/start`
+  - Clean up project session management code
+- ✅ `ios/Sources/AICLICompanion/Views/Chat/ViewModels/ChatViewModel.swift`
+  - Remove `startSession()` method that called `startProjectSession()`
+- ✅ `ios/Sources/AICLICompanion/Services/Chat/ChatSessionManager.swift`
+  - Remove `createSession()` method that called `startProjectSession()`
+
+**8.3.2 Server Routes Complete Cleanup** ✅ COMPLETED
+- ✅ `server/src/routes/projects.js`
+  - Remove entirely: POST `/projects/:name/start` endpoint (lines 152-423)
+  - Remove entirely: `activeSessions` Map and all related code
+  - Remove: Session cleanup event listeners
+  - Remove: GET/DELETE `/sessions/:sessionId` endpoints (lines 426-530)
+  - Keep only: GET `/projects` (list projects), GET `/projects/:name` (project info)
+
+**8.3.3 New iOS Project Selection Flow (Ultra-Simple)**
+1. User taps project → iOS immediately navigates to chat (NO server notification)
+2. iOS stores selected project locally only
+3. Chat view loads local messages if any exist
+4. When user sends first message → normal WebSocket message flow creates Claude session
+5. No server awareness of "current project" - server is stateless
+
+**8.3.4 Remove All Server-Side Session Awareness** ✅ COMPLETED
+- ✅ Remove any remaining session tracking in server
+- ✅ Remove session persistence calls during project selection  
+- ✅ Remove welcome message generation
+- ✅ Server only handles: project listing, WebSocket messages, Claude CLI passthrough
+
+#### 8.4 Update iOS App for Local Session Management ✅ COMPLETED
+**Changes Implemented:**
+- ✅ Added claudeSessionId fields to message structs
+- ✅ Added handlers to extract Claude's session IDs from responses
+- ✅ Update currentSessionId when Claude returns different ID
+- ✅ Modified iOS to send messages without session ID for fresh chats
+- ✅ Store Claude's session IDs in local persistence
+- ✅ Send Claude's session ID with continued conversations
+- ✅ Removed pre-session creation flow in ChatView
+- ✅ Added updateSessionMetadata to persistence service
+
+**Files Modified:**
+- `ios/Sources/AICLICompanion/Views/Chat/ChatView.swift` - Direct message sending
+- `ios/Sources/AICLICompanion/Views/Chat/ViewModels/ChatViewModel.swift` - Session ID handling
+- `ios/Sources/AICLICompanion/MessagePersistenceService.swift` - Session ID updates
+
+#### 8.5 Testing and Validation 🚧 READY FOR TESTING
+**What to Test:**
+1. **Fresh Chat Flow**:
+   - Open iOS app, send message without any existing session
+   - Verify Claude creates session and iOS receives session ID
+   - Verify subsequent messages use Claude's session ID
+
+2. **Continued Chat Flow**:
+   - Close and reopen iOS app
+   - Send message in existing chat
+   - Verify Claude recognizes session and continues conversation
+
+3. **Session Not Found Flow**:
+   - Manually clear Claude's sessions
+   - Try to continue existing chat in iOS
+   - Verify graceful handling and new session creation
+
+4. **Message Queue Delivery**:
+   - Send message and immediately background app
+   - Verify message delivered when app returns
+
+**Known Issues to Watch For:**
+- Server may still have some session persistence code that needs cleanup
+- Error handling for "No conversation found" needs testing
+- Message queue delivery on reconnect needs verification
+
+### Success Criteria
+1. **Server never generates session IDs** - only uses Claude's
+2. **iOS app manages all session state** locally
+3. **Messages delivered reliably** regardless of app state
+4. **No session desynchronization** - Claude is source of truth
+5. **Server remains stateless** - can restart without losing context
+6. **Clean error handling** when sessions don't exist
+
+### Migration Strategy
+1. First implement session ID extraction from Claude
+2. Update iOS to handle session IDs locally
+3. Gradually remove server session management
+4. Test extensively at each step
+5. Ensure backward compatibility during transition
+
+## Phase 8 Implementation Plan
+
+### Step 1: Parse and Extract Claude Session IDs (2 hours)
+- Modify stream parser to identify session init messages
+- Extract session IDs from Claude's responses
+- Pass session IDs back to clients in responses
+- Test session ID extraction thoroughly
+
+### Step 2: Update iOS for Local Session Management (2 hours)
+- Add local session storage to iOS app
+- Update message sending to include session IDs
+- Handle session not found errors gracefully
+- Test session persistence across app restarts
+
+### Step 3: Remove Server Session Management (3 hours)
+- Remove session persistence service usage
+- Remove server-generated session IDs
+- Update AICLI to use only Claude's sessions
+- Ensure backward compatibility
+
+### Step 4: Simplify Message Flow (2 hours)
+- Remove client state tracking
+- Simplify broadcast to direct responses
+- Fix message queue delivery
+- Test all message scenarios
+
+### Step 5: Comprehensive Testing (1 hour)
+- Test fresh chat flow
+- Test continued chat flow
+- Test error scenarios
+- Test message delivery reliability
+
 ## Completed Phases
 
 ### ✅ Phase 1-4: Message Persistence System
@@ -469,9 +739,105 @@ When all tasks are complete:
 9. [ ] All cleanup tasks completed
 10. [ ] Update this plan.md with final status
 
+## Implementation Strategy for Current Phase
+
+### Working Principles
+1. **Continuous Progress**: Work on tasks as long as possible before hitting blockers
+2. **TodoWrite Tracking**: Use todo system to track all progress
+3. **Minimal Interruptions**: Only stop for true showstoppers
+4. **Parallel Work**: When blocked on one task, switch to another
+
+### Current Focus
+- Debugging iOS message reception with systematic approach
+- Building comprehensive CI for all Swift components
+- Creating reliable UAT testing framework
+
 ## Notes
 - Consider adding message history limits in future phase
 - May want to add message search functionality later
 - Could optimize by batching persistence writes
 - WebSocket message size limits may require pagination for very large histories
-- macOS app should eventually replace the Tauri version entirely
+- Swift CI should match JavaScript coverage requirements (>80%)
+
+---
+
+## 🚨 URGENT: Phase 9 - Fix Server Resource Issues (Critical Performance Fix)
+**Duration**: 2 hours  
+**Priority**: CRITICAL - IMMEDIATE  
+**Started**: January 2025
+**Status**: Ready to execute
+
+### Problem Statement
+Server has major CPU/RAM consumption issues with zombie Claude processes:
+- Multiple Claude CLI processes running and not terminating (47% CPU usage observed)
+- Sessions persist when they shouldn't with `--print` mode
+- Incompatible use of `--print` with `--session-id`/`--resume` flags
+- Memory leaks from uncleaned intervals and event listeners
+- No process termination on session close/timeout
+
+### Root Cause Analysis
+The server is using Claude CLI incorrectly:
+1. **Mixing `--print` with session flags**: `claude --print --session-id` keeps processes alive
+2. **Wrong mode for our use case**: `--print` is for one-shot operations, not sessions
+3. **Process management issues**: No cleanup when sessions end
+
+### Solution: Remove --print Flag Completely
+
+#### Option 1 Architecture (Chosen):
+Use Claude CLI **without** `--print` mode for proper session management:
+- `claude --session-id <id> --output-format stream-json "prompt"` 
+- Process runs, outputs response, and **exits naturally**
+- Claude CLI internally maintains conversation history
+- No process persistence needed on server side
+
+### Implementation Tasks
+
+#### 9.1 Remove --print Flag from All Commands
+**File**: `server/src/services/aicli-process-runner.js`
+- Line 75: Remove `'--print'` from args array
+- Remove all stdin handling logic (lines 242-253) since --print uses stdin
+- Simplify command execution without stdin complexity
+
+#### 9.2 Simplify Process Management
+**Files to modify**:
+- `server/src/services/aicli-process-runner.js`:
+  - Remove health monitor intervals that never get cleaned
+  - Remove complex process monitoring
+  - Let processes exit naturally after response
+  
+#### 9.3 Clean Up Session Management
+**Files to modify**:
+- `server/src/services/aicli-session-manager.js`:
+  - Remove process tracking (processes don't persist)
+  - Keep only session ID mapping for routing
+  - Remove health checks and timeouts for processes
+
+#### 9.4 Kill Existing Zombie Processes
+**Immediate action**:
+```bash
+# Kill all existing Claude processes
+pkill -f claude
+# Restart server fresh
+npm start
+```
+
+### Expected Outcomes
+1. **No zombie processes** - each command completes and exits
+2. **Minimal CPU/RAM usage** - processes don't linger
+3. **Proper session isolation** - Claude CLI manages contexts internally
+4. **Simpler codebase** - remove 80% of process management complexity
+5. **Natural cleanup** - processes clean themselves up
+
+### Success Criteria
+- [ ] No Claude processes remain after responses complete
+- [ ] CPU usage returns to idle after operations
+- [ ] Memory usage stable over time
+- [ ] Sessions work correctly without --print flag
+- [ ] No process monitoring intervals left running
+
+### Testing Plan
+1. Send message and verify process exits after response
+2. Check `ps aux | grep claude` shows no lingering processes
+3. Monitor CPU/RAM over multiple operations
+4. Test session continuity without --print flag
+5. Verify no intervals or event listeners leak

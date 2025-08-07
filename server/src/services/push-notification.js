@@ -12,49 +12,55 @@ class PushNotificationService {
   }
 
   /**
-   * Initialize the push notification service
-   * @param {Object} config - Configuration object
-   * @param {string} config.cert - Path to the certificate file
-   * @param {string} config.key - Path to the key file
-   * @param {string} config.passphrase - Passphrase for the key
+   * Initialize the push notification service with APNs HTTP/2 API (.p8 key)
+   * @param {Object} config - Configuration object  
+   * @param {string} config.keyPath - Path to the .p8 key file
+   * @param {string} config.keyId - APNs Key ID
+   * @param {string} config.teamId - Apple Developer Team ID
+   * @param {string} config.bundleId - iOS app bundle identifier
    * @param {boolean} config.production - Whether to use production environment
    */
   initialize(config = {}) {
     try {
-      // Check if we have the required configuration
-      const certPath = config.cert || process.env.APNS_CERT_PATH;
-      const keyPath = config.key || process.env.APNS_KEY_PATH;
-      const passphrase = config.passphrase || process.env.APNS_PASSPHRASE;
+      // Get configuration from environment or config object
+      const keyPath = config.keyPath || process.env.APNS_KEY_PATH;
+      const keyId = config.keyId || process.env.APNS_KEY_ID;  
+      const teamId = config.teamId || process.env.APNS_TEAM_ID;
+      const bundleId = config.bundleId || process.env.APNS_BUNDLE_ID;
       const production = config.production || process.env.NODE_ENV === 'production';
 
-      if (!certPath || !keyPath) {
-        console.log('⚠️  Push notifications not configured - missing certificate or key path');
+      if (!keyPath || !keyId || !teamId) {
+        console.log('⚠️  Push notifications not configured - missing keyPath, keyId, or teamId');
+        console.log('   Required env vars: APNS_KEY_PATH, APNS_KEY_ID, APNS_TEAM_ID, APNS_BUNDLE_ID');
         return;
       }
 
-      // Check if files exist
-      if (!fs.existsSync(certPath) || !fs.existsSync(keyPath)) {
-        console.log('⚠️  Push notification certificate or key file not found');
+      // Check if .p8 key file exists
+      if (!fs.existsSync(keyPath)) {
+        console.log(`⚠️  APNs key file not found: ${keyPath}`);
         return;
       }
 
-      // Create APN provider
+      // Create APNs provider with HTTP/2 API (.p8 key)
       const options = {
-        cert: certPath,
-        key: keyPath,
-        production,
+        token: {
+          key: keyPath,  // Path to .p8 file
+          keyId: keyId,   // Key ID from Apple Developer Portal
+          teamId: teamId  // Team ID from Apple Developer Portal
+        },
+        production: production
       };
 
-      if (passphrase) {
-        options.passphrase = passphrase;
-      }
-
       this.provider = new apn.Provider(options);
+      this.bundleId = bundleId;
       this.isConfigured = true;
 
-      console.log(
-        `✅ Push notification service initialized (${production ? 'production' : 'development'} mode)`
-      );
+      console.log(`✅ Push notification service initialized with APNs HTTP/2`);
+      console.log(`   Environment: ${production ? 'production' : 'development'}`);
+      console.log(`   Key ID: ${keyId}`);
+      console.log(`   Team ID: ${teamId}`);
+      console.log(`   Bundle ID: ${bundleId}`);
+      
     } catch (error) {
       console.error('❌ Failed to initialize push notification service:', error);
     }
@@ -218,7 +224,7 @@ class PushNotificationService {
           body: this.truncateMessage(data.message, 150),
         };
       }
-      notification.topic = process.env.APNS_BUNDLE_ID || 'com.claude.companion';
+      notification.topic = this.bundleId || process.env.APNS_BUNDLE_ID || 'com.claude.companion';
       notification.payload = {
         sessionId: data.sessionId,
         projectName: data.projectName,
@@ -281,7 +287,7 @@ class PushNotificationService {
         subtitle: data.projectName,
         body: data.error,
       };
-      notification.topic = process.env.APNS_BUNDLE_ID || 'com.claude.companion';
+      notification.topic = this.bundleId || process.env.APNS_BUNDLE_ID || 'com.claude.companion';
       notification.payload = {
         sessionId: data.sessionId,
         error: true,

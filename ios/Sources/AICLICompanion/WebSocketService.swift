@@ -540,6 +540,10 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
             // Message history response
             case .getMessageHistory:
                 handleGetMessageHistory(message)
+                
+            // Claude response
+            case .claudeResponse:
+                handleClaudeResponse(message)
 
             default:
                 break
@@ -764,6 +768,32 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
             }
         }
         // This will be handled by registered handlers
+    }
+    
+    private func handleClaudeResponse(_ message: WebSocketMessage) {
+        if case .claudeResponse(let claudeResponse) = message.data {
+            print("📨 Claude response received")
+            print("   Request ID: \(message.requestId ?? "none")")
+            print("   Session ID: \(claudeResponse.sessionId ?? "none")")
+            print("   Success: \(claudeResponse.success)")
+            print("   Content length: \(claudeResponse.content.count) chars")
+            
+            // Check if this response has a requestId for routing
+            if let requestId = message.requestId {
+                print("   Response matched to request: \(requestId)")
+                
+                // The requestId allows the response to be routed to the correct chat view
+                // even when multiple chats are active simultaneously without session IDs
+            } else {
+                print("   ⚠️ No requestId - response may route incorrectly")
+            }
+            
+            // Log the actual session ID from Claude if present
+            if let sessionId = claudeResponse.sessionId, !sessionId.isEmpty {
+                print("   Claude assigned session ID: \(sessionId)")
+            }
+        }
+        // This will be handled by registered handlers in the UI
     }
 
     // MARK: - WebSocketDelegate

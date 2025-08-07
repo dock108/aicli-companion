@@ -1,6 +1,4 @@
 import { WebSocketUtilities } from './websocket-utilities.js';
-import { pushNotificationService } from './push-notification.js';
-import { getMessageQueueService } from './message-queue.js';
 import { createLogger } from '../utils/logger.js';
 import fs from 'fs';
 import path from 'path';
@@ -31,7 +29,8 @@ export class WebSocketMessageHandlers {
     logger.debug(`Client acknowledging ${messageIds.length} messages`, { clientId });
 
     try {
-      const acknowledgedCount = getMessageQueueService().acknowledgeMessages(messageIds, clientId);
+      // Server is stateless - no message queue to acknowledge
+      const acknowledgedCount = messageIds.length;
 
       WebSocketUtilities.sendMessage(
         clientId,
@@ -102,7 +101,8 @@ export class WebSocketMessageHandlers {
   }
 
   /**
-   * Handle 'streamStart' message - start streaming session
+   * Handle 'streamStart' message - acknowledge stream start request
+   * Server is stateless - just acknowledges the client's intent to start streaming
    */
   static async handleStreamStartMessage(
     clientId,
@@ -114,57 +114,27 @@ export class WebSocketMessageHandlers {
   ) {
     const { sessionId, initialPrompt, workingDirectory } = data;
 
-    logger.info('Starting stream session', {
+    logger.info('Stream start request acknowledged', {
       clientId,
       sessionId,
       workingDirectory: workingDirectory || process.cwd(),
     });
 
-    try {
-      // Create interactive session
-      const sessionResult = await aicliService.createInteractiveSession(
-        sessionId,
-        initialPrompt,
-        workingDirectory || process.cwd()
-      );
-
-      if (sessionResult.success) {
-        // Associate session with client
-        connectionManager.addSessionToClient(clientId, sessionId);
-
-        WebSocketUtilities.sendMessage(
-          clientId,
-          WebSocketUtilities.createResponse('streamStart', requestId, {
-            success: true,
-            sessionId: sessionResult.sessionId,
-            message: sessionResult.message,
-            timestamp: new Date().toISOString(),
-          }),
-          clients
-        );
-
-        // Check for any queued messages for this session
-        // Track this client for the session
-        getMessageQueueService().trackSessionClient(sessionId, clientId);
-
-        // Use the new delivery method with proper validation and spacing
-        getMessageQueueService().deliverQueuedMessages(sessionId, clientId, (message) => {
-          return WebSocketUtilities.sendMessage(clientId, message, clients);
-        });
-      } else {
-        throw new Error(sessionResult.message || 'Failed to create session');
-      }
-    } catch (error) {
-      logger.error('Stream start failed', { clientId, sessionId, error: error.message });
-      WebSocketUtilities.sendErrorMessage(
-        clientId,
-        requestId,
-        'STREAM_START_FAILED',
-        error.message,
-        clients,
-        { sessionId }
-      );
-    }
+    // Server is stateless - just acknowledge the stream start
+    // The client manages its own session state
+    WebSocketUtilities.sendMessage(
+      clientId,
+      WebSocketUtilities.createResponse('streamStart', requestId, {
+        success: true,
+        sessionId: sessionId,  // Echo back the session ID provided by client
+        message: 'Stream ready',
+        timestamp: new Date().toISOString(),
+      }),
+      clients
+    );
+    
+    // Note: Message queuing removed - server doesn't track sessions
+    // If a client needs missed messages, it should request them explicitly
   }
 
   /**
@@ -202,7 +172,7 @@ export class WebSocketMessageHandlers {
   }
 
   /**
-   * Handle 'streamClose' message - close streaming session
+   * Handle 'streamClose' message - server is stateless, just acknowledge
    */
   static async handleStreamCloseMessage(
     clientId,
@@ -214,74 +184,33 @@ export class WebSocketMessageHandlers {
   ) {
     const { sessionId, clearChat = false } = data;
 
+    logger.info('Stream close request acknowledged', { 
+      sessionId, 
+      clientId,
+      clearChat 
+    });
+
+    // Server is stateless - no cleanup needed
+    // iOS app manages its own session state
+    
     if (clearChat) {
-      // User is clearing the chat - fully close the session
-      logger.info('Clearing chat - closing session completely', { sessionId, clientId });
-
-      try {
-        // Close the session in AICLI service
-        await aicliService.closeSession(sessionId);
-
-        // Clear all queued messages for this session
-        await getMessageQueueService().clearSession(sessionId);
-
-        // Remove session from client
-        connectionManager.removeSessionFromClient(clientId, sessionId);
-
-        logger.info('Session fully closed and cleared', { sessionId });
-
-        // Send response with instruction to generate new session ID
-        WebSocketUtilities.sendMessage(
-          clientId,
-          WebSocketUtilities.createResponse('streamClose', requestId, {
-            success: true,
-            sessionId,
-            clearChat: true,
-            message: 'Session closed. Please generate a new session ID for the next chat.',
-            timestamp: new Date().toISOString(),
-          }),
-          clients
-        );
-      } catch (error) {
-        logger.error('Failed to clear chat session', { sessionId, error: error.message });
-        WebSocketUtilities.sendErrorMessage(
-          clientId,
-          requestId,
-          'CLEAR_CHAT_FAILED',
-          error.message,
-          clients,
-          { sessionId }
-        );
-      }
-    } else {
-      // Normal close - just pause the session
-      logger.info('Pausing stream session (will remain active for continuation)', {
-        sessionId,
+      // Client is clearing the chat - just acknowledge
+      WebSocketUtilities.sendMessage(
         clientId,
-      });
-
-      try {
-        // Instead of closing the session, just remove it from the client's active sessions
-        // but keep the session alive in the AICLI service for continuation
-        connectionManager.removeSessionFromClient(clientId, sessionId);
-
-        // Mark the client as no longer active for this session, but don't close the session
-        logger.debug('Session paused - can be continued later', { sessionId });
-
-        // Note: Not sending response message for 'streamClose' as iOS client doesn't expect it
-        // and fails to parse it. The session was successfully paused if we reach this point.
-        logger.debug('Session pause complete', { sessionId, clientId });
-      } catch (error) {
-        logger.error('Stream close failed', { sessionId, clientId, error: error.message });
-        WebSocketUtilities.sendErrorMessage(
-          clientId,
-          requestId,
-          'STREAM_CLOSE_FAILED',
-          error.message,
-          clients,
-          { sessionId }
-        );
-      }
+        WebSocketUtilities.createResponse('streamClose', requestId, {
+          success: true,
+          sessionId,
+          clearChat: true,
+          newSessionId: null,  // iOS will get new session ID from Claude on next message
+          message: 'Ready for new conversation',
+          timestamp: new Date().toISOString(),
+        }),
+        clients
+      );
+    } else {
+      // Normal close - just acknowledge
+      // Note: Not sending response for normal close as iOS doesn't expect it
+      logger.debug('Stream close acknowledged', { sessionId, clientId });
     }
   }
 
@@ -366,20 +295,13 @@ export class WebSocketMessageHandlers {
       // Subscribe client to events
       connectionManager.subscribeClient(clientId, events);
 
-      // Subscribe client to sessions and deliver queued messages
+      // Server is stateless - no session tracking or message queuing
+      // iOS app manages its own sessions and message history
       if (sessionIds && Array.isArray(sessionIds)) {
-        for (const sessionId of sessionIds) {
-          // Add session to client tracking
-          connectionManager.addSessionToClient(clientId, sessionId);
-
-          // Track this client for the session in message queue
-          getMessageQueueService().trackSessionClient(sessionId, clientId);
-
-          // Use the improved delivery method with validation and deduplication
-          getMessageQueueService().deliverQueuedMessages(sessionId, clientId, (message) => {
-            return WebSocketUtilities.sendMessage(clientId, message, clients);
-          });
-        }
+        logger.debug('Client subscribing to sessions - acknowledged but not tracked', {
+          clientId,
+          sessionIds,
+        });
       }
 
       // Note: Not sending response message for 'subscribe' as iOS client doesn't expect it
@@ -450,7 +372,8 @@ export class WebSocketMessageHandlers {
   }
 
   /**
-   * Handle 'claudeCommand' message - execute Claude agent commands
+   * Handle 'claudeCommand' message - pass command through to Claude
+   * Server is stateless - just routes messages between iOS and Claude
    */
   static async handleClaudeCommandMessage(
     clientId,
@@ -472,17 +395,11 @@ export class WebSocketMessageHandlers {
     });
 
     try {
-      // Associate session with client if not already done
-      if (sessionId) {
-        connectionManager.addSessionToClient(clientId, sessionId);
-
-        // Session tracking removed - server is now message-driven, not state-driven
-      }
-
+      // Server is stateless - no session tracking needed
       let result;
 
-      // Check if this is a meta-command (status, sessions, test) or a chat message
-      const metaCommands = ['status', 'sessions', 'test'];
+      // Check if this is a meta-command (status, test) or a chat message
+      const metaCommands = ['status', 'test'];  // Removed 'sessions' - server doesn't track sessions
       const isMetaCommand = metaCommands.includes(command.toLowerCase());
 
       if (isMetaCommand) {
@@ -490,9 +407,6 @@ export class WebSocketMessageHandlers {
         switch (command.toLowerCase()) {
           case 'status':
             result = await aicliService.healthCheck();
-            break;
-          case 'sessions':
-            result = { sessions: aicliService.getActiveSessions() };
             break;
           case 'test':
             result = await aicliService.testAICLICommand(args?.[0] || 'version');
@@ -506,6 +420,7 @@ export class WebSocketMessageHandlers {
 
         result = await aicliService.sendPrompt(command, {
           sessionId,
+          requestId,  // Pass through the request ID for response tracking
           streaming: true, // Enable streaming for agent mode
           workingDirectory: projectPath || process.cwd(),
           skipPermissions: true, // Enable autonomous behavior
@@ -521,83 +436,54 @@ export class WebSocketMessageHandlers {
           content: result.error ? result.error : JSON.stringify(result, null, 2),
           success: !result.error,
           sessionId,
+          projectPath, // Include project path for iOS thread routing
           error: result.error || null,
         };
       } else {
-        // Agent response - get aggregated content from session buffer
-        sessionLogger.debug('Checking session buffer');
-        const buffer = aicliService.sessionManager.getSessionBuffer(sessionId);
+        // Agent response - extract content directly from result
+        sessionLogger.debug('Processing Claude response', {
+          resultKeys: result ? Object.keys(result) : [],
+        });
+
         let content = '';
-
-        if (!buffer) {
-          sessionLogger.debug('No buffer found for session');
-        } else {
-          sessionLogger.debug('Buffer found', {
-            assistantMessageCount: buffer.assistantMessages?.length || 0,
-          });
+        
+        // Extract content from the result object
+        if (result && result.response) {
+          // Check if response is the final result object from AICLI
+          if (typeof result.response === 'object' && result.response.result) {
+            content = result.response.result;
+            sessionLogger.debug('Using result.response.result', { length: content.length });
+          } else if (result.response.text) {
+            content = result.response.text;
+            sessionLogger.debug('Using result.response.text', { length: content.length });
+          } else if (typeof result.response === 'string') {
+            content = result.response;
+            sessionLogger.debug('Using result.response as string', { length: content.length });
+          }
+        } else if (result && result.result) {
+          content = result.result;
+          sessionLogger.debug('Using result.result field', { length: content.length });
         }
 
-        if (buffer && buffer.assistantMessages && buffer.assistantMessages.length > 0) {
-          // Aggregate all assistant messages from the session
-          const aggregatedContent = aicliService.aggregateBufferedContent(buffer);
-          sessionLogger.debug('Aggregated content', { blockCount: aggregatedContent.length });
-
-          // Convert aggregated content blocks to text
-          const textBlocks = [];
-          aggregatedContent.forEach((block) => {
-            if (block.type === 'text' && block.text) {
-              textBlocks.push(block.text);
-            }
-          });
-
-          content = textBlocks.join('\n\n');
-          sessionLogger.debug('Aggregated assistant messages', {
-            messageCount: buffer.assistantMessages.length,
-            textBlockCount: textBlocks.length,
-          });
-        } else {
-          // Fallback to result object
-          sessionLogger.debug('No buffered messages, using result object', {
-            resultKeys: Object.keys(result),
-          });
-
-          // The result object from sendPrompt contains the final response
-          if (result && result.response) {
-            // Check if response is the final result object from AICLI
-            if (typeof result.response === 'object' && result.response.result) {
-              content = result.response.result;
-              sessionLogger.debug('Using result.response.result', { length: content.length });
-            } else if (result.response.text) {
-              content = result.response.text;
-              sessionLogger.debug('Using result.response.text', { length: content.length });
-            } else if (typeof result.response === 'string') {
-              content = result.response;
-              sessionLogger.debug('Using result.response as string', { length: content.length });
-            }
-          } else if (result && result.result) {
-            content = result.result;
-            sessionLogger.debug('Using result.result field', { length: content.length });
-          }
-
-          if (!content) {
-            // Last resort fallback
-            content = result.text || result.content || JSON.stringify(result);
-            sessionLogger.debug('Using final fallback extraction', { length: content.length });
-          }
+        if (!content) {
+          // Fallback extraction
+          content = result?.text || result?.content || JSON.stringify(result);
+          sessionLogger.debug('Using fallback extraction', { length: content.length });
         }
 
-        // Extract Claude's session ID from the response
+        // Extract Claude's session ID from the response if present
         let claudeSessionId = sessionId; // Use provided sessionId if available
-        if (!claudeSessionId && result && result.response && result.response.session_id) {
+        if (!claudeSessionId && result?.response?.session_id) {
           claudeSessionId = result.response.session_id;
           sessionLogger.info('Extracted Claude session ID from response', { claudeSessionId });
         }
 
         responseData = {
           content,
-          success: result.success !== false, // Default to true unless explicitly false
-          sessionId: claudeSessionId, // Use Claude's session ID
-          error: result.error || null,
+          success: result?.success !== false, // Default to true unless explicitly false
+          sessionId: claudeSessionId, // Use Claude's session ID or echo back what was sent
+          projectPath, // Include project path for iOS thread routing
+          error: result?.error || null,
         };
       }
 
@@ -623,7 +509,8 @@ export class WebSocketMessageHandlers {
   }
 
   /**
-   * Handle 'getMessageHistory' message - retrieve message history for a session
+   * Handle 'getMessageHistory' message - NO LONGER SUPPORTED
+   * Server is stateless and doesn't store message history
    */
   static async handleGetMessageHistoryMessage(
     clientId,
@@ -633,121 +520,26 @@ export class WebSocketMessageHandlers {
     clients,
     _connectionManager
   ) {
-    const { sessionId, limit, offset } = data;
+    const { sessionId } = data;
 
-    logger.info('Client requesting message history', {
+    logger.info('Client requesting message history - not supported in stateless mode', {
       clientId,
       sessionId,
-      limit: limit || 'all',
-      offset: offset || 0,
     });
 
-    try {
-      // Validate session exists
-      const session = await aicliService.getSession(sessionId);
-      if (!session) {
-        throw new Error(`Session ${sessionId} not found`);
-      }
-
-      // Get message buffer from session manager
-      let buffer = aicliService.sessionManager.getSessionBuffer(sessionId);
-
-      // If no buffer exists in memory, try to load from persistence
-      if (!buffer) {
-        logger.debug('No message buffer in memory, loading from persistence', { sessionId });
-        const { sessionPersistence } = await import('./session-persistence.js');
-        const persistedBuffer = await sessionPersistence.loadMessageBuffer(sessionId);
-
-        if (persistedBuffer) {
-          logger.debug('Loaded message buffer from persistence', { sessionId });
-          // Restore the buffer to session manager
-          aicliService.sessionManager.setSessionBuffer(sessionId, persistedBuffer);
-          buffer = persistedBuffer;
-        } else {
-          logger.debug('No persisted message buffer found - may be new session', { sessionId });
-        }
-      }
-
-      // Get user prompts and assistant messages
-      const messages = [];
-
-      // Add user prompts with type 'user'
-      if (buffer && buffer.userPrompts) {
-        buffer.userPrompts.forEach((prompt, index) => {
-          messages.push({
-            id: `user-${index}`,
-            type: 'user',
-            content: prompt,
-            timestamp: null, // User prompts don't have timestamps in current implementation
-          });
-        });
-      }
-
-      // Add assistant messages with full content
-      if (buffer && buffer.assistantMessages) {
-        buffer.assistantMessages.forEach((message) => {
-          messages.push({
-            id: message.id,
-            type: 'assistant',
-            content: message.content,
-            model: message.model,
-            usage: message.usage,
-            timestamp: message.timestamp || new Date().toISOString(),
-          });
-        });
-      }
-
-      // Sort messages by timestamp (if available)
-      // TODO: [OPTIMIZE] Better message ordering based on actual conversation flow
-      // Current implementation may not preserve exact conversation order
-
-      // Apply pagination if requested
-      const totalMessages = messages.length;
-      const startIndex = offset || 0;
-      const endIndex = limit ? startIndex + limit : totalMessages;
-      const paginatedMessages = messages.slice(startIndex, endIndex);
-
-      WebSocketUtilities.sendMessage(
-        clientId,
-        WebSocketUtilities.createResponse('getMessageHistory', requestId, {
-          success: true,
-          sessionId,
-          messages: paginatedMessages,
-          totalCount: totalMessages,
-          offset: startIndex,
-          limit: limit || null,
-          hasMore: endIndex < totalMessages,
-          sessionMetadata: {
-            workingDirectory: session.workingDirectory,
-            conversationStarted: session.conversationStarted,
-            createdAt: session.createdAt,
-            lastActivity: session.lastActivity,
-          },
-          timestamp: new Date().toISOString(),
-        }),
-        clients
-      );
-
-      logger.debug('Sent message history', {
-        sent: paginatedMessages.length,
-        total: totalMessages,
-        sessionId,
-      });
-    } catch (error) {
-      logger.error('Get message history failed', { clientId, sessionId, error: error.message });
-      WebSocketUtilities.sendErrorMessage(
-        clientId,
-        requestId,
-        'GET_HISTORY_FAILED',
-        error.message,
-        clients,
-        { sessionId }
-      );
-    }
+    // Server is stateless - doesn't store message history
+    WebSocketUtilities.sendErrorMessage(
+      clientId,
+      requestId,
+      'NOT_SUPPORTED',
+      'Server is stateless and does not store message history. iOS app should manage its own message persistence.',
+      clients,
+      { sessionId }
+    );
   }
 
   /**
-   * Handle 'clearChat' message - clear current chat and start fresh
+   * Handle 'clearChat' message - server is stateless, just acknowledge
    */
   static async handleClearChatMessage(
     clientId,
@@ -759,151 +551,50 @@ export class WebSocketMessageHandlers {
   ) {
     const { sessionId } = data;
 
-    logger.info('Clear chat requested', { sessionId, clientId });
+    logger.info('Clear chat requested - acknowledging', { sessionId, clientId });
 
-    try {
-      // Close the session completely
-      await aicliService.closeSession(sessionId);
+    // Server is stateless - no cleanup needed
+    // iOS app manages its own chat history
+    // Next message without session ID will start a fresh conversation with Claude
 
-      // Clear all queued messages
-      await getMessageQueueService().clearSession(sessionId);
-
-      // Remove session from client
-      connectionManager.removeSessionFromClient(clientId, sessionId);
-
-      // Generate a new session ID for the client to use
-      const { v4: uuidv4 } = await import('uuid');
-      const newSessionId = uuidv4();
-
-      logger.info('Chat cleared successfully', { oldSessionId: sessionId, newSessionId });
-
-      WebSocketUtilities.sendMessage(
-        clientId,
-        WebSocketUtilities.createResponse('clearChat', requestId, {
-          success: true,
-          oldSessionId: sessionId,
-          newSessionId,
-          message: 'Chat cleared successfully',
-          timestamp: new Date().toISOString(),
-        }),
-        clients
-      );
-    } catch (error) {
-      logger.error('Failed to clear chat', { sessionId, clientId, error: error.message });
-      WebSocketUtilities.sendErrorMessage(
-        clientId,
-        requestId,
-        'CLEAR_CHAT_FAILED',
-        error.message,
-        clients,
-        { sessionId }
-      );
-    }
+    WebSocketUtilities.sendMessage(
+      clientId,
+      WebSocketUtilities.createResponse('clearChat', requestId, {
+        success: true,
+        oldSessionId: sessionId,
+        newSessionId: null, // iOS will get new one from Claude on next message
+        message: 'Ready for new conversation',
+        timestamp: new Date().toISOString(),
+      }),
+      clients
+    );
   }
 
   /**
-   * Handle 'registerDevice' message - register device for push notifications
+   * Handle 'registerDevice' message - server is stateless, just acknowledge
    */
   static handleRegisterDeviceMessage(clientId, requestId, data, clients) {
     const { deviceToken, deviceInfo } = data;
 
-    logger.info('Registering device', {
+    logger.info('Device registration acknowledged', {
       clientId,
-      tokenPrefix: `${deviceToken?.substring(0, 20)}...`,
       platform: deviceInfo?.platform,
     });
 
-    try {
-      // Store device token with client
-      const client = clients.get(clientId);
-      if (client) {
-        client.deviceToken = deviceToken;
-        client.deviceInfo = deviceInfo;
-      }
-
-      // Register with push notification service
-      pushNotificationService.registerDevice(clientId, deviceToken, deviceInfo);
-
-      WebSocketUtilities.sendMessage(
-        clientId,
-        WebSocketUtilities.createResponse('registerDevice', requestId, {
-          success: true,
-          message: 'Device registered for push notifications',
-          timestamp: new Date().toISOString(),
-        }),
-        clients
-      );
-    } catch (error) {
-      logger.error('Device registration failed', { clientId, error: error.message });
-      WebSocketUtilities.sendErrorMessage(
-        clientId,
-        requestId,
-        'DEVICE_REGISTRATION_FAILED',
-        error.message,
-        clients,
-        { hasDeviceToken: !!deviceToken }
-      );
-    }
-  }
-
-  /**
-   * Handle client backgrounding/foregrounding
-   */
-  static async handleClientBackgroundingMessage(
-    clientId,
-    data,
-    requestId,
-    clients,
-    claudeService,
-    _connectionManager
-  ) {
-    const { isBackgrounded, sessionId } = data;
-
-    logger.info('Client backgrounding state change', {
+    // Server is stateless - no push notification management
+    // iOS app manages its own push notifications
+    
+    WebSocketUtilities.sendMessage(
       clientId,
-      sessionId,
-      isBackgrounded,
-    });
-
-    try {
-      const client = clients.get(clientId);
-      if (!client) {
-        throw new Error('Client not found');
-      }
-
-      // Update client state
-      client.isBackgrounded = isBackgrounded;
-
-      // Update session state if session exists
-      if (sessionId && claudeService.hasSession(sessionId)) {
-        if (isBackgrounded) {
-          await claudeService.markSessionBackgrounded(sessionId);
-        } else {
-          await claudeService.markSessionForegrounded(sessionId);
-        }
-      }
-
-      WebSocketUtilities.sendMessage(
-        clientId,
-        WebSocketUtilities.createResponse('client_backgrounding', requestId, {
-          success: true,
-          isBackgrounded,
-          sessionId,
-          timestamp: new Date().toISOString(),
-        }),
-        clients
-      );
-    } catch (error) {
-      logger.error('Client backgrounding update failed', { clientId, error: error.message });
-      WebSocketUtilities.sendErrorMessage(
-        clientId,
-        requestId,
-        'BACKGROUNDING_UPDATE_FAILED',
-        error.message,
-        clients
-      );
-    }
+      WebSocketUtilities.createResponse('registerDevice', requestId, {
+        success: true,
+        message: 'Device registration acknowledged',
+        timestamp: new Date().toISOString(),
+      }),
+      clients
+    );
   }
+
 
   /**
    * Get all available message handlers
@@ -923,7 +614,6 @@ export class WebSocketMessageHandlers {
       registerDevice: this.handleRegisterDeviceMessage,
       acknowledgeMessages: this.handleAcknowledgeMessagesMessage,
       clearChat: this.handleClearChatMessage,
-      client_backgrounding: this.handleClientBackgroundingMessage,
     };
   }
 

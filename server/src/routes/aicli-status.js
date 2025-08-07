@@ -80,7 +80,6 @@ export function setupAICLIStatusRoutes(app, aicliService) {
         },
         sessions: {
           active: activeSessions.length,
-          max: aicliService.maxSessions,
           details: sessionDetails,
         },
         system: systemInfo,

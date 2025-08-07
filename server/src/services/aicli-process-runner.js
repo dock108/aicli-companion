@@ -74,7 +74,7 @@ export class AICLIProcessRunner extends EventEmitter {
    * This method handles both regular and long-running commands
    */
   async executeAICLICommand(session, prompt) {
-    const { sessionId, workingDirectory, conversationStarted, initialPrompt, isRestoredSession } =
+    const { sessionId, workingDirectory, conversationStarted, initialPrompt, isRestoredSession, requestId } =
       session;
 
     // Create logger with session context
@@ -134,7 +134,7 @@ export class AICLIProcessRunner extends EventEmitter {
     });
 
     // No more timeout calculations - trust Claude CLI
-    return this.runAICLIProcess(args, finalPrompt, workingDirectory, sessionId);
+    return this.runAICLIProcess(args, finalPrompt, workingDirectory, sessionId, requestId);
   }
 
   /**
@@ -169,7 +169,7 @@ export class AICLIProcessRunner extends EventEmitter {
   /**
    * Run AICLI CLI process with comprehensive monitoring and parsing
    */
-  async runAICLIProcess(args, prompt, workingDirectory, sessionId) {
+  async runAICLIProcess(args, prompt, workingDirectory, sessionId, requestId = null) {
     const processLogger = logger.child({ sessionId });
 
     processLogger.debug('Running AICLI process', {
@@ -232,6 +232,7 @@ export class AICLIProcessRunner extends EventEmitter {
       // Emit process start event
       this.emit('processStart', {
         sessionId,
+        requestId,  // Include original request ID
         pid: aicliProcess.pid,
         command: this.aicliCommand,
         args,
@@ -249,7 +250,8 @@ export class AICLIProcessRunner extends EventEmitter {
         promiseResolve,
         reject,
         healthMonitor,
-        processLogger
+        processLogger,
+        requestId
       );
 
       // Handle process events
@@ -325,7 +327,8 @@ export class AICLIProcessRunner extends EventEmitter {
     promiseResolve,
     reject,
     healthMonitor,
-    processLogger
+    processLogger,
+    requestId = null
   ) {
     let stdout = '';
     let stderr = '';
@@ -361,6 +364,7 @@ export class AICLIProcessRunner extends EventEmitter {
         for (const parsedChunk of parsedChunks) {
           this.emit('streamChunk', {
             sessionId,
+            requestId,  // Include original request ID
             chunk: parsedChunk,
             timestamp: new Date().toISOString(),
           });
@@ -451,6 +455,7 @@ export class AICLIProcessRunner extends EventEmitter {
           for (const chunk of finalChunks) {
             this.emit('streamChunk', {
               sessionId,
+              requestId,  // Include original request ID
               chunk,
               timestamp: new Date().toISOString(),
             });
@@ -462,6 +467,7 @@ export class AICLIProcessRunner extends EventEmitter {
         // Emit process exit event
         this.emit('processExit', {
           sessionId,
+          requestId,  // Include original request ID
           pid: aicliProcess.pid,
           code,
           stdout: completeStdout.substring(0, 1000),
@@ -474,7 +480,7 @@ export class AICLIProcessRunner extends EventEmitter {
           return;
         }
 
-        this.processOutput(completeStdout, sessionId, promiseResolve, reject);
+        this.processOutput(completeStdout, sessionId, promiseResolve, reject, requestId);
       },
     };
   }
@@ -482,7 +488,7 @@ export class AICLIProcessRunner extends EventEmitter {
   /**
    * Process the complete output from AICLI CLI
    */
-  processOutput(completeStdout, sessionId, promiseResolve, reject) {
+  processOutput(completeStdout, sessionId, promiseResolve, reject, requestId = null) {
     try {
       // Validate JSON before parsing
       if (!completeStdout || completeStdout.length === 0) {
@@ -523,6 +529,7 @@ export class AICLIProcessRunner extends EventEmitter {
         });
         this.emit('aicliResponse', {
           sessionId,
+          requestId,  // Include original request ID
           response,
           isLast: index === responses.length - 1,
         });
@@ -641,6 +648,6 @@ export class AICLIProcessRunner extends EventEmitter {
         throw new Error(`Unknown test type: ${testType}`);
     }
 
-    return this.runAICLIProcess(args, prompt, process.cwd(), 'test-session', 30000);
+    return this.runAICLIProcess(args, prompt, process.cwd(), 'test-session');
   }
 }

@@ -7,11 +7,10 @@ import UIKit
 @available(iOS 16.0, macOS 13.0, *)
 struct ChatView: View {
     // MARK: - Environment & State
-    @EnvironmentObject var aicliService: AICLIService
+    @EnvironmentObject var aicliService: HTTPAICLIService
     @EnvironmentObject var settings: SettingsManager
     @StateObject private var viewModel: ChatViewModel
     @StateObject private var sessionManager = ChatSessionManager.shared
-    @ObservedObject private var webSocketService = WebSocketService.shared
     @StateObject private var queueManager = MessageQueueManager.shared
     
     @State private var messageText = ""
@@ -48,8 +47,8 @@ struct ChatView: View {
         self.session = session
         self.onSwitchProject = onSwitchProject
         
-        // Create view model with dependencies
-        let aicliService = AICLIService()
+        // Create view model with dependencies - services will be injected via environment
+        let aicliService = HTTPAICLIService()
         let settings = SettingsManager()
         self._viewModel = StateObject(wrappedValue: ChatViewModel(aicliService: aicliService, settings: settings))
     }
@@ -151,12 +150,11 @@ struct ChatView: View {
         // Set up keyboard observers
         setupKeyboardObservers()
         
-        // Set up WebSocket listeners
-        viewModel.setupWebSocketListeners()
+        // HTTP doesn't need separate listeners - responses are handled directly
         setupPermissionHandling()
         
-        // Connect WebSocket if needed
-        print("🔗 ChatView: Connecting WebSocket for project '\(project.name)'")
+        // Connect HTTP service if needed  
+        print("🔗 ChatView: Connecting HTTP service for project '\(project.name)'")
         connectWebSocketIfNeeded {
             print("🔗 ChatView: WebSocket connected, handling session for project '\(project.name)'")
             // Handle session after connection
@@ -286,8 +284,7 @@ struct ChatView: View {
         // Clear current session ID - next message will be a fresh chat
         viewModel.currentSessionId = nil
         
-        // Clear WebSocket active session
-        WebSocketService.shared.setActiveSession(nil)
+        // HTTP doesn't maintain active sessions - they're request-scoped
     }
     
     // MARK: - WebSocket Connection
@@ -299,58 +296,44 @@ struct ChatView: View {
             return
         }
         
-        print("🔗 ChatView: Checking WebSocket connection to \(wsURL)")
-        print("   Current connection state: \(webSocketService.isConnected)")
+        print("🔗 ChatView: Checking HTTP connection to \(wsURL)")
+        print("   Current connection state: \(aicliService.isConnected)")
         
-        if webSocketService.isConnected {
-            print("✅ ChatView: WebSocket already connected")
+        if aicliService.isConnected {
+            print("✅ ChatView: HTTP service already connected")
             completion()
             return
         }
         
-        print("🔗 ChatView: Starting WebSocket connection...")
+        print("🔗 ChatView: Starting HTTP connection...")
         
-        // Set up connection observer
-        var connectionObserver: AnyCancellable?
-        connectionObserver = webSocketService.$isConnected
-            .dropFirst()
-            .first(where: { $0 })
-            .sink { connected in
-                print("🎉 ChatView: WebSocket connection state changed to: \(connected)")
-                if connected {
-                    print("✅ ChatView: WebSocket connection established, proceeding with session handling")
-                    completion()
-                    connectionObserver?.cancel()
-                }
-            }
-        
-        webSocketService.connect(to: wsURL, authToken: connection.authToken)
-        print("🔗 ChatView: WebSocket connection initiated to \(wsURL)")
-    }
-    
-    // MARK: - Permission Handling
-    private func setupPermissionHandling() {
-        webSocketService.setMessageHandler(for: .permissionRequest) { message in
-            
-            if case .permissionRequest(let request) = message.data {
-                Task { @MainActor in
-                    self.permissionRequest = request
-                    self.showingPermissionAlert = true
-                }
+        // Connect via HTTP service
+        aicliService.connect(
+            to: connection.address,
+            port: connection.port,
+            authToken: connection.authToken
+        ) { result in
+            switch result {
+            case .success:
+                print("✅ ChatView: HTTP connection established, proceeding with session handling")
+                completion()
+            case .failure(let error):
+                print("❌ ChatView: HTTP connection failed: \(error)")
+                // completion() is not called on failure - the UI will show connection error
             }
         }
     }
     
+    // MARK: - Permission Handling
+    private func setupPermissionHandling() {
+        // Permission handling is now handled within HTTP responses
+        // No separate WebSocket message handlers needed
+    }
+    
     private func handlePermissionResponse(_ response: String) {
-        guard let request = permissionRequest,
-              let session = viewModel.activeSession else { return }
-        
-        webSocketService.respondToPermission(
-            sessionId: session.sessionId,
-            response: response,
-            remember: false
-        )
-        
+        // HTTP-based permission handling would be integrated into the chat flow
+        // For now, dismiss the permission alert
+        showingPermissionAlert = false
         permissionRequest = nil
     }
     

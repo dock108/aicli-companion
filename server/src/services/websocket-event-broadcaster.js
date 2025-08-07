@@ -102,7 +102,7 @@ export class WebSocketEventBroadcaster extends EventEmitter {
 
     const message = {
       type: 'streamData',
-      requestId: null,
+      requestId: data.requestId || null,  // Use requestId from event
       timestamp: new Date().toISOString(),
       data: {
         sessionId: data.sessionId,
@@ -124,7 +124,7 @@ export class WebSocketEventBroadcaster extends EventEmitter {
 
     const message = {
       type: 'systemInit',
-      requestId: null,
+      requestId: data.requestId || null,  // Use requestId from event
       timestamp: new Date().toISOString(),
       data: data.data,
     };
@@ -142,7 +142,7 @@ export class WebSocketEventBroadcaster extends EventEmitter {
 
     const message = {
       type: 'assistantMessage',
-      requestId: null,
+      requestId: data.requestId || null,  // Use requestId from event
       timestamp: new Date().toISOString(),
       data: data.data,
     };
@@ -158,7 +158,7 @@ export class WebSocketEventBroadcaster extends EventEmitter {
 
     const message = {
       type: 'toolUse',
-      requestId: null,
+      requestId: data.requestId || null,  // Use requestId from event
       timestamp: new Date().toISOString(),
       data: data.data,
     };
@@ -174,7 +174,7 @@ export class WebSocketEventBroadcaster extends EventEmitter {
 
     const message = {
       type: 'toolResult',
-      requestId: null,
+      requestId: data.requestId || null,  // Use requestId from event
       timestamp: new Date().toISOString(),
       data: data.data,
     };
@@ -190,7 +190,7 @@ export class WebSocketEventBroadcaster extends EventEmitter {
 
     const message = {
       type: 'conversationResult',
-      requestId: null,
+      requestId: data.requestId || null,  // Use requestId from event
       timestamp: new Date().toISOString(),
       data: data.data,
     };
@@ -229,7 +229,7 @@ export class WebSocketEventBroadcaster extends EventEmitter {
 
     const message = {
       type: 'processStart',
-      requestId: null,
+      requestId: data.requestId || null,  // Use requestId from event
       timestamp: new Date().toISOString(),
       data: {
         sessionId: data.sessionId,
@@ -251,7 +251,7 @@ export class WebSocketEventBroadcaster extends EventEmitter {
 
     const message = {
       type: 'processExit',
-      requestId: null,
+      requestId: data.requestId || null,  // Use requestId from event
       timestamp: new Date().toISOString(),
       data: {
         sessionId: data.sessionId,
@@ -299,7 +299,7 @@ export class WebSocketEventBroadcaster extends EventEmitter {
 
     const message = {
       type: 'streamChunk',
-      requestId: null,
+      requestId: data.requestId || null,  // Use requestId from event
       timestamp: new Date().toISOString(),
       data: {
         sessionId: data.sessionId,
@@ -321,7 +321,7 @@ export class WebSocketEventBroadcaster extends EventEmitter {
 
     const message = {
       type: 'commandProgress',
-      requestId: null,
+      requestId: data.requestId || null,  // Use requestId from event
       timestamp: new Date().toISOString(),
       data: {
         sessionId: data.sessionId,
@@ -377,12 +377,20 @@ export class WebSocketEventBroadcaster extends EventEmitter {
 
   /**
    * Validate event data has required fields
+   * In stateless architecture, null sessionId is acceptable for first messages
    */
   validateEventData(data, eventType) {
-    if (!data || !data.sessionId) {
-      console.warn(`⚠️ ${eventType} event missing data or sessionId`);
+    if (!data) {
+      console.warn(`⚠️ ${eventType} event missing data`);
       return false;
     }
+    
+    // In stateless architecture, null sessionId is expected for first messages
+    // Only log debug info, not warnings
+    if (!data.sessionId) {
+      console.debug(`🔄 ${eventType} event with null sessionId (stateless mode)`);
+    }
+    
     return true;
   }
 

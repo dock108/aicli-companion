@@ -654,8 +654,8 @@ struct WelcomeResponse: Codable {
     let clientId: String
     let serverVersion: String
     let claudeCodeVersion: String?
-    let capabilities: [String]
-    let maxSessions: Int
+    let capabilities: [String]?  // Optional - server is stateless
+    let maxSessions: Int?        // Optional - not needed in stateless architecture
 }
 
 struct AskResponseData: Codable {
@@ -974,6 +974,9 @@ enum AICLICompanionError: LocalizedError {
     case authenticationFailed
     case serverNotFound
     case invalidResponse
+    case invalidURL
+    case httpError(Int)
+    case noData
     case networkError(Error)
     case jsonParsingError(Error)
     case webSocketError(String)
@@ -992,6 +995,12 @@ enum AICLICompanionError: LocalizedError {
             return "Claude Code server not found"
         case .invalidResponse:
             return "Invalid response from server"
+        case .invalidURL:
+            return "Invalid server URL"
+        case .httpError(let statusCode):
+            return "HTTP error: \(statusCode)"
+        case .noData:
+            return "No data received from server"
         case .networkError(let error):
             return "Network error: \(error.localizedDescription)"
         case .jsonParsingError(let error):

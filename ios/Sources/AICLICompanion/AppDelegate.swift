@@ -60,10 +60,12 @@ public class AppDelegate: NSObject, UIApplicationDelegate {
         // Save token for later use
         UserDefaults.standard.set(token, forKey: "devicePushToken")
         
-        // Send token to WebSocket service if connected
-        if WebSocketService.shared.isConnected {
-            WebSocketService.shared.sendDeviceToken(token)
-        }
+        // Notify HTTPAICLIService about the device token
+        // The service will register with the server when it connects
+        NotificationCenter.default.post(
+            name: Notification.Name("DeviceTokenReceived"),
+            object: token
+        )
     }
     
     public func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {

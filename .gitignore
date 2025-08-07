@@ -10,6 +10,10 @@ certs/
 .claude/
 audit-report.json
 
+# APNS keys (sensitive)
+server/keys/
+*.p8
+
 # =================================
 # iOS / Xcode
 # =================================

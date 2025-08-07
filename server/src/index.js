@@ -13,6 +13,8 @@ import { setupAICLIStatusRoutes } from './routes/aicli-status.js';
 import { setupSessionRoutes } from './routes/sessions.js';
 import telemetryRoutes from './routes/telemetry.js';
 import pushNotificationRoutes from './routes/push-notifications.js';
+import chatRoutes from './routes/chat.js';
+import devicesRoutes from './routes/devices.js';
 import { setupWebSocket } from './services/websocket.js';
 import { errorHandler } from './middleware/error.js';
 import { AICLIService } from './services/aicli.js';
@@ -86,6 +88,11 @@ class AICLICompanionServer {
     setupSessionRoutes(this.app, this.aicliService);
     this.app.use(telemetryRoutes);
     this.app.use(pushNotificationRoutes);
+    
+    // New HTTP + APNS routes
+    this.app.set('aicliService', this.aicliService); // Make available to route handlers
+    this.app.use('/api/chat', chatRoutes);
+    this.app.use('/api/devices', devicesRoutes);
 
     // Static files (for web interface if needed)
     this.app.use('/static', express.static(join(__dirname, '../public')));
@@ -96,10 +103,13 @@ class AICLICompanionServer {
         name: 'AICLI Companion Server',
         version: this.config.version,
         status: 'running',
+        architecture: 'HTTP + APNS',
         endpoints: {
           health: '/health',
           api: '/api',
-          websocket: '/ws',
+          chat: '/api/chat',
+          devices: '/api/devices',
+          projects: '/api/projects',
         },
       });
     });
@@ -168,11 +178,12 @@ class AICLICompanionServer {
         this.authToken = null;
       }
 
-      // Initialize push notification service
+      // Initialize push notification service with APNs HTTP/2 API
       pushNotificationService.initialize({
-        cert: process.env.APNS_CERT_PATH,
-        key: process.env.APNS_KEY_PATH,
-        passphrase: process.env.APNS_PASSPHRASE,
+        keyPath: process.env.APNS_KEY_PATH || join(__dirname, '../keys/AuthKey_2Y226B9433.p8'),
+        keyId: process.env.APNS_KEY_ID || '2Y226B9433',
+        teamId: process.env.APNS_TEAM_ID || 'E3G5D247ZN',
+        bundleId: process.env.APNS_BUNDLE_ID || 'com.aiclicompanion.ios',  
         production: process.env.NODE_ENV === 'production',
       });
 
@@ -195,8 +206,8 @@ class AICLICompanionServer {
         this.server = createServer(this.app);
       }
 
-      // Set up WebSocket
-      this.setupWebSocket();
+      // TODO: Remove WebSocket infrastructure (migrating to HTTP + APNS)
+      // this.setupWebSocket();
 
       // DISABLED: Session persistence should be managed by clients, not the server
       // The server should start fresh on each restart without loading old sessions

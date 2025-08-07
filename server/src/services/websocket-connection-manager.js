@@ -70,10 +70,10 @@ export class WebSocketConnectionManager extends EventEmitter {
       }
     }
 
-    // Store client info
+    // Store client info (stateless - no session tracking)
     const client = {
       ws,
-      sessionIds: recentConnection ? new Set(recentConnection.sessionIds) : new Set(),
+      // Server is stateless - no session tracking
       isAlive: true,
       subscribedEvents: new Set(),
       connectedAt: new Date(),
@@ -86,7 +86,7 @@ export class WebSocketConnectionManager extends EventEmitter {
     this.clients.set(clientId, client);
 
     // Store in connection history for future reconnection detection
-    this.addToConnectionHistory(clientId, clientInfo, client.sessionIds);
+    this.addToConnectionHistory(clientId, clientInfo, new Set());
 
     // Record telemetry
     getTelemetryService().recordConnection(clientId, clientInfo);
@@ -115,8 +115,9 @@ export class WebSocketConnectionManager extends EventEmitter {
       this.handleDisconnection(clientId, 1011, 'Internal error');
     });
 
-    // Send welcome message - required for iOS connection state detection
-    this.sendWelcomeMessage(clientId);
+    // Send minimal welcome message for iOS connection detection
+    // iOS app requires this to confirm connection is established
+    this.sendMinimalWelcomeMessage(clientId);
 
     // Emit connection event
     this.emit('clientConnected', {
@@ -139,12 +140,8 @@ export class WebSocketConnectionManager extends EventEmitter {
     const client = this.clients.get(clientId);
     if (!client) return;
 
-    // Update connection history with final session list
-    if (client.clientInfo && client.sessionIds.size > 0) {
-      this.addToConnectionHistory(clientId, client.clientInfo, client.sessionIds);
-    }
-
-    const sessionCount = client.sessionIds.size;
+    // Server is stateless - no session tracking
+    const sessionCount = 0;
     const reasonStr = reason ? reason.toString() : 'No reason provided';
 
     console.log(`WebSocket client disconnected: ${clientId}`);
@@ -171,35 +168,26 @@ export class WebSocketConnectionManager extends EventEmitter {
     console.log(`   Remaining clients: ${this.clients.size}`);
   }
 
-  /**
-   * Send welcome message to newly connected client
-   */
-  sendWelcomeMessage(clientId) {
-    // Get Claude Code version if available
-    let claudeCodeVersion = null;
-    try {
-      // This will be filled in by the actual version check if needed
-      // For now, we'll leave it as null and the client can handle that
-      claudeCodeVersion = null;
-    } catch (error) {
-      // Ignore version check errors
-    }
 
+  /**
+   * Send minimal welcome message for iOS connection detection
+   * iOS app requires this to know connection is established
+   */
+  sendMinimalWelcomeMessage(clientId) {
     const welcomeMessage = {
       type: WEBSOCKET_EVENTS.WELCOME,
       timestamp: new Date().toISOString(),
       data: {
         clientId,
         serverVersion: SERVER_VERSION,
-        claudeCodeVersion,
-        capabilities: ['chat', 'streaming', 'permissions', 'file-operations', 'session-management'],
-        maxSessions: DEFAULT_CONFIG.MAX_SESSIONS,
+        capabilities: [],  // Empty array - server is stateless
+        // No maxSessions - not needed in stateless architecture
       },
     };
 
     const success = WebSocketUtilities.sendMessage(clientId, welcomeMessage, this.clients);
     if (success) {
-      console.log(`✅ Welcome message sent to client ${clientId}`);
+      console.log(`✅ Minimal welcome message sent to client ${clientId}`);
     } else {
       console.warn(`⚠️ Failed to send welcome message to client ${clientId}`);
     }
@@ -272,29 +260,21 @@ export class WebSocketConnectionManager extends EventEmitter {
   }
 
   /**
-   * Add session to client
+   * Add session to client - DISABLED
+   * Server is stateless and doesn't track sessions
    */
   addSessionToClient(clientId, sessionId) {
-    const client = this.clients.get(clientId);
-    if (client) {
-      client.sessionIds.add(sessionId);
-      console.log(
-        `📎 Added session ${sessionId} to client ${clientId} (total: ${client.sessionIds.size})`
-      );
-    }
+    // Server is stateless - no session tracking
+    console.log(`📎 Session tracking disabled (stateless server): ${sessionId}`);
   }
 
   /**
-   * Remove session from client
+   * Remove session from client - DISABLED
+   * Server is stateless and doesn't track sessions
    */
   removeSessionFromClient(clientId, sessionId) {
-    const client = this.clients.get(clientId);
-    if (client) {
-      client.sessionIds.delete(sessionId);
-      console.log(
-        `📎 Removed session ${sessionId} from client ${clientId} (remaining: ${client.sessionIds.size})`
-      );
-    }
+    // Server is stateless - no session tracking
+    console.log(`📎 Session tracking disabled (stateless server): ${sessionId}`);
   }
 
   /**
@@ -325,16 +305,12 @@ export class WebSocketConnectionManager extends EventEmitter {
   }
 
   /**
-   * Get clients by session ID
+   * Get clients by session ID - DISABLED
+   * Server is stateless and doesn't track sessions
    */
   getClientsBySession(sessionId) {
-    const sessionClients = [];
-    this.clients.forEach((client, clientId) => {
-      if (client.sessionIds.has(sessionId)) {
-        sessionClients.push({ clientId, client });
-      }
-    });
-    return sessionClients;
+    // Server is stateless - no session tracking
+    return [];
   }
 
   /**
@@ -495,17 +471,15 @@ export class WebSocketConnectionManager extends EventEmitter {
    * Get connection statistics
    */
   getStats() {
-    let totalSessions = 0;
     let totalSubscriptions = 0;
 
     this.clients.forEach((client) => {
-      totalSessions += client.sessionIds.size;
       totalSubscriptions += client.subscribedEvents.size;
     });
 
     return {
       connectedClients: this.clients.size,
-      totalSessions,
+      totalSessions: 0, // Server is stateless
       totalSubscriptions,
       healthMonitoring: !!this.pingInterval,
     };

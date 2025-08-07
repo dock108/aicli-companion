@@ -13,7 +13,7 @@ struct QRCodeView: View {
     @State private var qrImage: NSImage?
     @State private var copied = false
     @Environment(\.dismiss) private var dismiss
-    
+
     var body: some View {
         VStack(spacing: 20) {
             // Header
@@ -21,14 +21,14 @@ struct QRCodeView: View {
                 VStack(alignment: .leading) {
                     Text("Mobile Connection")
                         .font(.headline)
-                    
+
                     Text("Scan with Claude Companion app")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                
+
                 Spacer()
-                
+
                 Button {
                     dismiss()
                 } label: {
@@ -39,7 +39,7 @@ struct QRCodeView: View {
                 }
                 .buttonStyle(.plain)
             }
-            
+
             // QR Code
             if let qrImage = qrImage {
                 Image(nsImage: qrImage)
@@ -55,13 +55,13 @@ struct QRCodeView: View {
                 ProgressView()
                     .frame(width: 200, height: 200)
             }
-            
+
             // Connection String
             VStack(spacing: 8) {
                 Text("Connection String")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                
+
                 Text(connectionString)
                     .font(.system(.caption, design: .monospaced))
                     .padding(8)
@@ -73,20 +73,20 @@ struct QRCodeView: View {
                         }
                     }
             }
-            
+
             // Copy Button
             Button(action: copyConnectionString) {
                 HStack {
                     Image(systemName: copied ? "checkmark" : "doc.on.doc")
                         .symbolEffect(.bounce, value: copied)
-                    
+
                     Text(copied ? "Copied!" : "Copy Connection String")
                 }
             }
             .controlSize(.large)
             .buttonStyle(.borderedProminent)
             .disabled(copied)
-            
+
             // Instructions
             VStack(alignment: .leading, spacing: 4) {
                 Label("Open Claude Companion on your iOS device", systemImage: "1.circle.fill")
@@ -107,24 +107,24 @@ struct QRCodeView: View {
             generateQRCode()
         }
     }
-    
+
     private func generateQRCode() {
         DispatchQueue.global(qos: .userInitiated).async {
             let context = CIContext()
             let filter = CIFilter.qrCodeGenerator()
-            
+
             filter.message = Data(connectionString.utf8)
             filter.correctionLevel = "H"
-            
+
             if let outputImage = filter.outputImage {
                 // Scale up the image
                 let scale = 10.0
                 let transform = CGAffineTransform(scaleX: scale, y: scale)
                 let scaledImage = outputImage.transformed(by: transform)
-                
+
                 if let cgImage = context.createCGImage(scaledImage, from: scaledImage.extent) {
                     let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: 200, height: 200))
-                    
+
                     DispatchQueue.main.async {
                         self.qrImage = nsImage
                     }
@@ -132,22 +132,22 @@ struct QRCodeView: View {
             }
         }
     }
-    
+
     private func copyConnectionString() {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(connectionString, forType: .string)
-        
+
         withAnimation(.easeInOut(duration: 0.2)) {
             copied = true
         }
-        
+
         // Reset after delay
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
             withAnimation(.easeInOut(duration: 0.2)) {
                 copied = false
             }
         }
-        
+
         // Play sound if enabled
         if SettingsManager.shared.enableSounds {
             NSSound.beep()

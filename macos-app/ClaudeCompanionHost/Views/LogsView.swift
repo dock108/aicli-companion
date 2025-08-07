@@ -10,22 +10,22 @@ import UniformTypeIdentifiers
 
 struct LogsView: View {
     @EnvironmentObject private var serverManager: ServerManager
-    @State private var selectedLogLevel: LogLevel? = nil
+    @State private var selectedLogLevel: LogLevel?
     @State private var searchText = ""
     @State private var showingExportPicker = false
     @State private var autoScroll = true
     @State private var showLastMinutes = 10
-    
+
     private var filteredLogs: [LogEntry] {
         let cutoffTime = Date().addingTimeInterval(-TimeInterval(showLastMinutes * 60))
-        
+
         return serverManager.logs
             .filter { $0.timestamp >= cutoffTime }
             .filter { selectedLogLevel == nil || $0.level == selectedLogLevel }
             .filter { searchText.isEmpty || $0.message.localizedCaseInsensitiveContains(searchText) }
             .sorted { $0.timestamp > $1.timestamp } // Most recent first
     }
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header with controls
@@ -33,7 +33,7 @@ struct LogsView: View {
                 Text("Server Logs")
                     .font(.title2)
                     .fontWeight(.semibold)
-                
+
                 // Filter controls
                 HStack {
                     // Time filter
@@ -49,9 +49,9 @@ struct LogsView: View {
                         .pickerStyle(.menu)
                         .frame(width: 80)
                     }
-                    
+
                     Spacer()
-                    
+
                     // Log level filter
                     HStack {
                         Text("Level:")
@@ -66,20 +66,20 @@ struct LogsView: View {
                         .frame(width: 100)
                     }
                 }
-                
+
                 // Search and controls
                 HStack {
                     TextField("Search logs...", text: $searchText)
                         .textFieldStyle(.roundedBorder)
-                    
+
                     Toggle("Auto-scroll", isOn: $autoScroll)
                         .toggleStyle(.checkbox)
-                    
+
                     Button("Export...") {
                         showingExportPicker = true
                     }
                     .buttonStyle(.borderless)
-                    
+
                     Button("Clear") {
                         clearLogs()
                     }
@@ -90,7 +90,7 @@ struct LogsView: View {
             .padding()
             .background(Color(NSColor.controlBackgroundColor))
             .border(Color(NSColor.separatorColor), width: 0.5)
-            
+
             // Logs list
             if filteredLogs.isEmpty {
                 Spacer()
@@ -126,15 +126,15 @@ struct LogsView: View {
                     }
                 }
             }
-            
+
             // Status bar
             HStack {
                 Text("\(filteredLogs.count) entries")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                
+
                 Spacer()
-                
+
                 if serverManager.isRunning {
                     HStack(spacing: 4) {
                         Circle()
@@ -169,11 +169,11 @@ struct LogsView: View {
             handleExport(result)
         }
     }
-    
+
     private func clearLogs() {
         serverManager.clearLogs()
     }
-    
+
     private func handleExport(_ result: Result<URL, Error>) {
         switch result {
         case .success:
@@ -181,7 +181,7 @@ struct LogsView: View {
                 title: "Logs Exported",
                 body: "Server logs have been exported successfully"
             )
-            
+
         case .failure(let error):
             print("Export failed: \(error)")
             NotificationManager.shared.showNotification(
@@ -196,7 +196,7 @@ struct LogsView: View {
 
 struct LogEntryRow: View {
     let entry: LogEntry
-    
+
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             // Level indicator
@@ -204,14 +204,14 @@ struct LogEntryRow: View {
                 .foregroundStyle(colorForLevel(entry.level))
                 .frame(width: 16)
                 .font(.caption)
-            
+
             // Timestamp
             Text(DateFormatter.logTime.string(from: entry.timestamp))
                 .font(.caption)
                 .fontDesign(.monospaced)
                 .foregroundStyle(.secondary)
                 .frame(width: 80, alignment: .leading)
-            
+
             // Message
             Text(entry.message)
                 .font(.caption)
@@ -226,7 +226,7 @@ struct LogEntryRow: View {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(entry.message, forType: .string)
             }
-            
+
             Button("Copy Full Entry") {
                 let fullEntry = "\(DateFormatter.logTimestamp.string(from: entry.timestamp)) [\(entry.level)] \(entry.message)"
                 NSPasteboard.general.clearContents()
@@ -234,7 +234,7 @@ struct LogEntryRow: View {
             }
         }
     }
-    
+
     private func colorForLevel(_ level: LogLevel) -> Color {
         switch level {
         case .debug: return .gray
@@ -249,27 +249,27 @@ struct LogEntryRow: View {
 
 struct LogsDocument: FileDocument {
     static var readableContentTypes: [UTType] { [.plainText] }
-    
+
     let logs: [LogEntry]
-    
+
     init(logs: [LogEntry]) {
         self.logs = logs
     }
-    
+
     init(configuration: ReadConfiguration) throws {
         // Not implemented - export only
         self.logs = []
     }
-    
+
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
         let content = logs.map { entry in
             "\(DateFormatter.logTimestamp.string(from: entry.timestamp)) [\(entry.level)] \(entry.message)"
         }.joined(separator: "\n")
-        
+
         guard let data = content.data(using: .utf8) else {
             throw CocoaError(.fileWriteUnknown)
         }
-        
+
         return FileWrapper(regularFileWithContents: data)
     }
 }
@@ -282,13 +282,13 @@ extension DateFormatter {
         formatter.dateFormat = "HH:mm:ss"
         return formatter
     }()
-    
+
     static let logTimestamp: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
         return formatter
     }()
-    
+
     static let filenameSafe: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd-HHmmss"

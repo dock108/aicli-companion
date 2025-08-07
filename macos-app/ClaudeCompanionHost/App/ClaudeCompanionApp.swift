@@ -16,7 +16,7 @@ struct ClaudeCompanionApp: App {
     @StateObject private var networkMonitor = NetworkMonitor.shared
     @StateObject private var notificationManager = NotificationManager.shared
     @AppStorage("showDockIcon") private var showDockIcon = false
-    
+
     var body: some Scene {
         // Settings window
         Settings {
@@ -25,7 +25,7 @@ struct ClaudeCompanionApp: App {
                 .environmentObject(settingsManager)
                 .environmentObject(networkMonitor)
         }
-        
+
         // Activity Monitor window
         WindowGroup("Activity Monitor", id: "activity-monitor") {
             ActivityMonitorView()
@@ -33,7 +33,7 @@ struct ClaudeCompanionApp: App {
                 .environmentObject(settingsManager)
         }
         .windowResizability(.contentSize)
-        
+
         // QR Code window
         WindowGroup("QR Code", id: "qr-code") {
             if !serverManager.connectionString.isEmpty {
@@ -48,7 +48,7 @@ struct ClaudeCompanionApp: App {
             }
         }
         .windowResizability(.contentSize)
-        
+
         // Menu bar extra
         MenuBarExtra {
             MenuBarView()
@@ -62,4 +62,3 @@ struct ClaudeCompanionApp: App {
         .menuBarExtraStyle(.window)
     }
 }
-

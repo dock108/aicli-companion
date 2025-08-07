@@ -15,22 +15,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
     private var cancellables = Set<AnyCancellable>()
-    
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Set activation policy based on user preference
         updateDockIconVisibility()
-        
+
         // Request notification permissions
         requestNotificationPermissions()
-        
+
         // Register for launch at login if enabled
         Task { @MainActor in
             registerLaunchAtLogin()
         }
-        
+
         // Start monitoring network changes
         NetworkMonitor.shared.startMonitoring()
-        
+
         // Check if server should auto-start
         if SettingsManager.shared.autoStartServer {
             Task {
@@ -38,29 +38,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
     }
-    
+
     func applicationWillTerminate(_ notification: Notification) {
         // Clean shutdown
         Task {
             await ServerManager.shared.stopServer()
         }
-        
+
         // Stop network monitoring
         NetworkMonitor.shared.stopMonitoring()
     }
-    
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         // Keep app running even when all windows are closed
         return false
     }
-    
+
     // MARK: - Private Methods
-    
+
     private func updateDockIconVisibility() {
         let showDockIcon = UserDefaults.standard.bool(forKey: "showDockIcon")
         NSApp.setActivationPolicy(showDockIcon ? .regular : .accessory)
     }
-    
+
     private func requestNotificationPermissions() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if granted {
@@ -70,7 +70,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
     }
-    
+
     @MainActor
     private func registerLaunchAtLogin() {
         if SettingsManager.shared.launchAtLogin {
@@ -84,7 +84,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
     }
-    
+
     @objc func openActivityMonitor() {
         // Open the activity monitor window
         if let window = NSApp.windows.first(where: { $0.title == "Activity Monitor" }) {
@@ -95,7 +95,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             windowController.showWindow(nil)
         }
     }
-    
+
     @objc func showQRCode() {
         // Open the QR code window
         if let window = NSApp.windows.first(where: { $0.title == "QR Code" }) {

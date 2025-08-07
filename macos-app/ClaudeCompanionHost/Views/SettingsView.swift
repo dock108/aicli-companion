@@ -12,7 +12,7 @@ import ServiceManagement
 struct SettingsView: View {
     @EnvironmentObject private var serverManager: ServerManager
     @EnvironmentObject private var settingsManager: SettingsManager
-    
+
     private enum Tabs: Hashable {
         case general
         case server
@@ -20,7 +20,7 @@ struct SettingsView: View {
         case logs
         case advanced
     }
-    
+
     var body: some View {
         TabView {
             GeneralSettingsView()
@@ -28,25 +28,25 @@ struct SettingsView: View {
                     Label("General", systemImage: "gearshape")
                 }
                 .tag(Tabs.general)
-            
+
             ServerSettingsView()
                 .tabItem {
                     Label("Server", systemImage: "server.rack")
                 }
                 .tag(Tabs.server)
-            
+
             SecuritySettingsView()
                 .tabItem {
                     Label("Security", systemImage: "lock.shield")
                 }
                 .tag(Tabs.security)
-            
+
             LogsView()
                 .tabItem {
                     Label("Logs", systemImage: "doc.text")
                 }
                 .tag(Tabs.logs)
-            
+
             AdvancedSettingsView()
                 .tabItem {
                     Label("Advanced", systemImage: "wrench.and.screwdriver")
@@ -62,7 +62,7 @@ struct GeneralSettingsView: View {
     @EnvironmentObject private var settingsManager: SettingsManager
     @State private var showingImportPicker = false
     @State private var showingExportPicker = false
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             GroupBox("General") {
@@ -71,16 +71,16 @@ struct GeneralSettingsView: View {
                         .onChange(of: settingsManager.launchAtLogin) { _, newValue in
                             updateLaunchAtLogin(newValue)
                         }
-                    
+
                     Toggle("Show Dock Icon", isOn: $settingsManager.showDockIcon)
                         .onChange(of: settingsManager.showDockIcon) { _, newValue in
                             updateDockIconVisibility(newValue)
                         }
-                    
+
                     Toggle("Auto-start Server", isOn: $settingsManager.autoStartServer)
                 }
             }
-            
+
             GroupBox("Notifications") {
                 VStack(alignment: .leading, spacing: 12) {
                     Toggle("Enable Notifications", isOn: $settingsManager.enableNotifications)
@@ -88,7 +88,7 @@ struct GeneralSettingsView: View {
                         .disabled(!settingsManager.enableNotifications)
                 }
             }
-            
+
             GroupBox("Appearance") {
                 Picker("Theme", selection: $settingsManager.theme) {
                     Text("System").tag("system")
@@ -97,19 +97,19 @@ struct GeneralSettingsView: View {
                 }
                 .pickerStyle(.segmented)
             }
-            
+
             GroupBox("Settings Management") {
                 HStack {
                     Button("Export Settings...") {
                         showingExportPicker = true
                     }
-                    
+
                     Button("Import Settings...") {
                         showingImportPicker = true
                     }
-                    
+
                     Spacer()
-                    
+
                     Button("Reset to Defaults") {
                         resetToDefaults()
                     }
@@ -134,7 +134,7 @@ struct GeneralSettingsView: View {
             handleExport(result)
         }
     }
-    
+
     private func updateLaunchAtLogin(_ enabled: Bool) {
         // Update launch at login status
         if #available(macOS 13.0, *) {
@@ -149,20 +149,20 @@ struct GeneralSettingsView: View {
             }
         }
     }
-    
+
     private func updateDockIconVisibility(_ showIcon: Bool) {
         NSApp.setActivationPolicy(showIcon ? .regular : .accessory)
     }
-    
+
     private func handleImport(_ result: Result<[URL], Error>) {
         switch result {
         case .success(let urls):
             guard let url = urls.first else { return }
-            
+
             do {
                 let data = try Data(contentsOf: url)
                 try settingsManager.importSettings(from: data)
-                
+
                 NotificationManager.shared.showNotification(
                     title: "Settings Imported",
                     body: "Your settings have been successfully imported"
@@ -173,12 +173,12 @@ struct GeneralSettingsView: View {
                     body: error.localizedDescription
                 )
             }
-            
+
         case .failure(let error):
             print("Import failed: \(error)")
         }
     }
-    
+
     private func handleExport(_ result: Result<URL, Error>) {
         switch result {
         case .success:
@@ -186,12 +186,12 @@ struct GeneralSettingsView: View {
                 title: "Settings Exported",
                 body: "Your settings have been successfully exported"
             )
-            
+
         case .failure(let error):
             print("Export failed: \(error)")
         }
     }
-    
+
     private func resetToDefaults() {
         settingsManager.resetToDefaults()
         NotificationManager.shared.showNotification(
@@ -206,7 +206,7 @@ struct ServerSettingsView: View {
     @EnvironmentObject private var serverManager: ServerManager
     @EnvironmentObject private var settingsManager: SettingsManager
     @State private var selectedInterface: NetworkInterface?
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             GroupBox("Server Configuration") {
@@ -214,15 +214,15 @@ struct ServerSettingsView: View {
                     TextField("Port", value: $settingsManager.serverPort, format: .number.grouping(.never))
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 80)
-                    
+
                     Text("(1024-65535)")
                         .foregroundStyle(.secondary)
                         .font(.caption)
                 }
-                
+
                 Picker("Network Interface", selection: $selectedInterface) {
                     Text("All Interfaces (0.0.0.0)").tag(nil as NetworkInterface?)
-                    
+
                     ForEach(NetworkMonitor.shared.availableInterfaces) { interface in
                         Label {
                             Text("\(interface.displayName) - \(interface.address)")
@@ -232,11 +232,11 @@ struct ServerSettingsView: View {
                         .tag(interface as NetworkInterface?)
                     }
                 }
-                
+
                 Toggle("Enable Bonjour Discovery", isOn: $settingsManager.enableBonjour)
                     .help("Allows devices on the local network to discover this server")
             }
-            
+
             GroupBox("Logging") {
                 Picker("Log Level", selection: $settingsManager.logLevel) {
                     Text("Debug").tag("debug")
@@ -244,36 +244,36 @@ struct ServerSettingsView: View {
                     Text("Warning").tag("warning")
                     Text("Error").tag("error")
                 }
-                
+
                 HStack {
                     TextField("Max Log Entries", value: $settingsManager.maxLogEntries, format: .number)
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 100)
-                    
+
                     Text("entries")
                         .foregroundStyle(.secondary)
                 }
             }
-            
+
             GroupBox("Status") {
                 LabeledContent("Current Status") {
                     HStack {
                         Circle()
                             .fill(serverManager.isRunning ? Color.green : Color.red)
                             .frame(width: 8, height: 8)
-                        
+
                         Text(serverManager.isRunning ? "Running" : "Stopped")
                             .font(.caption)
                     }
                 }
-                
+
                 if serverManager.isRunning {
                     LabeledContent("Local IP") {
                         Text(serverManager.localIP)
                             .fontDesign(.monospaced)
                             .font(.caption)
                     }
-                    
+
                     LabeledContent("Active Sessions") {
                         Text(String(serverManager.activeSessions.count))
                             .font(.caption)
@@ -293,19 +293,19 @@ struct SecuritySettingsView: View {
     @EnvironmentObject private var serverManager: ServerManager
     @EnvironmentObject private var settingsManager: SettingsManager
     @State private var showingTokenAlert = false
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             GroupBox("Authentication") {
                 Toggle("Require Authentication", isOn: $settingsManager.requireAuthentication)
                     .help("Clients must provide an authentication token to connect")
-                
+
                 if settingsManager.requireAuthentication {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Authentication Token")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        
+
                         HStack {
                             if let token = serverManager.authToken {
                                 Text(token)
@@ -326,9 +326,9 @@ struct SecuritySettingsView: View {
                                     .foregroundStyle(.secondary)
                                     .italic()
                             }
-                            
+
                             Spacer()
-                            
+
                             Button("Generate New") {
                                 showingTokenAlert = true
                             }
@@ -337,11 +337,11 @@ struct SecuritySettingsView: View {
                     }
                 }
             }
-            
+
             GroupBox("macOS Security") {
                 Toggle("Enable Touch ID", isOn: $settingsManager.enableTouchID)
                     .help("Use Touch ID to authenticate admin actions")
-                
+
                 Text("The authentication token is securely stored in the macOS Keychain")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -363,7 +363,7 @@ struct SecuritySettingsView: View {
 struct AdvancedSettingsView: View {
     @EnvironmentObject private var settingsManager: SettingsManager
     @State private var showingDirectoryPicker = false
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             GroupBox("Server Paths") {
@@ -371,7 +371,7 @@ struct AdvancedSettingsView: View {
                     Text("Server Directory")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    
+
                     HStack {
                         Text(settingsManager.serverDirectory)
                             .fontDesign(.monospaced)
@@ -382,21 +382,21 @@ struct AdvancedSettingsView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(Color(NSColor.controlBackgroundColor))
                             .cornerRadius(4)
-                        
+
                         Button("Browse...") {
                             showingDirectoryPicker = true
                         }
                         .buttonStyle(.borderless)
                     }
                 }
-                
+
                 TextField("Server Command", text: $settingsManager.serverCommand)
                     .textFieldStyle(.roundedBorder)
                     .fontDesign(.monospaced)
                     .font(.caption)
                     .help("Command to start the server (e.g., 'npm start')")
             }
-            
+
             GroupBox("Executables") {
                 LabeledContent("Node.js Path") {
                     TextField("", text: $settingsManager.nodeExecutable)
@@ -405,7 +405,7 @@ struct AdvancedSettingsView: View {
                         .font(.caption)
                         .frame(width: 200)
                 }
-                
+
                 LabeledContent("npm Path") {
                     TextField("", text: $settingsManager.npmExecutable)
                         .textFieldStyle(.roundedBorder)
@@ -414,7 +414,7 @@ struct AdvancedSettingsView: View {
                         .frame(width: 200)
                 }
             }
-            
+
             GroupBox("Warning") {
                 Text("⚠️ Modifying these settings may prevent the server from starting correctly")
                     .font(.caption)
@@ -442,17 +442,18 @@ struct AdvancedSettingsView: View {
 // MARK: - Settings Document
 struct SettingsDocument: @preconcurrency FileDocument {
     static var readableContentTypes: [UTType] { [.json] }
-    
+
     let settingsManager: SettingsManager
-    
+
     init(settingsManager: SettingsManager) {
         self.settingsManager = settingsManager
     }
-    
+
+    @available(*, unavailable)
     init(configuration: ReadConfiguration) throws {
         fatalError("Not implemented - export only")
     }
-    
+
     @MainActor
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
         guard let data = settingsManager.exportSettings() else {

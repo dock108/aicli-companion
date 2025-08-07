@@ -20,7 +20,7 @@ class PerformanceMonitor: ObservableObject {
     private var metricsTimer: Timer?
     private let metricsReportInterval: TimeInterval = 60.0 // Report every minute
     
-    private let webSocketService = WebSocketService.shared
+    private let httpAICLIService = HTTPAICLIService()
     private var cancellables = Set<AnyCancellable>()
     
     // Session tracking
@@ -191,8 +191,8 @@ class PerformanceMonitor: ObservableObject {
     // MARK: - Private Methods
     
     private func setupObservers() {
-        // Monitor WebSocket connection state
-        webSocketService.$isConnected
+        // Monitor HTTP service connection state
+        httpAICLIService.$isConnected
             .sink { [weak self] isConnected in
                 if isConnected {
                     self?.recordConnectionEstablished()
@@ -312,9 +312,9 @@ class PerformanceMonitor: ObservableObject {
     }
     
     private func reportMetrics() {
-        guard webSocketService.isConnected else { return }
+        guard httpAICLIService.isConnected else { return }
         
-        let metrics = getCurrentMetrics(sessionId: webSocketService.getActiveSession())
+        let metrics = getCurrentMetrics(sessionId: nil) // HTTP doesn't maintain persistent sessions
         
         // Send metrics to server telemetry endpoint
         sendMetricsToServer(metrics)
@@ -348,13 +348,13 @@ class PerformanceMonitor: ObservableObject {
             ]
         ]
         
-        // Send via WebSocket
+        // Send via HTTP
         if let jsonData = try? JSONSerialization.data(withJSONObject: telemetryData),
            let jsonString = String(data: jsonData, encoding: .utf8) {
             
             print("📊 Sending performance metrics to server")
             
-            // Note: This would need a new WebSocket message type for telemetry
+            // Note: This would need an HTTP telemetry endpoint
             // For now, we'll just log it
             print("Telemetry data: \(jsonString)")
         }

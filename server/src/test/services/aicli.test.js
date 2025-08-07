@@ -1740,6 +1740,9 @@ describe('AICLIService Unit Tests', () => {
         const mockSessionManager = createMockEventEmitter({
           getSessionBuffer: mock.fn(() => null),
           createSessionBuffer: mock.fn(),
+          getSession: mock.fn(() => null),
+          trackSessionForRouting: mock.fn(async () => {}),
+          setSessionBuffer: mock.fn(),
         });
         const mockProcessRunner = createMockEventEmitter({
           aicliCommand: 'claude',
@@ -2109,7 +2112,7 @@ describe('AICLIService Unit Tests', () => {
         );
       });
 
-      it('should mark conversation as started for first prompt', async () => {
+      it('should delegate to process runner', async () => {
         const mockSession = {
           sessionId: 'session123',
           conversationStarted: false,
@@ -2123,19 +2126,24 @@ describe('AICLIService Unit Tests', () => {
           skipPermissions: false,
         });
         const mockSessionManager = createMockEventEmitter({
-          markConversationStarted: mock.fn(async () => {}),
+          trackClaudeSessionActivity: mock.fn(),
         });
         const testService = new AICLIService({
           sessionManager: mockSessionManager,
           processRunner: mockProcessRunner,
         });
 
-        await testService.executeAICLICommand(mockSession, 'test prompt');
+        const result = await testService.executeAICLICommand(mockSession, 'test prompt');
 
-        assert.strictEqual(mockSessionManager.markConversationStarted.mock.calls.length, 1);
+        assert.strictEqual(result.success, true);
+        assert.strictEqual(mockProcessRunner.executeAICLICommand.mock.calls.length, 1);
         assert.strictEqual(
-          mockSessionManager.markConversationStarted.mock.calls[0].arguments[0],
-          'session123'
+          mockProcessRunner.executeAICLICommand.mock.calls[0].arguments[0],
+          mockSession
+        );
+        assert.strictEqual(
+          mockProcessRunner.executeAICLICommand.mock.calls[0].arguments[1],
+          'test prompt'
         );
       });
     });

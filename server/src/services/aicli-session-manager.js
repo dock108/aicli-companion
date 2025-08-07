@@ -15,13 +15,176 @@ export class AICLISessionManager extends EventEmitter {
     // Session storage
     this.activeSessions = new Map();
     this.sessionMessageBuffers = new Map();
+    this.interactiveSessions = new Map(); // Track running Claude processes (not used in --print mode)
+    this.claudeSessions = new Map(); // Track Claude session IDs and their last activity
 
     // Configuration
-    this.sessionTimeout = options.sessionTimeout || 30 * 60 * 1000; // 30 minutes
+    this.sessionTimeout = options.sessionTimeout || 24 * 60 * 60 * 1000; // 24 hours
+    this.sessionWarningTime = options.sessionWarningTime || 20 * 60 * 60 * 1000; // 20 hours
     this.minTimeoutCheckInterval = options.minTimeoutCheckInterval || 60000; // 1 minute default
 
-    // Persistence will be initialized by the server after startup
-    // This prevents race conditions from multiple initialization attempts
+    // Resource limits
+    this.maxConcurrentSessions = options.maxConcurrentSessions || 10;
+    this.maxMemoryPerSession = options.maxMemoryPerSession || 500 * 1024 * 1024; // 500MB
+    this.maxTotalMemory = options.maxTotalMemory || 2 * 1024 * 1024 * 1024; // 2GB
+    this.maxCpuUsage = options.maxCpuUsage || 80; // 80%
+
+    // Start monitoring sessions
+    this.startSessionMonitoring();
+  }
+
+  /**
+   * Start monitoring sessions for timeouts and resource usage
+   */
+  startSessionMonitoring() {
+    // Check sessions every minute
+    this.monitoringInterval = setInterval(() => {
+      this.checkSessionTimeouts();
+      this.checkResourceUsage();
+      // Clean up old expired sessions every hour
+      if (Date.now() % (60 * 60 * 1000) < 60000) {
+        this.cleanupExpiredClaudeSessions();
+      }
+    }, 60000); // Every minute
+  }
+
+  /**
+   * Check for sessions approaching timeout
+   */
+  async checkSessionTimeouts() {
+    const now = Date.now();
+
+    // Check Claude sessions (--print mode with --resume)
+    for (const [sessionId, sessionData] of this.claudeSessions) {
+      const timeSinceActivity = now - sessionData.lastActivity;
+      const timeUntilTimeout = this.sessionTimeout - timeSinceActivity;
+
+      // Send warning at 20 hours of inactivity
+      if (
+        timeUntilTimeout <= 4 * 60 * 60 * 1000 &&
+        timeUntilTimeout > 0 &&
+        !sessionData.warningsSent?.includes('20hr')
+      ) {
+        const hoursInactive = Math.floor(timeSinceActivity / (60 * 60 * 1000));
+        const minutesInactive = Math.floor((timeSinceActivity % (60 * 60 * 1000)) / (60 * 1000));
+        console.log(`⏰ Claude session ${sessionId} approaching 24hr timeout`);
+        console.log(`   Time since activity: ${hoursInactive}h ${minutesInactive}m`);
+        console.log(`   Last activity: ${new Date(sessionData.lastActivity).toISOString()}`);
+        console.log(`   Time until timeout: ${Math.floor(timeUntilTimeout / (60 * 1000))} minutes`);
+
+        // Mark warning as sent
+        if (!sessionData.warningsSent) sessionData.warningsSent = [];
+        sessionData.warningsSent.push('20hr');
+
+        // Emit event for push notification
+        this.emit('sessionWarning', {
+          sessionId,
+          type: 'timeout',
+          message: 'Session will expire in 4 hours due to inactivity',
+          timeRemaining: timeUntilTimeout,
+        });
+      }
+
+      // Mark as expired after 24 hours of inactivity
+      if (timeUntilTimeout <= 0 && !sessionData.expired) {
+        console.log(
+          `⏰ Claude session ${sessionId} expired (24 hours of inactivity), marking for cleanup`
+        );
+        sessionData.expired = true;
+
+        // Emit event
+        this.emit('sessionExpired', {
+          sessionId,
+          reason: 'inactivity_timeout',
+          lastActivity: new Date(sessionData.lastActivity).toISOString(),
+        });
+      }
+    }
+
+    // Also check interactive sessions if we have any (future feature)
+    for (const [sessionId, session] of this.interactiveSessions) {
+      const sessionAge = now - session.createdAt;
+      const timeUntilTimeout = this.sessionTimeout - sessionAge;
+
+      // Send warning at 20 hours
+      if (timeUntilTimeout <= 4 * 60 * 60 * 1000 && !session.warningsSent?.includes('20hr')) {
+        console.log(`⏰ Interactive session ${sessionId} approaching 24hr timeout (4 hours left)`);
+
+        // Mark warning as sent
+        if (!session.warningsSent) session.warningsSent = [];
+        session.warningsSent.push('20hr');
+
+        // Emit event for push notification
+        this.emit('sessionWarning', {
+          sessionId,
+          type: 'timeout',
+          message: 'Session will expire in 4 hours',
+          timeRemaining: timeUntilTimeout,
+        });
+      }
+
+      // Auto-cleanup after 24 hours
+      if (timeUntilTimeout <= 0) {
+        console.log(`⏰ Interactive session ${sessionId} expired (24 hours), cleaning up`);
+        await this.killSession(sessionId);
+      }
+    }
+  }
+
+  /**
+   * Check resource usage and emit warnings
+   */
+  async checkResourceUsage() {
+    const processMonitor = (await import('../utils/process-monitor.js')).processMonitor;
+
+    let totalMemory = 0;
+    const sessionMetrics = [];
+
+    for (const [sessionId, session] of this.interactiveSessions) {
+      if (session.pid) {
+        const metrics = await processMonitor.monitorProcess(session.pid);
+        if (metrics) {
+          totalMemory += metrics.rss;
+          sessionMetrics.push({
+            sessionId,
+            memory: metrics.rss,
+            cpu: metrics.cpu,
+          });
+
+          // Check per-session memory limit
+          if (metrics.rss > this.maxMemoryPerSession) {
+            this.emit('resourceWarning', {
+              sessionId,
+              type: 'memory',
+              message: `Session using ${(metrics.rss / 1024 / 1024).toFixed(0)}MB (limit: ${(this.maxMemoryPerSession / 1024 / 1024).toFixed(0)}MB)`,
+              usage: metrics.rss,
+              limit: this.maxMemoryPerSession,
+            });
+          }
+        }
+      }
+    }
+
+    // Check total memory limit
+    if (totalMemory > this.maxTotalMemory) {
+      this.emit('resourceWarning', {
+        type: 'total_memory',
+        message: `Total memory usage ${(totalMemory / 1024 / 1024).toFixed(0)}MB exceeds limit`,
+        usage: totalMemory,
+        limit: this.maxTotalMemory,
+        sessions: sessionMetrics,
+      });
+    }
+
+    // Check concurrent session limit
+    if (this.interactiveSessions.size >= this.maxConcurrentSessions) {
+      this.emit('resourceWarning', {
+        type: 'session_limit',
+        message: `Reached maximum concurrent sessions (${this.maxConcurrentSessions})`,
+        count: this.interactiveSessions.size,
+        limit: this.maxConcurrentSessions,
+      });
+    }
   }
 
   /**
@@ -53,6 +216,99 @@ export class AICLISessionManager extends EventEmitter {
   }
 
   /**
+   * Track Claude session activity
+   * Called when we send or receive messages from Claude
+   */
+  trackClaudeSessionActivity(sessionId) {
+    if (!sessionId) return;
+
+    // Check if this session is already expired
+    const existingSession = this.claudeSessions.get(sessionId);
+    if (existingSession?.expired) {
+      console.log(`⚠️ Ignoring activity for expired session ${sessionId}`);
+      return false; // Don't track activity for expired sessions
+    }
+
+    // Update or create session tracking
+    if (!this.claudeSessions.has(sessionId)) {
+      console.log(`📝 Starting to track Claude session ${sessionId}`);
+      this.claudeSessions.set(sessionId, {
+        lastActivity: Date.now(),
+        warningsSent: [],
+        expired: false,
+      });
+    } else {
+      const sessionData = this.claudeSessions.get(sessionId);
+      sessionData.lastActivity = Date.now();
+      // Clear any previous warnings since the session is now active
+      if (sessionData.warningsSent && sessionData.warningsSent.length > 0) {
+        console.log(`🔄 Clearing timeout warnings for active session ${sessionId}`);
+        sessionData.warningsSent = [];
+      }
+      console.log(`✅ Updated activity for Claude session ${sessionId}`);
+    }
+
+    return true; // Activity tracked successfully
+  }
+
+  /**
+   * Check if a Claude session is expired
+   * Returns true if the session should not be used anymore
+   */
+  isClaudeSessionExpired(sessionId) {
+    if (!sessionId) return false;
+
+    const sessionData = this.claudeSessions.get(sessionId);
+    if (!sessionData) {
+      // We don't know about this session, so it's not expired from our perspective
+      return false;
+    }
+
+    // Check if explicitly marked as expired
+    if (sessionData.expired) {
+      return true;
+    }
+
+    // Check if it's been more than 24 hours since last activity
+    const now = Date.now();
+    const timeSinceActivity = now - sessionData.lastActivity;
+    if (timeSinceActivity > this.sessionTimeout) {
+      console.log(`⏰ Session ${sessionId} has exceeded 24-hour timeout, marking as expired`);
+      sessionData.expired = true;
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Clean up expired Claude sessions from tracking
+   * This doesn't kill the sessions, just removes them from our tracking
+   */
+  cleanupExpiredClaudeSessions() {
+    const now = Date.now();
+    let cleanedCount = 0;
+
+    for (const [sessionId, sessionData] of this.claudeSessions) {
+      const timeSinceActivity = now - sessionData.lastActivity;
+
+      // Remove sessions that have been expired for more than 24 hours
+      // This gives a 48-hour total window (24h active + 24h expired)
+      if (sessionData.expired && timeSinceActivity > this.sessionTimeout * 2) {
+        console.log(`🗑️ Removing expired Claude session ${sessionId} from tracking (48h total)`);
+        this.claudeSessions.delete(sessionId);
+        cleanedCount++;
+      }
+    }
+
+    if (cleanedCount > 0) {
+      console.log(`🧹 Cleaned up ${cleanedCount} expired Claude sessions`);
+    }
+
+    return cleanedCount;
+  }
+
+  /**
    * Initialize session persistence (disabled - sessions should be client-managed)
    */
   async initializePersistence() {
@@ -69,7 +325,6 @@ export class AICLISessionManager extends EventEmitter {
     // } catch (error) {
     //   console.error('❌ Failed to initialize session persistence:', error);
     // }
-    
     // Server is stateless - no message queue needed
   }
 
@@ -80,6 +335,160 @@ export class AICLISessionManager extends EventEmitter {
     // Server is stateless - no session restoration
     console.log('✅ Server starting fresh (stateless mode)');
     return;
+  }
+
+  /**
+   * Create or get an interactive Claude session
+   */
+  async getOrCreateInteractiveSession(workingDirectory, existingSessionId = null) {
+    // Check if we have an existing session with this ID
+    if (existingSessionId && this.interactiveSessions.has(existingSessionId)) {
+      const session = this.interactiveSessions.get(existingSessionId);
+      session.lastActivity = Date.now();
+      console.log(`♻️ Reusing existing interactive session ${existingSessionId}`);
+      return session;
+    }
+
+    // Check resource limits before creating new session
+    if (this.interactiveSessions.size >= this.maxConcurrentSessions) {
+      throw new Error(`Maximum concurrent sessions (${this.maxConcurrentSessions}) reached`);
+    }
+
+    // Create new interactive session
+    const processRunner = (await import('./aicli-process-runner.js')).AICLIProcessRunner;
+    const runner = new processRunner();
+
+    try {
+      console.log(`🚀 Creating new interactive Claude session for ${workingDirectory}`);
+      const sessionInfo = await runner.createInteractiveSession(workingDirectory);
+
+      // Store session info
+      const session = {
+        ...sessionInfo,
+        createdAt: Date.now(),
+        lastActivity: Date.now(),
+        messageCount: 0,
+        warningsSent: [],
+      };
+
+      this.interactiveSessions.set(sessionInfo.sessionId, session);
+
+      // Set up process exit handler
+      sessionInfo.process.on('exit', (code) => {
+        console.log(
+          `💀 Interactive session ${sessionInfo.sessionId} process exited with code ${code}`
+        );
+        this.interactiveSessions.delete(sessionInfo.sessionId);
+
+        // Emit event for client notification
+        this.emit('sessionClosed', {
+          sessionId: sessionInfo.sessionId,
+          reason: 'process_exit',
+          code,
+        });
+      });
+
+      console.log(`✅ Created interactive session ${sessionInfo.sessionId}`);
+      return session;
+    } catch (error) {
+      console.error(`❌ Failed to create interactive session: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Kill an interactive session
+   */
+  async killSession(sessionId) {
+    const session = this.interactiveSessions.get(sessionId);
+    if (!session) {
+      console.log(`⚠️ Session ${sessionId} not found`);
+      return false;
+    }
+
+    console.log(`🔪 Killing session ${sessionId}`);
+
+    // Kill the Claude process
+    if (session.process) {
+      session.process.kill('SIGTERM');
+
+      // Force kill after 5 seconds if still running
+      setTimeout(() => {
+        if (session.process && !session.process.killed) {
+          session.process.kill('SIGKILL');
+        }
+      }, 5000);
+    }
+
+    // Remove from tracking
+    this.interactiveSessions.delete(sessionId);
+    this.activeSessions.delete(sessionId);
+    this.sessionMessageBuffers.delete(sessionId);
+
+    // Emit event
+    this.emit('sessionClosed', {
+      sessionId,
+      reason: 'manual_kill',
+    });
+
+    return true;
+  }
+
+  /**
+   * Get session status
+   */
+  getSessionStatus(sessionId) {
+    const session = this.interactiveSessions.get(sessionId);
+    if (!session) {
+      return null;
+    }
+
+    const now = Date.now();
+    const sessionAge = now - session.createdAt;
+    const timeRemaining = this.sessionTimeout - sessionAge;
+
+    return {
+      sessionId,
+      active: true,
+      createdAt: new Date(session.createdAt).toISOString(),
+      lastActivity: new Date(session.lastActivity).toISOString(),
+      messageCount: session.messageCount,
+      timeRemaining: Math.max(0, timeRemaining),
+      hoursRemaining: Math.max(0, Math.floor(timeRemaining / (60 * 60 * 1000))),
+      workingDirectory: session.workingDirectory,
+      pid: session.pid,
+    };
+  }
+
+  /**
+   * Keep session alive (reset timeout)
+   */
+  keepSessionAlive(sessionId) {
+    const session = this.interactiveSessions.get(sessionId);
+    if (!session) {
+      return false;
+    }
+
+    // Reset creation time to now
+    session.createdAt = Date.now();
+    session.warningsSent = []; // Clear warnings
+
+    console.log(`♻️ Reset timeout for session ${sessionId}`);
+    return true;
+  }
+
+  /**
+   * Get all active sessions
+   */
+  getAllSessions() {
+    const sessions = [];
+    for (const [sessionId, _session] of this.interactiveSessions) {
+      const status = this.getSessionStatus(sessionId);
+      if (status) {
+        sessions.push(status);
+      }
+    }
+    return sessions;
   }
 
   /**
@@ -257,7 +666,7 @@ export class AICLISessionManager extends EventEmitter {
    */
   async getSession(sessionId) {
     // First check active sessions in memory
-    let session = this.activeSessions.get(sessionId);
+    const session = this.activeSessions.get(sessionId);
     if (session) {
       return session;
     }
@@ -271,7 +680,7 @@ export class AICLISessionManager extends EventEmitter {
    * Restore a single session from persistence - DISABLED
    * Server is stateless and doesn't persist sessions
    */
-  async _restoreSingleSession(sessionId) {
+  async _restoreSingleSession(_sessionId) {
     // Server is stateless - no session restoration
     return false;
   }
@@ -311,20 +720,6 @@ export class AICLISessionManager extends EventEmitter {
   }
 
   /**
-   * Get all sessions with metadata
-   */
-  getAllSessions() {
-    const sessions = [];
-    for (const [sessionId, session] of this.activeSessions) {
-      sessions.push({
-        sessionId,
-        ...session,
-      });
-    }
-    return sessions;
-  }
-
-  /**
    * Update session activity timestamp
    */
   async updateSessionActivity(sessionId) {
@@ -342,6 +737,11 @@ export class AICLISessionManager extends EventEmitter {
       //     console.warn(`⚠️ Failed to update session activity in persistence:`, error.message);
       //   }
       // }
+    }
+
+    // Also track Claude session activity if we have a session ID
+    if (sessionId) {
+      this.trackClaudeSessionActivity(sessionId);
     }
   }
 
@@ -513,6 +913,12 @@ export class AICLISessionManager extends EventEmitter {
   async shutdown() {
     console.log('🔄 Shutting down AICLI Session Manager...');
 
+    // Clear monitoring interval
+    if (this.monitoringInterval) {
+      clearInterval(this.monitoringInterval);
+      this.monitoringInterval = null;
+    }
+
     // Close all active sessions
     for (const [sessionId, _] of this.activeSessions) {
       try {
@@ -525,6 +931,8 @@ export class AICLISessionManager extends EventEmitter {
     // Clear all buffers and data structures
     this.sessionMessageBuffers.clear();
     this.activeSessions.clear();
+    this.claudeSessions.clear();
+    this.interactiveSessions.clear();
 
     console.log('✅ AICLI Session Manager shut down complete');
   }
@@ -549,10 +957,9 @@ export class AICLISessionManager extends EventEmitter {
    * Cleanup old sessions - DISABLED
    * Server is stateless
    */
-  async cleanupOldSessions(maxAgeMs) {
+  async cleanupOldSessions(_maxAgeMs) {
     return { cleaned: 0 };
   }
-
 
   /**
    * Reconcile session state - DISABLED

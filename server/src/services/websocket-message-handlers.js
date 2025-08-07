@@ -110,9 +110,9 @@ export class WebSocketMessageHandlers {
     data,
     aicliService,
     clients,
-    connectionManager
+    _connectionManager
   ) {
-    const { sessionId, initialPrompt, workingDirectory } = data;
+    const { sessionId, workingDirectory } = data;
 
     logger.info('Stream start request acknowledged', {
       clientId,
@@ -126,13 +126,13 @@ export class WebSocketMessageHandlers {
       clientId,
       WebSocketUtilities.createResponse('streamStart', requestId, {
         success: true,
-        sessionId: sessionId,  // Echo back the session ID provided by client
+        sessionId, // Echo back the session ID provided by client
         message: 'Stream ready',
         timestamp: new Date().toISOString(),
       }),
       clients
     );
-    
+
     // Note: Message queuing removed - server doesn't track sessions
     // If a client needs missed messages, it should request them explicitly
   }
@@ -180,19 +180,19 @@ export class WebSocketMessageHandlers {
     data,
     aicliService,
     clients,
-    connectionManager
+    _connectionManager
   ) {
     const { sessionId, clearChat = false } = data;
 
-    logger.info('Stream close request acknowledged', { 
-      sessionId, 
+    logger.info('Stream close request acknowledged', {
+      sessionId,
       clientId,
-      clearChat 
+      clearChat,
     });
 
     // Server is stateless - no cleanup needed
     // iOS app manages its own session state
-    
+
     if (clearChat) {
       // Client is clearing the chat - just acknowledge
       WebSocketUtilities.sendMessage(
@@ -201,7 +201,7 @@ export class WebSocketMessageHandlers {
           success: true,
           sessionId,
           clearChat: true,
-          newSessionId: null,  // iOS will get new session ID from Claude on next message
+          newSessionId: null, // iOS will get new session ID from Claude on next message
           message: 'Ready for new conversation',
           timestamp: new Date().toISOString(),
         }),
@@ -274,7 +274,7 @@ export class WebSocketMessageHandlers {
     data,
     aicliService,
     clients,
-    connectionManager
+    _connectionManager
   ) {
     const { events, sessionIds } = data;
 
@@ -293,7 +293,7 @@ export class WebSocketMessageHandlers {
       }
 
       // Subscribe client to events
-      connectionManager.subscribeClient(clientId, events);
+      _connectionManager.subscribeClient(clientId, events);
 
       // Server is stateless - no session tracking or message queuing
       // iOS app manages its own sessions and message history
@@ -381,7 +381,7 @@ export class WebSocketMessageHandlers {
     data,
     aicliService,
     clients,
-    connectionManager
+    _connectionManager
   ) {
     const { sessionId, command, args, projectPath } = data;
 
@@ -399,7 +399,7 @@ export class WebSocketMessageHandlers {
       let result;
 
       // Check if this is a meta-command (status, test) or a chat message
-      const metaCommands = ['status', 'test'];  // Removed 'sessions' - server doesn't track sessions
+      const metaCommands = ['status', 'test']; // Removed 'sessions' - server doesn't track sessions
       const isMetaCommand = metaCommands.includes(command.toLowerCase());
 
       if (isMetaCommand) {
@@ -420,7 +420,7 @@ export class WebSocketMessageHandlers {
 
         result = await aicliService.sendPrompt(command, {
           sessionId,
-          requestId,  // Pass through the request ID for response tracking
+          requestId, // Pass through the request ID for response tracking
           streaming: true, // Enable streaming for agent mode
           workingDirectory: projectPath || process.cwd(),
           skipPermissions: true, // Enable autonomous behavior
@@ -446,7 +446,7 @@ export class WebSocketMessageHandlers {
         });
 
         let content = '';
-        
+
         // Extract content from the result object
         if (result && result.response) {
           // Check if response is the final result object from AICLI
@@ -547,7 +547,7 @@ export class WebSocketMessageHandlers {
     data,
     aicliService,
     clients,
-    connectionManager
+    _connectionManager
   ) {
     const { sessionId } = data;
 
@@ -574,7 +574,7 @@ export class WebSocketMessageHandlers {
    * Handle 'registerDevice' message - server is stateless, just acknowledge
    */
   static handleRegisterDeviceMessage(clientId, requestId, data, clients) {
-    const { deviceToken, deviceInfo } = data;
+    const { deviceInfo } = data;
 
     logger.info('Device registration acknowledged', {
       clientId,
@@ -583,7 +583,7 @@ export class WebSocketMessageHandlers {
 
     // Server is stateless - no push notification management
     // iOS app manages its own push notifications
-    
+
     WebSocketUtilities.sendMessage(
       clientId,
       WebSocketUtilities.createResponse('registerDevice', requestId, {
@@ -594,7 +594,6 @@ export class WebSocketMessageHandlers {
       clients
     );
   }
-
 
   /**
    * Get all available message handlers

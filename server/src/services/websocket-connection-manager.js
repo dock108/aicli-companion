@@ -3,7 +3,7 @@ import { EventEmitter } from 'events';
 import { WebSocketUtilities } from './websocket-utilities.js';
 import { ConnectionStateManager } from './connection-state-manager.js';
 import { getTelemetryService } from './telemetry.js';
-import { WEBSOCKET_EVENTS, SERVER_VERSION, DEFAULT_CONFIG } from '../constants/index.js';
+import { WEBSOCKET_EVENTS, SERVER_VERSION } from '../constants/index.js';
 
 /**
  * Manages WebSocket client connections, authentication, and health monitoring
@@ -168,7 +168,6 @@ export class WebSocketConnectionManager extends EventEmitter {
     console.log(`   Remaining clients: ${this.clients.size}`);
   }
 
-
   /**
    * Send minimal welcome message for iOS connection detection
    * iOS app requires this to know connection is established
@@ -180,7 +179,7 @@ export class WebSocketConnectionManager extends EventEmitter {
       data: {
         clientId,
         serverVersion: SERVER_VERSION,
-        capabilities: [],  // Empty array - server is stateless
+        capabilities: [], // Empty array - server is stateless
         // No maxSessions - not needed in stateless architecture
       },
     };
@@ -308,7 +307,7 @@ export class WebSocketConnectionManager extends EventEmitter {
    * Get clients by session ID - DISABLED
    * Server is stateless and doesn't track sessions
    */
-  getClientsBySession(sessionId) {
+  getClientsBySession(_sessionId) {
     // Server is stateless - no session tracking
     return [];
   }

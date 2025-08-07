@@ -146,14 +146,8 @@ class MessageQueueManager: ObservableObject {
     }
     
     private func setupWebSocketHandlers() {
-        // Listen for queue-related messages
-        WebSocketService.shared.setMessageHandler(for: .progress) { [weak self] message in
-            if case .progress(let progress) = message.data {
-                if progress.stage == "queue_processing" {
-                    self?.handleQueueProgress(progress)
-                }
-            }
-        }
+        // HTTP architecture: Queue handling is done per-request
+        // No persistent WebSocket handlers needed
     }
     
     private func handleQueueProgress(_ progress: ProgressResponse) {

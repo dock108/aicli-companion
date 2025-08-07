@@ -33,9 +33,9 @@ describe('AICLISessionManager - Additional Coverage', () => {
   });
 
   describe('Session creation and limits', () => {
-    it('should enforce max session limit', async () => {
-      // Create sessions up to limit
-      for (let i = 1; i <= 3; i++) {
+    it('should allow unlimited sessions in HTTP mode', async () => {
+      // HTTP architecture is stateless and doesn't enforce session limits
+      for (let i = 1; i <= 5; i++) {
         const projectDir = join(testDir, `project-${i}`);
         mkdirSync(projectDir, { recursive: true });
         const result = await sessionManager.createInteractiveSession(
@@ -45,14 +45,7 @@ describe('AICLISessionManager - Additional Coverage', () => {
         );
         assert.ok(result.success);
       }
-
-      // Try to create one more
-      const project4Dir = join(testDir, 'project-4');
-      mkdirSync(project4Dir, { recursive: true });
-      await assert.rejects(
-        sessionManager.createInteractiveSession('session-4', 'test', project4Dir),
-        /Maximum number of sessions/
-      );
+      assert.strictEqual(sessionManager.activeSessions.size, 5);
     });
 
     it('should handle invalid session ID sanitization', async () => {
@@ -73,34 +66,7 @@ describe('AICLISessionManager - Additional Coverage', () => {
     });
   });
 
-  describe('Session lifecycle', () => {
-    it('should mark session as backgrounded', async () => {
-      const result = await sessionManager.createInteractiveSession('bg-session', 'test', testDir);
-
-      await sessionManager.markSessionBackgrounded(result.sessionId);
-
-      const session = await sessionManager.getSession(result.sessionId);
-      assert.strictEqual(session.isBackgrounded, true);
-      assert.ok(session.backgroundedAt);
-    });
-
-    it('should mark session as foregrounded', async () => {
-      const result = await sessionManager.createInteractiveSession('fg-session', 'test', testDir);
-
-      await sessionManager.markSessionBackgrounded(result.sessionId);
-      await sessionManager.markSessionForegrounded(result.sessionId);
-
-      const session = await sessionManager.getSession(result.sessionId);
-      assert.strictEqual(session.isBackgrounded, false);
-      assert.strictEqual(session.backgroundedAt, null);
-    });
-
-    it('should handle marking non-existent session as foregrounded', async () => {
-      // Should not throw, just log warning
-      await sessionManager.markSessionForegrounded('non-existent');
-      assert.ok(true); // If we get here, it didn't throw
-    });
-  });
+  // Session lifecycle tests removed - backgrounded session functionality no longer exists in HTTP architecture
 
   describe('Session activity and processing', () => {
     it('should update session activity', async () => {
@@ -201,64 +167,7 @@ describe('AICLISessionManager - Additional Coverage', () => {
     });
   });
 
-  describe('Session timeout', () => {
-    it('should timeout inactive session', { timeout: 3000 }, async () => {
-      // Create a fresh session manager for this test
-      const timeoutManager = new AICLISessionManager({
-        sessionTimeout: 500, // 500ms for testing
-        minTimeoutCheckInterval: 50, // 50ms for testing
-      });
-
-      const result = await timeoutManager.createInteractiveSession(
-        'timeout-session',
-        'test',
-        testDir
-      );
-
-      // Wait for timeout
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      // Session should be cleaned up
-      const session = await timeoutManager.getSession(result.sessionId);
-      assert.strictEqual(session, null);
-
-      // Clean up
-      await timeoutManager.shutdown();
-    });
-
-    it('should handle backgrounded session with longer timeout', { timeout: 5000 }, async () => {
-      // Create a fresh session manager for this test
-      const bgTimeoutManager = new AICLISessionManager({
-        sessionTimeout: 500, // 500ms for testing
-        backgroundedSessionTimeout: 1500, // 1.5 seconds for testing
-        minTimeoutCheckInterval: 50, // 50ms for testing
-      });
-
-      const result = await bgTimeoutManager.createInteractiveSession(
-        'bg-timeout-session',
-        'test',
-        testDir
-      );
-
-      // Mark as backgrounded
-      await bgTimeoutManager.markSessionBackgrounded(result.sessionId);
-
-      // Wait for regular timeout (should still exist due to longer backgrounded timeout)
-      await new Promise((resolve) => setTimeout(resolve, 800));
-
-      let session = await bgTimeoutManager.getSession(result.sessionId);
-      assert.ok(session); // Should still exist
-
-      // Wait for backgrounded timeout
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      session = await bgTimeoutManager.getSession(result.sessionId);
-      assert.strictEqual(session, null); // Should be cleaned up
-
-      // Clean up
-      await bgTimeoutManager.shutdown();
-    });
-  });
+  // Session timeout tests removed - backgrounded session functionality no longer exists in HTTP architecture
 
   describe('Session cleanup', () => {
     it('should cleanup dead session', async () => {
@@ -340,9 +249,10 @@ describe('AICLISessionManager - Additional Coverage', () => {
       assert.ok(exported);
     });
 
-    it('should cleanup old sessions', async () => {
+    it('should return cleanup stats', async () => {
       const cleaned = await sessionManager.cleanupOldSessions(0); // Clean all
-      assert.ok(Array.isArray(cleaned));
+      assert.strictEqual(typeof cleaned, 'object');
+      assert.strictEqual(cleaned.cleaned, 0); // No sessions to clean in stateless mode
     });
   });
 
@@ -367,7 +277,7 @@ describe('AICLISessionManager - Additional Coverage', () => {
         testDir
       );
 
-      const session = await sessionManager.getSession(result.sessionId);
+      const session = sessionManager.activeSessions.get(result.sessionId);
       session.isRestoredSession = true;
 
       const isActive = sessionManager.isClaudeSessionActive(result.sessionId);

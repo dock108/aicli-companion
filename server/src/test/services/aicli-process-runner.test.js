@@ -146,6 +146,7 @@ describe('AICLIProcessRunner', () => {
         conversationStarted: false,
         initialPrompt: 'Initial prompt',
         isRestoredSession: false,
+        requestId: 'test-request-id',
       };
 
       const prompt = 'User prompt';
@@ -160,7 +161,7 @@ describe('AICLIProcessRunner', () => {
       assert.strictEqual(mockSpawn.mock.calls.length, 1);
       const [command, args, options] = mockSpawn.mock.calls[0].arguments;
       assert.ok(command.includes('claude'));
-      assert.ok(args.includes('--session-id'));
+      assert.ok(args.includes('--resume'));
       assert.ok(args.includes('test-session'));
       assert.strictEqual(options.cwd, '/test/dir');
 

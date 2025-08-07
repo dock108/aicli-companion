@@ -7,6 +7,8 @@ import UIKit
 
 @available(iOS 16.0, macOS 13.0, *)
 public class HTTPAICLIService: ObservableObject {
+    static let shared = HTTPAICLIService()
+    
     @Published var isConnected = false
     @Published var connectionStatus: ConnectionStatus = .disconnected
     @Published var currentSession: String?
@@ -23,6 +25,9 @@ public class HTTPAICLIService: ObservableObject {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
         config.timeoutIntervalForResource = 120 // Longer timeout for Claude processing
+        config.waitsForConnectivity = true // Wait for network connectivity
+        config.allowsCellularAccess = true
+        config.sessionSendsLaunchEvents = true
         self.urlSession = URLSession(configuration: config)
 
         setupDateFormatters()
@@ -56,6 +61,9 @@ public class HTTPAICLIService: ObservableObject {
                 case .success:
                     self?.isConnected = true
                     self?.connectionStatus = .connected
+                    
+                    // Notify ConnectionReliabilityManager
+                    ConnectionReliabilityManager.shared.handleConnectionEstablished()
                     
                     // Register device for push notifications if we have a token
                     if let deviceToken = self?.deviceToken {
@@ -223,6 +231,7 @@ public class HTTPAICLIService: ObservableObject {
         var request = URLRequest(url: chatURL)
         request.httpMethod = "POST"
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 120 // Extended timeout for Claude processing
 
         var payload: [String: Any] = [
             "message": message
@@ -250,10 +259,35 @@ public class HTTPAICLIService: ObservableObject {
         print("📤 Sending HTTP message to: \(chatURL)")
         print("   Payload: \(payload)")
 
-        urlSession.dataTask(with: request) { data, response, error in
+        // Create background task for iOS to continue request when app is backgrounded
+        #if os(iOS)
+        var backgroundTaskID: UIBackgroundTaskIdentifier = .invalid
+        backgroundTaskID = UIApplication.shared.beginBackgroundTask(withName: "Claude Chat Request") {
+            // Clean up if task expires
+            UIApplication.shared.endBackgroundTask(backgroundTaskID)
+            backgroundTaskID = .invalid
+        }
+        #endif
+        
+        let task = urlSession.dataTask(with: request) { data, response, error in
+            #if os(iOS)
+            defer {
+                if backgroundTaskID != .invalid {
+                    UIApplication.shared.endBackgroundTask(backgroundTaskID)
+                }
+            }
+            #endif
+            
             if let error = error {
                 print("❌ Network error: \(error)")
-                completion(.failure(.networkError(error)))
+                // Check if it's a timeout error
+                let nsError = error as NSError
+                if nsError.code == NSURLErrorTimedOut {
+                    // More user-friendly timeout message
+                    completion(.failure(.networkError(NSError(domain: "HTTPAICLIService", code: -1001, userInfo: [NSLocalizedDescriptionKey: "The request timed out. Please check your connection and try again."]))))
+                } else {
+                    completion(.failure(.networkError(error)))
+                }
                 return
             }
 
@@ -272,7 +306,7 @@ public class HTTPAICLIService: ObservableObject {
             // Parse the response
             do {
                 let chatResponse = try self.decoder.decode(ClaudeChatResponse.self, from: data)
-                print("✅ Chat response received: \(chatResponse.content.prefix(100))...")
+                print("✅ Chat response received: \(chatResponse.content?.prefix(100) ?? "acknowledgment")...")
                 
                 // Update session ID if provided
                 if let newSessionId = chatResponse.sessionId {
@@ -284,6 +318,49 @@ public class HTTPAICLIService: ObservableObject {
                 completion(.success(chatResponse))
             } catch {
                 print("❌ JSON parsing error: \(error)")
+                completion(.failure(.jsonParsingError(error)))
+            }
+        }
+        task.resume()
+    }
+
+    // MARK: - Session Status
+    
+    func checkSessionStatus(sessionId: String, completion: @escaping (Result<Bool, AICLICompanionError>) -> Void) {
+        guard let baseURL = baseURL else {
+            completion(.failure(.invalidURL))
+            return
+        }
+        
+        let statusURL = baseURL.appendingPathComponent("api/sessions/\(sessionId)/status")
+        var request = URLRequest(url: statusURL)
+        request.httpMethod = "GET"
+        request.addValue("application/json", forHTTPHeaderField: "Accept")
+        request.timeoutInterval = 10 // Quick status check
+        
+        print("📡 Checking session status: \(statusURL)")
+        
+        urlSession.dataTask(with: request) { data, response, error in
+            if let error = error {
+                completion(.failure(.networkError(error)))
+                return
+            }
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                completion(.failure(.invalidResponse))
+                return
+            }
+            
+            guard let data = data else {
+                completion(.failure(.noData))
+                return
+            }
+            
+            do {
+                let statusResponse = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+                let hasNewMessages = statusResponse?["hasNewMessages"] as? Bool ?? false
+                completion(.success(hasNewMessages))
+            } catch {
                 completion(.failure(.jsonParsingError(error)))
             }
         }.resume()
@@ -355,10 +432,13 @@ public class HTTPAICLIService: ObservableObject {
 // MARK: - Response Models
 
 struct ClaudeChatResponse: Codable {
-    let content: String
+    let content: String?        // Optional - not present in acknowledgments
     let sessionId: String?
     let projectPath: String?
     let timestamp: Date
     let success: Bool
+    let message: String?        // Acknowledgment message
+    let deliveryMethod: String? // "apns" for acknowledgments
+    let requestId: String?      // Track request/response pairs
 }
 

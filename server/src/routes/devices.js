@@ -13,21 +13,21 @@ const router = express.Router();
  */
 router.post('/register', async (req, res) => {
   const { deviceToken, platform = 'ios', bundleId } = req.body;
-  
+
   if (!deviceToken) {
     return res.status(400).json({
       success: false,
-      error: 'Device token is required'
+      error: 'Device token is required',
     });
   }
 
   const deviceId = req.headers['x-device-id'] || `device_${Date.now()}`;
-  
+
   logger.info('Registering device for push notifications', {
     deviceId,
     platform,
     bundleId,
-    tokenLength: deviceToken.length
+    tokenLength: deviceToken.length,
   });
 
   try {
@@ -36,7 +36,7 @@ router.post('/register', async (req, res) => {
       token: deviceToken,
       platform,
       bundleId,
-      registeredAt: new Date()
+      registeredAt: new Date(),
     });
 
     logger.info('Device registered successfully', { deviceId });
@@ -45,18 +45,17 @@ router.post('/register', async (req, res) => {
       success: true,
       deviceId,
       message: 'Device registered for push notifications',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
-
   } catch (error) {
-    logger.error('Device registration failed', { 
+    logger.error('Device registration failed', {
       deviceId,
-      error: error.message 
+      error: error.message,
     });
 
     res.status(500).json({
       success: false,
-      error: 'Failed to register device'
+      error: 'Failed to register device',
     });
   }
 });
@@ -66,7 +65,7 @@ router.post('/register', async (req, res) => {
  */
 router.delete('/:deviceId', async (req, res) => {
   const { deviceId } = req.params;
-  
+
   logger.info('Unregistering device', { deviceId });
 
   try {
@@ -75,18 +74,17 @@ router.delete('/:deviceId', async (req, res) => {
     res.json({
       success: true,
       message: 'Device unregistered',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
-
   } catch (error) {
-    logger.error('Device unregistration failed', { 
+    logger.error('Device unregistration failed', {
       deviceId,
-      error: error.message 
+      error: error.message,
     });
 
     res.status(500).json({
       success: false,
-      error: 'Failed to unregister device'
+      error: 'Failed to unregister device',
     });
   }
 });
@@ -96,11 +94,11 @@ router.delete('/:deviceId', async (req, res) => {
  */
 router.post('/test-push', async (req, res) => {
   const { deviceToken, message = 'Test notification from Claude Companion' } = req.body;
-  
+
   if (!deviceToken) {
     return res.status(400).json({
       success: false,
-      error: 'Device token is required'
+      error: 'Device token is required',
     });
   }
 
@@ -110,21 +108,20 @@ router.post('/test-push', async (req, res) => {
     const result = await pushNotificationService.sendPushNotification(deviceToken, {
       message,
       title: 'Test Notification',
-      data: { test: true }
+      data: { test: true },
     });
 
     res.json({
       success: result.success,
       message: result.success ? 'Test notification sent' : 'Test notification failed',
-      error: result.error || null
+      error: result.error || null,
     });
-
   } catch (error) {
     logger.error('Test push notification failed', { error: error.message });
 
     res.status(500).json({
       success: false,
-      error: 'Failed to send test notification'
+      error: 'Failed to send test notification',
     });
   }
 });

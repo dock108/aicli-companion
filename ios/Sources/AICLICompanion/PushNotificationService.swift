@@ -16,7 +16,8 @@ public class PushNotificationService: NSObject, ObservableObject {
 
     override init() {
         super.init()
-        notificationCenter.delegate = self
+        // Delegate is set by EnhancedPushNotificationService to avoid conflicts
+        // notificationCenter.delegate = self
         checkAuthorizationStatus()
     }
 
@@ -282,4 +283,5 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
 
 extension Notification.Name {
     static let openChatSession = Notification.Name("openChatSession")
+    static let claudeResponseReceived = Notification.Name("claudeResponseReceived")
 }

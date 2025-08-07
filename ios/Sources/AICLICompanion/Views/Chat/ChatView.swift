@@ -47,10 +47,9 @@ struct ChatView: View {
         self.session = session
         self.onSwitchProject = onSwitchProject
         
-        // Create view model with dependencies - services will be injected via environment
-        let aicliService = HTTPAICLIService()
-        let settings = SettingsManager()
-        self._viewModel = StateObject(wrappedValue: ChatViewModel(aicliService: aicliService, settings: settings))
+        // ViewModule will be created lazily when environment objects are available
+        // We'll initialize it in body where we have access to environment objects
+        self._viewModel = StateObject(wrappedValue: ChatViewModel(aicliService: HTTPAICLIService.shared, settings: SettingsManager.shared))
     }
     
     // MARK: - Body
@@ -114,6 +113,11 @@ struct ChatView: View {
         .onDisappear {
             cleanupView()
         }
+        #if os(iOS)
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            refreshMessagesOnActivation()
+        }
+        #endif
         .onChange(of: selectedProject?.path) { oldPath, newPath in
             if let oldPath = oldPath, let newPath = newPath, oldPath != newPath {
                 // Save messages for the old project before switching
@@ -155,8 +159,8 @@ struct ChatView: View {
         
         // Connect HTTP service if needed  
         print("🔗 ChatView: Connecting HTTP service for project '\(project.name)'")
-        connectWebSocketIfNeeded {
-            print("🔗 ChatView: WebSocket connected, handling session for project '\(project.name)'")
+        connectHTTPIfNeeded {
+            print("🔗 ChatView: HTTP service connected, handling session for project '\(project.name)'")
             // Handle session after connection
             self.sessionManager.handleSessionAfterConnection(
                 for: project,
@@ -252,23 +256,11 @@ struct ChatView: View {
     private func clearCurrentSession() {
         guard let project = selectedProject else { return }
         
-        // Send clearChat message to server if we have an active session
+        // HTTP doesn't need to send clearChat to server - sessions are stateless
+        // Just clear the local session ID so next message starts fresh
         if let currentSessionId = viewModel.currentSessionId {
-            WebSocketService.shared.sendClearChat(
-                sessionId: currentSessionId,
-                completion: { result in
-                    switch result {
-                    case .success(let newSessionId):
-                        print("✅ Chat cleared, new session ID: \(newSessionId)")
-                        // Update the current session ID
-                        DispatchQueue.main.async {
-                            self.viewModel.currentSessionId = newSessionId
-                        }
-                    case .failure(let error):
-                        print("❌ Failed to clear chat: \(error)")
-                    }
-                }
-            )
+            print("🗑️ Clearing local session: \(currentSessionId)")
+            viewModel.currentSessionId = nil
         }
         
         // Clear messages from UI
@@ -287,28 +279,30 @@ struct ChatView: View {
         // HTTP doesn't maintain active sessions - they're request-scoped
     }
     
-    // MARK: - WebSocket Connection
-    private func connectWebSocketIfNeeded(completion: @escaping () -> Void) {
-        guard let connection = settings.currentConnection,
-              let wsURL = connection.wsURL else {
+    // MARK: - HTTP Connection
+    private func connectHTTPIfNeeded(completion: @escaping () -> Void) {
+        guard let connection = settings.currentConnection else {
             print("⚠️ ChatView: No connection configuration available")
             completion()
             return
         }
         
-        print("🔗 ChatView: Checking HTTP connection to \(wsURL)")
-        print("   Current connection state: \(aicliService.isConnected)")
+        let httpURL = "http://\(connection.address):\(connection.port)"
+        print("🔗 ChatView: Checking HTTP connection to \(httpURL)")
+        print("   Current connection state: \(HTTPAICLIService.shared.isConnected)")
         
-        if aicliService.isConnected {
+        if HTTPAICLIService.shared.isConnected {
             print("✅ ChatView: HTTP service already connected")
             completion()
             return
         }
         
         print("🔗 ChatView: Starting HTTP connection...")
+        print("   aicliService instance: \(ObjectIdentifier(aicliService))")
+        print("   HTTPAICLIService.shared instance: \(ObjectIdentifier(HTTPAICLIService.shared))")
         
-        // Connect via HTTP service
-        aicliService.connect(
+        // Use the shared instance for connection to ensure consistency
+        HTTPAICLIService.shared.connect(
             to: connection.address,
             port: connection.port,
             authToken: connection.authToken
@@ -399,6 +393,59 @@ struct ChatView: View {
         let threshold: CGFloat = 100
         let maxScrollPosition = max(0, contentHeight - scrollViewHeight)
         isNearBottom = (maxScrollPosition - position) <= threshold
+    }
+    
+    // MARK: - Background Refresh
+    private func refreshMessagesOnActivation() {
+        guard let project = selectedProject,
+              let sessionId = viewModel.currentSessionId else {
+            print("🔄 No active session to refresh")
+            return
+        }
+        
+        print("🔄 Refreshing messages after returning from background")
+        
+        // Reload messages from persistence to get any that were saved while backgrounded
+        let savedMessages = MessagePersistenceService.shared.loadMessages(for: project.path, sessionId: sessionId)
+        
+        if savedMessages.count > viewModel.messages.count {
+            print("🔄 Found \(savedMessages.count - viewModel.messages.count) new messages saved while backgrounded")
+            viewModel.messages = savedMessages
+        } else {
+            // No new messages found locally - check server for completed long-running responses
+            print("🔄 No new local messages - polling server for completed responses")
+            pollForCompletedResponses()
+        }
+    }
+    
+    private func pollForCompletedResponses() {
+        guard let project = selectedProject,
+              let sessionId = viewModel.currentSessionId else {
+            return
+        }
+        
+        print("🔍 Polling server for completed responses for session: \(sessionId)")
+        
+        // Use the HTTP service to make a lightweight status check
+        HTTPAICLIService.shared.checkSessionStatus(sessionId: sessionId) { result in
+            Task { @MainActor in
+                switch result {
+                case .success(let hasNewMessages):
+                    if hasNewMessages {
+                        print("✅ Server indicates new messages available - refreshing")
+                        // Reload messages from server/persistence
+                        let newMessages = MessagePersistenceService.shared.loadMessages(for: project.path, sessionId: sessionId)
+                        if newMessages.count > self.viewModel.messages.count {
+                            self.viewModel.messages = newMessages
+                        }
+                    } else {
+                        print("ℹ️ No new messages on server")
+                    }
+                case .failure(let error):
+                    print("⚠️ Failed to poll server for completed responses: \(error)")
+                }
+            }
+        }
     }
 }
 

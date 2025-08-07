@@ -11,17 +11,15 @@ class ChatSessionManager: ObservableObject {
     @Published var sessionError: String?
     
     // MARK: - Services
-    private let webSocketService = WebSocketService.shared
     private let persistenceService = MessagePersistenceService.shared
     private let sessionStatePersistence = SessionStatePersistenceService.shared
-    private let aicliService = AICLIService()
     private let sessionDeduplicationManager = SessionDeduplicationManager.shared
     
     // MARK: - Private Properties
     private var cancellables = Set<AnyCancellable>()
     
     private init() {
-        setupWebSocketHandlers()
+        // HTTP doesn't need WebSocket handlers
     }
     
     // MARK: - Session Lifecycle
@@ -35,8 +33,7 @@ class ChatSessionManager: ObservableObject {
             print("🔷 SessionManager: Using session from parent: \(passedSession.sessionId)")
             setActiveSession(passedSession)
             
-            // Subscribe to the session
-            webSocketService.subscribeToSessions([passedSession.sessionId])
+            // HTTP doesn't need session subscription - sessions are request-scoped
             
             completion(.success(passedSession))
             return
@@ -65,7 +62,7 @@ class ChatSessionManager: ObservableObject {
             )
             
             setActiveSession(restoredSession)
-            webSocketService.subscribeToSessions([sessionId])
+            // HTTP doesn't need session subscription
             
             // Update session state persistence with the correct session ID
             sessionStatePersistence.saveSessionState(
@@ -103,7 +100,7 @@ class ChatSessionManager: ObservableObject {
         )
         
         setActiveSession(newSession)
-        webSocketService.subscribeToSessions([sessionId])
+        // HTTP doesn't need session subscription
         
         // Save session state for future restoration
         sessionStatePersistence.saveSessionState(
@@ -141,7 +138,7 @@ class ChatSessionManager: ObservableObject {
                 )
                 
                 setActiveSession(restoredSession)
-                webSocketService.subscribeToSessions([sessionState.id])
+                // HTTP doesn't need session subscription
                 
                 // Touch the session to update last active time
                 sessionStatePersistence.touchSession(sessionState.id)
@@ -183,7 +180,7 @@ class ChatSessionManager: ObservableObject {
         )
         
         setActiveSession(restoredSession)
-        webSocketService.subscribeToSessions([sessionId])
+        // HTTP doesn't need session subscription
         
         // Request message history from server
         requestMessageHistory(for: sessionId)
@@ -206,25 +203,22 @@ class ChatSessionManager: ObservableObject {
         guard let session = activeSession else { return }
         
         print("🔷 SessionManager: Closing session \(session.sessionId)")
-        webSocketService.closeStream(sessionId: session.sessionId)
-        webSocketService.setActiveSession(nil)
+        // HTTP doesn't maintain streams
+        // HTTP doesn't maintain active sessions
         activeSession = nil
     }
     
     // MARK: - Private Methods
     private func setActiveSession(_ session: ProjectSession) {
         activeSession = session
-        webSocketService.setActiveSession(session.sessionId)
-        webSocketService.trackSession(session.sessionId)
+        // HTTP doesn't need active session tracking
         sessionError = nil
         
         // Touch session state to update last active time
         sessionStatePersistence.touchSession(session.sessionId)
     }
     
-    private func setupWebSocketHandlers() {
-        // Session status handling removed - not needed in simplified architecture
-    }
+    // WebSocket handlers removed - HTTP is request-response based
     
     
     private func requestMessageHistory(for sessionId: String) {
@@ -237,15 +231,8 @@ class ChatSessionManager: ObservableObject {
             offset: nil
         )
         
-        // Send via WebSocket
-        webSocketService.sendMessage(request, type: .getMessageHistory) { result in
-            switch result {
-            case .success:
-                print("✅ Message history request sent for session \(sessionId)")
-            case .failure(let error):
-                print("❌ Failed to request message history: \(error)")
-            }
-        }
+        // HTTP doesn't need server message history requests - messages are persisted locally
+        print("📝 HTTP architecture: Message history is loaded from local persistence")
     }
     
     // MARK: - Error Types

@@ -349,9 +349,15 @@ describe('AICLIProcessRunner - Additional Coverage', () => {
       mockSpawn = (_command, _args, _options) => {
         const proc = new MockChildProcess();
         proc.stdin = {
-          write: (data) => {
+          write: (data, encoding, callback) => {
             stdinWritten = true;
             writtenData = data;
+            // Call the callback if provided (new callback-based write)
+            if (typeof encoding === 'function') {
+              encoding(); // encoding is actually the callback
+            } else if (typeof callback === 'function') {
+              callback(); // proper callback parameter
+            }
           },
           end: () => {
             stdinEnded = true;

@@ -114,6 +114,12 @@ export class AICLIProcessRunner extends EventEmitter {
       sessionLogger.debug('Combined initial prompt with command prompt');
     }
 
+    // Validate we have a prompt
+    if (!finalPrompt || finalPrompt.trim().length === 0) {
+      sessionLogger.error('No prompt provided for AICLI command');
+      throw new Error('Prompt is required for AICLI CLI execution');
+    }
+
     sessionLogger.info('Executing AICLI command', {
       workingDirectory,
       promptLength: finalPrompt?.length,
@@ -211,7 +217,11 @@ export class AICLIProcessRunner extends EventEmitter {
         return;
       }
 
-      processLogger.info('Process started', { pid: aicliProcess.pid });
+      processLogger.info('Process started', { 
+        pid: aicliProcess.pid,
+        hasPrompt: !!prompt,
+        promptLength: prompt?.length || 0
+      });
 
       // Handle stdin input - pass the prompt
       this.handleStdinInput(aicliProcess, prompt);
@@ -261,10 +271,29 @@ export class AICLIProcessRunner extends EventEmitter {
    */
   handleStdinInput(aicliProcess, prompt) {
     // With --print mode, send prompt via stdin
-    if (prompt) {
-      aicliProcess.stdin.write(prompt);
+    try {
+      if (prompt && prompt.trim().length > 0) {
+        // Write the prompt and close stdin
+        aicliProcess.stdin.write(prompt, 'utf8', (error) => {
+          if (error) {
+            logger.error('Failed to write prompt to stdin', { error: error.message });
+          }
+          aicliProcess.stdin.end();
+        });
+      } else {
+        // For empty prompts, still need to close stdin
+        logger.warn('Empty prompt provided to AICLI CLI');
+        aicliProcess.stdin.end();
+      }
+    } catch (error) {
+      logger.error('Error handling stdin input', { error: error.message });
+      // Ensure stdin is closed even on error
+      try {
+        aicliProcess.stdin.end();
+      } catch (endError) {
+        logger.error('Failed to close stdin', { error: endError.message });
+      }
     }
-    aicliProcess.stdin.end();
   }
 
   /**

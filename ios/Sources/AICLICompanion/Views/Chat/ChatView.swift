@@ -205,6 +205,7 @@ struct ChatView: View {
         viewModel.saveMessages(for: project)
         
         // Clean up keyboard observers
+        // swiftlint:disable:next notification_center_detachment
         NotificationCenter.default.removeObserver(self)
         
         // Note: Do NOT close session - let it continue in background

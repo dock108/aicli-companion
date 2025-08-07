@@ -119,7 +119,7 @@ class BackgroundSessionCoordinator: ObservableObject {
         pendingMessagesLock.lock()
         
         // Find pending messages that match this request or don't have a request ID
-        let matchingProjects = pendingMessages.filter { (projectPath, pendingSet) in
+        let matchingProjects = pendingMessages.filter { (_, pendingSet) in
             // Match by request ID if available, otherwise process all pending
             return pendingSet.requestId == nil || pendingSet.requestId == requestId
         }

@@ -961,7 +961,6 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
                         self.backgroundMessageCompletion = nil
                     }
                 }
-                
             } catch {
                 print("❌ Failed to send background message history request: \(error)")
                 continuation.resume(returning: [])

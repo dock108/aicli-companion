@@ -35,8 +35,8 @@ class BackgroundMessageSyncService: ObservableObject {
     /// @param projectName: The project name for logging
     /// @returns: Bool indicating if sync was successful
     func syncMessagesForSession(
-        _ sessionId: String, 
-        projectId: String? = nil, 
+        _ sessionId: String,
+        projectId: String? = nil,
         projectName: String? = nil
     ) async -> Bool {
         print("🔄 Starting background message sync for session: \(sessionId)")
@@ -89,7 +89,6 @@ class BackgroundMessageSyncService: ObservableObject {
             }
             
             return result
-            
         } catch {
             await updateSyncStatus(false)
             print("❌ Background message sync error: \(error)")
@@ -112,7 +111,7 @@ class BackgroundMessageSyncService: ObservableObject {
             for session in activeSessions {
                 group.addTask {
                     await semaphore.wait()
-                    defer { 
+                    defer {
                         Task { await semaphore.signal() }
                     }
                     
@@ -124,10 +123,8 @@ class BackgroundMessageSyncService: ObservableObject {
                 }
             }
             
-            for await success in group {
-                if success {
-                    syncedCount += 1
-                }
+            for await success in group where success {
+                syncedCount += 1
             }
         }
         
@@ -207,7 +204,7 @@ class BackgroundMessageSyncService: ObservableObject {
     private func saveMessagesToLocalStorage(_ messages: [Message], sessionId: String) async -> Bool {
         // Save messages with background sync flag
         return await MessagePersistenceService.shared.saveBackgroundSyncedMessages(
-            messages, 
+            messages,
             for: sessionId
         )
     }
@@ -245,7 +242,7 @@ actor AsyncSemaphore {
     }
     
     func wait() async {
-        if count > 0 {
+        if !isEmpty {
             count -= 1
         } else {
             await withCheckedContinuation { continuation in
@@ -322,7 +319,7 @@ extension MessagePersistenceService {
                     
                     // Load existing messages for this project/session
                     let existingMessages = MessagePersistenceService.shared.loadMessages(
-                        for: sessionState.projectId, 
+                        for: sessionState.projectId,
                         sessionId: sessionId
                     )
                     
@@ -330,10 +327,8 @@ extension MessagePersistenceService {
                     var allMessages = existingMessages
                     let existingIds = Set(existingMessages.map { $0.id })
                     
-                    for message in messagesWithMetadata {
-                        if !existingIds.contains(message.id) {
-                            allMessages.append(message)
-                        }
+                    for message in messagesWithMetadata where !existingIds.contains(message.id) {
+                        allMessages.append(message)
                     }
                     
                     // Sort by timestamp to maintain chronological order
@@ -373,7 +368,7 @@ extension AICLIMessageMetadata {
     /// Indicates if this message was synced in background
     var backgroundSynced: Bool {
         get { return (additionalInfo?["backgroundSynced"] as? Bool) ?? false }
-        set { 
+        set {
             if additionalInfo == nil { additionalInfo = [:] }
             additionalInfo?["backgroundSynced"] = newValue
         }

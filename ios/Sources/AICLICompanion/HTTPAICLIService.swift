@@ -108,7 +108,7 @@ public class HTTPAICLIService: ObservableObject {
         request.httpMethod = "GET"
         request.addValue("application/json", forHTTPHeaderField: "Accept")
 
-        urlSession.dataTask(with: request) { data, response, error in
+        urlSession.dataTask(with: request) { _, response, error in
             if let error = error {
                 completion(.failure(.networkError(error)))
                 return
@@ -131,7 +131,7 @@ public class HTTPAICLIService: ObservableObject {
 
     private func setupPushNotifications() {
         // Request notification permission
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
             if granted {
                 DispatchQueue.main.async {
                     #if os(iOS)
@@ -379,7 +379,7 @@ public class HTTPAICLIService: ObservableObject {
         request.httpMethod = "GET"
         request.addValue("application/json", forHTTPHeaderField: "Accept")
 
-        urlSession.dataTask(with: request) { data, response, error in
+        urlSession.dataTask(with: request) { data, _, error in
             if let error = error {
                 completion(.failure(.networkError(error)))
                 return
@@ -441,4 +441,3 @@ struct ClaudeChatResponse: Codable {
     let deliveryMethod: String? // "apns" for acknowledgments
     let requestId: String?      // Track request/response pairs
 }
-

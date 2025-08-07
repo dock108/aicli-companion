@@ -80,7 +80,6 @@ struct ProjectSelectionView: View {
                         .foregroundColor(Colors.textSecondary(for: colorScheme))
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                
             } else if let errorMessage = errorMessage {
                 // Error state
                 VStack(spacing: Spacing.lg) {
@@ -103,7 +102,6 @@ struct ProjectSelectionView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                
             } else if projects.isEmpty {
                 // Empty state
                 VStack(spacing: Spacing.lg) {
@@ -126,7 +124,6 @@ struct ProjectSelectionView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                
             } else {
                 // Projects list
                 ScrollView {

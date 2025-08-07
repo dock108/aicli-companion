@@ -269,9 +269,9 @@ class PerformanceMonitor: ObservableObject {
         
         // Calculate average reconnection time
         var reconnectionTimes: [TimeInterval] = []
-        for i in 0..<events.count {
-            if events[i].type == .disconnected && i + 1 < events.count && events[i + 1].type == .connected {
-                let reconnectionTime = events[i + 1].timestamp.timeIntervalSince(events[i].timestamp)
+        for index in 0..<events.count {
+            if events[index].type == .disconnected && index + 1 < events.count && events[index + 1].type == .connected {
+                let reconnectionTime = events[index + 1].timestamp.timeIntervalSince(events[index].timestamp)
                 reconnectionTimes.append(reconnectionTime)
             }
         }
@@ -351,7 +351,6 @@ class PerformanceMonitor: ObservableObject {
         // Send via HTTP
         if let jsonData = try? JSONSerialization.data(withJSONObject: telemetryData),
            let jsonString = String(data: jsonData, encoding: .utf8) {
-            
             print("📊 Sending performance metrics to server")
             
             // Note: This would need an HTTP telemetry endpoint

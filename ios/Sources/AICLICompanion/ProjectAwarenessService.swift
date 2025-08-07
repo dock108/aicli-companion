@@ -218,6 +218,7 @@ class ProjectAwarenessService: ObservableObject {
         )
     }
 
+    // swiftlint:disable:next cyclomatic_complexity
     private func determineProjectType(from analysis: ProjectAnalysis) -> ProjectType {
         let files = analysis.detectedFiles
         let dirName = analysis.directoryName

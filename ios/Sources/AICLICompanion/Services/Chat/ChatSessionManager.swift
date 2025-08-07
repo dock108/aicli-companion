@@ -48,7 +48,6 @@ class ChatSessionManager: ObservableObject {
         if let metadata = persistenceService.getSessionMetadata(for: project.path),
            let sessionId = metadata.aicliSessionId,
            metadata.messageCount > 0 {
-            
             print("🔷 SessionManager: Found existing session with messages: \(sessionId) (\(metadata.messageCount) messages)")
             
             // Create session using the ACTUAL Claude session ID from message persistence

@@ -256,8 +256,8 @@ class ConnectionReliabilityManager: ObservableObject {
         // For HTTP, if we have a successful connection, assume good quality
         if lastSuccessfulConnection != nil {
             // We've connected successfully, set quality based on recent history
-            let recentDisconnections = disconnectionEvents.filter { 
-                now.timeIntervalSince($0) < recentWindow 
+            let recentDisconnections = disconnectionEvents.filter {
+                now.timeIntervalSince($0) < recentWindow
             }.count
             
             print("   Recent disconnections: \(recentDisconnections)")
@@ -340,22 +340,22 @@ struct CircularBuffer<T> {
     }
     
     func contains(_ element: T) -> Bool where T: Equatable {
-        for i in 0..<count {
-            let index = (writeIndex - count + i + capacity) % capacity
-            if buffer[index] == element {
+        for index in 0..<count {
+            let bufferIndex = (writeIndex - count + index + capacity) % capacity
+            if buffer[bufferIndex] == element {
                 return true
             }
         }
         return false
     }
     
-    func suffix(_ k: Int) -> [T] {
-        let k = min(k, count)
+    func suffix(_ suffixCount: Int) -> [T] {
+        let actualCount = min(suffixCount, count)
         var result: [T] = []
         
-        for i in 0..<k {
-            let index = (writeIndex - k + i + capacity) % capacity
-            if let element = buffer[index] {
+        for index in 0..<actualCount {
+            let bufferIndex = (writeIndex - actualCount + index + capacity) % capacity
+            if let element = buffer[bufferIndex] {
                 result.append(element)
             }
         }

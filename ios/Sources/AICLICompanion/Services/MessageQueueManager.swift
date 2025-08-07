@@ -85,8 +85,8 @@ class MessageQueueManager: ObservableObject {
         queueLock.lock()
         defer { queueLock.unlock() }
         
-        let sessionMessages = messageQueue.filter { 
-            $0.sessionId == sessionId && $0.deliveredAt == nil 
+        let sessionMessages = messageQueue.filter {
+            $0.sessionId == sessionId && $0.deliveredAt == nil
         }
         
         let oldest = sessionMessages.min { $0.queuedAt < $1.queuedAt }?.queuedAt

@@ -4,7 +4,6 @@ import SwiftUI
 /// Appears above message input or replaces typing bubble
 @available(iOS 16.0, macOS 13.0, *)
 struct ClaudeStatusIndicator: View {
-    
     // MARK: - State
     
     @ObservedObject var statusManager = ClaudeStatusManager.shared

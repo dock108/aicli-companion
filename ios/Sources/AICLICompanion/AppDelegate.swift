@@ -4,8 +4,7 @@ import UserNotifications
 
 @available(iOS 17.0, *)
 public class AppDelegate: NSObject, UIApplicationDelegate {
-    
-    public func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
+    public func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         // App launch setup
         
         // Initialize BackgroundSessionCoordinator early to capture session IDs
@@ -72,7 +71,7 @@ public class AppDelegate: NSObject, UIApplicationDelegate {
         print("❌ Failed to register for remote notifications: \(error)")
     }
     
-    public func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable : Any], fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+    public func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any], fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
         print("🔥 === APNS NOTIFICATION RECEIVED (didReceiveRemoteNotification) ===")
         print("📨 App state: \(application.applicationState.rawValue) (0=active, 1=inactive, 2=background)")
         
@@ -91,7 +90,6 @@ public class AppDelegate: NSObject, UIApplicationDelegate {
         if let claudeMessage = userInfo["message"] as? String,
            let sessionId = userInfo["sessionId"] as? String,
            let projectPath = userInfo["projectPath"] as? String {
-            
             print("🤖 === CLAUDE RESPONSE NOTIFICATION DETECTED ===")
             print("🤖 Message preview: \(String(claudeMessage.prefix(100)))...")
             print("🤖 Session ID: \(sessionId)")
@@ -244,7 +242,6 @@ public class AppDelegate: NSObject, UIApplicationDelegate {
             print("✅ Message saved to persistence: \(claudeMessage.content.prefix(50))...")
             print("✅ UI notification posted successfully")
             return true
-            
         } catch {
             print("❌ Failed to process Claude response: \(error)")
             return false

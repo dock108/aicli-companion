@@ -13,8 +13,8 @@ public class EnhancedPushNotificationService: NSObject, ObservableObject {
     
     @Published public var badgeCount: Int = 0
     @Published public var pendingNotifications: [String: Int] = [:] // projectId: count
-    @Published public var currentActiveProject: Project? = nil
-    @Published public var currentActiveSessionId: String? = nil
+    @Published public var currentActiveProject: Project?
+    @Published public var currentActiveSessionId: String?
     
     // MARK: - Constants
     
@@ -231,7 +231,6 @@ public class EnhancedPushNotificationService: NSObject, ObservableObject {
 
 @available(iOS 16.0, macOS 13.0, *)
 extension EnhancedPushNotificationService: UNUserNotificationCenterDelegate {
-    
     /// Handle notification while app is in foreground
     public func userNotificationCenter(
         _ center: UNUserNotificationCenter,
@@ -246,7 +245,6 @@ extension EnhancedPushNotificationService: UNUserNotificationCenterDelegate {
         if let claudeMessage = userInfo["message"] as? String,
            let sessionId = userInfo["sessionId"] as? String,
            let projectPath = userInfo["projectPath"] as? String {
-            
             print("🤖 === CLAUDE RESPONSE IN FOREGROUND ===")
             print("🤖 Session ID: \(sessionId)")
             print("🤖 Project Path: \(projectPath)")
@@ -254,7 +252,7 @@ extension EnhancedPushNotificationService: UNUserNotificationCenterDelegate {
             print("🤖 Current Active Project: \(currentActiveProject?.path ?? "none")")
             
             // Check if this notification is for the currently active project/session
-            let isForCurrentProject = (sessionId == currentActiveSessionId) || 
+            let isForCurrentProject = (sessionId == currentActiveSessionId) ||
                                      (currentActiveProject?.path == projectPath)
             
             if isForCurrentProject {
@@ -295,7 +293,6 @@ extension EnhancedPushNotificationService: UNUserNotificationCenterDelegate {
                 // Show banner for responses from other projects
                 completionHandler([.banner, .sound, .badge])
             }
-            
         } else {
             print("🔔 Standard notification - showing banner")
             // Show notification banner for non-Claude notifications

@@ -434,7 +434,6 @@ class ChatViewModel: ObservableObject {
             }
             
             print("🎯 === CLAUDE RESPONSE PROCESSING COMPLETED ===")
-            
         } else {
             print("❌ === SESSION MISMATCH - IGNORING RESPONSE ===")
             print("❌ Expected session: \(currentSessionId ?? "nil")")
@@ -778,15 +777,13 @@ class ChatViewModel: ObservableObject {
         var addedCount = 0
         var messageIdsToAcknowledge: [String] = []
         
-        for serverMessage in serverMessages {
-            if !existingContent.contains(serverMessage.content) {
-                messages.append(serverMessage)
-                addedCount += 1
-                
-                // Track message IDs that need acknowledgment (assistant messages)
-                if serverMessage.sender == .assistant {
-                    messageIdsToAcknowledge.append(serverMessage.id.uuidString)
-                }
+        for serverMessage in serverMessages where !existingContent.contains(serverMessage.content) {
+            messages.append(serverMessage)
+            addedCount += 1
+            
+            // Track message IDs that need acknowledgment (assistant messages)
+            if serverMessage.sender == .assistant {
+                messageIdsToAcknowledge.append(serverMessage.id.uuidString)
             }
         }
         

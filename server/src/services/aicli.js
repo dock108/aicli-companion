@@ -741,8 +741,8 @@ export class AICLIService extends EventEmitter {
 
     // Persist buffer after processing if messages were added
     if (result.action === 'buffer' || result.action === 'tool_use') {
-      // Messages were added to buffer, persist them
-      await sessionPersistence.saveMessageBuffer(sessionId, buffer);
+      // DISABLED: Message buffer persistence
+      // await sessionPersistence.saveMessageBuffer(sessionId, buffer);
     }
 
     // Handle the processing result and emit appropriate events
@@ -861,8 +861,8 @@ export class AICLIService extends EventEmitter {
       });
     }
 
-    // Persist buffer one final time before clearing
-    await sessionPersistence.saveMessageBuffer(sessionId, buffer);
+    // DISABLED: Message buffer persistence
+    // await sessionPersistence.saveMessageBuffer(sessionId, buffer);
 
     // Clear the buffer for next command
     AICLIMessageHandler.clearSessionBuffer(buffer);

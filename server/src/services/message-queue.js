@@ -24,32 +24,31 @@ class MessageQueueService {
   }
 
   /**
-   * Initialize the message queue service and load persisted messages
+   * Initialize the message queue service (persistence disabled)
    */
   async initialize() {
     if (this.isInitialized) return;
 
-    try {
-      // Load persisted message queues
-      const persistedQueues = await sessionPersistence.loadAllMessageQueues();
+    // DISABLED: Message queue persistence should be handled by clients
+    // Server should start fresh without loading old message queues
+    // try {
+    //   // Load persisted message queues
+    //   const persistedQueues = await sessionPersistence.loadAllMessageQueues();
+    //
+    //   for (const [sessionId, messages] of persistedQueues) {
+    //     this.messageQueue.set(sessionId, messages);
+    //
+    //     // Rebuild metadata index
+    //     for (const message of messages) {
+    //       this.messageMetadata.set(message.id, message);
+    //     }
+    //   }
+    // } catch (error) {
+    //   console.error('❌ Failed to initialize message queue:', error);
+    // }
 
-      for (const [sessionId, messages] of persistedQueues) {
-        this.messageQueue.set(sessionId, messages);
-
-        // Rebuild metadata index
-        for (const message of messages) {
-          this.messageMetadata.set(message.id, message);
-        }
-      }
-
-      this.isInitialized = true;
-      console.log(
-        `📚 Message queue initialized: ${this.messageQueue.size} sessions with queued messages`
-      );
-    } catch (error) {
-      console.error('❌ Failed to initialize message queue:', error);
-      this.isInitialized = true; // Continue without persisted data
-    }
+    this.isInitialized = true;
+    console.log('📚 Message queue initialized (persistence disabled)');
   }
 
   /**
@@ -119,8 +118,8 @@ class MessageQueueService {
     console.log(`   Expires at: ${expiresAt.toISOString()}`);
     console.log(`   Queue size for session: ${this.messageQueue.get(sessionId).length}`);
 
-    // Persist the message queue
-    this.persistMessageQueue(sessionId);
+    // DISABLED: Message queue persistence
+    // this.persistMessageQueue(sessionId);
 
     // Record telemetry
     getTelemetryService().recordMessageQueued();
@@ -248,7 +247,8 @@ class MessageQueueService {
       for (const messageId of messageIds) {
         const metadata = this.messageMetadata.get(messageId);
         if (metadata) {
-          this.persistMessageQueue(metadata.sessionId);
+          // DISABLED: Message queue persistence
+          // this.persistMessageQueue(metadata.sessionId);
           break; // Only need to persist once per session
         }
       }
@@ -379,11 +379,12 @@ class MessageQueueService {
       console.log(`🧹 Cleaned up ${cleanedCount} acknowledged messages`);
 
       // Persist updated queues after cleanup
-      for (const [sessionId, messages] of this.messageQueue) {
-        if (messages.length > 0) {
-          this.persistMessageQueue(sessionId);
-        }
-      }
+      // DISABLED: Message queue persistence
+      // for (const [sessionId, messages] of this.messageQueue) {
+      //   if (messages.length > 0) {
+      //     this.persistMessageQueue(sessionId);
+      //   }
+      // }
     }
   }
 

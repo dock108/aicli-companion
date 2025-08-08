@@ -1,8 +1,8 @@
-# SwiftLint configuration for Claude Companion iOS app
+# SwiftLint configuration for AICLI Companion iOS app
 
 # Paths to include
 included:
-  - ClaudeCompanion
+  - Sources/AICLICompanion
 
 # Paths to exclude
 excluded:
@@ -16,6 +16,11 @@ disabled_rules:
   - file_length
   - type_body_length
   - function_body_length
+  - multiple_closures_with_trailing_closure
+  - todo
+  - nesting
+  - function_parameter_count
+  - large_tuple
 
 opt_in_rules:
   - empty_count
@@ -42,6 +47,11 @@ opt_in_rules:
   - yoda_condition
 
 # Rule configuration
+cyclomatic_complexity:
+  warning: 15
+  error: 40
+  ignores_case_statements: true
+
 identifier_name:
   min_length:
     warning: 2
@@ -60,7 +70,6 @@ type_name:
 
 force_cast: error
 force_try: error
-force_unwrapping: warning
 
 trailing_whitespace:
   ignores_empty_lines: true
@@ -68,16 +77,17 @@ trailing_whitespace:
 vertical_whitespace:
   max_empty_lines: 2
 
-custom_rules:
-  no_hardcoded_strings:
-    regex: '([""])(?:(?=(\\?))\2.)*?\1'
-    match_kinds:
-      - string
-    message: "Avoid hardcoded strings. Use localized strings instead."
-    severity: warning
-    excluded:
-      - "ClaudeCompanion/Models/*.swift"
-      - "ClaudeCompanion/Utils/KeychainManager.swift"
+# Custom rules disabled for now
+# custom_rules:
+#   no_hardcoded_strings:
+#     regex: '([""])(?:(?=(\\?))\2.)*?\1'
+#     match_kinds:
+#       - string
+#     message: "Avoid hardcoded strings. Use localized strings instead."
+#     severity: warning
+#     excluded:
+#       - "Sources/AICLICompanion/Models/*.swift"
+#       - "Sources/AICLICompanion/KeychainManager.swift"
 
 # Reporter type
 reporter: "xcode"

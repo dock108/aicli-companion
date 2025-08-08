@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import path from 'path';
 import { DEFAULT_CONFIG, SERVER_VERSION } from '../constants/index.js';
 
 // Load environment variables
@@ -12,11 +13,13 @@ export class ServerConfig {
     this.version = SERVER_VERSION;
     this.port = process.env.PORT || DEFAULT_CONFIG.PORT;
     this.host = process.env.HOST || DEFAULT_CONFIG.HOST;
-    this.authToken = process.env.AUTH_TOKEN || null;
+    this.authRequired = process.env.AUTH_REQUIRED !== 'false';
+    this.authToken = this.authRequired ? process.env.AUTH_TOKEN || null : null;
     this.enableBonjour = process.env.ENABLE_BONJOUR !== 'false';
     this.enableTLS = process.env.ENABLE_TLS === 'true';
     this.allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['*'];
     this.nodeEnv = process.env.NODE_ENV || 'development';
+    this.configPath = process.env.CONFIG_PATH || path.dirname(process.cwd());
   }
 
   /**

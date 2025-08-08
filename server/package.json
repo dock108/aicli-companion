@@ -1,26 +1,33 @@
 {
-  "_TODO_COVERAGE": "claude-code.js excluded from unit test coverage due to process spawning complexity. Integration tests cover this functionality.",
-  "name": "claude-companion-server",
+  "name": "aicli-companion-server",
   "version": "1.0.0",
-  "description": "Companion server for Claude Code mobile app",
+  "description": "Companion server for AICLI Code mobile app",
   "main": "src/index.js",
   "type": "module",
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "test": "NODE_ENV=test node --test src/test/utils/*.test.js src/test/config/middleware-config.test.js src/test/config/tls-config.test.js src/test/services/*.test.js src/test/middleware/*.test.js src/test/routes/*.test.js",
-    "test:integration": "NODE_ENV=test node --test src/test/**/*.test.js",
-    "test:coverage": "NODE_ENV=test c8 --check-coverage --lines=80 --functions=80 --branches=80 --statements=80 --reporter=lcov --reporter=text node --test src/test/utils/*.test.js src/test/config/middleware-config.test.js src/test/config/tls-config.test.js src/test/services/*.test.js src/test/middleware/*.test.js src/test/routes/*.test.js",
-    "test:watch": "node --test --watch",
+    "test": "NODE_ENV=test node --test --test-force-exit --experimental-test-isolation=none src/test/**/*.test.js",
+    "test:coverage": "NODE_ENV=test c8 --reporter=lcov --reporter=text node --test --test-force-exit --experimental-test-isolation=none src/test/**/*.test.js",
+    "test:integration": "NODE_ENV=test node --test src/test-integration/**/*.test.js",
+    "test:uat": "NODE_ENV=test node --test --test-force-exit src/test-uat/**/*.test.js",
+    "test:uat:message-flow": "NODE_ENV=test node --test --test-force-exit src/test-uat/message-flow.test.js",
+    "test:uat:integration": "NODE_ENV=test node --test --test-force-exit src/test-uat/integration.test.js",
+    "test:uat:performance": "NODE_ENV=test node --test --test-force-exit src/test-uat/performance.test.js",
+    "test:uat:edge-cases": "NODE_ENV=test node --test --test-force-exit src/test-uat/edge-cases.test.js",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "format": "prettier --write \"src/**/*.js\"",
     "format:check": "prettier --check \"src/**/*.js\"",
     "install-global": "npm install -g .",
-    "prepare": "husky"
+    "prepare": "husky",
+    "hostapp": "cd hostapp && npm run tauri dev",
+    "hostapp:dev": "cd hostapp && npm run dev",
+    "hostapp:build": "cd hostapp && npm run tauri build",
+    "hostapp:install": "cd hostapp && npm install"
   },
   "keywords": [
-    "claude-code",
+    "aicli-code",
     "ai",
     "mobile",
     "companion",
@@ -29,16 +36,18 @@
   "author": "Michael Fuscoletti",
   "license": "MIT",
   "dependencies": {
+    "@parse/node-apn": "^6.5.0",
     "bonjour-service": "^1.2.1",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
+    "express-rate-limit": "^8.0.1",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
     "node-forge": "^1.3.1",
     "uuid": "^9.0.1",
-    "ws": "^8.14.2"
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "c8": "^10.1.3",
@@ -48,12 +57,13 @@
     "husky": "^9.1.7",
     "lint-staged": "^16.1.2",
     "nodemon": "^3.0.2",
-    "prettier": "^3.6.2"
+    "prettier": "^3.6.2",
+    "supertest": "^7.1.4"
   },
   "engines": {
     "node": ">=18.0.0"
   },
   "bin": {
-    "claude-companion-server": "./src/index.js"
+    "aicli-companion-server": "src/index.js"
   }
 }

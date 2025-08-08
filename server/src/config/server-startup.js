@@ -8,9 +8,13 @@ export class ServerStartup {
   /**
    * Generate or use existing auth token
    * @param {string|null} existingToken - Existing auth token from config
-   * @returns {string} Auth token to use
+   * @param {boolean} authRequired - Whether authentication is required
+   * @returns {string|null} Auth token to use
    */
-  static generateAuthToken(existingToken) {
+  static generateAuthToken(existingToken, authRequired) {
+    if (!authRequired) {
+      return null;
+    }
     if (!existingToken) {
       const token = TokenManager.generateSecureToken();
       console.log(`🔑 Generated auth token: ${token}`);
@@ -41,15 +45,15 @@ export class ServerStartup {
    * Display server startup information
    * @param {ServerConfig} config - Server configuration
    * @param {string} authToken - Auth token
-   * @param {boolean} claudeAvailable - Whether Claude Code is available
+   * @param {boolean} aicliAvailable - Whether AICLI Code is available
    * @param {string|null} fingerprint - TLS certificate fingerprint
    */
-  static displayStartupInfo(config, authToken, claudeAvailable, fingerprint) {
+  static displayStartupInfo(config, authToken, aicliAvailable, fingerprint) {
     const protocol = config.getProtocol();
     const wsProtocol = config.getWSProtocol();
     const hostname = config.getDisplayHostname();
 
-    console.log(`🚀 Claude Companion Server started`);
+    console.log(`🚀 AICLI Companion Server started`);
     console.log(`   ${protocol.toUpperCase()} Server: ${protocol}://${hostname}:${config.port}`);
     console.log(`   WebSocket: ${wsProtocol}://${hostname}:${config.port}/ws`);
 
@@ -58,6 +62,9 @@ export class ServerStartup {
       console.log(
         `   📱 Mobile app connection: ${wsProtocol}://${hostname}:${config.port}/ws?token=${authToken}`
       );
+    } else {
+      console.log(`   🔓 Authentication disabled (AUTH_REQUIRED=false)`);
+      console.log(`   📱 Mobile app connection: ${wsProtocol}://${hostname}:${config.port}/ws`);
     }
 
     if (config.enableTLS) {
@@ -67,23 +74,23 @@ export class ServerStartup {
       }
     }
 
-    if (claudeAvailable) {
-      console.log(`   ✅ Claude Code CLI detected`);
+    if (aicliAvailable) {
+      console.log(`   ✅ AICLI Code CLI detected`);
     }
   }
 
   /**
-   * Check Claude Code availability and display warning if not available
-   * @param {ClaudeCodeService} claudeService - Claude Code service instance
-   * @returns {Promise<boolean>} Whether Claude Code is available
+   * Check AICLI Code availability and display warning if not available
+   * @param {AICLIService} aicliService - AICLI Code service instance
+   * @returns {Promise<boolean>} Whether AICLI Code is available
    */
-  static async checkClaudeAvailability(claudeService) {
-    const isAvailable = await claudeService.checkAvailability();
+  static async checkAICLIAvailability(aicliService) {
+    const isAvailable = await aicliService.checkAvailability();
     if (!isAvailable) {
       console.warn(
-        '⚠️  Claude Code CLI not found. Server will start but functionality will be limited.'
+        '⚠️  AICLI Code CLI not found. Server will start but functionality will be limited.'
       );
-      console.warn('   Please ensure Claude Code is installed and available in PATH.');
+      console.warn('   Please ensure AICLI Code is installed and available in PATH.');
     }
     return isAvailable;
   }

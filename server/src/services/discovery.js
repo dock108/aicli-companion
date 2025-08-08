@@ -1,13 +1,22 @@
 import { Bonjour } from 'bonjour-service';
 
 export function setupBonjour(port, enableTLS = false) {
+  // Skip Bonjour setup in test environment to prevent network conflicts
+  if (process.env.NODE_ENV === 'test') {
+    console.log('   📡 Bonjour service skipped in test environment');
+    return {
+      on: () => {},
+      unpublishAll: () => {},
+    };
+  }
+
   try {
     const bonjour = new Bonjour();
 
     // Advertise the service
     const service = bonjour.publish({
-      name: 'Claude Companion Server',
-      type: 'claudecode',
+      name: 'AICLI Companion Server',
+      type: 'aiclicode',
       port,
       txt: {
         version: '1.0.0',

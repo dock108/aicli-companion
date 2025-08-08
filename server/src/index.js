@@ -1,29 +1,56 @@
 #!/usr/bin/env node
 
 import express from 'express';
-import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
 import { createServer as createHttpsServer } from 'https';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
 import { setupRoutes } from './routes/index.js';
-import { setupWebSocket } from './services/websocket.js';
+import { setupProjectRoutes } from './routes/projects.js';
+import { setupAICLIStatusRoutes } from './routes/aicli-status.js';
+import sessionRoutes from './routes/sessions.js';
+import telemetryRoutes from './routes/telemetry.js';
+import pushNotificationRoutes from './routes/push-notifications.js';
+import chatRoutes from './routes/chat.js';
+import devicesRoutes from './routes/devices.js';
 import { errorHandler } from './middleware/error.js';
-import { ClaudeCodeService } from './services/claude-code.js';
+import { AICLIService } from './services/aicli.js';
 import { ServerConfig } from './config/server-config.js';
 import { MiddlewareConfig } from './config/middleware-config.js';
 import { TLSConfig } from './config/tls-config.js';
 import { ServerStartup } from './config/server-startup.js';
+import { pushNotificationService } from './services/push-notification.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-class ClaudeCompanionServer {
+class AICLICompanionServer {
   constructor() {
     this.app = express();
     this.config = new ServerConfig();
-    this.claudeService = new ClaudeCodeService();
+    this.aicliService = new AICLIService();
+    this.aicliService.safeRootDirectory = this.config.configPath; // Set project directory as safe root
+
+    // Configure AICLI permission settings from environment or config
+    if (process.env.AICLI_PERMISSION_MODE) {
+      this.aicliService.setPermissionMode(process.env.AICLI_PERMISSION_MODE);
+    }
+
+    if (process.env.AICLI_ALLOWED_TOOLS) {
+      const tools = process.env.AICLI_ALLOWED_TOOLS.split(',').map((t) => t.trim());
+      this.aicliService.setAllowedTools(tools);
+    }
+
+    if (process.env.AICLI_DISALLOWED_TOOLS) {
+      const tools = process.env.AICLI_DISALLOWED_TOOLS.split(',').map((t) => t.trim());
+      this.aicliService.setDisallowedTools(tools);
+    }
+
+    if (process.env.AICLI_SKIP_PERMISSIONS === 'true') {
+      this.aicliService.setSkipPermissions(true);
+    }
+
     this.tlsConfig = new TLSConfig();
 
     // Will be set up during start()
@@ -47,13 +74,23 @@ class ClaudeCompanionServer {
       res.json({
         status: 'healthy',
         version: this.config.version,
-        claudeCodeAvailable: this.claudeService.isAvailable(),
+        aicliCodeAvailable: this.aicliService.isAvailable(),
         timestamp: new Date().toISOString(),
       });
     });
 
     // API routes
-    setupRoutes(this.app, this.claudeService);
+    setupRoutes(this.app, this.aicliService);
+    setupProjectRoutes(this.app, this.aicliService);
+    setupAICLIStatusRoutes(this.app, this.aicliService);
+    this.app.use(telemetryRoutes);
+    this.app.use(pushNotificationRoutes);
+
+    // New HTTP + APNS routes
+    this.app.set('aicliService', this.aicliService); // Make available to route handlers
+    this.app.use('/api/chat', chatRoutes);
+    this.app.use('/api/devices', devicesRoutes);
+    this.app.use('/api/sessions', sessionRoutes);
 
     // Static files (for web interface if needed)
     this.app.use('/static', express.static(join(__dirname, '../public')));
@@ -61,21 +98,19 @@ class ClaudeCompanionServer {
     // Default route
     this.app.get('/', (req, res) => {
       res.json({
-        name: 'Claude Companion Server',
+        name: 'AICLI Companion Server',
         version: this.config.version,
         status: 'running',
+        architecture: 'HTTP + APNS',
         endpoints: {
           health: '/health',
           api: '/api',
-          websocket: '/ws',
+          chat: '/api/chat',
+          devices: '/api/devices',
+          projects: '/api/projects',
         },
       });
     });
-  }
-
-  setupWebSocket() {
-    this.wss = new WebSocketServer({ server: this.server });
-    setupWebSocket(this.wss, this.claudeService, this.authToken);
   }
 
   setupErrorHandling() {
@@ -98,11 +133,23 @@ class ClaudeCompanionServer {
 
   async start() {
     try {
-      // Generate auth token if not provided
-      this.authToken = ServerStartup.generateAuthToken(this.authToken);
+      // Generate auth token only if authentication is required
+      if (this.config.authRequired) {
+        this.authToken = ServerStartup.generateAuthToken(this.authToken, this.config.authRequired);
+        // Configure auth middleware now that we have the token
+        MiddlewareConfig.configureAuth(this.app, this.authToken);
+      } else {
+        this.authToken = null;
+      }
 
-      // Configure auth middleware now that we have the token
-      MiddlewareConfig.configureAuth(this.app, this.authToken);
+      // Initialize push notification service with APNs HTTP/2 API
+      pushNotificationService.initialize({
+        keyPath: process.env.APNS_KEY_PATH || join(__dirname, '../keys/AuthKey_2Y226B9433.p8'),
+        keyId: process.env.APNS_KEY_ID || '2Y226B9433',
+        teamId: process.env.APNS_TEAM_ID || 'E3G5D247ZN',
+        bundleId: process.env.APNS_BUNDLE_ID || 'com.aiclicompanion.ios',
+        production: process.env.NODE_ENV === 'production',
+      });
 
       // Set up TLS if enabled
       let tlsOptions = null;
@@ -123,11 +170,23 @@ class ClaudeCompanionServer {
         this.server = createServer(this.app);
       }
 
-      // Set up WebSocket
-      this.setupWebSocket();
+      // WebSocket infrastructure removed - using HTTP + APNS only
 
-      // Verify Claude Code is available
-      const isAvailable = await ServerStartup.checkClaudeAvailability(this.claudeService);
+      // DISABLED: Session persistence should be managed by clients, not the server
+      // The server should start fresh on each restart without loading old sessions
+      // console.log('🔄 Initializing session persistence...');
+      // await this.aicliService.sessionManager.initializePersistence();
+
+      // DISABLED: No need to reconcile if we're not persisting sessions
+      // try {
+      //   const reconcileStats = await this.aicliService.sessionManager.reconcileSessionState();
+      //   console.log(`📊 Session reconciliation stats:`, reconcileStats);
+      // } catch (error) {
+      //   console.warn('⚠️ Session reconciliation failed:', error.message);
+      // }
+
+      // Verify AICLI Code is available
+      const isAvailable = await ServerStartup.checkAICLIAvailability(this.aicliService);
 
       // Start server
       this.server.listen(this.config.port, this.config.host, () => {
@@ -153,6 +212,12 @@ class ClaudeCompanionServer {
   shutdown() {
     console.log('🔄 Shutting down server...');
 
+    // Shutdown AICLI service
+    this.aicliService.shutdown();
+
+    // Shutdown push notification service
+    pushNotificationService.shutdown();
+
     this.server.close(() => {
       console.log('✅ Server shut down successfully');
       process.exit(0);
@@ -168,8 +233,8 @@ class ClaudeCompanionServer {
 
 // Start server if this file is run directly
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const server = new ClaudeCompanionServer();
+  const server = new AICLICompanionServer();
   server.start().catch(console.error);
 }
 
-export { ClaudeCompanionServer };
+export { AICLICompanionServer };

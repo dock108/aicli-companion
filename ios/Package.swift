@@ -2,15 +2,14 @@
 import PackageDescription
 
 let package = Package(
-    name: "ClaudeCompanion",
+    name: "AICLICompanion",
     platforms: [
-        .iOS(.v15),
-        .macOS(.v12)
+        .iOS(.v17)
     ],
     products: [
         .library(
-            name: "ClaudeCompanion",
-            targets: ["ClaudeCompanion"])
+            name: "AICLICompanion",
+            targets: ["AICLICompanion"])
     ],
     dependencies: [
         .package(url: "https://github.com/daltoniam/Starscream.git", from: "4.0.0"),
@@ -20,38 +19,18 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "ClaudeCompanion",
+            name: "AICLICompanion",
             dependencies: [
                 "Starscream",
                 .product(name: "Markdown", package: "swift-markdown"),
                 "KeychainAccess",
                 .product(name: "Crypto", package: "swift-crypto")
             ],
-            exclude: [
-                "ClaudeCompanionApp.swift",
-                "AccessibilityHelpers.swift",
-                "AnimationConstants.swift",
-                "ChatView.swift",
-                "ConnectionView.swift",
-                "ContentView.swift",
-                "ConversationHistoryView.swift",
-                "DevelopmentWorkflowView.swift",
-                "FileBrowserView.swift",
-                "ProjectContextView.swift",
-                "SettingsView.swift",
-                "RichContentRenderer.swift",
-                "ToolActivity.swift",
-                "WebSocketService.swift",
-                "ServiceDiscoveryManager.swift",
-                "FileManagementService.swift",
-                "ConversationPersistenceService.swift",
-                "DevelopmentWorkflowService.swift",
-                "ProjectAwarenessService.swift"
-            ]
-        ),
+            resources: [
+                .process("Resources")
+            ]),
         .testTarget(
-            name: "ClaudeCompanionTests",
-            dependencies: ["ClaudeCompanion"]
-        )
+            name: "AICLICompanionTests",
+            dependencies: ["AICLICompanion"])
     ]
 )

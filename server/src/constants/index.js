@@ -52,6 +52,7 @@ export const WEBSOCKET_EVENTS = {
   PING: 'ping',
   SUBSCRIBE: 'subscribe',
   SET_WORKING_DIRECTORY: 'setWorkingDirectory',
+  CLAUDE_COMMAND: 'claudeCommand',
 
   // Server to client
   WELCOME: 'welcome',
@@ -66,6 +67,7 @@ export const WEBSOCKET_EVENTS = {
   PERMISSION_REQUEST: 'permissionRequest',
   PERMISSION_HANDLED: 'permissionHandled',
   WORKING_DIRECTORY_SET: 'workingDirectorySet',
+  CLAUDE_RESPONSE: 'claudeResponse',
   ERROR: 'error',
 
   // Claude Code events

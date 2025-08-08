@@ -10,6 +10,10 @@ certs/
 .claude/
 audit-report.json
 
+# APNS keys (sensitive)
+server/keys/
+*.p8
+
 # =================================
 # iOS / Xcode
 # =================================
@@ -268,6 +272,22 @@ docs/generated/
 *.zip
 *.tar.gz
 *.rar
+
+# =================================
+# Tauri Host App
+# =================================
+
+# Tauri build artifacts
+server/hostapp/src-tauri/target/
+server/hostapp/dist/
+
+# Tauri generated files
+server/hostapp/src-tauri/gen/
+
+# Development logs
+server/hostapp/*.log
+.claude/settings.local.json
+server/*.txt
 
 # =================================
 # Database & Storage

@@ -560,7 +560,7 @@ struct LogEntryView: View {
             log.level == .error ? Color.red.opacity(0.1) : Color.clear
         )
     }
-    
+
     private func getServerPID() -> String {
         if let pid = serverManager.serverPID {
             return String(pid)

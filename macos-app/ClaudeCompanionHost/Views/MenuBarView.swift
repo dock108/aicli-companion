@@ -16,19 +16,10 @@ struct MenuBarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            HeaderSection()
+            // Footer Actions (moved to top)
+            FooterSection()
 
             Divider()
-                .padding(.vertical, 8)
-
-            // Server Status
-            ServerStatusSection()
-                .environmentObject(serverManager)
-
-            // Start/Stop Button - Prominent
-            StartStopButton()
-                .environmentObject(serverManager)
                 .padding(.vertical, 8)
 
             // Quick Actions
@@ -50,8 +41,20 @@ struct MenuBarView: View {
             Divider()
                 .padding(.vertical, 8)
 
-            // Footer Actions
-            FooterSection()
+            // Start/Stop Button - Prominent
+            StartStopButton()
+                .environmentObject(serverManager)
+                .padding(.vertical, 8)
+
+            // Server Status
+            ServerStatusSection()
+                .environmentObject(serverManager)
+
+            Divider()
+                .padding(.vertical, 8)
+
+            // Header (moved to bottom)
+            HeaderSection()
         }
         .frame(width: 320)
         .padding()
@@ -278,6 +281,7 @@ struct FooterSection: View {
     var body: some View {
         HStack {
             Button("Settings...") {
+                NSApp.activate(ignoringOtherApps: true)
                 openSettings()
             }
             .buttonStyle(.plain)

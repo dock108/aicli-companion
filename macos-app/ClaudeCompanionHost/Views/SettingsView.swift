@@ -435,20 +435,22 @@ struct AdvancedSettingsView: View {
             }
 
             GroupBox("Executables") {
-                LabeledContent("Node.js Path") {
-                    TextField("", text: $settingsManager.nodeExecutable)
-                        .textFieldStyle(.roundedBorder)
-                        .fontDesign(.monospaced)
-                        .font(.caption)
-                        .frame(width: 200)
-                }
+                VStack(alignment: .leading, spacing: 12) {
+                    LabeledContent("Node.js Path") {
+                        TextField("", text: $settingsManager.nodeExecutable)
+                            .textFieldStyle(.roundedBorder)
+                            .fontDesign(.monospaced)
+                            .font(.caption)
+                            .frame(width: 200)
+                    }
 
-                LabeledContent("npm Path") {
-                    TextField("", text: $settingsManager.npmExecutable)
-                        .textFieldStyle(.roundedBorder)
-                        .fontDesign(.monospaced)
-                        .font(.caption)
-                        .frame(width: 200)
+                    LabeledContent("npm Path") {
+                        TextField("", text: $settingsManager.npmExecutable)
+                            .textFieldStyle(.roundedBorder)
+                            .fontDesign(.monospaced)
+                            .font(.caption)
+                            .frame(width: 200)
+                    }
                 }
             }
 

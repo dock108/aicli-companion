@@ -8,7 +8,7 @@ on:
 
 env:
   NODE_VERSION: '22'
-  XCODE_VERSION: '16.0'
+  XCODE_VERSION: '16.2'
   RUST_VERSION: 'stable'
 
 jobs:

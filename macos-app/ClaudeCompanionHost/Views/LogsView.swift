@@ -252,7 +252,13 @@ struct LogEntryRow: View {
         }
     }
 
-    // getServerPID moved to ServerManager extension
+    private func getServerPID() -> String {
+        if let pid = serverManager.serverPID {
+            return String(pid)
+        } else {
+            return String(ProcessInfo.processInfo.processIdentifier)
+        }
+    }
 }
 
 // MARK: - Logs Document for Export

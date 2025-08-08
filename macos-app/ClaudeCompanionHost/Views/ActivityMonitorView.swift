@@ -561,7 +561,13 @@ struct LogEntryView: View {
         )
     }
 
-    // Removed getServerPID function; now using serverManager.serverPIDString
+    private func getServerPID() -> String {
+        if let pid = serverManager.serverPID {
+            return String(pid)
+        } else {
+            return String(ProcessInfo.processInfo.processIdentifier)
+        }
+    }
 }
 
 struct PerformanceChart: View {

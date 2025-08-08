@@ -98,7 +98,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
 
     @objc func openLogs() {
         // Open the settings window on the logs tab
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        NSApp.sendAction(#selector(AppDelegate.showSettingsWindow(_:)), to: nil, from: nil)
     }
 
     @objc func showQRCode() {

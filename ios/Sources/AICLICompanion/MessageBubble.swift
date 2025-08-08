@@ -265,8 +265,8 @@ struct MessageBubble: View {
                 // Find closing ```
                 var codeLines: [String] = []
                 lineIndex += 1
-                while i < lines.count && !lines[i].hasPrefix("```") {
-                    codeLines.append(lines[i])
+                while lineIndex < lines.count && !lines[lineIndex].hasPrefix("```") {
+                    codeLines.append(lines[lineIndex])
                     lineIndex += 1
                 }
                 
@@ -293,7 +293,7 @@ struct MessageBubble: View {
                 currentText += (currentText.isEmpty ? "" : "\n") + line
             }
             
-            i += 1
+            lineIndex += 1
         }
         
         // Add any remaining text

@@ -440,7 +440,7 @@ struct AdvancedSettingsView: View {
 }
 
 // MARK: - Settings Document
-struct SettingsDocument: @preconcurrency FileDocument {
+struct SettingsDocument: FileDocument {
     static var readableContentTypes: [UTType] { [.json] }
 
     let settingsManager: SettingsManager
@@ -449,9 +449,9 @@ struct SettingsDocument: @preconcurrency FileDocument {
         self.settingsManager = settingsManager
     }
 
-    @available(*, unavailable)
     init(configuration: ReadConfiguration) throws {
-        fatalError("Not implemented - export only")
+        // This is export-only, so we don't support reading
+        throw CocoaError(.fileReadUnsupportedScheme)
     }
 
     @MainActor

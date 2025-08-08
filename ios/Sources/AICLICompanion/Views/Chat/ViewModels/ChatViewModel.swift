@@ -317,19 +317,28 @@ class ChatViewModel: ObservableObject {
         
         let restoredMessages = persistenceService.loadMessages(for: project.path, sessionId: sessionId)
         if !restoredMessages.isEmpty {
-            messages = restoredMessages
-            print("📖 Loaded \(messages.count) messages for project \(project.name)")
+            // Check if we're switching to a different conversation
+            let isSameSession = currentSessionId == sessionId && !messages.isEmpty
+            
+            if isSameSession {
+                // Same session - merge any new messages incrementally
+                _ = mergePersistedMessages(restoredMessages)
+            } else {
+                // Different session - safe to replace messages array
+                messages = restoredMessages
+                print("📖 Loaded \(messages.count) messages for project \(project.name)")
+            }
         } else {
             // No persisted messages found - this could mean:
             // 1. A brand new session (no messages yet)
             // 2. Session exists on server but no conversation history was saved locally
             print("📝 No persisted messages found for session \(sessionId)")
             
-            // Don't automatically add welcome message - let the natural flow handle it
-            // The session will either:
-            // - Show empty state if truly new
-            // - Receive messages from server if conversation exists
-            messages = []
+            // Only clear messages if switching to a different session
+            let isSameSession = currentSessionId == sessionId
+            if !isSameSession {
+                messages = []
+            }
         }
     }
     
@@ -379,14 +388,31 @@ class ChatViewModel: ObservableObject {
         print("🎯 Current Session ID: \(currentSessionId ?? "nil")")
         print("🎯 Project: \(project.name) (\(project.path))")
         print("🎯 Current Project: \(currentProject?.name ?? "nil") (\(currentProject?.path ?? "nil"))")
+        print("🎯 Message ID: \(message.id)")
         print("🎯 Message content preview: \(message.content.prefix(100))...")
         print("🎯 Current loading state: isLoading=\(isLoading), isWaiting=\(isWaitingForClaudeResponse)")
+        print("🎯 Current message count: \(messages.count)")
         
         // Only process if:
         // 1. Session IDs match
         // 2. We don't have a session yet (first message) and project matches
         if currentSessionId == sessionId || (currentSessionId == nil && project.path == currentProject?.path) {
             print("🎯 === PROCESSING CLAUDE RESPONSE ===")
+            
+            // Check if we already have this message to prevent duplicates
+            let existingMessageIds = Set(messages.map { $0.id })
+            let existingContent = Set(messages.map { $0.content.trimmingCharacters(in: .whitespacesAndNewlines) })
+            let messageContent = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            if existingMessageIds.contains(message.id) {
+                print("🔸 DUPLICATE MESSAGE DETECTED (ID match): \(message.id) - SKIPPING")
+                return
+            }
+            
+            if existingContent.contains(messageContent) {
+                print("🔸 DUPLICATE MESSAGE DETECTED (content match): \(messageContent.prefix(50))... - SKIPPING")
+                return
+            }
             
             // Update session ID if we didn't have one (first message case)
             if currentSessionId == nil {
@@ -407,7 +433,7 @@ class ChatViewModel: ObservableObject {
             }
             
             // Add message to conversation
-            print("📝 Adding Claude message to conversation...")
+            print("📝 Adding NEW Claude message to conversation...")
             messages.append(message)
             print("✅ ChatViewModel: Added APNS Claude response to chat")
             print("📊 Total messages now: \(messages.count)")
@@ -763,10 +789,12 @@ class ChatViewModel: ObservableObject {
     private func mergeServerMessages(_ serverMessages: [Message], for session: ProjectSession) {
         print("🔄 Merging \(serverMessages.count) server messages with \(messages.count) local messages")
         
-        // If we have no local messages, just use server messages
+        // If we have no local messages, use incremental insertion instead of replacement
         if messages.isEmpty {
-            messages = serverMessages
-            print("✅ Using all server messages (no local messages)")
+            // Insert server messages in chronological order
+            let sortedServerMessages = serverMessages.sorted { $0.timestamp < $1.timestamp }
+            messages.append(contentsOf: sortedServerMessages)
+            print("✅ Added all \(serverMessages.count) server messages (no local messages)")
             return
         }
         
@@ -777,8 +805,10 @@ class ChatViewModel: ObservableObject {
         var addedCount = 0
         var messageIdsToAcknowledge: [String] = []
         
+        // Collect new messages that don't already exist
+        var newServerMessages: [Message] = []
         for serverMessage in serverMessages where !existingContent.contains(serverMessage.content) {
-            messages.append(serverMessage)
+            newServerMessages.append(serverMessage)
             addedCount += 1
             
             // Track message IDs that need acknowledgment (assistant messages)
@@ -787,10 +817,17 @@ class ChatViewModel: ObservableObject {
             }
         }
         
-        // HTTP doesn't need message acknowledgment - messages are delivered directly
-        
-        // Sort messages by timestamp to maintain chronological order
-        messages.sort { $0.timestamp < $1.timestamp }
+        // Insert new messages in chronological order without full array sort
+        let sortedNewMessages = newServerMessages.sorted { $0.timestamp < $1.timestamp }
+        for newMessage in sortedNewMessages {
+            // Find correct insertion point to maintain chronological order
+            if let insertIndex = messages.firstIndex(where: { $0.timestamp > newMessage.timestamp }) {
+                messages.insert(newMessage, at: insertIndex)
+            } else {
+                // Message is newest, append to end
+                messages.append(newMessage)
+            }
+        }
         
         print("✅ Added \(addedCount) new messages from server")
         print("📊 Total messages now: \(messages.count)")
@@ -854,5 +891,68 @@ class ChatViewModel: ObservableObject {
         default:
             return "Working on it..."
         }
+    }
+    
+    // MARK: - Message Deduplication
+    
+    /// Safely merge persisted messages with current messages, preventing duplicates
+    func mergePersistedMessages(_ persistedMessages: [Message]) -> Int {
+        guard !persistedMessages.isEmpty else {
+            print("🔄 No persisted messages to merge")
+            return 0
+        }
+        
+        print("🔄 ChatViewModel: Merging \(persistedMessages.count) persisted messages with \(messages.count) current messages")
+        
+        // Create a set of existing message IDs for fast lookup
+        let existingMessageIds = Set(messages.map { $0.id })
+        
+        // Also check content as backup in case IDs don't match
+        let existingContent = Set(messages.map { $0.content.trimmingCharacters(in: .whitespacesAndNewlines) })
+        
+        var newMessages: [Message] = []
+        var duplicateCount = 0
+        
+        for persistedMessage in persistedMessages {
+            let trimmedContent = persistedMessage.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            // Skip if we already have this message (by ID or content)
+            if existingMessageIds.contains(persistedMessage.id) {
+                duplicateCount += 1
+                print("   🔸 Skipping duplicate message (ID match): \(persistedMessage.id)")
+                continue
+            }
+            
+            if existingContent.contains(trimmedContent) {
+                duplicateCount += 1
+                print("   🔸 Skipping duplicate message (content match): \(trimmedContent.prefix(50))...")
+                continue
+            }
+            
+            newMessages.append(persistedMessage)
+        }
+        
+        if !newMessages.isEmpty {
+            // Sort new messages by timestamp before inserting
+            let sortedNewMessages = newMessages.sorted { $0.timestamp < $1.timestamp }
+            
+            // Insert new messages in chronological order to maintain sort without full array recreation
+            for newMessage in sortedNewMessages {
+                // Find correct insertion point to maintain chronological order
+                if let insertIndex = messages.firstIndex(where: { $0.timestamp > newMessage.timestamp }) {
+                    messages.insert(newMessage, at: insertIndex)
+                } else {
+                    // Message is newest, append to end
+                    messages.append(newMessage)
+                }
+            }
+            
+            print("✅ ChatViewModel: Incrementally added \(newMessages.count) new messages (skipped \(duplicateCount) duplicates)")
+            print("📊 Total messages now: \(messages.count)")
+        } else {
+            print("📝 No new messages to add (all \(duplicateCount) were duplicates)")
+        }
+        
+        return newMessages.count
     }
 }

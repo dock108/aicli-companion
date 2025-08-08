@@ -179,6 +179,9 @@ struct ChatView: View {
                     
                     print("🔷 ChatView: Loaded \(self.viewModel.messages.count) messages for restored session")
                     
+                    // Check for any new messages that may have been saved while in a different project
+                    self.refreshMessagesAfterProjectSwitch()
+                    
                 case .failure(let error):
                     // No existing session, user can start one when ready
                     print("ℹ️ No existing session (\(error.localizedDescription)), waiting for user to start")
@@ -396,7 +399,31 @@ struct ChatView: View {
         isNearBottom = (maxScrollPosition - position) <= threshold
     }
     
-    // MARK: - Background Refresh
+    // MARK: - Message Refresh
+    private func refreshMessagesAfterProjectSwitch() {
+        guard let project = selectedProject,
+              let sessionId = viewModel.currentSessionId else {
+            print("🔄 No active session to refresh after project switch")
+            return
+        }
+        
+        print("🔄 ChatView: Checking for new messages after switching to project '\(project.name)'")
+        print("🔄 Current state: \(viewModel.messages.count) messages in memory")
+        
+        // Reload messages from persistence to get any that were saved while in different project
+        let savedMessages = MessagePersistenceService.shared.loadMessages(for: project.path, sessionId: sessionId)
+        print("🔄 Found \(savedMessages.count) messages in persistence")
+        
+        // Use the deduplication method to safely merge messages
+        let newMessageCount = viewModel.mergePersistedMessages(savedMessages)
+        
+        if newMessageCount > 0 {
+            print("✅ ChatView: Successfully merged \(newMessageCount) new messages after project switch")
+        } else {
+            print("🔄 No new messages found after switching to project '\(project.name)'")
+        }
+    }
+    
     private func refreshMessagesOnActivation() {
         guard let project = selectedProject,
               let sessionId = viewModel.currentSessionId else {
@@ -404,17 +431,23 @@ struct ChatView: View {
             return
         }
         
-        print("🔄 Refreshing messages after returning from background")
+        print("🔄 ChatView: Refreshing messages after returning from background")
+        print("🔄 Current state: \(viewModel.messages.count) messages in memory")
         
         // Reload messages from persistence to get any that were saved while backgrounded
         let savedMessages = MessagePersistenceService.shared.loadMessages(for: project.path, sessionId: sessionId)
+        print("🔄 Found \(savedMessages.count) messages in persistence")
         
-        if savedMessages.count > viewModel.messages.count {
-            print("🔄 Found \(savedMessages.count - viewModel.messages.count) new messages saved while backgrounded")
-            viewModel.messages = savedMessages
+        // Use the new deduplication method to safely merge messages
+        let newMessageCount = viewModel.mergePersistedMessages(savedMessages)
+        
+        if newMessageCount > 0 {
+            print("✅ ChatView: Successfully merged \(newMessageCount) new messages after returning from background")
         } else {
+            print("📝 ChatView: No new messages found in persistence")
+            
             // No new messages found locally - check server for completed long-running responses
-            print("🔄 No new local messages - polling server for completed responses")
+            print("🔄 Polling server for any completed responses...")
             pollForCompletedResponses()
         }
     }

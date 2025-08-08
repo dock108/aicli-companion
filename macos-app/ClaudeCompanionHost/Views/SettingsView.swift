@@ -481,22 +481,21 @@ struct AdvancedSettingsView: View {
 struct SettingsDocument: FileDocument {
     static var readableContentTypes: [UTType] { [.json] }
 
-    let settingsManager: SettingsManager
+    private let settingsData: Data
 
+    @MainActor
     init(settingsManager: SettingsManager) {
-        self.settingsManager = settingsManager
+        // Export settings data at initialization time on the main actor
+        self.settingsData = settingsManager.exportSettings() ?? Data()
     }
 
     init(configuration: ReadConfiguration) throws {
         // This is export-only, so we don't support reading
+        self.settingsData = Data()
         throw CocoaError(.fileReadUnsupportedScheme)
     }
 
-    @MainActor
-    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
-        guard let data = settingsManager.exportSettings() else {
-            throw CocoaError(.fileWriteUnknown)
-        }
-        return FileWrapper(regularFileWithContents: data)
+    nonisolated func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        return FileWrapper(regularFileWithContents: settingsData)
     }
 }

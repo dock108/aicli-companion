@@ -160,4 +160,5 @@ extension NotificationManager: UNUserNotificationCenterDelegate {
 // MARK: - App Commands
 @objc protocol AppCommands {
     func openActivityMonitor()
+    func openLogs()
 }

@@ -32,6 +32,7 @@ targets:
       DEVELOPMENT_TEAM: ""
       SWIFT_VERSION: "5.0"
       MACOSX_DEPLOYMENT_TARGET: "14.0"
+      CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION: true
     dependencies:
       - sdk: SwiftUI.framework
       - sdk: Network.framework

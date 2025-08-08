@@ -42,6 +42,10 @@ class ServerManager: ObservableObject {
     var serverFullURL: String {
         "http://\(localIP):\(port)"
     }
+    
+    var serverPID: Int32? {
+        return serverProcess?.processIdentifier
+    }
 
     // MARK: - Initialization
     private init() {

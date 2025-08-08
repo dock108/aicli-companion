@@ -11,7 +11,7 @@ import UserNotifications
 import Combine
 import ServiceManagement
 
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
     private var cancellables = Set<AnyCancellable>()
@@ -94,6 +94,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let windowController = NSWindowController()
             windowController.showWindow(nil)
         }
+    }
+
+    @objc func openLogs() {
+        // Open the logs window (same as activity monitor for now)
+        openActivityMonitor()
     }
 
     @objc func showQRCode() {

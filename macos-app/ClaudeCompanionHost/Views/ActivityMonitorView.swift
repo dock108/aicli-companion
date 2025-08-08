@@ -526,6 +526,7 @@ struct LogsToolbar: View {
 
 struct LogEntryView: View {
     let log: LogEntry
+    @EnvironmentObject private var serverManager: ServerManager
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -536,7 +537,7 @@ struct LogEntryView: View {
                 .frame(width: 80, alignment: .leading)
 
             // PID
-            Text("PID: \(log.pid)")
+            Text("PID: \(getServerPID())")
                 .font(.system(.caption, design: .monospaced))
                 .foregroundStyle(.tertiary)
                 .frame(width: 60, alignment: .leading)
@@ -558,6 +559,14 @@ struct LogEntryView: View {
         .background(
             log.level == .error ? Color.red.opacity(0.1) : Color.clear
         )
+    }
+    
+    private func getServerPID() -> String {
+        if let pid = serverManager.serverPID {
+            return String(pid)
+        } else {
+            return String(ProcessInfo.processInfo.processIdentifier)
+        }
     }
 }
 

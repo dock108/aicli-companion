@@ -196,6 +196,7 @@ struct LogsView: View {
 
 struct LogEntryRow: View {
     let entry: LogEntry
+    @EnvironmentObject private var serverManager: ServerManager
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {

@@ -188,7 +188,7 @@ export function setupAICLIStatusRoutes(app, aicliService) {
       });
     } catch (error) {
       const sanitizedTestType = String(req.params.testType).replace(/[^a-zA-Z0-9_-]/g, '');
-      console.error(`AICLI CLI debug test (${sanitizedTestType}) failed:`, error);
+      console.error('AICLI CLI debug test (%s) failed:', sanitizedTestType, error);
       res.status(500).json({
         success: false,
         testType: req.params.testType,

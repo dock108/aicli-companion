@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import express from 'express';
-import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
 import { createServer as createHttpsServer } from 'https';
 import { fileURLToPath } from 'url';
@@ -15,7 +14,6 @@ import telemetryRoutes from './routes/telemetry.js';
 import pushNotificationRoutes from './routes/push-notifications.js';
 import chatRoutes from './routes/chat.js';
 import devicesRoutes from './routes/devices.js';
-import { setupWebSocket } from './services/websocket.js';
 import { errorHandler } from './middleware/error.js';
 import { AICLIService } from './services/aicli.js';
 import { ServerConfig } from './config/server-config.js';
@@ -115,40 +113,6 @@ class AICLICompanionServer {
     });
   }
 
-  setupWebSocket() {
-    this.wss = new WebSocketServer({ server: this.server });
-    setupWebSocket(this.wss, this.aicliService, this.authToken);
-
-    // Forward AICLI CLI events to console for host app logging
-    this.aicliService.on('processStart', (data) => {
-      console.log(
-        `[AICLI_PROCESS_START] PID: ${data.pid}, Type: ${data.type}, Session: ${data.sessionId || 'one-time'}`
-      );
-    });
-
-    this.aicliService.on('processStdout', (data) => {
-      console.log(`[AICLI_STDOUT] PID: ${data.pid} - ${data.data}`);
-    });
-
-    this.aicliService.on('processStderr', (data) => {
-      console.error(`[AICLI_STDERR] PID: ${data.pid} - ${data.data}`);
-    });
-
-    this.aicliService.on('processExit', (data) => {
-      console.log(
-        `[AICLI_PROCESS_EXIT] PID: ${data.pid}, Code: ${data.code}, Session: ${data.sessionId || 'one-time'}`
-      );
-    });
-
-    this.aicliService.on('processError', (data) => {
-      console.error(`[AICLI_PROCESS_ERROR] PID: ${data.pid} - ${data.error}`);
-    });
-
-    this.aicliService.on('commandSent', (data) => {
-      console.log(`[AICLI_COMMAND] Session: ${data.sessionId} - ${data.prompt}`);
-    });
-  }
-
   setupErrorHandling() {
     this.app.use(errorHandler);
 
@@ -206,8 +170,7 @@ class AICLICompanionServer {
         this.server = createServer(this.app);
       }
 
-      // TODO: Remove WebSocket infrastructure (migrating to HTTP + APNS)
-      // this.setupWebSocket();
+      // WebSocket infrastructure removed - using HTTP + APNS only
 
       // DISABLED: Session persistence should be managed by clients, not the server
       // The server should start fresh on each restart without loading old sessions

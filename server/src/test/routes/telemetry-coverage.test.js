@@ -4,7 +4,7 @@ import express from 'express';
 import request from 'supertest';
 import { mock } from 'node:test';
 
-describe('Telemetry Routes', () => {
+describe('Telemetry Routes Coverage', () => {
   let app;
   let mockTelemetryService;
 
@@ -12,7 +12,7 @@ describe('Telemetry Routes', () => {
     app = express();
     app.use(express.json());
 
-    // Create mock telemetry service
+    // Mock telemetry service
     mockTelemetryService = {
       getMetrics: mock.fn(() => ({
         sessions: {
@@ -43,13 +43,13 @@ describe('Telemetry Routes', () => {
       reset: mock.fn(),
     };
 
-    // Mock auth middleware
+    // Mock auth middleware to allow requests
     app.use((req, res, next) => {
       req.user = { id: 'test-user' };
       next();
     });
 
-    // Create custom router with mocked service
+    // Create router directly with inline handlers that use mocked service
     const router = express.Router();
 
     router.get('/api/telemetry', (req, res) => {
@@ -57,6 +57,7 @@ describe('Telemetry Routes', () => {
         const metrics = mockTelemetryService.getMetrics();
         res.json(metrics);
       } catch (error) {
+        console.error('Error fetching telemetry:', error);
         res.status(500).json({
           error: 'Failed to fetch telemetry',
           message: error.message,
@@ -78,6 +79,7 @@ describe('Telemetry Routes', () => {
 
         res.json(metrics);
       } catch (error) {
+        console.error('Error fetching connection telemetry:', error);
         res.status(500).json({
           error: 'Failed to fetch connection telemetry',
           message: error.message,
@@ -94,6 +96,7 @@ describe('Telemetry Routes', () => {
           timestamp: new Date().toISOString(),
         });
       } catch (error) {
+        console.error('Error resetting telemetry:', error);
         res.status(500).json({
           error: 'Failed to reset telemetry',
           message: error.message,

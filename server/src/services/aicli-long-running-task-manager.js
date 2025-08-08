@@ -168,15 +168,8 @@ export class AICLILongRunningTaskManager extends EventEmitter {
     const sessionParts = sessionId.split('_');
     const projectName = sessionParts.slice(0, -1).join('_') || 'Project';
 
-    // Find all device tokens associated with this session
+    // Device tokens are now managed via HTTP/push notification registration
     const deviceTokens = [];
-    if (global.webSocketClients) {
-      global.webSocketClients.forEach((client, clientId) => {
-        if (client.sessionIds && client.sessionIds.has(sessionId) && client.deviceToken) {
-          deviceTokens.push({ clientId, token: client.deviceToken });
-        }
-      });
-    }
 
     // Prepare notification data
     const notificationData = {

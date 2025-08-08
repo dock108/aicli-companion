@@ -482,7 +482,7 @@ export class AICLISessionManager extends EventEmitter {
    */
   getAllSessions() {
     const sessions = [];
-    for (const [sessionId, _session] of this.interactiveSessions) {
+    for (const [sessionId, _session] of this.activeSessions) {
       const status = this.getSessionStatus(sessionId);
       if (status) {
         sessions.push(status);

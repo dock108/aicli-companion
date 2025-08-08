@@ -239,9 +239,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: [server, ios, macos]
-    permissions:
-      contents: read
-      pull-requests: write
     
     steps:
     - uses: actions/checkout@v4

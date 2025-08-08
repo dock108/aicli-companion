@@ -212,6 +212,13 @@ struct LogEntryRow: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 80, alignment: .leading)
 
+            // PID
+            Text("PID: \(getServerPID())")
+                .font(.caption)
+                .fontDesign(.monospaced)
+                .foregroundStyle(.tertiary)
+                .frame(width: 60, alignment: .leading)
+
             // Message
             Text(entry.message)
                 .font(.caption)
@@ -242,6 +249,10 @@ struct LogEntryRow: View {
         case .warning: return .orange
         case .error: return .red
         }
+    }
+
+    private func getServerPID() -> String {
+        return String(ProcessInfo.processInfo.processIdentifier)
     }
 }
 

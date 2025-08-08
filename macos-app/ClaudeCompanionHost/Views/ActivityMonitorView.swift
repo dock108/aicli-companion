@@ -535,6 +535,12 @@ struct LogEntryView: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 80, alignment: .leading)
 
+            // PID
+            Text("PID: \(ProcessInfo.processInfo.processIdentifier)")
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(.tertiary)
+                .frame(width: 60, alignment: .leading)
+
             // Level Icon
             Image(systemName: log.level.icon)
                 .foregroundStyle(Color(log.level.color))

@@ -62,6 +62,7 @@ struct GeneralSettingsView: View {
     @EnvironmentObject private var settingsManager: SettingsManager
     @State private var showingImportPicker = false
     @State private var showingExportPicker = false
+    @State private var showingDirectoryPicker = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -78,6 +79,31 @@ struct GeneralSettingsView: View {
                         }
 
                     Toggle("Auto-start Server", isOn: $settingsManager.autoStartServer)
+                }
+            }
+
+            GroupBox("Server Directory") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Default Directory")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    HStack {
+                        Text(settingsManager.serverDirectory)
+                            .fontDesign(.monospaced)
+                            .font(.caption)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .padding(6)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color(NSColor.controlBackgroundColor))
+                            .cornerRadius(4)
+
+                        Button("Browse...") {
+                            showingDirectoryPicker = true
+                        }
+                        .buttonStyle(.borderless)
+                    }
                 }
             }
 
@@ -118,6 +144,7 @@ struct GeneralSettingsView: View {
             }
         }
         .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
         .fileImporter(
             isPresented: $showingImportPicker,
             allowedContentTypes: [.json],
@@ -132,6 +159,13 @@ struct GeneralSettingsView: View {
             defaultFilename: "claude-companion-settings.json"
         ) { result in
             handleExport(result)
+        }
+        .fileImporter(
+            isPresented: $showingDirectoryPicker,
+            allowedContentTypes: [.folder],
+            allowsMultipleSelection: false
+        ) { result in
+            handleDirectorySelection(result)
         }
     }
 
@@ -198,6 +232,25 @@ struct GeneralSettingsView: View {
             title: "Settings Reset",
             body: "All settings have been reset to defaults"
         )
+    }
+
+    private func handleDirectorySelection(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            if let url = urls.first {
+                settingsManager.serverDirectory = url.path
+                NotificationManager.shared.showNotification(
+                    title: "Directory Updated",
+                    body: "Server directory has been changed"
+                )
+            }
+        case .failure(let error):
+            print("Directory selection failed: \(error)")
+            NotificationManager.shared.showNotification(
+                title: "Directory Selection Failed",
+                body: error.localizedDescription
+            )
+        }
     }
 }
 
@@ -282,6 +335,7 @@ struct ServerSettingsView: View {
             }
         }
         .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear {
             selectedInterface = NetworkMonitor.shared.availableInterfaces.first
         }
@@ -348,6 +402,7 @@ struct SecuritySettingsView: View {
             }
         }
         .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
         .alert("Generate New Token?", isPresented: $showingTokenAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Generate", role: .destructive) {
@@ -366,35 +421,17 @@ struct AdvancedSettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            GroupBox("Server Paths") {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Server Directory")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    HStack {
-                        Text(settingsManager.serverDirectory)
+            GroupBox("Server Configuration") {
+                VStack(alignment: .leading, spacing: 12) {
+                    LabeledContent("Server Command") {
+                        TextField("", text: $settingsManager.serverCommand)
+                            .textFieldStyle(.roundedBorder)
                             .fontDesign(.monospaced)
                             .font(.caption)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .padding(6)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color(NSColor.controlBackgroundColor))
-                            .cornerRadius(4)
-
-                        Button("Browse...") {
-                            showingDirectoryPicker = true
-                        }
-                        .buttonStyle(.borderless)
+                            .frame(width: 200)
                     }
-                }
-
-                TextField("Server Command", text: $settingsManager.serverCommand)
-                    .textFieldStyle(.roundedBorder)
-                    .fontDesign(.monospaced)
-                    .font(.caption)
                     .help("Command to start the server (e.g., 'npm start')")
+                }
             }
 
             GroupBox("Executables") {
@@ -422,6 +459,7 @@ struct AdvancedSettingsView: View {
             }
         }
         .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
         .fileImporter(
             isPresented: $showingDirectoryPicker,
             allowedContentTypes: [.folder],

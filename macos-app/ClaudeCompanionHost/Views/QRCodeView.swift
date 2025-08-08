@@ -46,14 +46,14 @@ struct QRCodeView: View {
                     .interpolation(.none)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 200, height: 200)
-                    .padding()
+                    .frame(width: 180, height: 180)
+                    .padding(12)
                     .background(Color.white)
                     .cornerRadius(12)
-                    .shadow(radius: 5)
+                    .shadow(radius: 3)
             } else {
                 ProgressView()
-                    .frame(width: 200, height: 200)
+                    .frame(width: 180, height: 180)
             }
 
             // Connection String
@@ -101,7 +101,7 @@ struct QRCodeView: View {
             .cornerRadius(8)
         }
         .padding()
-        .frame(width: 350, height: 500)
+        .frame(width: 320, height: 450)
         .background(MacOSVisualEffectView())
         .onAppear {
             generateQRCode()

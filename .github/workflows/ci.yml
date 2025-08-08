@@ -99,13 +99,13 @@ jobs:
     - name: Run iOS Tests with Coverage
       run: |
         cd ios
-        xcodebuild -scheme AICLICompanion -destination 'platform=iOS Simulator,name=iPhone 16 Pro' test -enableCodeCoverage YES CODE_SIGNING_ALLOWED=NO
+        xcodebuild -scheme AICLICompanion -destination 'platform=iOS Simulator,name=iPhone 16 Pro' test -enableCodeCoverage YES CODE_SIGNING_ALLOWED=NO -resultBundlePath ios-test.xcresult
     
     - name: Generate iOS Coverage Report
       run: |
         cd ios
-        xcrun xccov view --report --json DerivedData/Build/Logs/Test/*.xcresult > ios-coverage.json || true
-        xcrun xccov view --report DerivedData/Build/Logs/Test/*.xcresult > ios-coverage.txt || true
+        xcrun xccov view --report --json ios-test.xcresult > ios-coverage.json || true
+        xcrun xccov view --report ios-test.xcresult > ios-coverage.txt || true
     
     - name: Upload iOS Coverage Reports
       uses: actions/upload-artifact@v4
@@ -161,13 +161,13 @@ jobs:
     - name: Run macOS Tests with Coverage
       run: |
         cd macos-app
-        xcodebuild -project ClaudeCompanionHost.xcodeproj -scheme ClaudeCompanionHost -destination 'platform=macOS' test -enableCodeCoverage YES CODE_SIGNING_ALLOWED=NO
+        xcodebuild -project ClaudeCompanionHost.xcodeproj -scheme ClaudeCompanionHost -destination 'platform=macOS' test -enableCodeCoverage YES CODE_SIGNING_ALLOWED=NO -resultBundlePath macos-test.xcresult
     
     - name: Generate macOS Coverage Report
       run: |
         cd macos-app
-        xcrun xccov view --report --json DerivedData/Build/Logs/Test/*.xcresult > macos-coverage.json || true
-        xcrun xccov view --report DerivedData/Build/Logs/Test/*.xcresult > macos-coverage.txt || true
+        xcrun xccov view --report --json macos-test.xcresult > macos-coverage.json || true
+        xcrun xccov view --report macos-test.xcresult > macos-coverage.txt || true
     
     - name: Upload macOS Coverage Reports
       uses: actions/upload-artifact@v4

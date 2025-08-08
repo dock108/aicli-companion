@@ -242,7 +242,7 @@ actor AsyncSemaphore {
     }
     
     func wait() async {
-        if !isEmpty {
+        if !count.isZero {
             count -= 1
         } else {
             await withCheckedContinuation { continuation in

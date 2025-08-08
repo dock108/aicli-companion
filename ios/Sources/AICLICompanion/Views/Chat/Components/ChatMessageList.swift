@@ -49,13 +49,8 @@ struct ChatMessageList: View {
                 }
                 .onAppear {
                     scrollViewHeight = geometry.size.height
-                    // Scroll to bottom when view appears with existing messages
-                    if let lastMessage = messages.last {
-                        // Use a small delay to ensure the view is fully rendered
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            proxy.scrollTo(lastMessage.id.uuidString, anchor: .bottom)
-                        }
-                    }
+                    // Scroll to bottom when conversation opens
+                    scrollToBottomReliably(proxy: proxy)
                 }
                 .onChange(of: geometry.size.height) { _, newHeight in
                     scrollViewHeight = newHeight
@@ -78,17 +73,16 @@ struct ChatMessageList: View {
                     onScrollPositionChanged(-value)
                 }
                 .onChange(of: messages.count) { oldCount, newCount in
-                    // Handle initial load (from 0 to some messages)
-                    if oldCount == 0 && newCount > 0 {
-                        // Initial messages loaded, scroll to bottom
-                        if let lastMessage = messages.last {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                proxy.scrollTo(lastMessage.id.uuidString, anchor: .bottom)
-                            }
-                        }
-                    } else {
-                        // Handle regular message additions
+                    // Handle all message count increases (including initial load)
+                    if newCount > oldCount {
                         handleMessageCountChange(oldCount: oldCount, newCount: newCount, proxy: proxy)
+                    }
+                }
+                .onChange(of: messages.isEmpty) { wasEmpty, isEmpty in
+                    // Handle when messages array changes from empty to populated
+                    if wasEmpty && !isEmpty {
+                        // Messages just loaded, scroll to bottom
+                        scrollToBottomReliably(proxy: proxy)
                     }
                 }
                 .onChange(of: isLoading) { oldLoading, newLoading in
@@ -101,20 +95,28 @@ struct ChatMessageList: View {
     private func handleMessageCountChange(oldCount: Int, newCount: Int, proxy: ScrollViewProxy) {
         guard newCount > oldCount else { return }
         
-        // Determine if we should auto-scroll
+        // Determine if we should auto-scroll to the newest message
         let shouldScroll: Bool
         
-        if let lastMessage = messages.last {
-            // Always scroll for user messages (they just sent it)
+        if oldCount == 0 {
+            // Initial load - always scroll to bottom
+            shouldScroll = true
+        } else if let lastMessage = messages.last {
+            // New message added - check scroll behavior
             if lastMessage.sender == .user {
+                // Always scroll for user messages (they just sent it)
                 shouldScroll = true
             } else {
                 // For assistant messages, only scroll if user is near bottom
                 shouldScroll = isNearBottom
             }
-            
-            if shouldScroll {
-                scrollToMessage(lastMessage.id.uuidString, proxy: proxy, animated: lastMessage.sender == .assistant)
+        } else {
+            shouldScroll = false
+        }
+        
+        if shouldScroll {
+            if let lastMessage = messages.last {
+                scrollToMessage(lastMessage.id, proxy: proxy, animated: oldCount > 0 && lastMessage.sender == .assistant)
             }
         }
     }
@@ -126,7 +128,7 @@ struct ChatMessageList: View {
         }
     }
     
-    private func scrollToMessage(_ messageId: String, proxy: ScrollViewProxy, animated: Bool = true) {
+    private func scrollToMessage(_ messageId: UUID, proxy: ScrollViewProxy, animated: Bool = true) {
         if animated {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                 proxy.scrollTo(messageId, anchor: .bottom)
@@ -139,6 +141,21 @@ struct ChatMessageList: View {
     private func scrollToLoadingIndicator(proxy: ScrollViewProxy) {
         withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
             proxy.scrollTo("loading-indicator", anchor: .bottom)
+        }
+    }
+    
+    private func scrollToBottomReliably(proxy: ScrollViewProxy) {
+        guard let lastMessage = messages.last else { return }
+        
+        // Multiple attempts with increasing delays to handle render timing
+        DispatchQueue.main.async {
+            proxy.scrollTo(lastMessage.id, anchor: .bottom)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            proxy.scrollTo(lastMessage.id, anchor: .bottom)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            proxy.scrollTo(lastMessage.id, anchor: .bottom)
         }
     }
 }

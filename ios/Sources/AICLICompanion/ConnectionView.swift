@@ -363,7 +363,8 @@ struct HelpStep: View {
 struct TerminalTextFieldStyle: TextFieldStyle {
     @Environment(\.colorScheme) var colorScheme
     
-    func body(configuration: TextField<Self._Label>) -> some View {
+    // swiftlint:disable:next identifier_name
+    func _body(configuration: TextField<Self._Label>) -> some View {
         configuration
             .font(Typography.font(.code))
             .padding()

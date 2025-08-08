@@ -3,17 +3,23 @@ import Combine
 
 // MARK: - Project Models for Server API
 
-struct Project: Identifiable, Codable, Equatable {
-    var id: String { path } // Use path as stable identifier
-    let name: String
-    let path: String
-    let type: String
+public struct Project: Identifiable, Codable, Equatable {
+    public var id: String { path } // Use path as stable identifier
+    public let name: String
+    public let path: String
+    public let type: String
+    
+    public init(name: String, path: String, type: String) {
+        self.name = name
+        self.path = path
+        self.type = type
+    }
     
     private enum CodingKeys: String, CodingKey {
         case name, path, type
     }
     
-    static func == (lhs: Project, rhs: Project) -> Bool {
+    public static func == (lhs: Project, rhs: Project) -> Bool {
         return lhs.name == rhs.name && lhs.path == rhs.path && lhs.type == rhs.type
     }
 }

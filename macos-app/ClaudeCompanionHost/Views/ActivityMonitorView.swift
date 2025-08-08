@@ -536,7 +536,7 @@ struct LogEntryView: View {
                 .frame(width: 80, alignment: .leading)
 
             // PID
-            Text("PID: \(ProcessInfo.processInfo.processIdentifier)")
+            Text("PID: \(log.pid)")
                 .font(.system(.caption, design: .monospaced))
                 .foregroundStyle(.tertiary)
                 .frame(width: 60, alignment: .leading)

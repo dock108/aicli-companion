@@ -252,7 +252,11 @@ struct LogEntryRow: View {
     }
 
     private func getServerPID() -> String {
-        return String(ProcessInfo.processInfo.processIdentifier)
+        if let pid = serverManager.serverPID {
+            return String(pid)
+        } else {
+            return String(ProcessInfo.processInfo.processIdentifier)
+        }
     }
 }
 

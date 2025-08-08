@@ -380,7 +380,7 @@ class PushNotificationService {
       const result = await this.sendNotification(device.token, notification);
 
       if (!result.success) {
-        console.error(`❌ Error notification failed for client ${clientId}:`, result.error);
+        console.error('❌ Error notification failed for client %s:', clientId, result.error);
       }
     } catch (error) {
       console.error('Error sending error notification:', error);

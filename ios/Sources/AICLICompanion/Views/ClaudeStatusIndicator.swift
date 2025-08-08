@@ -4,7 +4,6 @@ import SwiftUI
 /// Appears above message input or replaces typing bubble
 @available(iOS 16.0, macOS 13.0, *)
 struct ClaudeStatusIndicator: View {
-    
     // MARK: - State
     
     @ObservedObject var statusManager = ClaudeStatusManager.shared
@@ -176,30 +175,9 @@ class ClaudeStatusManager: ObservableObject {
     }
     
     private func setupStatusHandlers() {
-        // Listen for status stream chunks
-        WebSocketService.shared.setMessageHandler(for: .streamChunk) { [weak self] message in
-            if case .streamChunk(let chunkResponse) = message.data {
-                // Check if this is a status chunk
-                if chunkResponse.chunk.type == "status",
-                   let statusType = chunkResponse.chunk.metadata?.statusType {
-                    
-                    let status = ClaudeStatus(
-                        statusType: statusType,
-                        stage: chunkResponse.chunk.metadata?.stage,
-                        duration: chunkResponse.chunk.metadata?.duration,
-                        tokens: chunkResponse.chunk.metadata?.tokens,
-                        tools: chunkResponse.chunk.metadata?.tools,
-                        canInterrupt: chunkResponse.chunk.metadata?.canInterrupt ?? false,
-                        originalText: chunkResponse.chunk.content,
-                        sessionId: chunkResponse.sessionId
-                    )
-                    
-                    DispatchQueue.main.async {
-                        self?.updateStatus(status)
-                    }
-                }
-            }
-        }
+        // HTTP architecture: Status updates are handled within HTTP responses
+        // For now, status updates are not implemented for HTTP
+        // This method is kept for future implementation
     }
     
     func updateStatus(_ status: ClaudeStatus) {

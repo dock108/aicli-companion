@@ -12,7 +12,6 @@ const originalSendToMultipleClients = pushNotificationService.sendToMultipleClie
 
 describe('AICLILongRunningTaskManager', () => {
   let taskManager;
-  let originalWebSocketClients;
 
   beforeEach(() => {
     // Mock the methods
@@ -21,10 +20,6 @@ describe('AICLILongRunningTaskManager', () => {
     pushNotificationService.sendToMultipleClients = mock.fn();
 
     taskManager = new AICLILongRunningTaskManager();
-
-    // Mock global webSocketClients
-    originalWebSocketClients = global.webSocketClients;
-    global.webSocketClients = new Map();
   });
 
   afterEach(() => {
@@ -37,9 +32,6 @@ describe('AICLILongRunningTaskManager', () => {
     AICLIConfig.calculateTimeoutForCommand = originalCalculateTimeout;
     pushNotificationService.sendClaudeResponseNotification = originalSendNotification;
     pushNotificationService.sendToMultipleClients = originalSendToMultipleClients;
-
-    // Restore global
-    global.webSocketClients = originalWebSocketClients;
 
     // Force cleanup of any remaining timers (safety net)
     // This is a workaround for the test that creates intervals
@@ -187,12 +179,6 @@ describe('AICLILongRunningTaskManager', () => {
     });
 
     it('should handle successful completion', async () => {
-      // Add a mock client with device token
-      global.webSocketClients.set('client1', {
-        sessionIds: new Set(['test-session']),
-        deviceToken: 'test-token',
-      });
-
       const mockExecuteFunction = mock.fn(() =>
         Promise.resolve({
           type: 'result',
@@ -225,12 +211,6 @@ describe('AICLILongRunningTaskManager', () => {
     });
 
     it('should handle execution error', async () => {
-      // Add a mock client with device token
-      global.webSocketClients.set('client1', {
-        sessionIds: new Set(['test-session']),
-        deviceToken: 'test-token',
-      });
-
       const mockExecuteFunction = mock.fn(() => Promise.reject(new Error('Task failed')));
 
       let errorMessage = null;
@@ -270,47 +250,15 @@ describe('AICLILongRunningTaskManager', () => {
   });
 
   describe('sendLongRunningCompletionNotification', () => {
-    beforeEach(() => {
-      // Set up mock webSocket clients
-      global.webSocketClients.set('client1', {
-        sessionIds: new Set([
-          'test-session',
-          'test_session_uuid123',
-          'my_project_uuid123',
-          'multi_word_project_name_uuid456',
-        ]),
-        deviceToken: 'token1',
-      });
-
-      global.webSocketClients.set('client2', {
-        sessionIds: new Set(['test-session', 'other-session']),
-        deviceToken: 'token2',
-      });
-
-      global.webSocketClients.set('client3', {
-        sessionIds: new Set(['other-session']),
-        deviceToken: 'token3',
-      });
-
-      global.webSocketClients.set('client4', {
-        sessionIds: new Set(['test-session']),
-        // No device token
-      });
-    });
-
-    it('should send notifications to clients with matching session and device token', async () => {
+    it('should send notifications with empty client list (no WebSocket clients)', async () => {
       await taskManager.sendLongRunningCompletionNotification('test-session', 'Test prompt', false);
 
-      // Should call sendToMultipleClients with client1 and client2
+      // Should call sendToMultipleClients with empty array (no WebSocket clients)
       assert.strictEqual(pushNotificationService.sendToMultipleClients.mock.calls.length, 1);
 
       const call = pushNotificationService.sendToMultipleClients.mock.calls[0];
       const clientIds = call.arguments[0];
-      assert.strictEqual(clientIds.length, 2);
-      assert.ok(clientIds.includes('client1'));
-      assert.ok(clientIds.includes('client2'));
-      assert.ok(!clientIds.includes('client3')); // Wrong session
-      assert.ok(!clientIds.includes('client4')); // No device token
+      assert.strictEqual(clientIds.length, 0);
     });
 
     it('should send success notification with correct data', async () => {
@@ -323,8 +271,7 @@ describe('AICLILongRunningTaskManager', () => {
       const call = pushNotificationService.sendToMultipleClients.mock.calls[0];
       const [clientIds, notificationData] = call.arguments;
 
-      assert.strictEqual(clientIds.length, 1);
-      assert.ok(clientIds.includes('client1'));
+      assert.strictEqual(clientIds.length, 0);
       assert.strictEqual(notificationData.sessionId, 'test_session_uuid123');
       assert.strictEqual(notificationData.projectName, 'test_session');
       assert.ok(notificationData.message.includes('Task completed'));
@@ -343,7 +290,7 @@ describe('AICLILongRunningTaskManager', () => {
       const call = pushNotificationService.sendToMultipleClients.mock.calls[0];
       const [clientIds, notificationData] = call.arguments;
 
-      assert.strictEqual(clientIds.length, 2);
+      assert.strictEqual(clientIds.length, 0);
       assert.ok(notificationData.message.includes('Task failed'));
       assert.ok(notificationData.message.includes('Failing prompt'));
       assert.ok(notificationData.message.includes('Something went wrong'));
@@ -375,9 +322,7 @@ describe('AICLILongRunningTaskManager', () => {
       assert.strictEqual(notificationData.projectName, 'multi_word_project_name');
     });
 
-    it('should handle no webSocket clients gracefully', () => {
-      global.webSocketClients = null;
-
+    it('should handle no device tokens gracefully', () => {
       assert.doesNotThrow(() => {
         taskManager.sendLongRunningCompletionNotification('test-session', 'Test prompt', false);
       });

@@ -3,7 +3,6 @@ import Foundation
 /// Validates messages received from the server to filter out invalid or malformed content
 @available(iOS 16.0, macOS 13.0, *)
 struct MessageValidator {
-    
     /// Validate a stream chunk before processing
     static func isValidStreamChunk(_ chunk: StreamChunk) -> Bool {
         // Filter empty content chunks

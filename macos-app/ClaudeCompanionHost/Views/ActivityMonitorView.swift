@@ -12,16 +12,16 @@ struct ActivityMonitorView: View {
     @EnvironmentObject private var serverManager: ServerManager
     @State private var selectedTab = 0
     @State private var searchText = ""
-    @State private var selectedLogLevel: LogLevel? = nil
+    @State private var selectedLogLevel: LogLevel?
     @State private var autoScroll = true
-    
+
     var body: some View {
         VStack(spacing: 0) {
             // Header
             HeaderView()
-            
+
             Divider()
-            
+
             // Tab Selection
             Picker("View", selection: $selectedTab) {
                 Text("Overview").tag(0)
@@ -31,7 +31,7 @@ struct ActivityMonitorView: View {
             }
             .pickerStyle(.segmented)
             .padding()
-            
+
             // Tab Content
             switch selectedTab {
             case 0:
@@ -58,7 +58,7 @@ struct ActivityMonitorView: View {
 // MARK: - Header View
 struct HeaderView: View {
     @EnvironmentObject private var serverManager: ServerManager
-    
+
     var body: some View {
         HStack {
             // Title and Status
@@ -67,25 +67,25 @@ struct HeaderView: View {
                     .font(.title2)
                     .symbolRenderingMode(.hierarchical)
                     .foregroundStyle(.blue)
-                
+
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Activity Monitor")
                         .font(.headline)
-                    
+
                     HStack(spacing: 4) {
                         Circle()
                             .fill(serverManager.isRunning ? Color.green : Color.red)
                             .frame(width: 6, height: 6)
-                        
+
                         Text(serverManager.isRunning ? "Server Running" : "Server Stopped")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
             }
-            
+
             Spacer()
-            
+
             // Quick Stats
             HStack(spacing: 20) {
                 StatItem(
@@ -94,14 +94,14 @@ struct HeaderView: View {
                     icon: "person.2.fill",
                     color: .blue
                 )
-                
+
                 StatItem(
                     label: "Port",
                     value: String(serverManager.port),
                     icon: "network",
                     color: .green
                 )
-                
+
                 StatItem(
                     label: "Health",
                     value: serverManager.serverHealth == .healthy ? "Good" : "Check",
@@ -117,16 +117,16 @@ struct HeaderView: View {
 // MARK: - Overview Tab
 struct OverviewTab: View {
     @EnvironmentObject private var serverManager: ServerManager
-    
+
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
                 // Server Status Card
                 ServerStatusCard()
-                
+
                 // Connection Info Card
                 ConnectionInfoCard()
-                
+
                 // Recent Activity Card
                 RecentActivityCard()
             }
@@ -138,7 +138,7 @@ struct OverviewTab: View {
 // MARK: - Sessions Tab
 struct SessionsTab: View {
     @EnvironmentObject private var serverManager: ServerManager
-    
+
     var body: some View {
         if serverManager.activeSessions.isEmpty {
             ContentUnavailableView(
@@ -165,16 +165,16 @@ struct LogsTab: View {
     @Binding var searchText: String
     @Binding var selectedLogLevel: LogLevel?
     @Binding var autoScroll: Bool
-    
+
     var filteredLogs: [LogEntry] {
         serverManager.logs.filter { log in
-            let matchesSearch = searchText.isEmpty || 
+            let matchesSearch = searchText.isEmpty ||
                 log.message.localizedCaseInsensitiveContains(searchText)
             let matchesLevel = selectedLogLevel == nil || log.level == selectedLogLevel
             return matchesSearch && matchesLevel
         }
     }
-    
+
     var body: some View {
         VStack(spacing: 0) {
             // Toolbar
@@ -183,9 +183,9 @@ struct LogsTab: View {
                 selectedLogLevel: $selectedLogLevel,
                 autoScroll: $autoScroll
             )
-            
+
             Divider()
-            
+
             // Logs List
             ScrollViewReader { proxy in
                 ScrollView {
@@ -215,7 +215,7 @@ struct PerformanceTab: View {
     @State private var cpuHistory: [Double] = []
     @State private var memoryHistory: [Double] = []
     @State private var timer: Timer?
-    
+
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
@@ -227,7 +227,7 @@ struct PerformanceTab: View {
                     unit: "%"
                 )
                 .frame(height: 200)
-                
+
                 // Memory Usage Chart
                 PerformanceChart(
                     title: "Memory Usage",
@@ -236,7 +236,7 @@ struct PerformanceTab: View {
                     unit: "MB"
                 )
                 .frame(height: 200)
-                
+
                 // Network Stats
                 NetworkStatsCard()
             }
@@ -249,16 +249,16 @@ struct PerformanceTab: View {
             stopPerformanceMonitoring()
         }
     }
-    
+
     private func startPerformanceMonitoring() {
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
             // Simulate performance data - in real app, fetch actual metrics
             let cpu = Double.random(in: 10...30)
             let memory = Double.random(in: 100...200)
-            
+
             cpuHistory.append(cpu)
             memoryHistory.append(memory)
-            
+
             // Keep last 60 data points
             if cpuHistory.count > 60 {
                 cpuHistory.removeFirst()
@@ -266,7 +266,7 @@ struct PerformanceTab: View {
             }
         }
     }
-    
+
     private func stopPerformanceMonitoring() {
         timer?.invalidate()
         timer = nil
@@ -279,16 +279,16 @@ struct StatItem: View {
     let value: String
     let icon: String
     let color: Color
-    
+
     var body: some View {
         VStack(spacing: 4) {
             Image(systemName: icon)
                 .font(.title3)
                 .foregroundStyle(color)
-            
+
             Text(value)
                 .font(.headline)
-            
+
             Text(label)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -298,7 +298,7 @@ struct StatItem: View {
 
 struct ServerStatusCard: View {
     @EnvironmentObject private var serverManager: ServerManager
-    
+
     var body: some View {
         GroupBox("Server Status") {
             VStack(alignment: .leading, spacing: 12) {
@@ -307,19 +307,19 @@ struct ServerStatusCard: View {
                     value: serverManager.isRunning ? "Running" : "Stopped",
                     color: serverManager.isRunning ? .green : .red
                 )
-                
+
                 StatusRow(
                     label: "Health",
                     value: healthString,
                     color: healthColor
                 )
-                
+
                 StatusRow(
                     label: "Uptime",
                     value: "2h 34m", // TODO: Calculate actual uptime
                     color: .blue
                 )
-                
+
                 if let token = serverManager.authToken {
                     StatusRow(
                         label: "Auth Token",
@@ -331,7 +331,7 @@ struct ServerStatusCard: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
-    
+
     private var healthString: String {
         switch serverManager.serverHealth {
         case .healthy: return "Healthy"
@@ -339,7 +339,7 @@ struct ServerStatusCard: View {
         case .unknown: return "Unknown"
         }
     }
-    
+
     private var healthColor: Color {
         switch serverManager.serverHealth {
         case .healthy: return .green
@@ -351,21 +351,21 @@ struct ServerStatusCard: View {
 
 struct ConnectionInfoCard: View {
     @EnvironmentObject private var serverManager: ServerManager
-    
+
     var body: some View {
         GroupBox("Connection Info") {
             VStack(alignment: .leading, spacing: 12) {
                 InfoRow(label: "Local IP", value: serverManager.localIP)
                 InfoRow(label: "Port", value: String(serverManager.port))
                 InfoRow(label: "Full URL", value: serverManager.serverFullURL)
-                
+
                 if !serverManager.connectionString.isEmpty {
                     HStack {
                         Text("Connection String")
                             .foregroundStyle(.secondary)
-                        
+
                         Spacer()
-                        
+
                         Text(serverManager.connectionString)
                             .fontDesign(.monospaced)
                             .font(.caption)
@@ -381,11 +381,11 @@ struct ConnectionInfoCard: View {
 
 struct RecentActivityCard: View {
     @EnvironmentObject private var serverManager: ServerManager
-    
+
     var recentLogs: [LogEntry] {
         Array(serverManager.logs.suffix(5))
     }
-    
+
     var body: some View {
         GroupBox("Recent Activity") {
             if recentLogs.isEmpty {
@@ -400,13 +400,13 @@ struct RecentActivityCard: View {
                             Image(systemName: log.level.icon)
                                 .foregroundStyle(Color(log.level.color))
                                 .font(.caption)
-                            
+
                             Text(log.message)
                                 .font(.caption)
                                 .lineLimit(1)
-                            
+
                             Spacer()
-                            
+
                             Text(log.timestamp, style: .time)
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
@@ -420,7 +420,7 @@ struct RecentActivityCard: View {
 
 struct SessionDetailCard: View {
     let session: Session
-    
+
     var body: some View {
         GroupBox {
             HStack {
@@ -428,16 +428,16 @@ struct SessionDetailCard: View {
                 Image(systemName: "iphone")
                     .font(.largeTitle)
                     .foregroundStyle(.blue)
-                
+
                 VStack(alignment: .leading, spacing: 4) {
                     Text(session.deviceName)
                         .font(.headline)
-                    
+
                     Text("Session ID: \(session.sessionId)")
                         .font(.caption)
                         .fontDesign(.monospaced)
                         .foregroundStyle(.secondary)
-                    
+
                     HStack {
                         Label("Connected", systemImage: "clock")
                         Text(session.connectedAt, style: .relative)
@@ -445,20 +445,20 @@ struct SessionDetailCard: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 }
-                
+
                 Spacer()
-                
+
                 // Signal Strength
                 VStack {
                     Image(systemName: "wifi", variableValue: session.signalStrength)
                         .font(.title2)
                         .foregroundStyle(.green)
-                    
+
                     Text("Signal")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
-                
+
                 // Actions
                 Button {
                     // Disconnect session
@@ -481,14 +481,14 @@ struct LogsToolbar: View {
     @Binding var selectedLogLevel: LogLevel?
     @Binding var autoScroll: Bool
     @EnvironmentObject private var serverManager: ServerManager
-    
+
     var body: some View {
         HStack {
             // Search
             HStack {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
-                
+
                 TextField("Search logs...", text: $searchText)
                     .textFieldStyle(.plain)
             }
@@ -496,7 +496,7 @@ struct LogsToolbar: View {
             .background(Color(NSColor.controlBackgroundColor))
             .cornerRadius(6)
             .frame(width: 200)
-            
+
             // Level Filter
             Picker("Level", selection: $selectedLogLevel) {
                 Text("All").tag(nil as LogLevel?)
@@ -508,13 +508,13 @@ struct LogsToolbar: View {
             }
             .pickerStyle(.menu)
             .frame(width: 100)
-            
+
             Spacer()
-            
+
             // Controls
             Toggle("Auto-scroll", isOn: $autoScroll)
                 .toggleStyle(.checkbox)
-            
+
             Button("Clear") {
                 serverManager.logs.removeAll()
             }
@@ -526,7 +526,7 @@ struct LogsToolbar: View {
 
 struct LogEntryView: View {
     let log: LogEntry
-    
+
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             // Timestamp
@@ -534,13 +534,13 @@ struct LogEntryView: View {
                 .font(.system(.caption, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .frame(width: 80, alignment: .leading)
-            
+
             // Level Icon
             Image(systemName: log.level.icon)
                 .foregroundStyle(Color(log.level.color))
                 .font(.caption)
                 .frame(width: 20)
-            
+
             // Message
             Text(log.message)
                 .font(.system(.caption, design: .monospaced))
@@ -560,7 +560,7 @@ struct PerformanceChart: View {
     let data: [Double]
     let color: Color
     let unit: String
-    
+
     var body: some View {
         GroupBox(title) {
             if data.isEmpty {
@@ -576,7 +576,7 @@ struct PerformanceChart: View {
                         y: .value(unit, value)
                     )
                     .foregroundStyle(color)
-                    
+
                     AreaMark(
                         x: .value("Time", index),
                         y: .value(unit, value)
@@ -606,27 +606,27 @@ struct NetworkStatsCard: View {
                     Label("Requests/sec", systemImage: "arrow.up.arrow.down")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    
+
                     Text("42")
                         .font(.largeTitle)
                         .fontWeight(.semibold)
                 }
-                
+
                 VStack(alignment: .leading, spacing: 8) {
                     Label("Avg Response Time", systemImage: "timer")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    
+
                     Text("125ms")
                         .font(.largeTitle)
                         .fontWeight(.semibold)
                 }
-                
+
                 VStack(alignment: .leading, spacing: 8) {
                     Label("Data Transferred", systemImage: "arrow.up.arrow.down.circle")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    
+
                     Text("1.2 MB")
                         .font(.largeTitle)
                         .fontWeight(.semibold)
@@ -642,19 +642,19 @@ struct StatusRow: View {
     let label: String
     let value: String
     let color: Color
-    
+
     var body: some View {
         HStack {
             Text(label)
                 .foregroundStyle(.secondary)
-            
+
             Spacer()
-            
+
             HStack(spacing: 4) {
                 Circle()
                     .fill(color)
                     .frame(width: 6, height: 6)
-                
+
                 Text(value)
                     .fontWeight(.medium)
             }
@@ -665,14 +665,14 @@ struct StatusRow: View {
 struct InfoRow: View {
     let label: String
     let value: String
-    
+
     var body: some View {
         HStack {
             Text(label)
                 .foregroundStyle(.secondary)
-            
+
             Spacer()
-            
+
             Text(value)
                 .fontDesign(.monospaced)
                 .textSelection(.enabled)

@@ -14,8 +14,8 @@ class BackgroundSessionCoordinator: ObservableObject {
     /// Lock for thread-safe access to pending messages
     private let pendingMessagesLock = NSLock()
     
-    /// WebSocket service reference
-    private let webSocketService = WebSocketService.shared
+    /// HTTP service reference
+    private let httpService = HTTPAICLIService.shared
     
     /// Message persistence service
     private let persistenceService = MessagePersistenceService.shared
@@ -39,7 +39,7 @@ class BackgroundSessionCoordinator: ObservableObject {
     // MARK: - Initialization
     
     private init() {
-        setupWebSocketHandlers()
+        // HTTP doesn't need persistent handlers - responses are handled directly
     }
     
     // MARK: - Public Methods
@@ -86,49 +86,40 @@ class BackgroundSessionCoordinator: ObservableObject {
     
     // MARK: - Private Methods
     
-    private func setupWebSocketHandlers() {
-        // Listen for ALL claudeResponse messages, not just ones for active views
-        webSocketService.setGlobalMessageHandler(for: .claudeResponse) { [weak self] message in
-            self?.handleClaudeResponse(message)
+    /// Process messages that were saved with a session ID (called from HTTP response handler)
+    func processSavedMessagesWithSessionId(_ sessionId: String, for project: Project) {
+        print("🎯 BackgroundSessionCoordinator: Processing saved messages with session ID: \(sessionId)")
+        
+        // Check if there are pending messages for this project
+        pendingMessagesLock.lock()
+        let pendingSet = pendingMessages[project.path]
+        pendingMessagesLock.unlock()
+        
+        if let pendingSet = pendingSet {
+            print("📋 Found pending messages for project, associating with session ID")
+            
+            // Save messages with the session ID
+            persistenceService.saveMessages(
+                for: project.path,
+                messages: pendingSet.messages,
+                sessionId: sessionId,
+                project: project
+            )
+            
+            // Remove from pending
+            pendingMessagesLock.lock()
+            pendingMessages.removeValue(forKey: project.path)
+            pendingMessagesLock.unlock()
+            
+            print("✅ Saved \(pendingSet.messages.count) pending messages with session ID")
         }
-        
-        // Also listen for conversationResult messages
-        webSocketService.setGlobalMessageHandler(for: .conversationResult) { [weak self] message in
-            self?.handleConversationResult(message)
-        }
-    }
-    
-    private func handleClaudeResponse(_ message: WebSocketMessage) {
-        guard case .claudeResponse(let response) = message.data,
-              let sessionId = response.sessionId,
-              !sessionId.isEmpty else {
-            return
-        }
-        
-        print("🎯 BackgroundSessionCoordinator: Received Claude response with session ID: \(sessionId)")
-        
-        // Check if this response matches any pending messages
-        processPendingMessagesWithSessionId(sessionId, requestId: message.requestId)
-    }
-    
-    private func handleConversationResult(_ message: WebSocketMessage) {
-        guard case .conversationResult(let result) = message.data,
-              let sessionId = result.claudeSessionId ?? result.sessionId,
-              !sessionId.isEmpty else {
-            return
-        }
-        
-        print("🎯 BackgroundSessionCoordinator: Received conversation result with session ID: \(sessionId)")
-        
-        // Process any pending messages
-        processPendingMessagesWithSessionId(sessionId, requestId: message.requestId)
     }
     
     private func processPendingMessagesWithSessionId(_ sessionId: String, requestId: String?) {
         pendingMessagesLock.lock()
         
         // Find pending messages that match this request or don't have a request ID
-        let matchingProjects = pendingMessages.filter { (projectPath, pendingSet) in
+        let matchingProjects = pendingMessages.filter { (_, pendingSet) in
             // Match by request ID if available, otherwise process all pending
             return pendingSet.requestId == nil || pendingSet.requestId == requestId
         }

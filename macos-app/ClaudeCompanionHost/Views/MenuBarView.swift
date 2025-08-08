@@ -13,43 +13,43 @@ struct MenuBarView: View {
     @State private var showingQRCode = false
     @State private var copiedToClipboard = false
     @Environment(\.openWindow) private var openWindow
-    
+
     var body: some View {
         VStack(spacing: 0) {
             // Header
             HeaderSection()
-            
+
             Divider()
                 .padding(.vertical, 8)
-            
+
             // Server Status
             ServerStatusSection()
                 .environmentObject(serverManager)
-            
+
             // Start/Stop Button - Prominent
             StartStopButton()
                 .environmentObject(serverManager)
                 .padding(.vertical, 8)
-            
+
             // Quick Actions
             QuickActionsSection(
                 showingQRCode: $showingQRCode,
                 copiedToClipboard: $copiedToClipboard
             )
             .environmentObject(serverManager)
-            
+
             // Active Sessions
-            if serverManager.activeSessions.count > 0 {
+            if !serverManager.activeSessions.isEmpty {
                 Divider()
                     .padding(.vertical, 8)
-                
+
                 ActiveSessionsSection()
                     .environmentObject(serverManager)
             }
-            
+
             Divider()
                 .padding(.vertical, 8)
-            
+
             // Footer Actions
             FooterSection()
         }
@@ -74,7 +74,7 @@ struct HeaderSection: View {
                     .symbolRenderingMode(.hierarchical)
                     .foregroundStyle(.blue)
             }
-            
+
             VStack(alignment: .leading, spacing: 2) {
                 Text("Claude Companion")
                     .font(.headline)
@@ -82,9 +82,9 @@ struct HeaderSection: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            
+
             Spacer()
-            
+
             // Activity Indicator
             ActivityIndicator()
         }
@@ -94,28 +94,28 @@ struct HeaderSection: View {
 // MARK: - Server Status Section
 struct ServerStatusSection: View {
     @EnvironmentObject private var serverManager: ServerManager
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Status Row
             HStack {
                 StatusIndicator(isRunning: serverManager.isRunning)
-                
+
                 VStack(alignment: .leading, spacing: 2) {
                     Text(serverManager.isRunning ? "Server Running" : "Server Stopped")
                         .font(.system(.body, design: .rounded))
                         .fontWeight(.medium)
-                    
+
                     if serverManager.isRunning {
                         Text("Port \(String(serverManager.port))")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
-                
+
                 Spacer()
             }
-            
+
             // Connection Info
             if serverManager.isRunning {
                 ConnectionInfoView()
@@ -133,7 +133,7 @@ struct QuickActionsSection: View {
     @EnvironmentObject private var serverManager: ServerManager
     @Binding var showingQRCode: Bool
     @Binding var copiedToClipboard: Bool
-    
+
     var body: some View {
         VStack(spacing: 8) {
             // Copy URL Button
@@ -144,7 +144,7 @@ struct QuickActionsSection: View {
             ) {
                 copyConnectionURL()
             }
-            
+
             // Show QR Code Button
             QuickActionButton(
                 title: "Show QR Code",
@@ -157,7 +157,7 @@ struct QuickActionsSection: View {
                 QRCodeView(connectionString: serverManager.connectionString)
                     .frame(width: 300, height: 350)
             }
-            
+
             // Open Logs Button
             QuickActionButton(
                 title: "View Activity Monitor",
@@ -167,21 +167,21 @@ struct QuickActionsSection: View {
             }
         }
     }
-    
+
     private func copyConnectionURL() {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(serverManager.connectionString, forType: .string)
-        
+
         withAnimation(.easeInOut(duration: 0.2)) {
             copiedToClipboard = true
         }
-        
+
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
             withAnimation(.easeInOut(duration: 0.2)) {
                 copiedToClipboard = false
             }
         }
-        
+
         // Show notification
         NotificationManager.shared.showNotification(
             title: "Copied!",
@@ -193,16 +193,16 @@ struct QuickActionsSection: View {
 // MARK: - Active Sessions Section
 struct ActiveSessionsSection: View {
     @EnvironmentObject private var serverManager: ServerManager
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Label("Active Sessions", systemImage: "person.2.fill")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                
+
                 Spacer()
-                
+
                 Text(String(serverManager.activeSessions.count))
                     .font(.caption)
                     .fontWeight(.medium)
@@ -211,7 +211,7 @@ struct ActiveSessionsSection: View {
                     .background(Color.blue.opacity(0.2))
                     .cornerRadius(10)
             }
-            
+
             VStack(spacing: 4) {
                 ForEach(serverManager.activeSessions) { session in
                     SessionRow(session: session)
@@ -225,18 +225,18 @@ struct ActiveSessionsSection: View {
 struct StartStopButton: View {
     @EnvironmentObject private var serverManager: ServerManager
     @State private var isProcessing = false
-    
+
     var body: some View {
         Button(action: toggleServer) {
             HStack(spacing: 12) {
                 Image(systemName: serverManager.isRunning ? "stop.circle.fill" : "play.circle.fill")
                     .font(.title2)
                     .symbolRenderingMode(.hierarchical)
-                
+
                 Text(serverManager.isRunning ? "Stop Server" : "Start Server")
                     .font(.system(.body, design: .rounded))
                     .fontWeight(.medium)
-                
+
                 if isProcessing {
                     ProgressView()
                         .scaleEffect(0.8)
@@ -253,7 +253,7 @@ struct StartStopButton: View {
         .buttonStyle(.plain)
         .disabled(isProcessing)
     }
-    
+
     private func toggleServer() {
         isProcessing = true
         Task {
@@ -275,7 +275,7 @@ struct StartStopButton: View {
 // MARK: - Footer Section
 struct FooterSection: View {
     @Environment(\.openSettings) private var openSettings
-    
+
     var body: some View {
         HStack {
             Button("Settings...") {
@@ -283,9 +283,9 @@ struct FooterSection: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
-            
+
             Spacer()
-            
+
             Button("Quit") {
                 NSApp.terminate(nil)
             }
@@ -299,7 +299,7 @@ struct FooterSection: View {
 // MARK: - Supporting Views
 struct StatusIndicator: View {
     let isRunning: Bool
-    
+
     var body: some View {
         Circle()
             .fill(isRunning ? Color.green : Color.red.opacity(0.5))
@@ -314,7 +314,7 @@ struct StatusIndicator: View {
 
 struct ConnectionInfoView: View {
     @EnvironmentObject private var serverManager: ServerManager
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             InfoRow(label: "Local IP:", value: serverManager.localIP)
@@ -326,11 +326,11 @@ struct ConnectionInfoView: View {
         .font(.caption)
         .padding(.vertical, 4)
     }
-    
+
     struct InfoRow: View {
         let label: String
         let value: String
-        
+
         var body: some View {
             HStack {
                 Text(label)
@@ -349,17 +349,17 @@ struct QuickActionButton: View {
     let icon: String
     var isDisabled: Bool = false
     let action: () -> Void
-    
+
     var body: some View {
         Button(action: action) {
             HStack {
                 Image(systemName: icon)
                     .font(.body)
                     .frame(width: 20)
-                
+
                 Text(title)
                     .font(.body)
-                
+
                 Spacer()
             }
             .padding(.horizontal, 12)
@@ -375,26 +375,26 @@ struct QuickActionButton: View {
 
 struct SessionRow: View {
     let session: Session
-    
+
     var body: some View {
         HStack {
             Image(systemName: "iphone")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(session.deviceName)
                     .font(.caption)
                     .lineLimit(1)
-                
+
                 Text(session.sessionId)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
-            
+
             Spacer()
-            
+
             // Connection strength indicator
             Image(systemName: "wifi", variableValue: session.signalStrength)
                 .font(.caption)
@@ -410,7 +410,7 @@ struct SessionRow: View {
 struct ActivityIndicator: View {
     @EnvironmentObject private var serverManager: ServerManager
     @State private var isAnimating = false
-    
+
     var body: some View {
         Image(systemName: "circle.dotted")
             .font(.body)
@@ -432,6 +432,6 @@ struct VisualEffectView: NSViewRepresentable {
         view.state = .active
         return view
     }
-    
+
     func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
 }

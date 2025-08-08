@@ -1,5 +1,8 @@
 import SwiftUI
 import Combine
+#if os(iOS)
+import UIKit
+#endif
 
 @available(iOS 16.0, macOS 13.0, *)
 @MainActor
@@ -13,12 +16,9 @@ class ChatViewModel: ObservableObject {
     @Published var currentSessionId: String?
     
     // MARK: - Services
-    private let webSocketService = WebSocketService.shared
     private let persistenceService = MessagePersistenceService.shared
-    private let queueManager = MessageQueueManager.shared
-    private let reliabilityManager = ConnectionReliabilityManager.shared
     private let performanceMonitor = PerformanceMonitor.shared
-    private let aicliService: AICLIService
+    private let aicliService: HTTPAICLIService
     private let settings: SettingsManager
     
     // MARK: - Project Reference
@@ -33,10 +33,11 @@ class ChatViewModel: ObservableObject {
     private var lastRequestId: String?
     
     // MARK: - Initialization
-    init(aicliService: AICLIService, settings: SettingsManager) {
+    init(aicliService: HTTPAICLIService, settings: SettingsManager) {
         self.aicliService = aicliService
         self.settings = settings
         setupAutoSave()
+        setupNotificationListeners()
     }
     
     deinit {
@@ -48,6 +49,13 @@ class ChatViewModel: ObservableObject {
     func sendMessage(_ text: String, for project: Project) {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         
+        // Update current project reference if needed
+        if currentProject?.path != project.path {
+            currentProject = project
+            // Notify push notification service about the active project
+            EnhancedPushNotificationService.shared.setActiveProject(project, sessionId: currentSessionId)
+        }
+        
         // Add user message
         let userMessage = Message(
             content: text,
@@ -55,7 +63,6 @@ class ChatViewModel: ObservableObject {
             type: .text
         )
         messages.append(userMessage)
-        reliabilityManager.cacheMessage(userMessage)
         
         // Send command
         isLoading = true
@@ -70,9 +77,17 @@ class ChatViewModel: ObservableObject {
     }
     
     private func sendAICLICommand(_ command: String, for project: Project, messageStartTime: Date) {
-        // Ensure WebSocket is connected
-        guard webSocketService.isConnected else {
+        // Debug logging for connection state
+        print("📤 ChatViewModel: Preparing to send message")
+        print("   aicliService instance: \(ObjectIdentifier(aicliService))")
+        print("   aicliService.isConnected: \(aicliService.isConnected)")
+        print("   HTTPAICLIService.shared instance: \(ObjectIdentifier(HTTPAICLIService.shared))")
+        print("   HTTPAICLIService.shared.isConnected: \(HTTPAICLIService.shared.isConnected)")
+        
+        // Ensure HTTP service is connected
+        guard aicliService.isConnected else {
             isLoading = false
+            print("❌ ChatViewModel: Service not connected, showing error message")
             let errorMessage = Message(
                 content: "❌ Not connected to server. Please check your connection.",
                 sender: .assistant,
@@ -87,14 +102,7 @@ class ChatViewModel: ObservableObject {
         // For continued chats: currentSessionId will have Claude's session ID
         let sessionIdToUse = currentSessionId ?? activeSession?.sessionId
         
-        // Create the command request
-        let claudeRequest = ClaudeCommandRequest(
-            command: command,
-            projectPath: project.path,
-            sessionId: sessionIdToUse  // Will be nil for fresh chats
-        )
-        
-        print("📤 Sending command to server: \(command)")
+        print("📤 Sending HTTP message to server: \(command)")
         print("   Session ID: \(sessionIdToUse ?? "none (fresh chat)")")
         print("   Project path: \(project.path)")
         
@@ -116,21 +124,141 @@ class ChatViewModel: ObservableObject {
         // Mark that we're waiting for a direct Claude response
         isWaitingForClaudeResponse = true
         
-        // Store the message start time for performance tracking
-        objc_setAssociatedObject(claudeRequest, "messageStartTime", messageStartTime, .OBJC_ASSOCIATION_RETAIN)
-        
-        // Generate and store request ID for tracking
-        let requestId = UUID().uuidString
-        lastRequestId = requestId
-        
-        // Send via WebSocket
-        webSocketService.sendMessage(claudeRequest, type: .claudeCommand, requestId: requestId) { result in
-            switch result {
-            case .success(let message):
-                self.handleCommandResponse(message)
-            case .failure(let error):
-                self.handleCommandError(error)
+        // Send via HTTP
+        aicliService.sendMessage(
+            message: command,
+            projectPath: project.path,
+            sessionId: sessionIdToUse
+        ) { [weak self] result in
+            Task { @MainActor in
+                guard let self = self else { return }
+                
+                switch result {
+                case .success(let response):
+                    // Handle response first to determine if this is acknowledgment or direct response
+                    self.handleHTTPResponse(response)
+                    
+                    // Only clear loading state for direct responses, not acknowledgments
+                    if response.deliveryMethod != "apns" && response.content != nil {
+                        // Direct Claude response - clear loading state
+                        self.messageTimeout?.invalidate()
+                        self.messageTimeout = nil
+                        self.isLoading = false
+                        self.isWaitingForClaudeResponse = false
+                    }
+                    // For acknowledgments, keep loading state and timeout active until APNS response
+                    
+                case .failure(let error):
+                    // Always clear loading state on error
+                    self.messageTimeout?.invalidate()
+                    self.messageTimeout = nil
+                    self.isLoading = false
+                    self.isWaitingForClaudeResponse = false
+                    self.handleHTTPError(error)
+                }
             }
+        }
+    }
+    
+    // MARK: - HTTP Response Handlers
+    
+    private func handleHTTPResponse(_ response: ClaudeChatResponse) {
+        // Update session ID if provided (won't be for first message)
+        if let sessionId = response.sessionId, !sessionId.isEmpty {
+            if sessionId != currentSessionId {
+                print("🔄 ChatViewModel: Updating session ID from HTTP response: \(sessionId)")
+                currentSessionId = sessionId
+                
+                // Create session object for the UI if we have a current project
+                if let project = getProjectFromSession(), activeSession == nil {
+                    let session = ProjectSession(
+                        sessionId: sessionId,
+                        projectName: project.name,
+                        projectPath: project.path,
+                        status: "active",
+                        startedAt: Date().ISO8601Format()
+                    )
+                    setActiveSession(session)
+                }
+                
+                // Process any pending messages that were waiting for this session ID
+                if let project = getProjectFromSession() {
+                    BackgroundSessionCoordinator.shared.processSavedMessagesWithSessionId(sessionId, for: project)
+                }
+            }
+        }
+        
+        // Check if this is an acknowledgment (APNS delivery) vs direct Claude response
+        if response.deliveryMethod == "apns" || response.content == nil {
+            // This is an acknowledgment - Claude response will come via APNS
+            print("📋 ChatViewModel: Received acknowledgment - Claude response will arrive via APNS")
+            print("   Keeping loading state active until Claude response arrives")
+            
+            if response.sessionId == nil {
+                print("   📝 New conversation - waiting for Claude to generate session ID")
+            }
+            
+            if let message = response.message {
+                print("   Acknowledgment: \(message)")
+            }
+            
+            // Don't add acknowledgment to chat messages - only handle session management
+            // IMPORTANT: Don't set isLoading = false here - keep thinking state until APNS response
+            // The actual Claude response will be delivered via push notification
+            
+        } else if let content = response.content, !content.isEmpty {
+            // This is a direct Claude response (fallback mode)
+            print("📝 ChatViewModel: Received direct Claude response")
+            
+            let assistantMessage = Message(
+                content: content,
+                sender: .assistant,
+                type: .markdown,
+                metadata: AICLIMessageMetadata(
+                    sessionId: response.sessionId ?? "",
+                    duration: 0,
+                    additionalInfo: [
+                        "httpResponse": true,
+                        "timestamp": response.timestamp
+                    ]
+                )
+            )
+            messages.append(assistantMessage)
+            print("✅ ChatViewModel: Added HTTP response message to chat")
+            
+            // Save conversation
+            if let project = getProjectFromSession() {
+                saveMessages(for: project)
+            }
+        }
+    }
+    
+    private func handleHTTPError(_ error: AICLICompanionError) {
+        // Check if it's a network timeout error
+        var errorContent = "❌ Error: "
+        if case .networkError(let nsError) = error {
+            let nsErrorCode = (nsError as NSError).code
+            if nsErrorCode == NSURLErrorTimedOut {
+                errorContent = "❌ Error: Network error: The request timed out.\n\nPlease check your connection and try again."
+            } else {
+                errorContent = "❌ Error: \(error.localizedDescription)\n\nPlease check your connection and try again."
+            }
+        } else {
+            errorContent = "❌ Error: \(error.localizedDescription)\n\nPlease check your connection and try again."
+        }
+        
+        let errorMessage = Message(
+            content: errorContent,
+            sender: .assistant,
+            type: .text
+        )
+        messages.append(errorMessage)
+        print("❌ ChatViewModel: Added HTTP error message: \(error)")
+        
+        // If we have a project but no session ID yet, save messages as pending
+        if let project = currentProject, currentSessionId == nil {
+            print("⚠️ Saving messages as pending due to error before session creation")
+            saveMessages(for: project)
         }
     }
     
@@ -138,9 +266,11 @@ class ChatViewModel: ObservableObject {
     func setActiveSession(_ session: ProjectSession?) {
         activeSession = session
         if let session = session {
-            webSocketService.setActiveSession(session.sessionId)
-            webSocketService.trackSession(session.sessionId)
+            currentSessionId = session.sessionId
         }
+        
+        // Notify push notification service about the active project/session change
+        EnhancedPushNotificationService.shared.setActiveProject(currentProject, sessionId: currentSessionId)
     }
     
     
@@ -152,7 +282,7 @@ class ChatViewModel: ObservableObject {
         }
         
         // Use Claude's session ID if available, fallback to other sources
-        let sessionId = currentSessionId ?? activeSession?.sessionId ?? webSocketService.getActiveSession()
+        let sessionId = currentSessionId ?? activeSession?.sessionId
         
         if let sessionId = sessionId {
             // We have a session ID, save normally
@@ -178,6 +308,13 @@ class ChatViewModel: ObservableObject {
     }
     
     func loadMessages(for project: Project, sessionId: String) {
+        // Update current project reference
+        currentProject = project
+        currentSessionId = sessionId
+        
+        // Notify push notification service about the active project
+        EnhancedPushNotificationService.shared.setActiveProject(project, sessionId: sessionId)
+        
         let restoredMessages = persistenceService.loadMessages(for: project.path, sessionId: sessionId)
         if !restoredMessages.isEmpty {
             messages = restoredMessages
@@ -212,12 +349,118 @@ class ChatViewModel: ObservableObject {
         }
     }
     
+    private func setupNotificationListeners() {
+        // Listen for Claude responses received via APNS
+        NotificationCenter.default.publisher(for: .claudeResponseReceived)
+            .sink { [weak self] notification in
+                self?.handleClaudeResponseNotification(notification)
+            }
+            .store(in: &cancellables)
+    }
+    
+    private func handleClaudeResponseNotification(_ notification: Notification) {
+        print("🎯 === CHATVIEWMODEL: APNS NOTIFICATION RECEIVED ===")
+        
+        guard let userInfo = notification.userInfo,
+              let message = userInfo["message"] as? Message,
+              let sessionId = userInfo["sessionId"] as? String,
+              let project = userInfo["project"] as? Project else {
+            print("⚠️ ChatViewModel: Invalid Claude response notification payload")
+            if let keys = notification.userInfo?.keys {
+                print("⚠️ userInfo keys: \(Array(keys))")
+            } else {
+                print("⚠️ userInfo is nil")
+            }
+            return
+        }
+        
+        print("🎯 ChatViewModel: Claude response notification validated")
+        print("🎯 Session ID: \(sessionId)")
+        print("🎯 Current Session ID: \(currentSessionId ?? "nil")")
+        print("🎯 Project: \(project.name) (\(project.path))")
+        print("🎯 Current Project: \(currentProject?.name ?? "nil") (\(currentProject?.path ?? "nil"))")
+        print("🎯 Message content preview: \(message.content.prefix(100))...")
+        print("🎯 Current loading state: isLoading=\(isLoading), isWaiting=\(isWaitingForClaudeResponse)")
+        
+        // Only process if:
+        // 1. Session IDs match
+        // 2. We don't have a session yet (first message) and project matches
+        if currentSessionId == sessionId || (currentSessionId == nil && project.path == currentProject?.path) {
+            print("🎯 === PROCESSING CLAUDE RESPONSE ===")
+            
+            // Update session ID if we didn't have one (first message case)
+            if currentSessionId == nil {
+                currentSessionId = sessionId
+                print("🔄 ChatViewModel: First message - setting session ID from Claude via APNS: \(sessionId)")
+                
+                // Also update any active session tracking
+                if let project = currentProject {
+                    let session = ProjectSession(
+                        sessionId: sessionId,
+                        projectName: project.name,
+                        projectPath: project.path,
+                        status: "active",
+                        startedAt: Date().ISO8601Format()
+                    )
+                    setActiveSession(session)
+                }
+            }
+            
+            // Add message to conversation
+            print("📝 Adding Claude message to conversation...")
+            messages.append(message)
+            print("✅ ChatViewModel: Added APNS Claude response to chat")
+            print("📊 Total messages now: \(messages.count)")
+            
+            // CRITICAL: Clear loading state now that Claude response arrived
+            print("🛑 Clearing loading state after Claude response...")
+            isWaitingForClaudeResponse = false
+            isLoading = false
+            messageTimeout?.invalidate()
+            messageTimeout = nil
+            print("✅ Loading state cleared: isLoading=\(isLoading), isWaiting=\(isWaitingForClaudeResponse)")
+            
+            // Clear badge count since we've processed the notification
+            #if os(iOS)
+            UIApplication.shared.applicationIconBadgeNumber = 0
+            #endif
+            print("🔵 Cleared badge count after processing Claude response")
+            
+            // Save the updated conversation
+            if let project = getProjectFromSession() {
+                print("💾 Saving conversation with \(messages.count) messages...")
+                saveMessages(for: project)
+                print("💾 Conversation saved successfully")
+            }
+            
+            print("🎯 === CLAUDE RESPONSE PROCESSING COMPLETED ===")
+        } else {
+            print("❌ === SESSION MISMATCH - IGNORING RESPONSE ===")
+            print("❌ Expected session: \(currentSessionId ?? "nil")")
+            print("❌ Received session: \(sessionId)")
+            print("❌ Expected project: \(currentProject?.path ?? "nil")")
+            print("❌ Received project: \(project.path)")
+        }
+    }
+    
     private func handleCommandResponse(_ message: WebSocketMessage) {
         messageTimeout?.invalidate()
         isWaitingForClaudeResponse = false
         
         if case .claudeResponse(let response) = message.data {
             print("🔄 ChatViewModel: Received Claude response via callback - Success: \(response.success)")
+            
+            // Verify requestId matches to ensure response is for this chat
+            if let messageRequestId = message.requestId, let expectedRequestId = lastRequestId {
+                if messageRequestId != expectedRequestId {
+                    print("⚠️ ChatViewModel: Received response with mismatched requestId")
+                    print("   Expected: \(expectedRequestId)")
+                    print("   Received: \(messageRequestId)")
+                    // This response is not for our request, ignore it
+                    return
+                }
+                print("✅ ChatViewModel: Response requestId matches expected: \(messageRequestId)")
+            }
             
             isLoading = false
             progressInfo = nil
@@ -328,209 +571,11 @@ class ChatViewModel: ObservableObject {
         messages.append(errorMessage)
     }
     
-    // MARK: - WebSocket Event Handling
-    func setupWebSocketListeners() {
-        // Listen for system init messages
-        webSocketService.setMessageHandler(for: .systemInit) { [weak self] message in
-            guard let self = self else { return }
-            
-            if case .systemInit(let systemInit) = message.data {
-                Task { @MainActor in
-                    self.handleSystemInit(systemInit)
-                }
-            }
-        }
-        
-        // Listen for message history
-        webSocketService.setMessageHandler(for: .getMessageHistory) { [weak self] message in
-            guard let self = self else { return }
-            
-            if case .getMessageHistoryResponse(let historyResponse) = message.data {
-                Task { @MainActor in
-                    self.handleMessageHistory(historyResponse)
-                }
-            }
-        }
-        
-        // Listen for stream data
-        webSocketService.setMessageHandler(for: .streamData) { [weak self] message in
-            guard let self = self else { return }
-            
-            if case .streamData(let streamData) = message.data {
-                Task { @MainActor in
-                    self.handleStreamData(streamData)
-                }
-            }
-        }
-        
-        // Listen for stream completion
-        webSocketService.setMessageHandler(for: .streamComplete) { [weak self] message in
-            guard let self = self else { return }
-            
-            if case .streamComplete(let complete) = message.data {
-                Task { @MainActor in
-                    self.handleStreamComplete(complete)
-                }
-            }
-        }
-        
-        // Listen for stream chunks
-        webSocketService.setMessageHandler(for: .streamChunk) { [weak self] message in
-            guard let self = self else { return }
-            
-            if case .streamChunk(let chunk) = message.data {
-                Task { @MainActor in
-                    self.handleStreamChunk(chunk)
-                }
-            }
-        }
-        
-        // Listen for streaming completion notifications from ClaudeResponseStreamer
-        NotificationCenter.default.publisher(for: .streamingComplete)
-            .sink { [weak self] notification in
-                guard let self = self else { return }
-                
-                if let message = notification.userInfo?["message"] as? Message {
-                    Task { @MainActor in
-                        self.handleStreamingComplete(message)
-                    }
-                }
-            }
-            .store(in: &cancellables)
-        
-        // Listen for queued message notifications
-        webSocketService.setMessageHandler(for: .progress) { [weak self] message in
-            guard let self = self else { return }
-            
-            if case .progress(let progress) = message.data {
-                if progress.stage.contains("queue") {
-                    Task { @MainActor in
-                        self.handleQueueProgress(progress)
-                    }
-                }
-            }
-        }
-        
-        // Listen for conversationResult messages (complete responses from server)
-        webSocketService.setMessageHandler(for: .conversationResult) { [weak self] message in
-            guard let self = self else { return }
-            
-            if case .conversationResult(let result) = message.data {
-                Task { @MainActor in
-                    self.handleConversationResult(result, messageId: message.requestId)
-                }
-            }
-        }
-        
-        // Listen for assistantMessage messages (structured assistant responses)
-        webSocketService.setMessageHandler(for: .assistantMessage) { [weak self] message in
-            guard let self = self else { return }
-            
-            if case .assistantMessage(let assistantMsg) = message.data {
-                Task { @MainActor in
-                    self.handleAssistantMessage(assistantMsg, messageId: message.requestId)
-                }
-            }
-        }
-    }
+    // MARK: - HTTP Event Handling (Simplified)
+    // HTTP responses are handled directly in sendMessage completion handlers
+    // No separate event listeners needed since HTTP is request-response based
     
-    private func handleStreamData(_ streamData: StreamDataResponse) {
-        // Handle streaming data
-        if streamData.streamType == "text" {
-            responseStreamer.startStreaming(sessionId: streamData.sessionId)
-            isLoading = false
-        }
-    }
-    
-    private func handleStreamComplete(_ complete: StreamCompleteResponse) {
-        // Complete the streaming
-        // Note: The message will be added by handleStreamingComplete notification
-        isLoading = false
-        progressInfo = nil
-    }
-    
-    private func handleStreamChunk(_ chunkResponse: StreamChunkResponse) {
-        // Cancel timeout since we're receiving data
-        messageTimeout?.invalidate()
-        
-        // Don't start streaming for claudeCommand responses
-        // These are complete responses that don't need streaming
-        if isWaitingForClaudeResponse {
-            // Just update progress info if there's tool activity
-            if let toolName = extractToolName(from: chunkResponse.chunk) {
-                let progressResponse = ProgressResponse(
-                    sessionId: chunkResponse.sessionId,
-                    stage: "Working",
-                    progress: nil,
-                    message: getActivityMessage(for: toolName),
-                    timestamp: Date()
-                )
-                progressInfo = ProgressInfo(from: progressResponse)
-            }
-            return
-        }
-        
-        // For actual streaming responses, start the streamer
-        if responseStreamer.currentSessionId != chunkResponse.sessionId {
-            responseStreamer.startStreaming(sessionId: chunkResponse.sessionId)
-            isLoading = false
-            progressInfo = nil
-        }
-        
-        // Update activity based on chunk type
-        if let toolName = extractToolName(from: chunkResponse.chunk) {
-            let progressResponse = ProgressResponse(
-                sessionId: chunkResponse.sessionId,
-                stage: "Working",
-                progress: nil,
-                message: getActivityMessage(for: toolName),
-                timestamp: Date()
-            )
-            progressInfo = ProgressInfo(from: progressResponse)
-        }
-        
-        // Post notification for the streamer
-        NotificationCenter.default.post(
-            name: .streamChunkReceived,
-            object: nil,
-            userInfo: ["chunk": chunkResponse.chunk]
-        )
-    }
-    
-    private func handleSystemInit(_ systemInit: SystemInitResponse) {
-        // Extract and store Claude's session ID
-        if let claudeSessionId = systemInit.claudeSessionId ?? systemInit.sessionId {
-            if claudeSessionId != currentSessionId {
-                print("🔑 ChatViewModel: System init with Claude session ID: \(claudeSessionId) (was: \(currentSessionId ?? "nil"))")
-                currentSessionId = claudeSessionId
-                print("🔑 ChatViewModel: Session ID successfully set to: \(currentSessionId ?? "nil")")
-                
-                // Create session object for the UI if we have a current project and no active session
-                if let project = getProjectFromSession(), activeSession == nil {
-                    ChatSessionManager.shared.createSessionFromClaudeResponse(
-                        sessionId: claudeSessionId,
-                        for: project
-                    ) { result in
-                        switch result {
-                        case .success(let session):
-                            Task { @MainActor in
-                                self.setActiveSession(session)
-                            }
-                        case .failure(let error):
-                            print("❌ Failed to create session from Claude response: \(error)")
-                        }
-                    }
-                }
-                
-                // Update persistence with Claude's session ID
-                if let project = getProjectFromSession() {
-                    persistenceService.updateSessionMetadata(for: project.path, aicliSessionId: claudeSessionId)
-                }
-            }
-        }
-        
-        print("System initialized with tools: \(systemInit.availableTools.joined(separator: ", "))")
-    }
+    // WebSocket streaming handlers removed - HTTP responses are complete and immediate
     
     private func getProjectFromSession() -> Project? {
         return currentProject
@@ -540,29 +585,9 @@ class ChatViewModel: ObservableObject {
         // Cancel timeout since we got a response
         messageTimeout?.invalidate()
         
-        // Check if this message was already received (deduplication after reconnect)
-        if reliabilityManager.wasMessageReceived(message) {
-            print("🔄 Duplicate message detected after reconnection, skipping")
-            return
-        }
-        
-        // Check if this message was queued
-        var finalMessage = message
-        if let sessionId = activeSession?.sessionId {
-            let queueInfo = queueManager.getQueueInfo(for: sessionId)
-            if queueInfo.count > 0 {
-                // Mark message as delivered from queue
-                finalMessage.markDeliveredFromQueue()
-                queueManager.markMessageDelivered(messageId: message.id.uuidString)
-            }
-        }
-        
-        // Cache the message for reconnection deduplication
-        reliabilityManager.cacheMessage(finalMessage)
-        
-        // Add the completed message to the UI with proper ordering
-        let orderedMessages = MessageQueueOrganizer.sortMessages(messages + [finalMessage])
-        messages = orderedMessages
+        // HTTP responses are direct - no deduplication or queuing needed
+        // Add the message directly to the UI
+        messages.append(message)
         
         // Reset loading state
         isLoading = false
@@ -627,20 +652,12 @@ class ChatViewModel: ObservableObject {
                 )
             )
             
-            // Check for duplicates before adding
-            if !reliabilityManager.wasMessageReceived(message) {
-                messages.append(message)
-                reliabilityManager.cacheMessage(message)
-                
-                // Send acknowledgment if we have a message ID
-                if let msgId = messageId {
-                    acknowledgeMessage(msgId)
-                }
-                
-                // Save the complete conversation now that we have messages and a session ID
-                if let project = getProjectFromSession() {
-                    saveMessages(for: project)
-                }
+            // HTTP responses are direct - add message to UI
+            messages.append(message)
+            
+            // Save the complete conversation now that we have messages and a session ID
+            if let project = getProjectFromSession() {
+                saveMessages(for: project)
             }
         }
         
@@ -678,20 +695,12 @@ class ChatViewModel: ObservableObject {
                 )
             )
             
-            // Check for duplicates before adding
-            if !reliabilityManager.wasMessageReceived(message) {
-                messages.append(message)
-                reliabilityManager.cacheMessage(message)
-                
-                // Send acknowledgment if we have a message ID
-                if let msgId = messageId {
-                    acknowledgeMessage(msgId)
-                }
-                
-                // Save the complete conversation now that we have messages
-                if let project = getProjectFromSession() {
-                    saveMessages(for: project)
-                }
+            // HTTP responses are direct - add message to UI
+            messages.append(message)
+            
+            // Save the complete conversation now that we have messages
+            if let project = getProjectFromSession() {
+                saveMessages(for: project)
             }
         }
         
@@ -699,17 +708,7 @@ class ChatViewModel: ObservableObject {
         progressInfo = nil
     }
     
-    private func acknowledgeMessage(_ messageId: String) {
-        // Send acknowledgment to server
-        webSocketService.acknowledgeMessages([messageId]) { result in
-            switch result {
-            case .success:
-                print("✅ Acknowledged message: \(messageId)")
-            case .failure(let error):
-                print("❌ Failed to acknowledge message: \(error)")
-            }
-        }
-    }
+    // HTTP doesn't need message acknowledgment - removed
     
     private func handleMessageHistory(_ historyResponse: GetMessageHistoryResponse) {
         print("📜 Processing message history for session \(historyResponse.sessionId)")
@@ -778,29 +777,17 @@ class ChatViewModel: ObservableObject {
         var addedCount = 0
         var messageIdsToAcknowledge: [String] = []
         
-        for serverMessage in serverMessages {
-            if !existingContent.contains(serverMessage.content) {
-                messages.append(serverMessage)
-                addedCount += 1
-                
-                // Track message IDs that need acknowledgment (assistant messages)
-                if serverMessage.sender == .assistant {
-                    messageIdsToAcknowledge.append(serverMessage.id.uuidString)
-                }
+        for serverMessage in serverMessages where !existingContent.contains(serverMessage.content) {
+            messages.append(serverMessage)
+            addedCount += 1
+            
+            // Track message IDs that need acknowledgment (assistant messages)
+            if serverMessage.sender == .assistant {
+                messageIdsToAcknowledge.append(serverMessage.id.uuidString)
             }
         }
         
-        // Send acknowledgment for all new messages
-        if !messageIdsToAcknowledge.isEmpty {
-            webSocketService.acknowledgeMessages(messageIdsToAcknowledge) { result in
-                switch result {
-                case .success:
-                    print("✅ Acknowledged \(messageIdsToAcknowledge.count) messages from history")
-                case .failure(let error):
-                    print("❌ Failed to acknowledge messages from history: \(error)")
-                }
-            }
-        }
+        // HTTP doesn't need message acknowledgment - messages are delivered directly
         
         // Sort messages by timestamp to maintain chronological order
         messages.sort { $0.timestamp < $1.timestamp }

@@ -138,7 +138,7 @@ struct MessageBubble: View {
     // MARK: - Markdown Detection
     private var hasCodeBlock: Bool {
         // Check for any markdown formatting
-        return message.content.contains("```") || 
+        return message.content.contains("```") ||
                message.content.contains("`") ||
                message.content.contains("**") ||
                message.content.contains("*") ||
@@ -246,10 +246,10 @@ struct MessageBubble: View {
         var parts: [ContentPart] = []
         var currentText = ""
         let lines = content.components(separatedBy: "\n")
-        var i = 0
+        var lineIndex = 0
         
-        while i < lines.count {
-            let line = lines[i]
+        while lineIndex < lines.count {
+            let line = lines[lineIndex]
             
             // Check for code block
             if line.hasPrefix("```") {
@@ -264,15 +264,15 @@ struct MessageBubble: View {
                 
                 // Find closing ```
                 var codeLines: [String] = []
-                i += 1
+                lineIndex += 1
                 while i < lines.count && !lines[i].hasPrefix("```") {
                     codeLines.append(lines[i])
-                    i += 1
+                    lineIndex += 1
                 }
                 
                 let code = codeLines.joined(separator: "\n")
                 parts.append(.codeBlock(code, language: language.isEmpty ? nil : language))
-            } 
+            }
             // Check for headings
             else if let heading = parseHeading(line) {
                 if !currentText.isEmpty {
@@ -288,8 +288,7 @@ struct MessageBubble: View {
                     currentText = ""
                 }
                 parts.append(listItem)
-            }
-            else {
+            } else {
                 // Regular text
                 currentText += (currentText.isEmpty ? "" : "\n") + line
             }
@@ -362,8 +361,7 @@ struct MessageBubble: View {
                 
                 parts.append(linkPart.part)
                 remaining = String(remaining[linkPart.range.upperBound...])
-            }
-            else {
+            } else {
                 // No more special formatting found
                 parts.append(contentsOf: parseFormattedText(remaining))
                 break
@@ -401,8 +399,7 @@ struct MessageBubble: View {
                 parts.append(.italic(String(italicContent)))
                 
                 remaining = String(remaining[range.upperBound...])
-            }
-            else {
+            } else {
                 // No formatting found
                 parts.append(.text(remaining))
                 break
@@ -446,7 +443,6 @@ struct MessageBubble: View {
                let textEnd = linkText.firstIndex(of: "]"),
                let urlStart = linkText.firstIndex(of: "("),
                let urlEnd = linkText.lastIndex(of: ")") {
-                
                 let textStartIndex = linkText.index(after: textStart)
                 let urlStartIndex = linkText.index(after: urlStart)
                 
@@ -489,9 +485,9 @@ struct MessageBubble: View {
             popover.sourceView = window
             // Validate window bounds to prevent NaN values
             let bounds = window.bounds
-            let x = bounds.width.isFinite ? bounds.midX : bounds.width / 2
-            let y = bounds.height.isFinite ? bounds.midY : bounds.height / 2
-            popover.sourceRect = CGRect(x: x, y: y, width: 0, height: 0)
+            let xPosition = bounds.width.isFinite ? bounds.midX : bounds.width / 2
+            let yPosition = bounds.height.isFinite ? bounds.midY : bounds.height / 2
+            popover.sourceRect = CGRect(x: xPosition, y: yPosition, width: 0, height: 0)
             popover.permittedArrowDirections = []
         }
         

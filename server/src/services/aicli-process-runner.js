@@ -48,6 +48,233 @@ export class AICLIProcessRunner extends EventEmitter {
     }
   }
 
+  /**
+   * Create an interactive Claude CLI session that stays running
+   * Returns the process and initial session info
+   */
+  async createInteractiveSession(workingDirectory) {
+    const sessionLogger = logger.child({ workingDirectory });
+
+    // Build args for interactive mode (no --print flag)
+    const args = ['--output-format', 'stream-json', '--verbose'];
+
+    // Add permission configuration
+    this.addPermissionArgs(args);
+
+    sessionLogger.info('Creating interactive Claude session', {
+      workingDirectory,
+      args: args.slice(0, 3), // Log first few args
+    });
+
+    return new Promise((resolve, reject) => {
+      let claudeProcess;
+      let initialSessionId = null;
+      let initComplete = false;
+
+      try {
+        // Spawn Claude in interactive mode
+        claudeProcess = this.spawnFunction(this.aicliCommand, args, {
+          cwd: workingDirectory,
+          stdio: ['pipe', 'pipe', 'pipe'], // Keep pipes open for communication
+        });
+      } catch (spawnError) {
+        sessionLogger.error('Failed to spawn interactive Claude CLI', {
+          error: spawnError.message,
+          code: spawnError.code,
+        });
+        reject(new Error(`Failed to start Claude CLI: ${spawnError.message}`));
+        return;
+      }
+
+      if (!claudeProcess.pid) {
+        reject(new Error('Claude CLI process failed to start (no PID)'));
+        return;
+      }
+
+      sessionLogger.info('Interactive process started', { pid: claudeProcess.pid });
+
+      // Set up stream parser for this session
+      const streamParser = new ClaudeStreamParser();
+
+      // Handle stdout - parse initial response to get session ID
+      claudeProcess.stdout.on('data', (data) => {
+        const chunk = data.toString();
+        sessionLogger.debug('Interactive stdout chunk', {
+          length: chunk.length,
+          preview: chunk.substring(0, 200),
+        });
+
+        // Parse stream JSON to look for session ID
+        const lines = chunk.split('\n');
+        for (const line of lines) {
+          if (!line.trim()) continue;
+
+          try {
+            const parsed = JSON.parse(line);
+            sessionLogger.debug('Parsed JSON from Claude', {
+              type: parsed.type,
+              subtype: parsed.subtype,
+              hasSessionId: !!parsed.session_id,
+            });
+
+            // Look for session ID in system init message
+            if (parsed.type === 'system' && parsed.subtype === 'init' && parsed.session_id) {
+              initialSessionId = parsed.session_id;
+              sessionLogger.info('Got session ID from Claude', { sessionId: initialSessionId });
+
+              if (!initComplete) {
+                initComplete = true;
+                // Resolve with process and session info
+                resolve({
+                  process: claudeProcess,
+                  sessionId: initialSessionId,
+                  pid: claudeProcess.pid,
+                  streamParser,
+                  workingDirectory,
+                });
+              }
+            }
+          } catch (e) {
+            sessionLogger.debug('Failed to parse line as JSON', {
+              line: line.substring(0, 100),
+              error: e.message,
+            });
+          }
+        }
+      });
+
+      // Handle stderr
+      claudeProcess.stderr.on('data', (data) => {
+        const error = data.toString();
+        sessionLogger.error('Claude stderr', { error });
+
+        if (!initComplete) {
+          initComplete = true;
+          reject(new Error(`Claude CLI error: ${error}`));
+        }
+      });
+
+      // Handle process exit
+      claudeProcess.on('exit', (code) => {
+        sessionLogger.info('Claude process exited', { code });
+
+        if (!initComplete) {
+          initComplete = true;
+          reject(new Error(`Claude CLI exited immediately with code ${code}`));
+        }
+      });
+
+      // Handle process errors
+      claudeProcess.on('error', (error) => {
+        sessionLogger.error('Claude process error', { error: error.message });
+
+        if (!initComplete) {
+          initComplete = true;
+          reject(error);
+        }
+      });
+
+      // Set a timeout for initialization (30 seconds for interactive mode)
+      setTimeout(() => {
+        if (!initComplete) {
+          initComplete = true;
+          sessionLogger.error('Timeout waiting for Claude to initialize', {
+            pid: claudeProcess?.pid,
+            receivedSessionId: initialSessionId,
+          });
+          reject(new Error('Timeout waiting for Claude CLI to initialize (30s)'));
+        }
+      }, 30000); // 30 second timeout for interactive mode
+    });
+  }
+
+  /**
+   * Send a message to an interactive Claude session and get response
+   */
+  async sendToInteractiveSession(sessionInfo, message) {
+    const { process: claudeProcess, sessionId } = sessionInfo;
+    const sessionLogger = logger.child({ sessionId });
+
+    return new Promise((resolve, reject) => {
+      let responseComplete = false;
+      const responses = [];
+
+      // Set up one-time listeners for this message
+      const dataHandler = (data) => {
+        const chunk = data.toString();
+
+        // Parse each line as stream JSON
+        const lines = chunk.split('\n');
+        for (const line of lines) {
+          if (!line.trim()) continue;
+
+          try {
+            const parsed = JSON.parse(line);
+            responses.push(parsed);
+
+            // Check if this is the final result
+            if (parsed.type === 'result') {
+              responseComplete = true;
+              claudeProcess.stdout.removeListener('data', dataHandler);
+
+              // Extract session ID from result
+              const resultSessionId = parsed.session_id || sessionId;
+
+              sessionLogger.info('Got complete response', {
+                responseCount: responses.length,
+                sessionId: resultSessionId,
+              });
+
+              // Return the final result with all responses
+              resolve({
+                result: parsed.result,
+                sessionId: resultSessionId,
+                responses,
+                success: !parsed.is_error,
+              });
+            }
+          } catch (e) {
+            // Not valid JSON, continue collecting
+          }
+        }
+      };
+
+      const errorHandler = (data) => {
+        const error = data.toString();
+        sessionLogger.error('Error during message send', { error });
+        claudeProcess.stderr.removeListener('data', errorHandler);
+        reject(new Error(`Claude error: ${error}`));
+      };
+
+      // Attach handlers
+      claudeProcess.stdout.on('data', dataHandler);
+      claudeProcess.stderr.once('data', errorHandler);
+
+      // Send the message
+      sessionLogger.info('Sending message to interactive session', {
+        messageLength: message.length,
+      });
+
+      claudeProcess.stdin.write(`${message}\n`, (err) => {
+        if (err) {
+          sessionLogger.error('Failed to write to stdin', { error: err.message });
+          claudeProcess.stdout.removeListener('data', dataHandler);
+          claudeProcess.stderr.removeListener('data', errorHandler);
+          reject(err);
+        }
+      });
+
+      // Set a timeout for response
+      setTimeout(() => {
+        if (!responseComplete) {
+          claudeProcess.stdout.removeListener('data', dataHandler);
+          claudeProcess.stderr.removeListener('data', errorHandler);
+          reject(new Error('Timeout waiting for Claude response'));
+        }
+      }, 120000); // 2 minute timeout per message
+    });
+  }
+
   setAllowedTools(tools) {
     if (Array.isArray(tools)) {
       this.allowedTools = tools;
@@ -74,32 +301,26 @@ export class AICLIProcessRunner extends EventEmitter {
    * This method handles both regular and long-running commands
    */
   async executeAICLICommand(session, prompt) {
-    const { sessionId, workingDirectory, conversationStarted, initialPrompt, isRestoredSession } =
-      session;
+    const { sessionId, workingDirectory, requestId } = session;
 
     // Create logger with session context
     const sessionLogger = logger.child({ sessionId });
 
     // Build AICLI CLI arguments - use stream-json to avoid buffer limits
-    // REMOVED --print flag to fix process persistence issues
-    const args = ['--output-format', 'stream-json', '--verbose'];
+    // Include --print flag as required by AICLI CLI for stdin input
+    const args = ['--print', '--output-format', 'stream-json', '--verbose'];
 
     // Only add session arguments if we have a valid sessionId
     if (sessionId) {
-      // For continuing conversations or restored sessions, use --resume instead of --session-id
-      // Restored sessions must use --resume because AICLI CLI already knows about them
-      if (conversationStarted || isRestoredSession) {
-        // For established conversations or sessions that were restored from persistence,
-        // use --resume to continue the existing Claude CLI session
-        args.push('--resume');
-        args.push(sessionId);
-      } else {
-        // For truly new conversations with provided session ID, use --session-id
-        args.push('--session-id');
-        args.push(sessionId);
-      }
+      // Use --resume to continue an existing Claude conversation
+      // Claude will remember the context if the session is still active
+      args.push('--resume');
+      args.push(sessionId);
+      sessionLogger.info('Using --resume with session ID', { sessionId });
+    } else {
+      // For fresh chats (no sessionId), let Claude CLI create its own session ID
+      sessionLogger.info('Starting new conversation (no session ID)');
     }
-    // For fresh chats (no sessionId), let Claude CLI create its own session ID
 
     // Add permission configuration
     this.addPermissionArgs(args);
@@ -107,19 +328,20 @@ export class AICLIProcessRunner extends EventEmitter {
     // Validate arguments
     InputValidator.validateAICLIArgs(args);
 
-    // Determine the prompt to send
-    let finalPrompt = prompt;
-    if (!conversationStarted && initialPrompt) {
-      finalPrompt = `${initialPrompt}\n\n${prompt}`;
-      sessionLogger.debug('Combined initial prompt with command prompt');
+    // Use the prompt as-is for stateless operation
+    const finalPrompt = prompt;
+
+    // Validate we have a prompt
+    if (!finalPrompt || finalPrompt.trim().length === 0) {
+      sessionLogger.error('No prompt provided for AICLI command');
+      throw new Error('Prompt is required for AICLI CLI execution');
     }
 
     sessionLogger.info('Executing AICLI command', {
       workingDirectory,
       promptLength: finalPrompt?.length,
-      conversationStarted,
-      isRestoredSession: isRestoredSession || false,
-      cliFlag: conversationStarted || isRestoredSession ? '--resume' : '--session-id',
+      hasSessionId: !!sessionId,
+      sessionId: sessionId || 'new',
     });
 
     sessionLogger.debug('Command details', {
@@ -128,7 +350,7 @@ export class AICLIProcessRunner extends EventEmitter {
     });
 
     // No more timeout calculations - trust Claude CLI
-    return this.runAICLIProcess(args, finalPrompt, workingDirectory, sessionId);
+    return this.runAICLIProcess(args, finalPrompt, workingDirectory, sessionId, requestId);
   }
 
   /**
@@ -163,7 +385,7 @@ export class AICLIProcessRunner extends EventEmitter {
   /**
    * Run AICLI CLI process with comprehensive monitoring and parsing
    */
-  async runAICLIProcess(args, prompt, workingDirectory, sessionId) {
+  async runAICLIProcess(args, prompt, workingDirectory, sessionId, requestId = null) {
     const processLogger = logger.child({ sessionId });
 
     processLogger.debug('Running AICLI process', {
@@ -178,8 +400,8 @@ export class AICLIProcessRunner extends EventEmitter {
 
       try {
         // Build the complete command arguments
-        // Always include prompt as argument (no --print mode)
-        const fullArgs = prompt ? [...args, prompt] : args;
+        // With --print flag, prompt is sent via stdin, not as argument
+        const fullArgs = args;
 
         processLogger.debug('Spawning AICLI process', {
           command: this.aicliCommand,
@@ -211,10 +433,14 @@ export class AICLIProcessRunner extends EventEmitter {
         return;
       }
 
-      processLogger.info('Process started', { pid: aicliProcess.pid });
+      processLogger.info('Process started', {
+        pid: aicliProcess.pid,
+        hasPrompt: !!prompt,
+        promptLength: prompt?.length || 0,
+      });
 
-      // Handle stdin input
-      this.handleStdinInput(aicliProcess);
+      // Handle stdin input - pass the prompt
+      this.handleStdinInput(aicliProcess, prompt);
 
       // Start monitoring this process
       this.startProcessMonitoring(aicliProcess.pid);
@@ -222,6 +448,7 @@ export class AICLIProcessRunner extends EventEmitter {
       // Emit process start event
       this.emit('processStart', {
         sessionId,
+        requestId, // Include original request ID
         pid: aicliProcess.pid,
         command: this.aicliCommand,
         args,
@@ -239,7 +466,8 @@ export class AICLIProcessRunner extends EventEmitter {
         promiseResolve,
         reject,
         healthMonitor,
-        processLogger
+        processLogger,
+        requestId
       );
 
       // Handle process events
@@ -259,10 +487,31 @@ export class AICLIProcessRunner extends EventEmitter {
   /**
    * Handle stdin input for the process
    */
-  handleStdinInput(aicliProcess) {
-    // No stdin input needed without --print mode
-    // Just close stdin immediately
-    aicliProcess.stdin.end();
+  handleStdinInput(aicliProcess, prompt) {
+    // With --print mode, send prompt via stdin
+    try {
+      if (prompt && prompt.trim().length > 0) {
+        // Write the prompt and close stdin
+        aicliProcess.stdin.write(prompt, 'utf8', (error) => {
+          if (error) {
+            logger.error('Failed to write prompt to stdin', { error: error.message });
+          }
+          aicliProcess.stdin.end();
+        });
+      } else {
+        // For empty prompts, still need to close stdin
+        logger.warn('Empty prompt provided to AICLI CLI');
+        aicliProcess.stdin.end();
+      }
+    } catch (error) {
+      logger.error('Error handling stdin input', { error: error.message });
+      // Ensure stdin is closed even on error
+      try {
+        aicliProcess.stdin.end();
+      } catch (endError) {
+        logger.error('Failed to close stdin', { error: endError.message });
+      }
+    }
   }
 
   /**
@@ -294,7 +543,8 @@ export class AICLIProcessRunner extends EventEmitter {
     promiseResolve,
     reject,
     healthMonitor,
-    processLogger
+    processLogger,
+    requestId = null
   ) {
     let stdout = '';
     let stderr = '';
@@ -330,6 +580,7 @@ export class AICLIProcessRunner extends EventEmitter {
         for (const parsedChunk of parsedChunks) {
           this.emit('streamChunk', {
             sessionId,
+            requestId, // Include original request ID
             chunk: parsedChunk,
             timestamp: new Date().toISOString(),
           });
@@ -420,6 +671,7 @@ export class AICLIProcessRunner extends EventEmitter {
           for (const chunk of finalChunks) {
             this.emit('streamChunk', {
               sessionId,
+              requestId, // Include original request ID
               chunk,
               timestamp: new Date().toISOString(),
             });
@@ -431,6 +683,7 @@ export class AICLIProcessRunner extends EventEmitter {
         // Emit process exit event
         this.emit('processExit', {
           sessionId,
+          requestId, // Include original request ID
           pid: aicliProcess.pid,
           code,
           stdout: completeStdout.substring(0, 1000),
@@ -443,7 +696,7 @@ export class AICLIProcessRunner extends EventEmitter {
           return;
         }
 
-        this.processOutput(completeStdout, sessionId, promiseResolve, reject);
+        this.processOutput(completeStdout, sessionId, promiseResolve, reject, requestId);
       },
     };
   }
@@ -451,7 +704,7 @@ export class AICLIProcessRunner extends EventEmitter {
   /**
    * Process the complete output from AICLI CLI
    */
-  processOutput(completeStdout, sessionId, promiseResolve, reject) {
+  processOutput(completeStdout, sessionId, promiseResolve, reject, requestId = null) {
     try {
       // Validate JSON before parsing
       if (!completeStdout || completeStdout.length === 0) {
@@ -478,9 +731,28 @@ export class AICLIProcessRunner extends EventEmitter {
         return;
       }
 
-      // Find the final result
+      // Find the final result and extract session ID from any message that has it
       const finalResult =
         responses.find((r) => r.type === 'result') || responses[responses.length - 1];
+
+      // Look for session_id in any of the responses (system messages often have it)
+      let claudeSessionId = null;
+      for (const response of responses) {
+        if (response.session_id) {
+          claudeSessionId = response.session_id;
+          logger.info('Found Claude session ID in response', {
+            sessionId,
+            claudeSessionId,
+            responseType: response.type,
+          });
+          break;
+        }
+      }
+
+      // If we found a session ID, add it to the final result
+      if (claudeSessionId && finalResult) {
+        finalResult.session_id = claudeSessionId;
+      }
 
       // Emit all responses for detailed tracking
       responses.forEach((response, index) => {
@@ -492,6 +764,7 @@ export class AICLIProcessRunner extends EventEmitter {
         });
         this.emit('aicliResponse', {
           sessionId,
+          requestId, // Include original request ID
           response,
           isLast: index === responses.length - 1,
         });
@@ -610,6 +883,6 @@ export class AICLIProcessRunner extends EventEmitter {
         throw new Error(`Unknown test type: ${testType}`);
     }
 
-    return this.runAICLIProcess(args, prompt, process.cwd(), 'test-session', 30000);
+    return this.runAICLIProcess(args, prompt, process.cwd(), 'test-session');
   }
 }

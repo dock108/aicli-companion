@@ -182,7 +182,7 @@ extension ServiceDiscoveryManager: NetServiceBrowserDelegate {
         print("🔍 Browser stopped searching")
     }
 
-    func netServiceBrowser(_ browser: NetServiceBrowser, didNotSearch errorDict: [String : NSNumber]) {
+    func netServiceBrowser(_ browser: NetServiceBrowser, didNotSearch errorDict: [String: NSNumber]) {
         let errorCode = errorDict[NetService.errorCode] ?? NSNumber(value: -1)
         let errorMessage = "Service discovery failed with error code: \(errorCode)"
 
@@ -217,7 +217,7 @@ extension ServiceDiscoveryManager: NetServiceDelegate {
         serviceResolvers.removeAll { $0 == sender }
     }
 
-    func netService(_ sender: NetService, didNotResolve errorDict: [String : NSNumber]) {
+    func netService(_ sender: NetService, didNotResolve errorDict: [String: NSNumber]) {
         let errorCode = errorDict[NetService.errorCode] ?? NSNumber(value: -1)
         print("🔍 Failed to resolve service \(sender.name): error code \(errorCode)")
 
@@ -326,7 +326,7 @@ extension ServiceDiscoveryManager {
         request.httpMethod = "GET"
         request.timeoutInterval = 5.0
 
-        URLSession.shared.dataTask(with: request) { data, response, error in
+        URLSession.shared.dataTask(with: request) { _, response, error in
             if let error = error {
                 completion(.failure(.networkError(error)))
                 return
@@ -365,7 +365,7 @@ extension ServiceDiscoveryManager {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
 
-        URLSession.shared.dataTask(with: request) { data, response, error in
+        URLSession.shared.dataTask(with: request) { _, response, error in
             if let error = error {
                 // Provide more specific error messages
                 if (error as NSError).code == NSURLErrorCannotConnectToHost {

@@ -73,9 +73,9 @@ struct FileItem: Identifiable, Hashable {
 }
 
 enum FileType: String, CaseIterable {
-    case file = "file"
-    case directory = "directory"
-    case symlink = "symlink"
+    case file
+    case directory
+    case symlink
 }
 
 struct FilePermissions: Hashable, Equatable {
@@ -96,10 +96,10 @@ struct FileChange {
 }
 
 enum FileChangeType: String, CaseIterable {
-    case created = "created"
-    case modified = "modified"
-    case deleted = "deleted"
-    case renamed = "renamed"
+    case created
+    case modified
+    case deleted
+    case renamed
 }
 
 // MARK: - File Management Service

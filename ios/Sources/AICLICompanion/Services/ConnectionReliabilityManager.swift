@@ -167,11 +167,13 @@ class ConnectionReliabilityManager: ObservableObject {
         nextReconnectTime = nil
     }
     
-    /// Called when WebSocket connects successfully
+    /// Called when HTTP connection is established successfully
     func handleConnectionEstablished() {
-        print("🎉 ConnectionReliabilityManager: WebSocket connection established")
+        print("🎉 ConnectionReliabilityManager: HTTP connection established")
         resetReconnectionState()
         lastSuccessfulConnection = Date()
+        // For HTTP, immediately set quality to good/excellent
+        connectionQuality = .excellent
         updateConnectionQuality()
     }
     
@@ -245,62 +247,50 @@ class ConnectionReliabilityManager: ObservableObject {
         let now = Date()
         let recentWindow: TimeInterval = 300 // 5 minutes
         
-        // First check if WebSocket is actually connected
-        let isWebSocketConnected = WebSocketService.shared.isConnected
-        
+        // HTTP architecture doesn't maintain persistent connections
+        // Check network connectivity instead of WebSocket connection
         print("🔍 ConnectionReliabilityManager: Updating connection quality")
-        print("   WebSocket connected: \(isWebSocketConnected)")
+        print("   HTTP architecture: Connection quality based on network state")
         print("   Current quality: \(connectionQuality)")
         
-        // If WebSocket is not connected, we're offline
-        if !isWebSocketConnected {
-            if connectionQuality != .offline {
-                print("   Setting quality to OFFLINE (WebSocket not connected)")
-                connectionQuality = .offline
-                logConnectionEvent(.qualityChanged, quality: .offline)
+        // For HTTP, if we have a successful connection, assume good quality
+        if lastSuccessfulConnection != nil {
+            // We've connected successfully, set quality based on recent history
+            let recentDisconnections = disconnectionEvents.filter {
+                now.timeIntervalSince($0) < recentWindow
+            }.count
+            
+            print("   Recent disconnections: \(recentDisconnections)")
+            print("   Last successful connection: \(lastSuccessfulConnection?.description ?? "none")")
+            
+            let oldQuality = connectionQuality
+            
+            // Simplified quality determination for HTTP
+            if recentDisconnections == 0 {
+                connectionQuality = .excellent
+            } else if recentDisconnections <= 1 {
+                connectionQuality = .good
+            } else if recentDisconnections <= 3 {
+                connectionQuality = .fair
+            } else {
+                connectionQuality = .poor
             }
-            return
-        }
-        
-        // Count recent disconnections
-        let recentDisconnections = disconnectionEvents.filter { 
-            now.timeIntervalSince($0) < recentWindow 
-        }.count
-        
-        // Calculate uptime percentage
-        let uptimePercentage: Double
-        if let lastConnection = lastSuccessfulConnection {
-            let totalTime = now.timeIntervalSince(lastConnection)
-            let disconnectionTime = Double(recentDisconnections) * 30.0 // Assume 30s per disconnection
-            uptimePercentage = max(0, (totalTime - disconnectionTime) / totalTime)
+            
+            if oldQuality != connectionQuality {
+                print("   Quality changed: \(oldQuality) → \(connectionQuality)")
+                logConnectionEvent(.qualityChanged, quality: connectionQuality)
+            } else {
+                print("   Quality unchanged: \(connectionQuality)")
+            }
         } else {
-            uptimePercentage = 0
-        }
-        
-        print("   Recent disconnections: \(recentDisconnections)")
-        print("   Uptime percentage: \(uptimePercentage)")
-        print("   Last successful connection: \(lastSuccessfulConnection?.description ?? "none")")
-        
-        // Determine quality based on metrics
-        let oldQuality = connectionQuality
-        
-        if recentDisconnections == 0 && uptimePercentage >= 0.99 {
-            connectionQuality = .excellent
-        } else if recentDisconnections <= 1 && uptimePercentage >= 0.95 {
-            connectionQuality = .good
-        } else if recentDisconnections <= 3 && uptimePercentage >= 0.85 {
-            connectionQuality = .fair
-        } else if uptimePercentage >= 0.5 {
-            connectionQuality = .poor
-        } else {
-            connectionQuality = .poor // Keep as poor instead of offline if WebSocket is connected
-        }
-        
-        if oldQuality != connectionQuality {
-            print("   Quality changed: \(oldQuality) → \(connectionQuality)")
+            // No successful connection yet, check network availability
+            if pathMonitor != nil {
+                // We have network, assume we can connect
+                connectionQuality = .fair
+            } else {
+                connectionQuality = .unknown
+            }
             logConnectionEvent(.qualityChanged, quality: connectionQuality)
-        } else {
-            print("   Quality unchanged: \(connectionQuality)")
         }
     }
     
@@ -350,22 +340,22 @@ struct CircularBuffer<T> {
     }
     
     func contains(_ element: T) -> Bool where T: Equatable {
-        for i in 0..<count {
-            let index = (writeIndex - count + i + capacity) % capacity
-            if buffer[index] == element {
+        for index in 0..<count {
+            let bufferIndex = (writeIndex - count + index + capacity) % capacity
+            if buffer[bufferIndex] == element {
                 return true
             }
         }
         return false
     }
     
-    func suffix(_ k: Int) -> [T] {
-        let k = min(k, count)
+    func suffix(_ suffixCount: Int) -> [T] {
+        let actualCount = min(suffixCount, count)
         var result: [T] = []
         
-        for i in 0..<k {
-            let index = (writeIndex - k + i + capacity) % capacity
-            if let element = buffer[index] {
+        for index in 0..<actualCount {
+            let bufferIndex = (writeIndex - actualCount + index + capacity) % capacity
+            if let element = buffer[bufferIndex] {
                 result.append(element)
             }
         }

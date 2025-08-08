@@ -254,6 +254,7 @@ extension SessionStatePersistenceService {
         
         for (projectId, metadata) in messagePersistence.savedSessions {
             // Check if we already have this session
+            // swiftlint:disable:next for_where
             if getSessionState(for: projectId) == nil {
                 // Migrate the session
                 saveSessionState(

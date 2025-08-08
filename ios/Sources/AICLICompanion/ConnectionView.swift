@@ -363,7 +363,7 @@ struct HelpStep: View {
 struct TerminalTextFieldStyle: TextFieldStyle {
     @Environment(\.colorScheme) var colorScheme
     
-    func _body(configuration: TextField<Self._Label>) -> some View {
+    func body(configuration: TextField<Self._Label>) -> some View {
         configuration
             .font(Typography.font(.code))
             .padding()

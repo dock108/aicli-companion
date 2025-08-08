@@ -13,6 +13,8 @@ public class EnhancedPushNotificationService: NSObject, ObservableObject {
     
     @Published public var badgeCount: Int = 0
     @Published public var pendingNotifications: [String: Int] = [:] // projectId: count
+    @Published public var currentActiveProject: Project?
+    @Published public var currentActiveSessionId: String?
     
     // MARK: - Constants
     
@@ -179,7 +181,7 @@ public class EnhancedPushNotificationService: NSObject, ObservableObject {
     }
     
     /// Reset badge count
-    func resetBadgeCount() {
+    public func resetBadgeCount() {
         badgeCount = 0
         pendingNotifications.removeAll()
         updateApplicationBadge()
@@ -188,6 +190,18 @@ public class EnhancedPushNotificationService: NSObject, ObservableObject {
     /// Get notification settings
     func getNotificationSettings() async -> UNNotificationSettings {
         return await notificationCenter.notificationSettings()
+    }
+    
+    /// Update the currently active project and session
+    public func setActiveProject(_ project: Project?, sessionId: String?) {
+        currentActiveProject = project
+        currentActiveSessionId = sessionId
+        
+        if let project = project {
+            print("📍 Active project set to: \(project.name) (session: \(sessionId ?? "none"))")
+        } else {
+            print("📍 No active project")
+        }
     }
     
     // MARK: - Private Methods
@@ -217,17 +231,190 @@ public class EnhancedPushNotificationService: NSObject, ObservableObject {
 
 @available(iOS 16.0, macOS 13.0, *)
 extension EnhancedPushNotificationService: UNUserNotificationCenterDelegate {
-    
     /// Handle notification while app is in foreground
     public func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        print("📱 Received notification while app in foreground")
+        print("🔔 === FOREGROUND NOTIFICATION RECEIVED ===")
+        let userInfo = notification.request.content.userInfo
+        print("🔔 Notification payload keys: \(userInfo.keys)")
         
-        // Show notification even when app is in foreground
-        completionHandler([.banner, .sound, .badge])
+        // Check if this is a Claude response notification with APNS payload
+        if let claudeMessage = userInfo["message"] as? String,
+           let sessionId = userInfo["sessionId"] as? String,
+           let projectPath = userInfo["projectPath"] as? String {
+            print("🤖 === CLAUDE RESPONSE IN FOREGROUND ===")
+            print("🤖 Session ID: \(sessionId)")
+            print("🤖 Project Path: \(projectPath)")
+            print("🤖 Current Active Session: \(currentActiveSessionId ?? "none")")
+            print("🤖 Current Active Project: \(currentActiveProject?.path ?? "none")")
+            
+            // Check if this notification is for the currently active project/session
+            let isForCurrentProject = (sessionId == currentActiveSessionId) ||
+                                     (currentActiveProject?.path == projectPath)
+            
+            if isForCurrentProject {
+                print("🤖 Response is for CURRENT project - processing silently")
+                print("🤖 Message preview: \(String(claudeMessage.prefix(100)))...")
+                
+                // Process Claude response immediately for foreground delivery
+                Task {
+                    await processClaudeResponseInForeground(
+                        message: claudeMessage,
+                        sessionId: sessionId,
+                        projectPath: projectPath,
+                        originalMessage: userInfo["originalMessage"] as? String,
+                        requestId: userInfo["requestId"] as? String,
+                        userInfo: userInfo
+                    )
+                }
+                
+                // Don't show banner for current project - process silently
+                // IMPORTANT: Return empty options to prevent didReceiveRemoteNotification from being called
+                completionHandler([])
+            } else {
+                print("🔔 Response is for DIFFERENT project - showing banner")
+                print("🔔 Project: \(projectPath.split(separator: "/").last ?? "Unknown")")
+                
+                // Save to persistence for later viewing
+                Task {
+                    await saveClaudeResponseForBackground(
+                        message: claudeMessage,
+                        sessionId: sessionId,
+                        projectPath: projectPath,
+                        originalMessage: userInfo["originalMessage"] as? String,
+                        requestId: userInfo["requestId"] as? String,
+                        userInfo: userInfo
+                    )
+                }
+                
+                // Show banner for responses from other projects
+                completionHandler([.banner, .sound, .badge])
+            }
+        } else {
+            print("🔔 Standard notification - showing banner")
+            // Show notification banner for non-Claude notifications
+            completionHandler([.banner, .sound, .badge])
+        }
+    }
+    
+    private func processClaudeResponseInForeground(
+        message: String,
+        sessionId: String,
+        projectPath: String,
+        originalMessage: String?,
+        requestId: String?,
+        userInfo: [AnyHashable: Any]
+    ) async {
+        print("🔄 === PROCESSING CLAUDE RESPONSE IN FOREGROUND ===")
+        
+        // Create Message object from Claude response
+        let claudeMessage = Message(
+            content: message,
+            sender: .assistant,
+            type: .markdown,
+            metadata: AICLIMessageMetadata(
+                sessionId: sessionId,
+                duration: 0,
+                additionalInfo: [
+                    "deliveredVia": "apns_foreground",
+                    "requestId": requestId ?? "",
+                    "originalMessage": originalMessage ?? "",
+                    "processedAt": Date()
+                ]
+            )
+        )
+        
+        // Extract project name from path
+        let projectName = projectPath.split(separator: "/").last.map(String.init) ?? "Project"
+        
+        // Create project object
+        let project = Project(
+            name: projectName,
+            path: projectPath,
+            type: "directory"
+        )
+        
+        // Post notification to ChatViewModel
+        await MainActor.run {
+            print("📡 === POSTING CLAUDE RESPONSE TO CHATVIEWMODEL ===")
+            NotificationCenter.default.post(
+                name: .claudeResponseReceived,
+                object: nil,
+                userInfo: [
+                    "message": claudeMessage,
+                    "sessionId": sessionId,
+                    "projectPath": projectPath,
+                    "project": project
+                ]
+            )
+            print("📡 Claude response posted to ChatViewModel")
+            
+            // Clear badge since we're processing this notification
+            #if os(iOS)
+            UIApplication.shared.applicationIconBadgeNumber = 0
+            #endif
+        }
+        
+        print("✅ Foreground Claude response processing completed")
+    }
+    
+    private func saveClaudeResponseForBackground(
+        message: String,
+        sessionId: String,
+        projectPath: String,
+        originalMessage: String?,
+        requestId: String?,
+        userInfo: [AnyHashable: Any]
+    ) async {
+        print("💾 === SAVING CLAUDE RESPONSE FOR BACKGROUND PROJECT ===")
+        print("💾 Session ID: \(sessionId)")
+        print("💾 Project Path: \(projectPath)")
+        
+        // Create Message object from Claude response
+        let claudeMessage = Message(
+            content: message,
+            sender: .assistant,
+            type: .markdown,
+            metadata: AICLIMessageMetadata(
+                sessionId: sessionId,
+                duration: 0,
+                additionalInfo: [
+                    "deliveredVia": "apns_background_project",
+                    "requestId": requestId ?? "",
+                    "originalMessage": originalMessage ?? "",
+                    "processedAt": Date()
+                ]
+            )
+        )
+        
+        // Extract project name from path
+        let projectName = projectPath.split(separator: "/").last.map(String.init) ?? "Project"
+        
+        // Create project object
+        let project = Project(
+            name: projectName,
+            path: projectPath,
+            type: "directory"
+        )
+        
+        // Save message to persistence
+        let messages = [claudeMessage]
+        MessagePersistenceService.shared.saveMessages(
+            for: projectPath,
+            messages: messages,
+            sessionId: sessionId,
+            project: project
+        )
+        
+        print("💾 Saved background project response to persistence")
+        
+        // Update session tracking
+        BackgroundSessionCoordinator.shared.processSavedMessagesWithSessionId(sessionId, for: project)
+        
+        print("💾 Background project response processing completed")
     }
     
     /// Handle notification actions

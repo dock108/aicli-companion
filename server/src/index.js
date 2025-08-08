@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import express from 'express';
-import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
 import { createServer as createHttpsServer } from 'https';
 import { fileURLToPath } from 'url';
@@ -10,10 +9,11 @@ import { dirname, join } from 'path';
 import { setupRoutes } from './routes/index.js';
 import { setupProjectRoutes } from './routes/projects.js';
 import { setupAICLIStatusRoutes } from './routes/aicli-status.js';
-import { setupSessionRoutes } from './routes/sessions.js';
+import sessionRoutes from './routes/sessions.js';
 import telemetryRoutes from './routes/telemetry.js';
 import pushNotificationRoutes from './routes/push-notifications.js';
-import { setupWebSocket } from './services/websocket.js';
+import chatRoutes from './routes/chat.js';
+import devicesRoutes from './routes/devices.js';
 import { errorHandler } from './middleware/error.js';
 import { AICLIService } from './services/aicli.js';
 import { ServerConfig } from './config/server-config.js';
@@ -83,9 +83,14 @@ class AICLICompanionServer {
     setupRoutes(this.app, this.aicliService);
     setupProjectRoutes(this.app, this.aicliService);
     setupAICLIStatusRoutes(this.app, this.aicliService);
-    setupSessionRoutes(this.app, this.aicliService);
     this.app.use(telemetryRoutes);
     this.app.use(pushNotificationRoutes);
+
+    // New HTTP + APNS routes
+    this.app.set('aicliService', this.aicliService); // Make available to route handlers
+    this.app.use('/api/chat', chatRoutes);
+    this.app.use('/api/devices', devicesRoutes);
+    this.app.use('/api/sessions', sessionRoutes);
 
     // Static files (for web interface if needed)
     this.app.use('/static', express.static(join(__dirname, '../public')));
@@ -96,46 +101,15 @@ class AICLICompanionServer {
         name: 'AICLI Companion Server',
         version: this.config.version,
         status: 'running',
+        architecture: 'HTTP + APNS',
         endpoints: {
           health: '/health',
           api: '/api',
-          websocket: '/ws',
+          chat: '/api/chat',
+          devices: '/api/devices',
+          projects: '/api/projects',
         },
       });
-    });
-  }
-
-  setupWebSocket() {
-    this.wss = new WebSocketServer({ server: this.server });
-    setupWebSocket(this.wss, this.aicliService, this.authToken);
-
-    // Forward AICLI CLI events to console for host app logging
-    this.aicliService.on('processStart', (data) => {
-      console.log(
-        `[AICLI_PROCESS_START] PID: ${data.pid}, Type: ${data.type}, Session: ${data.sessionId || 'one-time'}`
-      );
-    });
-
-    this.aicliService.on('processStdout', (data) => {
-      console.log(`[AICLI_STDOUT] PID: ${data.pid} - ${data.data}`);
-    });
-
-    this.aicliService.on('processStderr', (data) => {
-      console.error(`[AICLI_STDERR] PID: ${data.pid} - ${data.data}`);
-    });
-
-    this.aicliService.on('processExit', (data) => {
-      console.log(
-        `[AICLI_PROCESS_EXIT] PID: ${data.pid}, Code: ${data.code}, Session: ${data.sessionId || 'one-time'}`
-      );
-    });
-
-    this.aicliService.on('processError', (data) => {
-      console.error(`[AICLI_PROCESS_ERROR] PID: ${data.pid} - ${data.error}`);
-    });
-
-    this.aicliService.on('commandSent', (data) => {
-      console.log(`[AICLI_COMMAND] Session: ${data.sessionId} - ${data.prompt}`);
     });
   }
 
@@ -168,11 +142,12 @@ class AICLICompanionServer {
         this.authToken = null;
       }
 
-      // Initialize push notification service
+      // Initialize push notification service with APNs HTTP/2 API
       pushNotificationService.initialize({
-        cert: process.env.APNS_CERT_PATH,
-        key: process.env.APNS_KEY_PATH,
-        passphrase: process.env.APNS_PASSPHRASE,
+        keyPath: process.env.APNS_KEY_PATH || join(__dirname, '../keys/AuthKey_2Y226B9433.p8'),
+        keyId: process.env.APNS_KEY_ID || '2Y226B9433',
+        teamId: process.env.APNS_TEAM_ID || 'E3G5D247ZN',
+        bundleId: process.env.APNS_BUNDLE_ID || 'com.aiclicompanion.ios',
         production: process.env.NODE_ENV === 'production',
       });
 
@@ -195,20 +170,20 @@ class AICLICompanionServer {
         this.server = createServer(this.app);
       }
 
-      // Set up WebSocket
-      this.setupWebSocket();
+      // WebSocket infrastructure removed - using HTTP + APNS only
 
-      // Initialize AICLI session persistence (recover any existing sessions)
-      console.log('🔄 Initializing session persistence...');
-      await this.aicliService.sessionManager.initializePersistence();
+      // DISABLED: Session persistence should be managed by clients, not the server
+      // The server should start fresh on each restart without loading old sessions
+      // console.log('🔄 Initializing session persistence...');
+      // await this.aicliService.sessionManager.initializePersistence();
 
-      // Reconcile session state with AICLI CLI to clean up stale sessions
-      try {
-        const reconcileStats = await this.aicliService.sessionManager.reconcileSessionState();
-        console.log(`📊 Session reconciliation stats:`, reconcileStats);
-      } catch (error) {
-        console.warn('⚠️ Session reconciliation failed:', error.message);
-      }
+      // DISABLED: No need to reconcile if we're not persisting sessions
+      // try {
+      //   const reconcileStats = await this.aicliService.sessionManager.reconcileSessionState();
+      //   console.log(`📊 Session reconciliation stats:`, reconcileStats);
+      // } catch (error) {
+      //   console.warn('⚠️ Session reconciliation failed:', error.message);
+      // }
 
       // Verify AICLI Code is available
       const isAvailable = await ServerStartup.checkAICLIAvailability(this.aicliService);

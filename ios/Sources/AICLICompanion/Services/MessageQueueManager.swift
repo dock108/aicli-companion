@@ -85,8 +85,8 @@ class MessageQueueManager: ObservableObject {
         queueLock.lock()
         defer { queueLock.unlock() }
         
-        let sessionMessages = messageQueue.filter { 
-            $0.sessionId == sessionId && $0.deliveredAt == nil 
+        let sessionMessages = messageQueue.filter {
+            $0.sessionId == sessionId && $0.deliveredAt == nil
         }
         
         let oldest = sessionMessages.min { $0.queuedAt < $1.queuedAt }?.queuedAt
@@ -146,14 +146,8 @@ class MessageQueueManager: ObservableObject {
     }
     
     private func setupWebSocketHandlers() {
-        // Listen for queue-related messages
-        WebSocketService.shared.setMessageHandler(for: .progress) { [weak self] message in
-            if case .progress(let progress) = message.data {
-                if progress.stage == "queue_processing" {
-                    self?.handleQueueProgress(progress)
-                }
-            }
-        }
+        // HTTP architecture: Queue handling is done per-request
+        // No persistent WebSocket handlers needed
     }
     
     private func handleQueueProgress(_ progress: ProgressResponse) {

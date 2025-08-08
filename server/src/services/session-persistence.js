@@ -501,7 +501,13 @@ export class SessionPersistenceService {
     }
     try {
       const bufferFile = path.join(this.storageDir, `buffer-${sessionId}.json`);
-      await fs.unlink(bufferFile);
+      const resolvedBufferFile = path.resolve(bufferFile);
+      const resolvedStorageDir = path.resolve(this.storageDir);
+      if (!resolvedBufferFile.startsWith(resolvedStorageDir + path.sep)) {
+        console.warn(`⚠️ Attempted path traversal in sessionId: ${sessionId}`);
+        return;
+      }
+      await fs.unlink(resolvedBufferFile);
       console.log(`🗑️ Removed message buffer for session ${sessionId}`);
     } catch (error) {
       if (error.code !== 'ENOENT') {

@@ -158,11 +158,11 @@ struct BuildTarget {
 
 @available(iOS 16.0, macOS 13.0, *)
 enum BuildTargetType: String, CaseIterable {
-    case executable = "executable"
-    case library = "library"
-    case framework = "framework"
-    case test = "test"
-    case app = "app"
+    case executable
+    case library
+    case framework
+    case test
+    case app
 }
 
 @available(iOS 16.0, macOS 13.0, *)
@@ -193,9 +193,9 @@ struct BuildWarning {
 
 @available(iOS 16.0, macOS 13.0, *)
 enum ErrorSeverity: String, CaseIterable {
-    case error = "error"
-    case warning = "warning"
-    case note = "note"
+    case error
+    case warning
+    case note
 
     var color: Color {
         switch self {

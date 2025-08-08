@@ -10,7 +10,7 @@ import AppKit
 
 struct MenuBarIcon: View {
     let isServerRunning: Bool
-    
+
     var body: some View {
         if let nsImage = NSImage(named: "MenuBarIcon") {
             Image(nsImage: nsImage)

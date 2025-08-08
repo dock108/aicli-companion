@@ -8,33 +8,34 @@ import UIKit
 @available(iOS 17.0, macOS 14.0, *)
 public class PushNotificationService: NSObject, ObservableObject {
     public static let shared = PushNotificationService()
-    
+
     @Published public var isAuthorized = false
     @Published public var authorizationStatus: UNAuthorizationStatus = .notDetermined
-    
+
     private let notificationCenter = UNUserNotificationCenter.current()
-    
+
     override init() {
         super.init()
-        notificationCenter.delegate = self
+        // Delegate is set by EnhancedPushNotificationService to avoid conflicts
+        // notificationCenter.delegate = self
         checkAuthorizationStatus()
     }
-    
+
     // MARK: - Authorization
-    
+
     public func requestAuthorization() async {
         do {
             let granted = try await notificationCenter.requestAuthorization(options: [.alert, .sound, .badge])
-            
+
             await MainActor.run {
                 self.isAuthorized = granted
                 self.checkAuthorizationStatus()
             }
-            
+
             if granted {
                 print("✅ Push notification authorization granted")
                 await setupCategories()
-                
+
                 // Register for remote notifications
                 await MainActor.run {
                     #if os(iOS)
@@ -48,7 +49,7 @@ public class PushNotificationService: NSObject, ObservableObject {
             print("❌ Failed to request notification authorization: \(error)")
         }
     }
-    
+
     func checkAuthorizationStatus() {
         notificationCenter.getNotificationSettings { settings in
             DispatchQueue.main.async {
@@ -57,9 +58,9 @@ public class PushNotificationService: NSObject, ObservableObject {
             }
         }
     }
-    
+
     // MARK: - Categories
-    
+
     private func setupCategories() async {
         // Define actions for Claude response notifications
         let viewAction = UNNotificationAction(
@@ -67,19 +68,19 @@ public class PushNotificationService: NSObject, ObservableObject {
             title: "View Response",
             options: [.foreground]
         )
-        
+
         let copyAction = UNNotificationAction(
             identifier: "COPY_ACTION",
             title: "Copy",
             options: []
         )
-        
+
         let dismissAction = UNNotificationAction(
             identifier: "DISMISS_ACTION",
             title: "Dismiss",
             options: [.destructive]
         )
-        
+
         // Create category
         let claudeResponseCategory = UNNotificationCategory(
             identifier: "CLAUDE_RESPONSE",
@@ -89,13 +90,13 @@ public class PushNotificationService: NSObject, ObservableObject {
             categorySummaryFormat: "%u Claude responses",
             options: [.customDismissAction]
         )
-        
+
         // Register categories
         notificationCenter.setNotificationCategories([claudeResponseCategory])
     }
-    
+
     // MARK: - Send Notifications
-    
+
     /// Send a notification for a completed Claude response
     func sendResponseNotification(
         sessionId: String,
@@ -108,7 +109,7 @@ public class PushNotificationService: NSObject, ObservableObject {
             print("⚠️ Push notifications not authorized")
             return
         }
-        
+
         // Create notification content
         let content = UNMutableNotificationContent()
         content.title = "Claude Response Ready"
@@ -117,7 +118,7 @@ public class PushNotificationService: NSObject, ObservableObject {
         content.sound = .default
         content.categoryIdentifier = "CLAUDE_RESPONSE"
         content.threadIdentifier = sessionId
-        
+
         // Add metadata
         content.userInfo = [
             "sessionId": sessionId,
@@ -125,15 +126,15 @@ public class PushNotificationService: NSObject, ObservableObject {
             "totalChunks": totalChunks,
             "timestamp": Date().timeIntervalSince1970
         ]
-        
+
         // Store full response if provided (for copy action)
         if let fullResponse = fullResponse {
             content.userInfo["fullResponse"] = fullResponse
         }
-        
+
         // Create trigger (immediate)
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false)
-        
+
         // Create request
         let requestId = "claude-\(sessionId)-\(Date().timeIntervalSince1970)"
         let request = UNNotificationRequest(
@@ -141,7 +142,7 @@ public class PushNotificationService: NSObject, ObservableObject {
             content: content,
             trigger: trigger
         )
-        
+
         // Schedule notification
         do {
             try await notificationCenter.add(request)
@@ -150,7 +151,7 @@ public class PushNotificationService: NSObject, ObservableObject {
             print("❌ Failed to schedule notification: \(error)")
         }
     }
-    
+
     /// Send a notification for an error
     func sendErrorNotification(
         sessionId: String,
@@ -158,35 +159,35 @@ public class PushNotificationService: NSObject, ObservableObject {
         error: String
     ) async {
         guard isAuthorized else { return }
-        
+
         let content = UNMutableNotificationContent()
         content.title = "Claude Error"
         content.subtitle = projectName
         content.body = error
         content.sound = .default
-        
+
         let request = UNNotificationRequest(
             identifier: "claude-error-\(Date().timeIntervalSince1970)",
             content: content,
             trigger: nil
         )
-        
+
         try? await notificationCenter.add(request)
     }
-    
+
     // MARK: - Helper Methods
-    
+
     private func truncateForNotification(_ text: String, maxLength: Int = 150) -> String {
         if text.count <= maxLength {
             return text
         }
-        
+
         let truncated = String(text.prefix(maxLength))
         return truncated + "..."
     }
-    
+
     // MARK: - Clear Notifications
-    
+
     func clearNotifications(for sessionId: String) {
         notificationCenter.getDeliveredNotifications { notifications in
             let identifiers = notifications
@@ -198,14 +199,14 @@ public class PushNotificationService: NSObject, ObservableObject {
                     return false
                 }
                 .map { $0.request.identifier }
-            
+
             if !identifiers.isEmpty {
                 self.notificationCenter.removeDeliveredNotifications(withIdentifiers: identifiers)
                 print("🧹 Cleared \(identifiers.count) notifications for session \(sessionId)")
             }
         }
     }
-    
+
     func clearAllNotifications() {
         notificationCenter.removeAllDeliveredNotifications()
         notificationCenter.removeAllPendingNotificationRequests()
@@ -216,7 +217,6 @@ public class PushNotificationService: NSObject, ObservableObject {
 
 @available(iOS 17.0, macOS 14.0, *)
 extension PushNotificationService: UNUserNotificationCenterDelegate {
-    
     // Handle notification while app is in foreground
     public func userNotificationCenter(
         _ center: UNUserNotificationCenter,
@@ -234,7 +234,7 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
         completionHandler([.alert, .sound, .badge])
         #endif
     }
-    
+
     // Handle notification actions
     public func userNotificationCenter(
         _ center: UNUserNotificationCenter,
@@ -242,7 +242,7 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
         let userInfo = response.notification.request.content.userInfo
-        
+
         switch response.actionIdentifier {
         case "VIEW_ACTION", UNNotificationDefaultActionIdentifier:
             // User tapped notification or view action
@@ -254,7 +254,7 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
                     userInfo: ["sessionId": sessionId]
                 )
             }
-            
+
         case "COPY_ACTION":
             // Copy full response to clipboard
             if let fullResponse = userInfo["fullResponse"] as? String {
@@ -266,15 +266,15 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
                 #endif
                 print("📋 Response copied to clipboard")
             }
-            
+
         case "DISMISS_ACTION":
             // Just dismiss
             break
-            
+
         default:
             break
         }
-        
+
         completionHandler()
     }
 }
@@ -283,4 +283,5 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
 
 extension Notification.Name {
     static let openChatSession = Notification.Name("openChatSession")
+    static let claudeResponseReceived = Notification.Name("claudeResponseReceived")
 }

@@ -49,6 +49,13 @@ struct ChatMessageList: View {
                 }
                 .onAppear {
                     scrollViewHeight = geometry.size.height
+                    // Scroll to bottom when view appears with existing messages
+                    if let lastMessage = messages.last {
+                        // Use a small delay to ensure the view is fully rendered
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            proxy.scrollTo(lastMessage.id.uuidString, anchor: .bottom)
+                        }
+                    }
                 }
                 .onChange(of: geometry.size.height) { _, newHeight in
                     scrollViewHeight = newHeight
@@ -71,7 +78,18 @@ struct ChatMessageList: View {
                     onScrollPositionChanged(-value)
                 }
                 .onChange(of: messages.count) { oldCount, newCount in
-                    handleMessageCountChange(oldCount: oldCount, newCount: newCount, proxy: proxy)
+                    // Handle initial load (from 0 to some messages)
+                    if oldCount == 0 && newCount > 0 {
+                        // Initial messages loaded, scroll to bottom
+                        if let lastMessage = messages.last {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                proxy.scrollTo(lastMessage.id.uuidString, anchor: .bottom)
+                            }
+                        }
+                    } else {
+                        // Handle regular message additions
+                        handleMessageCountChange(oldCount: oldCount, newCount: newCount, proxy: proxy)
+                    }
                 }
                 .onChange(of: isLoading) { oldLoading, newLoading in
                     handleLoadingStateChange(oldLoading: oldLoading, newLoading: newLoading, proxy: proxy)

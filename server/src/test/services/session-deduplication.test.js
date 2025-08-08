@@ -97,44 +97,19 @@ describe('Session Deduplication', () => {
       lastActivity: Date.now() - 500,
     };
 
-    // Temporarily change NODE_ENV to enable persistence checking
-    const originalNodeEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
+    // Since the server is stateless, we need to pre-populate the active sessions
+    // to simulate reuse (persistence isn't checked in findSessionByWorkingDirectory)
+    sessionManager.activeSessions.set('persisted-session', persistedSession);
 
-    // Mock persistence to return session
-    sessionPersistence.getSessionByWorkingDirectory = (dir) => {
-      if (dir === workingDir) {
-        return { sessionId: persistedSession.sessionId, session: persistedSession };
-      }
-      return null;
-    };
+    const result = await sessionManager.createInteractiveSession(
+      'new-session',
+      'New prompt',
+      workingDir
+    );
 
-    sessionPersistence.getSession = (id) => {
-      if (id === persistedSession.sessionId) {
-        return persistedSession;
-      }
-      return null;
-    };
-
-    // Mock _restoreSingleSession to add the session to activeSessions
-    sessionManager._restoreSingleSession = async (sessionId) => {
-      sessionManager.activeSessions.set(sessionId, persistedSession);
-    };
-
-    try {
-      const result = await sessionManager.createInteractiveSession(
-        'new-session',
-        'New prompt',
-        workingDir
-      );
-
-      assert.strictEqual(result.success, true);
-      assert.strictEqual(result.reused, true);
-      assert.strictEqual(result.sessionId, 'persisted-session');
-    } finally {
-      // Always restore NODE_ENV
-      process.env.NODE_ENV = originalNodeEnv;
-    }
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(result.reused, true);
+    assert.strictEqual(result.sessionId, 'persisted-session');
   });
 
   it('should handle multiple clients connecting to same project', async () => {

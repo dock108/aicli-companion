@@ -79,7 +79,7 @@ class MessagePersistenceService: ObservableObject {
         encoder.dateEncodingStrategy = .iso8601
         decoder.dateDecodingStrategy = .iso8601
         
-        // Load existing sessions
+        // Load existing session metadata from disk
         loadAllSessionMetadata()
     }
     
@@ -278,7 +278,10 @@ class MessagePersistenceService: ObservableObject {
     // MARK: - Private Methods
     
     private func loadAllSessionMetadata() {
+        print("🗂️ MessagePersistence: Loading all session metadata from disk")
+        
         guard let projectDirs = try? fileManager.contentsOfDirectory(at: sessionsDirectory, includingPropertiesForKeys: nil) else {
+            print("   ❌ Failed to list sessions directory")
             return
         }
         
@@ -286,9 +289,13 @@ class MessagePersistenceService: ObservableObject {
             let metadataFile = projectDir.appendingPathComponent("metadata.json")
             if let data = try? Data(contentsOf: metadataFile),
                let metadata = try? decoder.decode(PersistedSessionMetadata.self, from: data) {
-                savedSessions[metadata.projectId] = metadata
+                // Store by projectPath for consistency with getSessionMetadata
+                savedSessions[metadata.projectPath] = metadata
+                print("   ✅ Loaded metadata for project: \(metadata.projectName) - Last message: \(metadata.formattedLastUsed)")
             }
         }
+        
+        print("   📊 Loaded metadata for \(savedSessions.count) projects")
     }
     
     private func sanitizeFilename(_ filename: String) -> String {

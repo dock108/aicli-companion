@@ -1,6 +1,5 @@
 import express from 'express';
 import { exec } from 'child_process';
-import util from 'util';
 import { promisify } from 'util';
 import rateLimit from 'express-rate-limit';
 
@@ -81,7 +80,6 @@ export function setupAICLIStatusRoutes(app, aicliService) {
         },
         sessions: {
           active: activeSessions.length,
-          max: aicliService.maxSessions,
           details: sessionDetails,
         },
         system: systemInfo,
@@ -190,7 +188,7 @@ export function setupAICLIStatusRoutes(app, aicliService) {
       });
     } catch (error) {
       const sanitizedTestType = String(req.params.testType).replace(/[^a-zA-Z0-9_-]/g, '');
-      console.error(util.format('AICLI CLI debug test (%s) failed:', sanitizedTestType), error);
+      console.error('AICLI CLI debug test (%s) failed:', sanitizedTestType, error);
       res.status(500).json({
         success: false,
         testType: req.params.testType,

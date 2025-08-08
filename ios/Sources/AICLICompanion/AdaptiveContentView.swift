@@ -3,7 +3,7 @@ import SwiftUI
 @available(iOS 17.0, macOS 14.0, *)
 public struct AdaptiveContentView: View {
     public init() {}
-    @EnvironmentObject var aicliService: AICLIService
+    @EnvironmentObject var aicliService: HTTPAICLIService
     @EnvironmentObject var settings: SettingsManager
     @State private var isConnected = false
     @State private var selectedProject: Project?

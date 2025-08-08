@@ -51,8 +51,8 @@ public struct SecondaryButton: View {
                     .font(Typography.font(.body))
                     .fontWeight(.medium)
                     .foregroundColor(
-                        isEnabled 
-                            ? Colors.accentPrimaryEnd 
+                        isEnabled
+                            ? Colors.accentPrimaryEnd
                             : Colors.textSecondary(for: colorScheme)
                     )
             }

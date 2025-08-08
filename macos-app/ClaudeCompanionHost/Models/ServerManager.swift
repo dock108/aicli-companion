@@ -12,7 +12,7 @@ import Network
 @MainActor
 class ServerManager: ObservableObject {
     static let shared = ServerManager()
-    
+
     // MARK: - Published Properties
     @Published var isRunning = false
     @Published var port: Int = 3001
@@ -22,13 +22,13 @@ class ServerManager: ObservableObject {
     @Published var isProcessing = false
     @Published var serverHealth: ServerHealth = .unknown
     @Published var logs: [LogEntry] = []
-    
+
     // MARK: - Private Properties
     private var serverProcess: Process?
     private var healthCheckTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
     private let serverURL = "http://localhost"
-    
+
     // MARK: - Computed Properties
     var connectionString: String {
         guard isRunning else { return "" }
@@ -38,24 +38,24 @@ class ServerManager: ObservableObject {
             return "\(localIP):\(port)"
         }
     }
-    
+
     var serverFullURL: String {
         "http://\(localIP):\(port)"
     }
-    
+
     // MARK: - Initialization
     private init() {
         setupNetworkMonitoring()
         loadSettings()
     }
-    
+
     // MARK: - Public Methods
     func startServer() async throws {
         guard !isRunning else { return }
-        
+
         isProcessing = true
         defer { isProcessing = false }
-        
+
         // Check if server is already running externally
         if await checkExternalServer() {
             // Server is running externally, just update our state
@@ -64,19 +64,19 @@ class ServerManager: ObservableObject {
             await fetchServerStatus()
             return
         }
-        
+
         // Start the server process
         do {
             try await launchServerProcess()
             isRunning = true
             startHealthChecking()
-            
+
             // Send notification
             NotificationManager.shared.showNotification(
                 title: "Server Started",
                 body: "Claude Companion server is now running on port \(port)"
             )
-            
+
             // Log the event
             addLog(.info, "Server started successfully on port \(port)")
         } catch {
@@ -84,73 +84,73 @@ class ServerManager: ObservableObject {
             throw error
         }
     }
-    
+
     func stopServer() async {
         guard isRunning else { return }
-        
+
         isProcessing = true
         defer { isProcessing = false }
-        
+
         // Stop health checking
         stopHealthChecking()
-        
+
         // Check if this is our process or external
         if let process = serverProcess {
             // Our process - terminate it
             process.terminate()
             try? await Task.sleep(for: .seconds(0.5))
-            
+
             if process.isRunning {
                 process.interrupt()
             }
-            
+
             serverProcess = nil
         } else {
             // External process - send shutdown request
             await sendShutdownRequest()
         }
-        
+
         isRunning = false
         activeSessions.removeAll()
         serverHealth = .unknown
-        
+
         // Send notification
         NotificationManager.shared.showNotification(
             title: "Server Stopped",
             body: "Claude Companion server has been stopped"
         )
-        
+
         addLog(.info, "Server stopped")
     }
-    
+
     func generateAuthToken() {
         let token = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
         authToken = token
         KeychainManager.shared.saveAuthToken(token)
-        
+
         addLog(.info, "Generated new authentication token")
     }
-    
+
     func refreshStatus() async {
         isProcessing = true
         defer { isProcessing = false }
-        
+
         await fetchServerStatus()
     }
-    
+
     // MARK: - Private Methods
     private func setupNetworkMonitoring() {
         // Subscribe to network changes
         NetworkMonitor.shared.$localIP
             .assign(to: &$localIP)
     }
-    
+
     private func loadSettings() {
         let defaults = UserDefaults.standard
         port = defaults.integer(forKey: "serverPort") == 0 ? 3001 : defaults.integer(forKey: "serverPort")
         authToken = KeychainManager.shared.loadAuthToken()
     }
-    
+
     private func saveSettings() {
         let defaults = UserDefaults.standard
         defaults.set(port, forKey: "serverPort")
@@ -158,10 +158,10 @@ class ServerManager: ObservableObject {
             KeychainManager.shared.saveAuthToken(token)
         }
     }
-    
+
     private func launchServerProcess() async throws {
         let task = Process()
-        
+
         // Try to find npm in common locations
         let npmPaths = [
             "/Users/michaelfuscoletti/.nvm/versions/node/v22.18.0/bin/npm",
@@ -169,25 +169,26 @@ class ServerManager: ObservableObject {
             "/usr/local/bin/npm",
             "/usr/bin/npm"
         ]
-        
+
         var npmPath: String?
         for path in npmPaths {
+            // swiftlint:disable:next for_where
             if FileManager.default.fileExists(atPath: path) {
                 npmPath = path
                 break
             }
         }
-        
+
         guard let validNpmPath = npmPath else {
             throw NSError(domain: "ServerManager", code: 1, userInfo: [
                 NSLocalizedDescriptionKey: "npm not found. Please ensure Node.js is installed."
             ])
         }
-        
+
         task.executableURL = URL(fileURLWithPath: validNpmPath)
         task.currentDirectoryURL = URL(fileURLWithPath: "/Users/michaelfuscoletti/Desktop/claude-companion/server")
         task.arguments = ["start"]
-        
+
         // Set environment variables
         var environment = ProcessInfo.processInfo.environment
         environment["PORT"] = String(port)
@@ -202,13 +203,13 @@ class ServerManager: ObservableObject {
             environment["CONFIG_PATH"] = serverDir
         }
         task.environment = environment
-        
+
         // Set up pipes for output
         let outputPipe = Pipe()
         let errorPipe = Pipe()
         task.standardOutput = outputPipe
         task.standardError = errorPipe
-        
+
         // Monitor output
         outputPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
@@ -218,7 +219,7 @@ class ServerManager: ObservableObject {
                 }
             }
         }
-        
+
         errorPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
             if !data.isEmpty, let output = String(data: data, encoding: .utf8) {
@@ -227,14 +228,14 @@ class ServerManager: ObservableObject {
                 }
             }
         }
-        
+
         try task.run()
         serverProcess = task
-        
+
         // Wait for server to be ready
         try await waitForServerReady()
     }
-    
+
     private func waitForServerReady() async throws {
         for _ in 0..<30 { // 30 attempts, 1 second each
             if await checkServerHealth() {
@@ -244,10 +245,10 @@ class ServerManager: ObservableObject {
         }
         throw ServerError.startupTimeout
     }
-    
+
     private func checkExternalServer() async -> Bool {
         guard let url = URL(string: "\(serverFullURL)/health") else { return false }
-        
+
         do {
             let (_, response) = try await URLSession.shared.data(from: url)
             return (response as? HTTPURLResponse)?.statusCode == 200
@@ -255,13 +256,13 @@ class ServerManager: ObservableObject {
             return false
         }
     }
-    
+
     private func checkServerHealth() async -> Bool {
         guard let url = URL(string: "\(serverFullURL)/health") else { return false }
-        
+
         do {
             let (data, response) = try await URLSession.shared.data(from: url)
-            
+
             if (response as? HTTPURLResponse)?.statusCode == 200 {
                 // Parse health data
                 if let health = try? JSONDecoder().decode(HealthResponse.self, from: data) {
@@ -277,13 +278,13 @@ class ServerManager: ObservableObject {
                 self.serverHealth = .unhealthy
             }
         }
-        
+
         return false
     }
-    
+
     private func fetchServerStatus() async {
         guard let url = URL(string: "\(serverFullURL)/api/status") else { return }
-        
+
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
             if let status = try? JSONDecoder().decode(ServerStatus.self, from: data) {
@@ -295,38 +296,38 @@ class ServerManager: ObservableObject {
             addLog(.error, "Failed to fetch server status: \(error.localizedDescription)")
         }
     }
-    
+
     private func sendShutdownRequest() async {
         guard let url = URL(string: "\(serverFullURL)/api/shutdown") else { return }
-        
+
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         if let token = authToken {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
-        
+
         do {
             let (_, _) = try await URLSession.shared.data(for: request)
         } catch {
             addLog(.error, "Failed to send shutdown request: \(error.localizedDescription)")
         }
     }
-    
+
     private func startHealthChecking() {
         stopHealthChecking()
-        
+
         healthCheckTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             Task {
                 await self?.checkServerHealth()
             }
         }
     }
-    
+
     private func stopHealthChecking() {
         healthCheckTimer?.invalidate()
         healthCheckTimer = nil
     }
-    
+
     private func processServerOutput(_ output: String) {
         // Parse and handle server output
         let lines = output.components(separatedBy: .newlines)
@@ -340,11 +341,11 @@ class ServerManager: ObservableObject {
             }
         }
     }
-    
+
     private func processServerError(_ output: String) {
         addLog(.error, output)
     }
-    
+
     private func updateActiveSessions(from health: HealthResponse) {
         // Update active sessions from health response
         if let sessions = health.activeSessions {
@@ -359,7 +360,7 @@ class ServerManager: ObservableObject {
             }
         }
     }
-    
+
     private func updateFromStatus(_ status: ServerStatus) {
         // Update state from server status
         if let sessions = status.sessions {
@@ -374,12 +375,12 @@ class ServerManager: ObservableObject {
             }
         }
     }
-    
+
     func clearLogs() {
         logs.removeAll()
         addLog(.info, "Logs cleared by user")
     }
-    
+
     private func addLog(_ level: LogLevel, _ message: String) {
         let entry = LogEntry(
             id: UUID(),
@@ -387,9 +388,9 @@ class ServerManager: ObservableObject {
             level: level,
             message: message
         )
-        
+
         logs.append(entry)
-        
+
         // Keep only last 1000 logs
         if logs.count > 1000 {
             logs.removeFirst(logs.count - 1000)
@@ -408,7 +409,7 @@ enum ServerError: LocalizedError {
     case startupTimeout
     case alreadyRunning
     case notRunning
-    
+
     var errorDescription: String? {
         switch self {
         case .startupTimeout:
@@ -441,7 +442,7 @@ enum LogLevel {
     case info
     case warning
     case error
-    
+
     var icon: String {
         switch self {
         case .debug: return "ant.circle"
@@ -450,7 +451,7 @@ enum LogLevel {
         case .error: return "xmark.circle"
         }
     }
-    
+
     var color: String {
         switch self {
         case .debug: return "gray"

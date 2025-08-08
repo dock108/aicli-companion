@@ -11,7 +11,7 @@ public struct Spacing {
     public static let xl: CGFloat = 32
     public static let xxl: CGFloat = 48
     public static let xxxl: CGFloat = 60
-    
+
     // MARK: - Component Specific Spacing
     public struct Component {
         public static let buttonPaddingVertical: CGFloat = 16
@@ -20,13 +20,13 @@ public struct Spacing {
         public static let navBarVerticalPadding: CGFloat = 8
         public static let cardPadding: CGFloat = 20
     }
-    
+
     // MARK: - Layout Specific Spacing
     public struct Layout {
         public static let screenPaddingTop: CGFloat = 24
         public static let screenPaddingBottom: CGFloat = 24
         public static let screenPaddingHorizontal: CGFloat = 24
-        
+
         // Connection screen specific spacing
         public static let navBarToHero: CGFloat = 32
         public static let heroToTitle: CGFloat = 24
@@ -44,7 +44,7 @@ public struct CornerRadius {
     public static let md: CGFloat = 12  // Buttons
     public static let lg: CGFloat = 16  // Cards
     public static let xl: CGFloat = 24  // Bottom sheets
-    
+
     // Component specific
     public static let button: CGFloat = 12
     public static let card: CGFloat = 16
@@ -61,21 +61,21 @@ public struct Shadows {
         xOffset: 0,
         yOffset: 1
     )
-    
+
     public static let medium = Shadow(
         color: Color.black.opacity(0.06),
         radius: 4,
         xOffset: 0,
         yOffset: 2
     )
-    
+
     public static let large = Shadow(
         color: Color.black.opacity(0.08),
         radius: 8,
         xOffset: 0,
         yOffset: 4
     )
-    
+
     public struct Shadow {
         let color: Color
         let radius: CGFloat
@@ -93,12 +93,12 @@ extension View {
             .padding(.top, Spacing.Layout.screenPaddingTop)
             .padding(.bottom, Spacing.Layout.screenPaddingBottom)
     }
-    
+
     /// Apply component padding
     public func componentPadding() -> some View {
         self.padding(Spacing.Component.cardPadding)
     }
-    
+
     /// Apply shadow
     public func shadow(_ shadow: Shadows.Shadow) -> some View {
         self.shadow(

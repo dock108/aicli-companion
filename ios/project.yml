@@ -52,3 +52,4 @@ targets:
         CODE_SIGN_STYLE: Automatic
         SWIFT_VERSION: 5.9
         TARGETED_DEVICE_FAMILY: 1,2
+        CODE_SIGN_ENTITLEMENTS: App/AICLICompanion.entitlements

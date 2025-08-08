@@ -1,6 +1,6 @@
 {
   "server/src/**/*.js": ["cd server && npx prettier --write", "cd server && npx eslint --fix"],
-  "ios/**/*.swift": ["swiftlint lint --fix --format"],
+  "ios/**/*.swift": ["swiftlint lint --format"],
   "**/*.json": ["prettier --write"],
   "**/*.md": ["prettier --write"]
 }

@@ -125,7 +125,7 @@ struct ProjectBadgeModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .overlay(alignment: .topTrailing) {
-                if let count = notificationService.pendingNotifications[projectId], !count.isZero {
+                if let count = notificationService.pendingNotifications[projectId], count != 0 {
                     ZStack {
                         Circle()
                             .fill(Color.red)

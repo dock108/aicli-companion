@@ -483,7 +483,7 @@ struct AdvancedSettingsView: View {
 struct SettingsDocument: FileDocument {
     static var readableContentTypes: [UTType] { [.json] }
 
-    private let settingsData: Data
+    @MainActor private let settingsData: Data
 
     @MainActor
     init(settingsManager: SettingsManager) {

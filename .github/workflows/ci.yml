@@ -143,10 +143,10 @@ jobs:
     - name: Install SwiftLint
       run: brew install swiftlint
     
-    - name: Generate Xcode Project
+    - name: Skip Xcode Project Generation (using existing project)
       run: |
         cd macos-app
-        xcodegen generate
+        echo "Using existing AICLICompanionHost.xcodeproj"
     
     - name: Run SwiftLint
       run: |
@@ -156,12 +156,12 @@ jobs:
     - name: Build macOS App
       run: |
         cd macos-app
-        xcodebuild -project ClaudeCompanionHost.xcodeproj -scheme ClaudeCompanionHost -destination 'platform=macOS' build CODE_SIGNING_ALLOWED=NO
+        xcodebuild -project AICLICompanionHost.xcodeproj -scheme AICLICompanionHost -destination 'platform=macOS' build CODE_SIGNING_ALLOWED=NO
     
     - name: Run macOS Tests with Coverage
       run: |
         cd macos-app
-        xcodebuild -project ClaudeCompanionHost.xcodeproj -scheme ClaudeCompanionHost -destination 'platform=macOS' test -enableCodeCoverage YES CODE_SIGNING_ALLOWED=NO -resultBundlePath macos-test.xcresult
+        xcodebuild -project AICLICompanionHost.xcodeproj -scheme AICLICompanionHost -destination 'platform=macOS' test -enableCodeCoverage YES CODE_SIGNING_ALLOWED=NO -resultBundlePath macos-test.xcresult
     
     - name: Generate macOS Coverage Report
       run: |
@@ -181,7 +181,7 @@ jobs:
     - name: Build for Release
       run: |
         cd macos-app
-        xcodebuild -project ClaudeCompanionHost.xcodeproj -scheme ClaudeCompanionHost -configuration Release -destination 'platform=macOS' build CODE_SIGNING_ALLOWED=NO
+        xcodebuild -project AICLICompanionHost.xcodeproj -scheme AICLICompanionHost -configuration Release -destination 'platform=macOS' build CODE_SIGNING_ALLOWED=NO
       continue-on-error: true
 
   # Code Quality Report

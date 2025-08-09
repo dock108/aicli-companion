@@ -13,7 +13,6 @@ extension ServerManager {
 
     func addLog(_ level: LogLevel, _ message: String) {
         let entry = LogEntry(
-            timestamp: Date(),
             level: level,
             message: message
         )

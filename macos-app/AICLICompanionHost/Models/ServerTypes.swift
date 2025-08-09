@@ -74,13 +74,22 @@ struct Session: Identifiable {
 
 // MARK: - Log Entry
 struct LogEntry: Identifiable {
-    let id = UUID()
+    let id: UUID
     let timestamp: Date
     let level: LogLevel
     let message: String
+    let category: String
+
+    init(level: LogLevel, message: String, category: String = "") {
+        self.id = UUID()
+        self.timestamp = Date()
+        self.level = level
+        self.message = message
+        self.category = category
+    }
 }
 
-enum LogLevel {
+enum LogLevel: CaseIterable {
     case debug
     case info
     case warning
@@ -95,12 +104,21 @@ enum LogLevel {
         }
     }
 
-    var color: NSColor {
+    var color: Color {
         switch self {
-        case .debug: return .systemGray
-        case .info: return .systemBlue
-        case .warning: return .systemOrange
-        case .error: return .systemRed
+        case .debug: return Color(.systemGray)
+        case .info: return Color(.systemBlue)
+        case .warning: return Color(.systemOrange)
+        case .error: return Color(.systemRed)
+        }
+    }
+
+    var displayName: String {
+        switch self {
+        case .debug: return "Debug"
+        case .info: return "Info"
+        case .warning: return "Warning"
+        case .error: return "Error"
         }
     }
 }

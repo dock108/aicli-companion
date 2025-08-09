@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 54;
+	objectVersion = 56;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -22,6 +22,23 @@
 		B8AD098A9609C524474924CD /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B38B3C579E26C4C781CFD405 /* SwiftUI.framework */; };
 		C0E577D671E66A656C4D5376 /* LogsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E55F3CDA5B67CABF13AFBE9F /* LogsView.swift */; };
 		C1AC8F57D39240FF1A17AF57 /* MenuBarIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9E150D268B4DB3301E60399 /* MenuBarIcon.swift */; };
+		D1143DA82E480F5300F6C4DD /* ActivityMonitorCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DA12E480F5300F6C4DD /* ActivityMonitorCards.swift */; };
+		D1143DA92E480F5300F6C4DD /* MenuBarActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DA52E480F5300F6C4DD /* MenuBarActions.swift */; };
+		D1143DAA2E480F5300F6C4DD /* ActivityMonitorTabs.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DA42E480F5300F6C4DD /* ActivityMonitorTabs.swift */; };
+		D1143DAB2E480F5300F6C4DD /* MenuBarSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DA72E480F5300F6C4DD /* MenuBarSections.swift */; };
+		D1143DAC2E480F5300F6C4DD /* ActivityMonitorCharts.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DA22E480F5300F6C4DD /* ActivityMonitorCharts.swift */; };
+		D1143DAD2E480F5300F6C4DD /* MenuBarComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DA62E480F5300F6C4DD /* MenuBarComponents.swift */; };
+		D1143DAE2E480F5300F6C4DD /* ActivityMonitorComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DA32E480F5300F6C4DD /* ActivityMonitorComponents.swift */; };
+		D1143DB32E480F5E00F6C4DD /* ProcessConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DB02E480F5E00F6C4DD /* ProcessConfiguration.swift */; };
+		D1143DB42E480F5E00F6C4DD /* ExecutableDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DAF2E480F5E00F6C4DD /* ExecutableDiscovery.swift */; };
+		D1143DB52E480F5E00F6C4DD /* ProcessOutputHandling.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DB12E480F5E00F6C4DD /* ProcessOutputHandling.swift */; };
+		D1143DB62E480F5E00F6C4DD /* ServerDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DB22E480F5E00F6C4DD /* ServerDiscovery.swift */; };
+		D1143DBD2E480F9800F6C4DD /* SettingsComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DB92E480F9800F6C4DD /* SettingsComponents.swift */; };
+		D1143DBE2E480F9800F6C4DD /* TunnelSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DBC2E480F9800F6C4DD /* TunnelSettingsView.swift */; };
+		D1143DBF2E480F9800F6C4DD /* NgrokSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DB72E480F9800F6C4DD /* NgrokSetupView.swift */; };
+		D1143DC02E480F9800F6C4DD /* SettingsDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DBA2E480F9800F6C4DD /* SettingsDocument.swift */; };
+		D1143DC12E480F9800F6C4DD /* SecuritySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DB82E480F9800F6C4DD /* SecuritySettingsView.swift */; };
+		D1143DC22E480F9800F6C4DD /* SettingsView.swift.backup in Resources */ = {isa = PBXBuildFile; fileRef = D1143DBB2E480F9800F6C4DD /* SettingsView.swift.backup */; };
 		D617AB228584EAF37011FB8F /* AICLICompanionHostTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D295461C0704190DFBDA4A9 /* AICLICompanionHostTests.swift */; };
 		D8FA16F8CCA39FC590212813 /* ServerManagerLogging.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF37DB1CB3780EBBF07CD79F /* ServerManagerLogging.swift */; };
 		DE51B6D028B90051BEFB2D28 /* VisualEffectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1AED27C384E464F6C2AC813 /* VisualEffectView.swift */; };
@@ -65,6 +82,23 @@
 		C4B9FFF6C401721A7E23A959 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		C5BD67B0917061C4DE0B34F6 /* ServerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerManager.swift; sourceTree = "<group>"; };
 		CA0C40424243F5321CCD205B /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		D1143DA12E480F5300F6C4DD /* ActivityMonitorCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityMonitorCards.swift; sourceTree = "<group>"; };
+		D1143DA22E480F5300F6C4DD /* ActivityMonitorCharts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityMonitorCharts.swift; sourceTree = "<group>"; };
+		D1143DA32E480F5300F6C4DD /* ActivityMonitorComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityMonitorComponents.swift; sourceTree = "<group>"; };
+		D1143DA42E480F5300F6C4DD /* ActivityMonitorTabs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityMonitorTabs.swift; sourceTree = "<group>"; };
+		D1143DA52E480F5300F6C4DD /* MenuBarActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarActions.swift; sourceTree = "<group>"; };
+		D1143DA62E480F5300F6C4DD /* MenuBarComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarComponents.swift; sourceTree = "<group>"; };
+		D1143DA72E480F5300F6C4DD /* MenuBarSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarSections.swift; sourceTree = "<group>"; };
+		D1143DAF2E480F5E00F6C4DD /* ExecutableDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExecutableDiscovery.swift; sourceTree = "<group>"; };
+		D1143DB02E480F5E00F6C4DD /* ProcessConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessConfiguration.swift; sourceTree = "<group>"; };
+		D1143DB12E480F5E00F6C4DD /* ProcessOutputHandling.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessOutputHandling.swift; sourceTree = "<group>"; };
+		D1143DB22E480F5E00F6C4DD /* ServerDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerDiscovery.swift; sourceTree = "<group>"; };
+		D1143DB72E480F9800F6C4DD /* NgrokSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NgrokSetupView.swift; sourceTree = "<group>"; };
+		D1143DB82E480F9800F6C4DD /* SecuritySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecuritySettingsView.swift; sourceTree = "<group>"; };
+		D1143DB92E480F9800F6C4DD /* SettingsComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsComponents.swift; sourceTree = "<group>"; };
+		D1143DBA2E480F9800F6C4DD /* SettingsDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsDocument.swift; sourceTree = "<group>"; };
+		D1143DBB2E480F9800F6C4DD /* SettingsView.swift.backup */ = {isa = PBXFileReference; lastKnownFileType = text; path = SettingsView.swift.backup; sourceTree = "<group>"; };
+		D1143DBC2E480F9800F6C4DD /* TunnelSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunnelSettingsView.swift; sourceTree = "<group>"; };
 		D73D2F820B825E953F8B8A05 /* ServerManagerProcess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerManagerProcess.swift; sourceTree = "<group>"; };
 		E55F3CDA5B67CABF13AFBE9F /* LogsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogsView.swift; sourceTree = "<group>"; };
 		EB024E5545B00A9068C05EF6 /* Network.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Network.framework; path = System/Library/Frameworks/Network.framework; sourceTree = SDKROOT; };
@@ -101,6 +135,19 @@
 		19882388267B41DDD95BEAC4 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				D1143DB72E480F9800F6C4DD /* NgrokSetupView.swift */,
+				D1143DB82E480F9800F6C4DD /* SecuritySettingsView.swift */,
+				D1143DB92E480F9800F6C4DD /* SettingsComponents.swift */,
+				D1143DBA2E480F9800F6C4DD /* SettingsDocument.swift */,
+				D1143DBB2E480F9800F6C4DD /* SettingsView.swift.backup */,
+				D1143DBC2E480F9800F6C4DD /* TunnelSettingsView.swift */,
+				D1143DA12E480F5300F6C4DD /* ActivityMonitorCards.swift */,
+				D1143DA22E480F5300F6C4DD /* ActivityMonitorCharts.swift */,
+				D1143DA32E480F5300F6C4DD /* ActivityMonitorComponents.swift */,
+				D1143DA42E480F5300F6C4DD /* ActivityMonitorTabs.swift */,
+				D1143DA52E480F5300F6C4DD /* MenuBarActions.swift */,
+				D1143DA62E480F5300F6C4DD /* MenuBarComponents.swift */,
+				D1143DA72E480F5300F6C4DD /* MenuBarSections.swift */,
 				5C502727F53D351B93F652A3 /* ActivityMonitorView.swift */,
 				E55F3CDA5B67CABF13AFBE9F /* LogsView.swift */,
 				B9E150D268B4DB3301E60399 /* MenuBarIcon.swift */,
@@ -146,6 +193,10 @@
 		D573D5420F0D167AB5F845DD /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				D1143DAF2E480F5E00F6C4DD /* ExecutableDiscovery.swift */,
+				D1143DB02E480F5E00F6C4DD /* ProcessConfiguration.swift */,
+				D1143DB12E480F5E00F6C4DD /* ProcessOutputHandling.swift */,
+				D1143DB22E480F5E00F6C4DD /* ServerDiscovery.swift */,
 				C5BD67B0917061C4DE0B34F6 /* ServerManager.swift */,
 				FF37DB1CB3780EBBF07CD79F /* ServerManagerLogging.swift */,
 				EC953C5B942B362454AB61A7 /* ServerManagerNetworking.swift */,
@@ -264,6 +315,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D1143DC22E480F9800F6C4DD /* SettingsView.swift.backup in Resources */,
 				9471C4201804C92958C163C2 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -275,10 +327,21 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D1143DB32E480F5E00F6C4DD /* ProcessConfiguration.swift in Sources */,
+				D1143DB42E480F5E00F6C4DD /* ExecutableDiscovery.swift in Sources */,
+				D1143DB52E480F5E00F6C4DD /* ProcessOutputHandling.swift in Sources */,
+				D1143DB62E480F5E00F6C4DD /* ServerDiscovery.swift in Sources */,
 				EF0DBD79337930B4851B4B75 /* AICLICompanionApp.swift in Sources */,
 				8E0FDC277ACC5A36550B584E /* ActivityMonitorView.swift in Sources */,
 				20BB37ACA314C78851A98135 /* AppDelegate.swift in Sources */,
 				641E539B3FB8C3D69DFF4401 /* KeychainManager.swift in Sources */,
+				D1143DA82E480F5300F6C4DD /* ActivityMonitorCards.swift in Sources */,
+				D1143DA92E480F5300F6C4DD /* MenuBarActions.swift in Sources */,
+				D1143DAA2E480F5300F6C4DD /* ActivityMonitorTabs.swift in Sources */,
+				D1143DAB2E480F5300F6C4DD /* MenuBarSections.swift in Sources */,
+				D1143DAC2E480F5300F6C4DD /* ActivityMonitorCharts.swift in Sources */,
+				D1143DAD2E480F5300F6C4DD /* MenuBarComponents.swift in Sources */,
+				D1143DAE2E480F5300F6C4DD /* ActivityMonitorComponents.swift in Sources */,
 				C0E577D671E66A656C4D5376 /* LogsView.swift in Sources */,
 				C1AC8F57D39240FF1A17AF57 /* MenuBarIcon.swift in Sources */,
 				F57456BC5A842B17696FDD6E /* MenuBarView.swift in Sources */,
@@ -293,6 +356,11 @@
 				A208136083770A2795BDCD87 /* SettingsManager.swift in Sources */,
 				EF2FA3D727B3FF3B73D708D3 /* SettingsView.swift in Sources */,
 				DE51B6D028B90051BEFB2D28 /* VisualEffectView.swift in Sources */,
+				D1143DBD2E480F9800F6C4DD /* SettingsComponents.swift in Sources */,
+				D1143DBE2E480F9800F6C4DD /* TunnelSettingsView.swift in Sources */,
+				D1143DBF2E480F9800F6C4DD /* NgrokSetupView.swift in Sources */,
+				D1143DC02E480F9800F6C4DD /* SettingsDocument.swift in Sources */,
+				D1143DC12E480F9800F6C4DD /* SecuritySettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

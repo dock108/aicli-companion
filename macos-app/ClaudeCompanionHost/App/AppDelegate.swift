@@ -31,11 +31,31 @@ class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
         // Start monitoring network changes
         NetworkMonitor.shared.startMonitoring()
 
-        // Check if server should auto-start
+        // Check if server should auto-start (with delay to ensure settings are loaded)
         if SettingsManager.shared.autoStartServer {
             Task {
-                try? await ServerManager.shared.startServer()
+                // Add delay to ensure all managers are fully initialized
+                try await Task.sleep(for: .milliseconds(1000))
+                
+                print("🚀 Auto-starting server with current settings...")
+                print("   - Auth required: \(SettingsManager.shared.requireAuthentication)")
+                print("   - Tunnel enabled: \(SettingsManager.shared.enableTunnel)")
+                print("   - Tunnel provider: \(SettingsManager.shared.tunnelProvider)")
+                print("   - Token configured: \(!SettingsManager.shared.ngrokAuthToken.isEmpty)")
+                
+                do {
+                    try await ServerManager.shared.startServer()
+                    print("✅ Auto-start successful")
+                } catch {
+                    print("❌ Auto-start failed: \(error)")
+                    // Don't fail silently - user should know auto-start failed
+                    await MainActor.run {
+                        ServerManager.shared.addLog(.error, "Auto-start failed: \(error.localizedDescription)")
+                    }
+                }
             }
+        } else {
+            print("ℹ️ Auto-start disabled - server can be started manually")
         }
     }
 
@@ -63,10 +83,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
 
     private func requestNotificationPermissions() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
-            if granted {
-                print("✅ Notification permissions granted")
-            } else if let error = error {
-                print("❌ Notification permission error: \(error)")
+            DispatchQueue.main.async {
+                if granted {
+                    print("✅ Notification permissions granted")
+                } else {
+                    print("⚠️ Notifications not authorized - some features may be limited")
+                    if let error = error {
+                        print("❌ Notification permission error: \(error)")
+                    }
+                    // Don't show this error to user as it's not critical for app function
+                }
             }
         }
     }

@@ -17,8 +17,10 @@ export class ServerStartup {
     }
     if (!existingToken) {
       const token = TokenManager.generateSecureToken();
-      console.log(`🔑 Generated auth token: ${token}`);
-      console.log('   Save this token to connect mobile clients');
+      // Mask the generated token for security
+      const maskedToken = token.substring(0, 8) + '...****';
+      console.log(`🔑 Generated auth token: ${maskedToken}`);
+      console.log('   Full token available in app settings');
       return token;
     }
     return existingToken;
@@ -59,8 +61,10 @@ export class ServerStartup {
 
     if (authToken) {
       console.log(`   🔐 Authentication enabled`);
+      // Mask auth token in connection URL for security
+      const maskedToken = authToken.substring(0, 8) + '...****';
       console.log(
-        `   📱 Mobile app connection: ${wsProtocol}://${hostname}:${config.port}/ws?token=${authToken}`
+        `   📱 Mobile app connection: ${wsProtocol}://${hostname}:${config.port}/ws?token=${maskedToken}`
       );
     } else {
       console.log(`   🔓 Authentication disabled (AUTH_REQUIRED=false)`);

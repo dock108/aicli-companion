@@ -36,6 +36,7 @@
   "author": "Michael Fuscoletti",
   "license": "MIT",
   "dependencies": {
+    "@ngrok/ngrok": "^1.5.2",
     "@parse/node-apn": "^6.5.0",
     "bonjour-service": "^1.2.1",
     "cors": "^2.8.5",

@@ -22,6 +22,7 @@ class ServerManager: ObservableObject {
     @Published var isProcessing = false
     @Published var serverHealth: ServerHealth = .unknown
     @Published var logs: [LogEntry] = []
+    @Published var publicURL: String?
 
     // MARK: - Private Properties
     private var serverProcess: Process?
@@ -32,15 +33,27 @@ class ServerManager: ObservableObject {
     // MARK: - Computed Properties
     var connectionString: String {
         guard isRunning else { return "" }
+        
+        // Use public URL if available (when tunneling is active)
+        let baseURL = publicURL ?? "http://\(localIP):\(port)"
+        
         if let token = authToken, SettingsManager.shared.requireAuthentication {
-            return "\(localIP):\(port)?token=\(token)"
+            // For public URLs, append token as query parameter
+            if publicURL != nil {
+                return "\(baseURL)?token=\(token)"
+            } else {
+                // For local connections, use the local format
+                return "\(localIP):\(port)?token=\(token)"
+            }
         } else {
-            return "\(localIP):\(port)"
+            // Return public URL if available, otherwise local
+            return publicURL ?? "\(localIP):\(port)"
         }
     }
 
     var serverFullURL: String {
-        "http://\(localIP):\(port)"
+        // Return public URL if available, otherwise local URL
+        publicURL ?? "http://\(localIP):\(port)"
     }
 
     var serverPID: Int32? {
@@ -54,28 +67,64 @@ class ServerManager: ObservableObject {
     }
 
     // MARK: - Public Methods
+    
+    /// Restart server with current configuration, ensuring clean shutdown and startup
+    func restartServerWithCurrentConfig() async throws {
+        addLog(.info, "Restarting server with current configuration...")
+        isProcessing = true
+        defer { isProcessing = false }
+        
+        // Force stop any existing server
+        await forceStopAnyServerOnPort()
+        
+        // Wait for cleanup
+        try await Task.sleep(for: .milliseconds(1000))
+        
+        // Verify port is free
+        let portFree = await isPortAvailable(port)
+        if !portFree {
+            addLog(.warning, "Port \(port) still in use after cleanup, attempting force kill...")
+            await forceKillProcessOnPort(port)
+            try await Task.sleep(for: .milliseconds(500))
+        }
+        
+        // Start with current configuration
+        try await startServer()
+        addLog(.info, "Server restart completed successfully")
+        
+        // Mark configuration as applied
+        await MainActor.run {
+            SettingsManager.shared.markConfigurationApplied()
+        }
+    }
+    
     func startServer() async throws {
         guard !isRunning else { return }
 
         isProcessing = true
         defer { isProcessing = false }
 
-        // Check if server is already running externally
+        // Check if server is already running externally (quick check)
+        addLog(.debug, "Checking for existing server at \(serverFullURL)")
         if await checkExternalServer() {
             // Server is running externally, just update our state
+            addLog(.info, "Found existing server, connecting to it")
             isRunning = true
             startHealthChecking()
             await fetchServerStatus()
             return
         }
+        addLog(.debug, "No existing server found, starting new instance")
 
         // Start the server process
         do {
+            addLog(.info, "Launching server process...")
             try await launchServerProcess()
             isRunning = true
+            addLog(.info, "Server process launched, starting health checks...")
             startHealthChecking()
 
-            // Send notification
+            // Send notification (only if permissions granted)
             NotificationManager.shared.showNotification(
                 title: "Server Started",
                 body: "AICLI Companion server is now running on port \(port)"
@@ -85,6 +134,10 @@ class ServerManager: ObservableObject {
             addLog(.info, "Server started successfully on port \(port)")
         } catch {
             addLog(.error, "Failed to start server: \(error.localizedDescription)")
+            // Additional error details
+            if let nsError = error as NSError? {
+                addLog(.debug, "Error details: domain=\(nsError.domain), code=\(nsError.code)")
+            }
             throw error
         }
     }
@@ -101,6 +154,7 @@ class ServerManager: ObservableObject {
         isRunning = false
         serverHealth = .unknown
         activeSessions.removeAll()
+        publicURL = nil
 
         defer {
             isProcessing = false
@@ -145,6 +199,131 @@ class ServerManager: ObservableObject {
     }
 
     // MARK: - Private Methods
+    
+    /// Force stop any server running on our configured port
+    private func forceStopAnyServerOnPort() async {
+        addLog(.debug, "Force stopping any server on port \(port)...")
+        
+        // First, try our normal stop process
+        if isRunning {
+            await stopServer()
+        }
+        
+        // Then force kill any remaining processes on the port
+        await forceKillProcessOnPort(port)
+        
+        // Reset our state
+        serverProcess = nil
+        isRunning = false
+        publicURL = nil
+        activeSessions.removeAll()
+        serverHealth = .unknown
+    }
+    
+    /// Force kill any process using the specified port
+    private func forceKillProcessOnPort(_ port: Int) async {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/lsof")
+        task.arguments = ["-ti", ":\(port)"]
+        
+        let pipe = Pipe()
+        task.standardOutput = pipe
+        task.standardError = pipe
+        
+        do {
+            try task.run()
+            task.waitUntilExit()
+            
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            if let output = String(data: data, encoding: .utf8), !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                let pids = output.trimmingCharacters(in: .whitespacesAndNewlines).components(separatedBy: .newlines)
+                
+                for pid in pids where !pid.isEmpty {
+                    addLog(.debug, "Killing process \(pid) using port \(port)")
+                    let killTask = Process()
+                    killTask.executableURL = URL(fileURLWithPath: "/bin/kill")
+                    killTask.arguments = ["-9", pid]
+                    try? killTask.run()
+                    killTask.waitUntilExit()
+                }
+            }
+        } catch {
+            addLog(.debug, "Could not kill processes on port \(port): \(error)")
+        }
+    }
+    
+    /// Check if a port is available
+    private func isPortAvailable(_ port: Int) async -> Bool {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/lsof")
+        task.arguments = ["-i", ":\(port)"]
+        
+        do {
+            try task.run()
+            task.waitUntilExit()
+            // lsof returns 0 if processes are found, 1 if none found
+            return task.terminationStatus != 0
+        } catch {
+            // If lsof fails, assume port is available
+            return true
+        }
+    }
+    
+    /// Build server environment variables from current settings
+    private func buildServerEnvironment() -> [String: String] {
+        var environment = ProcessInfo.processInfo.environment
+        environment["PORT"] = String(port)
+        environment["PATH"] = "/Users/michaelfuscoletti/.nvm/versions/node/v22.18.0/bin:/usr/local/bin:/usr/bin:/bin"
+        
+        // Configure authentication based on settings
+        let requireAuth = SettingsManager.shared.requireAuthentication || SettingsManager.shared.enableTunnel
+        environment["AUTH_REQUIRED"] = requireAuth ? "true" : "false"
+        
+        if requireAuth {
+            // Generate token if we don't have one
+            if authToken == nil {
+                generateAuthToken()
+            }
+            
+            if let token = authToken {
+                environment["AUTH_TOKEN"] = token
+                addLog(.info, "Starting server with authentication enabled")
+            }
+        } else {
+            addLog(.info, "Starting server without authentication")
+        }
+        
+        // Configure tunnel settings
+        let enableTunnel = SettingsManager.shared.enableTunnel
+        environment["ENABLE_TUNNEL"] = enableTunnel ? "true" : "false"
+        
+        if enableTunnel {
+            environment["TUNNEL_PROVIDER"] = SettingsManager.shared.tunnelProvider
+            
+            if SettingsManager.shared.tunnelProvider == "ngrok" {
+                let ngrokToken = SettingsManager.shared.ngrokAuthToken
+                if !ngrokToken.isEmpty {
+                    environment["NGROK_AUTH_TOKEN"] = ngrokToken
+                    // Log first 8 chars for debugging (masked for security)
+                    let maskedToken = String(ngrokToken.prefix(8)) + "...****"
+                    addLog(.info, "Starting server with ngrok tunnel enabled (token: \(maskedToken))")
+                } else {
+                    addLog(.warning, "ngrok auth token not configured - tunnel may fail")
+                }
+            }
+            
+            addLog(.debug, "Tunnel configuration: provider=\(SettingsManager.shared.tunnelProvider), enabled=\(enableTunnel)")
+        }
+        
+        // Pass the configured server directory to use for projects
+        let serverDir = SettingsManager.shared.serverDirectory
+        if !serverDir.isEmpty {
+            environment["CONFIG_PATH"] = serverDir
+        }
+        
+        return environment
+    }
+    
     private func setupNetworkMonitoring() {
         // Subscribe to network changes
         NetworkMonitor.shared.$localIP
@@ -195,20 +374,20 @@ class ServerManager: ObservableObject {
         task.currentDirectoryURL = URL(fileURLWithPath: "/Users/michaelfuscoletti/Desktop/claude-companion/server")
         task.arguments = ["start"]
 
-        // Set environment variables
-        var environment = ProcessInfo.processInfo.environment
-        environment["PORT"] = String(port)
-        // Add PATH to include node
-        environment["PATH"] = "/Users/michaelfuscoletti/.nvm/versions/node/v22.18.0/bin:/usr/local/bin:/usr/bin:/bin"
-        if let token = authToken {
-            environment["AUTH_TOKEN"] = token
-        }
-        // Pass the configured server directory to use for projects
-        let serverDir = SettingsManager.shared.serverDirectory
-        if !serverDir.isEmpty {
-            environment["CONFIG_PATH"] = serverDir
-        }
+        // Use centralized environment building
+        let environment = buildServerEnvironment()
         task.environment = environment
+        
+        // Debug log environment variables (masked sensitive ones)
+        addLog(.debug, "Environment variables set:")
+        for (key, value) in environment {
+            if key.contains("TOKEN") {
+                let maskedValue = value.count > 8 ? String(value.prefix(8)) + "...****" : "****"
+                addLog(.debug, "  \(key)=\(maskedValue)")
+            } else {
+                addLog(.debug, "  \(key)=\(value)")
+            }
+        }
 
         // Set up pipes for output
         let outputPipe = Pipe()
@@ -230,6 +409,7 @@ class ServerManager: ObservableObject {
             let data = handle.availableData
             if !data.isEmpty, let output = String(data: data, encoding: .utf8) {
                 DispatchQueue.main.async {
+                    self?.addLog(.error, "Server stderr: \(output)")
                     self?.processServerError(output)
                 }
             }
@@ -272,9 +452,17 @@ class ServerManager: ObservableObject {
         guard let url = URL(string: "\(serverFullURL)/health") else { return false }
 
         do {
-            let (_, response) = try await URLSession.shared.data(from: url)
-            return (response as? HTTPURLResponse)?.statusCode == 200
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 2.0  // Quick check - don't wait long
+            
+            let (_, response) = try await URLSession.shared.data(for: request)
+            let success = (response as? HTTPURLResponse)?.statusCode == 200
+            if success {
+                addLog(.info, "Found existing server running externally")
+            }
+            return success
         } catch {
+            // This is normal - no external server running
             return false
         }
     }
@@ -388,6 +576,15 @@ class ServerManager: ObservableObject {
                 addLog(.info, line)
             } else if line.contains("Session") {
                 addLog(.info, line)
+            } else if line.contains("Public URL:") || line.contains("Tunnel URL:") || line.contains("Ngrok tunnel established:") {
+                // Extract tunnel URL
+                if let urlRange = line.range(of: "https?://[^\\s]+", options: .regularExpression) {
+                    let extractedURL = String(line[urlRange])
+                    publicURL = extractedURL
+                    addLog(.info, "Tunnel established: \(extractedURL)")
+                }
+            } else if line.contains("ngrok") || line.contains("tunnel") {
+                addLog(.info, line)
             } else {
                 addLog(.debug, line)
             }
@@ -433,7 +630,7 @@ class ServerManager: ObservableObject {
         addLog(.info, "Logs cleared by user")
     }
 
-    private func addLog(_ level: LogLevel, _ message: String) {
+    func addLog(_ level: LogLevel, _ message: String) {
         let entry = LogEntry(
             id: UUID(),
             timestamp: Date(),

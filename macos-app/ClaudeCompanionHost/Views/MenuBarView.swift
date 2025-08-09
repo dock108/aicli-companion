@@ -157,7 +157,8 @@ struct QuickActionsSection: View {
                 showingQRCode = true
             }
             .popover(isPresented: $showingQRCode) {
-                QRCodeView(connectionString: serverManager.connectionString)
+                // Use public URL if tunneling is enabled, otherwise use local connection
+                QRCodeView(connectionString: serverManager.publicURL ?? serverManager.connectionString)
             }
 
             // Open Logs Button
@@ -171,8 +172,11 @@ struct QuickActionsSection: View {
     }
 
     private func copyConnectionURL() {
+        // Use public URL if available, otherwise use local connection
+        let urlToCopy = serverManager.publicURL ?? serverManager.connectionString
+        
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(serverManager.connectionString, forType: .string)
+        NSPasteboard.general.setString(urlToCopy, forType: .string)
 
         withAnimation(.easeInOut(duration: 0.2)) {
             copiedToClipboard = true
@@ -185,9 +189,10 @@ struct QuickActionsSection: View {
         }
 
         // Show notification
+        let notificationBody = serverManager.publicURL != nil ? "Public URL copied to clipboard" : "Connection URL copied to clipboard"
         NotificationManager.shared.showNotification(
             title: "Copied!",
-            body: "Connection URL copied to clipboard"
+            body: notificationBody
         )
     }
 }
@@ -259,15 +264,19 @@ struct StartStopButton: View {
     private func toggleServer() {
         isProcessing = true
         Task {
-            if serverManager.isRunning {
-                await serverManager.stopServer()
-            } else {
-                do {
-                    try await serverManager.startServer()
-                } catch {
-                    // Handle error if needed
-                    print("Failed to start server: \(error)")
+            do {
+                if serverManager.isRunning {
+                    // Use force stop to ensure clean shutdown
+                    await serverManager.stopServer()
+                } else {
+                    // Use restart flow to ensure current configuration is applied
+                    try await serverManager.restartServerWithCurrentConfig()
                 }
+            } catch {
+                await MainActor.run {
+                    serverManager.addLog(.error, "Server operation failed: \(error.localizedDescription)")
+                }
+                print("Failed server operation: \(error)")
             }
             isProcessing = false
         }
@@ -324,6 +333,52 @@ struct ConnectionInfoView: View {
             InfoRow(label: "Port:", value: String(serverManager.port))
             if serverManager.authToken != nil {
                 InfoRow(label: "Auth:", value: "Enabled")
+            }
+            if let publicURL = serverManager.publicURL {
+                // Add subtle divider before tunnel info
+                Divider()
+                    .padding(.vertical, 2)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    // Status row using consistent InfoRow format
+                    InfoRow(label: "Tunnel:", value: "🌐 Active")
+                        .foregroundStyle(.green)
+                    
+                    // URL display with proper formatting and improved contrast
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Public URL:")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fontWeight(.medium)
+                        
+                        Text(publicURL)
+                            .fontDesign(.monospaced)
+                            .font(.caption)
+                            .foregroundStyle(.primary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(Color(NSColor.controlBackgroundColor).opacity(0.8))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .stroke(Color.green.opacity(0.3), lineWidth: 1)
+                            )
+                            .cornerRadius(4)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .textSelection(.enabled)
+                            .contextMenu {
+                                Button("Copy URL") {
+                                    NSPasteboard.general.clearContents()
+                                    NSPasteboard.general.setString(publicURL, forType: .string)
+                                }
+                                Button("Open in Browser") {
+                                    if let url = URL(string: publicURL) {
+                                        NSWorkspace.shared.open(url)
+                                    }
+                                }
+                            }
+                    }
+                }
             }
         }
         .font(.caption)

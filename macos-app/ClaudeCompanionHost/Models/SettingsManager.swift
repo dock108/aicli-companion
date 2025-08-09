@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import Combine
 
 @MainActor
 class SettingsManager: ObservableObject {
@@ -28,6 +29,11 @@ class SettingsManager: ObservableObject {
     // Security Settings
     @AppStorage("requireAuthentication") var requireAuthentication: Bool = true
     @AppStorage("enableTouchID") var enableTouchID: Bool = true
+    
+    // Internet Access Settings
+    @AppStorage("enableTunnel") var enableTunnel: Bool = false
+    @AppStorage("tunnelProvider") var tunnelProvider: String = "ngrok"
+    @AppStorage("ngrokAuthToken") var ngrokAuthToken: String = ""
 
     // Advanced Settings
     @AppStorage("serverCommand") var serverCommand: String = "npm start"
@@ -35,9 +41,23 @@ class SettingsManager: ObservableObject {
     @AppStorage("nodeExecutable") var nodeExecutable: String = "/usr/local/bin/node"
     @AppStorage("npmExecutable") var npmExecutable: String = "/usr/local/bin/npm"
 
+    // MARK: - Configuration Change Tracking
+    @Published var configurationChanged: Bool = false
+    
+    // Store initial configuration to track changes
+    private var initialConfiguration: [String: Any] = [:]
+    
+    // MARK: - Computed Properties
+    var needsRestart: Bool {
+        // Server needs restart if configuration has changed and server is running
+        return configurationChanged && (ServerManager.shared.isRunning)
+    }
+    
     // MARK: - Private Properties
     private init() {
         setupDefaults()
+        captureInitialConfiguration()
+        setupConfigurationTracking()
     }
 
     // MARK: - Public Methods
@@ -54,6 +74,9 @@ class SettingsManager: ObservableObject {
         theme = "system"
         requireAuthentication = true
         enableTouchID = true
+        enableTunnel = false
+        tunnelProvider = "ngrok"
+        ngrokAuthToken = ""
         serverCommand = "npm start"
         serverDirectory = ""
         nodeExecutable = "/usr/local/bin/node"
@@ -74,6 +97,9 @@ class SettingsManager: ObservableObject {
             "theme": theme,
             "requireAuthentication": requireAuthentication,
             "enableTouchID": enableTouchID,
+            "enableTunnel": enableTunnel,
+            "tunnelProvider": tunnelProvider,
+            "ngrokAuthToken": ngrokAuthToken,
             "serverCommand": serverCommand,
             "serverDirectory": serverDirectory,
             "nodeExecutable": nodeExecutable,
@@ -137,6 +163,18 @@ class SettingsManager: ObservableObject {
         if let touchID = settings["enableTouchID"] as? Bool {
             enableTouchID = touchID
         }
+        
+        if let tunnel = settings["enableTunnel"] as? Bool {
+            enableTunnel = tunnel
+        }
+        
+        if let provider = settings["tunnelProvider"] as? String {
+            tunnelProvider = provider
+        }
+        
+        if let ngrokToken = settings["ngrokAuthToken"] as? String {
+            ngrokAuthToken = ngrokToken
+        }
 
         if let cmd = settings["serverCommand"] as? String {
             serverCommand = cmd
@@ -155,6 +193,17 @@ class SettingsManager: ObservableObject {
         }
     }
 
+    /// Mark configuration as applied (call after successful restart)
+    func markConfigurationApplied() {
+        configurationChanged = false
+        captureInitialConfiguration()
+    }
+    
+    /// Force mark configuration as changed (useful for manual tracking)
+    func markConfigurationChanged() {
+        configurationChanged = true
+    }
+    
     // MARK: - Private Methods
     private func setupDefaults() {
         // Set default server directory if not set
@@ -162,6 +211,62 @@ class SettingsManager: ObservableObject {
             serverDirectory = "/Users/michaelfuscoletti/Desktop/claude-companion/server"
         }
     }
+    
+    private func captureInitialConfiguration() {
+        initialConfiguration = [
+            "serverPort": serverPort,
+            "requireAuthentication": requireAuthentication,
+            "enableTunnel": enableTunnel,
+            "tunnelProvider": tunnelProvider,
+            "ngrokAuthToken": ngrokAuthToken,
+            "serverDirectory": serverDirectory,
+            "nodeExecutable": nodeExecutable,
+            "npmExecutable": npmExecutable
+        ]
+    }
+    
+    private func setupConfigurationTracking() {
+        // Track changes to server-relevant settings using @Published properties
+        // We'll use objectWillChange to detect any changes to the SettingsManager
+        objectWillChange
+            .debounce(for: .milliseconds(100), scheduler: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.checkForConfigurationChanges()
+            }
+            .store(in: &cancellables)
+    }
+    
+    private func checkForConfigurationChanges() {
+        let currentConfiguration: [String: Any] = [
+            "serverPort": serverPort,
+            "requireAuthentication": requireAuthentication,
+            "enableTunnel": enableTunnel,
+            "tunnelProvider": tunnelProvider,
+            "ngrokAuthToken": ngrokAuthToken,
+            "serverDirectory": serverDirectory,
+            "nodeExecutable": nodeExecutable,
+            "npmExecutable": npmExecutable
+        ]
+        
+        // Compare current with initial configuration
+        for (key, currentValue) in currentConfiguration {
+            if let initialValue = initialConfiguration[key] {
+                // Use string comparison for consistency
+                if String(describing: currentValue) != String(describing: initialValue) {
+                    configurationChanged = true
+                    return
+                }
+            } else {
+                configurationChanged = true
+                return
+            }
+        }
+        
+        configurationChanged = false
+    }
+    
+    // Add cancellables storage
+    private var cancellables = Set<AnyCancellable>()
 }
 
 // MARK: - Supporting Types

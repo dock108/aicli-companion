@@ -109,7 +109,7 @@ class ServerManager: ObservableObject {
             addLog(.info, "✅ Server started successfully on port \(port)")
         } catch {
             addLog(.error, "Failed to start server: \(error.localizedDescription)")
-            
+
             // Clean up failed process
             if let process = serverProcess {
                 if process.isRunning {
@@ -117,7 +117,7 @@ class ServerManager: ObservableObject {
                 }
                 serverProcess = nil
             }
-            
+
             throw error
         }
     }
@@ -144,7 +144,7 @@ class ServerManager: ObservableObject {
         if serverProcess != nil {
             await stopServerProcess()
         }
-        
+
         // Always kill anything on our port to ensure clean state
         await killProcessOnPort(port)
 
@@ -240,7 +240,7 @@ class ServerManager: ObservableObject {
                 addLog(.error, "Server process exited unexpectedly during startup")
                 throw ServerError.processSpawnFailed
             }
-            
+
             addLog(.debug, "Checking server readiness (attempt \(attempt)/\(maxAttempts))...")
 
             if await checkIfServerHealthy() {

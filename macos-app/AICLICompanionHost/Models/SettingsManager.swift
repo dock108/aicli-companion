@@ -34,7 +34,7 @@ class SettingsManager: ObservableObject {
     @AppStorage("enableTunnel") var enableTunnel: Bool = false
     @AppStorage("tunnelProvider") var tunnelProvider: String = "ngrok"
     @AppStorage("ngrokAuthToken") var ngrokAuthToken: String = ""
-    
+
     // Project Settings
     @AppStorage("defaultProjectDirectory") var defaultProjectDirectory: String = ""
 
@@ -179,7 +179,7 @@ class SettingsManager: ObservableObject {
         if let ngrokToken = settings["ngrokAuthToken"] as? String {
             ngrokAuthToken = ngrokToken
         }
-        
+
         if let projectDir = settings["defaultProjectDirectory"] as? String {
             defaultProjectDirectory = projectDir
         }

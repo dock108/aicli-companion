@@ -163,46 +163,62 @@ extension ServerManager {
         }
         return starting
     }
-    
+
     // MARK: - Process Management
-    
+
     func killProcessOnPort(_ port: Int) async {
         addLog(.info, "Killing any process on port \(port)...")
-        
-        // Use lsof to find PIDs using the port
+
+        // Get our own PID to avoid killing ourselves
+        let ourPID = ProcessInfo.processInfo.processIdentifier
+        addLog(.debug, "Our process PID: \(ourPID)")
+
+        // Use lsof to find PIDs using the port (only LISTEN state to get servers, not clients)
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
-        task.arguments = ["-t", "-i", ":\(port)"]
-        
+        task.arguments = ["-t", "-i", ":\(port)", "-sTCP:LISTEN"]
+
         let pipe = Pipe()
         task.standardOutput = pipe
         task.standardError = Pipe()
-        
+
         do {
             try task.run()
             task.waitUntilExit()
-            
+
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             if let output = String(data: data, encoding: .utf8) {
                 let pids = output.split(separator: "\n").compactMap { Int($0) }
-                
+
                 for pid in pids {
-                    addLog(.debug, "Killing process with PID \(pid)")
+                    // Skip our own process!
+                    if pid == Int(ourPID) {
+                        addLog(.warning, "Skipping our own process (PID \(pid))")
+                        continue
+                    }
+
+                    // Also skip if it's our managed server process
+                    if let serverPID = serverPID, pid == Int(serverPID) {
+                        addLog(.debug, "Found our managed server process (PID \(pid)), will handle separately")
+                        continue
+                    }
+
+                    addLog(.debug, "Killing external process with PID \(pid)")
                     let killTask = Process()
                     killTask.executableURL = URL(fileURLWithPath: "/bin/kill")
                     killTask.arguments = ["-9", String(pid)]
-                    
+
                     do {
                         try killTask.run()
                         killTask.waitUntilExit()
-                        addLog(.info, "Killed process \(pid) on port \(port)")
+                        addLog(.info, "Killed external process \(pid) on port \(port)")
                     } catch {
                         addLog(.error, "Failed to kill process \(pid): \(error.localizedDescription)")
                     }
                 }
-                
+
                 if pids.isEmpty {
-                    addLog(.debug, "No processes found on port \(port)")
+                    addLog(.debug, "No server processes found on port \(port)")
                 } else {
                     // Wait a moment for processes to fully terminate
                     try await Task.sleep(for: .milliseconds(500))

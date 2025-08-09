@@ -1012,7 +1012,7 @@ struct AdvancedSettingsView: View {
                 Text("⚠️ Modifying these settings may prevent the server from starting correctly")
                     .font(.caption)
                     .foregroundStyle(.orange)
-                
+
                 Text("Leave Node.js and npm paths empty to auto-detect from NVM, Homebrew, or system installations")
                     .font(.caption)
                     .foregroundStyle(.secondary)

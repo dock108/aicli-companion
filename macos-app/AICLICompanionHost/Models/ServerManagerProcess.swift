@@ -15,7 +15,7 @@ extension ServerManager {
         guard !isRunning else {
             throw ServerError.serverAlreadyRunning
         }
-        
+
         // Prevent multiple simultaneous start attempts
         guard serverProcess == nil else {
             addLog(.warning, "Server process already starting, ignoring duplicate request")
@@ -44,27 +44,27 @@ extension ServerManager {
 
         // Setup environment
         var environment = ProcessInfo.processInfo.environment
-        
+
         // Get the actual paths we'll be using
         let actualNodePath = await findNodeExecutable()
         let actualNpmPath = await findNpmExecutable()
-        
+
         // Add the directory containing node and npm to PATH
         let currentPath = environment["PATH"] ?? ""
         var pathComponents: [String] = []
-        
+
         // Add the directory of the actual node executable
         let nodeBinPath = URL(fileURLWithPath: actualNodePath).deletingLastPathComponent().path
         pathComponents.append(nodeBinPath)
         addLog(.debug, "Added to PATH: \(nodeBinPath)")
-        
+
         // Add the directory of the actual npm executable if different
         let npmBinPath = URL(fileURLWithPath: actualNpmPath).deletingLastPathComponent().path
         if npmBinPath != nodeBinPath {
             pathComponents.append(npmBinPath)
             addLog(.debug, "Added to PATH: \(npmBinPath)")
         }
-        
+
         // Add common paths as fallback
         pathComponents.append(contentsOf: [
             "/opt/homebrew/bin",
@@ -72,11 +72,11 @@ extension ServerManager {
             "/usr/bin",
             "/bin"
         ])
-        
+
         // Combine all paths
         pathComponents.append(currentPath)
         environment["PATH"] = pathComponents.joined(separator: ":")
-        
+
         environment["PORT"] = String(port)
         environment["NODE_ENV"] = "production"
 
@@ -110,37 +110,54 @@ extension ServerManager {
 
         process.environment = environment
 
-        // Setup command - use bundled server
+        // Setup command - use bundled server or development fallback
         guard let resourcePath = Bundle.main.resourcePath else {
             addLog(.error, "Could not find app resources")
             throw ServerError.processSpawnFailed
         }
-        
-        let serverDir = "\(resourcePath)/server"
-        
-        // Verify bundled server exists
+
+        var serverDir = "\(resourcePath)/server"
+
+        // Check for bundled server
         if !FileManager.default.fileExists(atPath: serverDir) {
-            addLog(.error, "Bundled server not found at: \(serverDir)")
-            addLog(.error, "Please ensure the server is bundled with the app")
-            throw ServerError.processSpawnFailed
+            // Development fallback - check for server in project
+            let devServerPath = "\(resourcePath)/../../../../../../server"
+            let resolvedDevPath = URL(fileURLWithPath: devServerPath).standardizedFileURL.path
+
+            if FileManager.default.fileExists(atPath: resolvedDevPath) {
+                serverDir = resolvedDevPath
+                addLog(.warning, "Using development server at: \(serverDir)")
+            } else {
+                // Last resort - check common development location
+                let projectServerPath = "/Users/michaelfuscoletti/Desktop/claude-companion/server"
+                if FileManager.default.fileExists(atPath: projectServerPath) {
+                    serverDir = projectServerPath
+                    addLog(.warning, "Using project server at: \(serverDir)")
+                } else {
+                    addLog(.error, "Server not found. Please add server folder to Xcode project Resources.")
+                    addLog(.error, "Expected location: \(resourcePath)/server")
+                    addLog(.error, "See ADD_SERVER_TO_XCODE.md for instructions")
+                    throw ServerError.processSpawnFailed
+                }
+            }
         }
-        
+
         process.currentDirectoryURL = URL(fileURLWithPath: serverDir)
-        addLog(.debug, "Working directory set to bundled server: \(serverDir)")
+        addLog(.debug, "Working directory set to: \(serverDir)")
 
         // Parse server command from settings
         let serverCommand = SettingsManager.shared.serverCommand
         let commandComponents = serverCommand.split(separator: " ").map(String.init)
-        
+
         if commandComponents.isEmpty {
             addLog(.error, "Invalid server command")
             throw ServerError.processSpawnFailed
         }
-        
+
         // Determine executable and arguments
         let executable = commandComponents[0]
         let arguments = Array(commandComponents.dropFirst())
-        
+
         // Find the full path for the executable (npm, node, etc.)
         let executablePath: String
         if executable == "npm" {
@@ -151,7 +168,7 @@ extension ServerManager {
             // For other commands, try to find it in PATH or use as-is
             executablePath = executable
         }
-        
+
         process.executableURL = URL(fileURLWithPath: executablePath)
         process.arguments = arguments.isEmpty && executable == "npm" ? ["start"] : arguments
 
@@ -268,7 +285,7 @@ extension ServerManager {
             addLog(.debug, "Using node path from settings: \(expandedPath)")
             return expandedPath
         }
-        
+
         // Priority 2: Check for NVM installation
         let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
         let nvmPath = "\(homeDir)/.nvm/versions/node"
@@ -286,32 +303,32 @@ extension ServerManager {
                 addLog(.debug, "Could not read NVM directory: \(error)")
             }
         }
-        
+
         // Priority 3: Check common installation locations
         let commonPaths = [
             "/opt/homebrew/bin/node",    // Apple Silicon Homebrew
             "/usr/local/bin/node",       // Intel Homebrew or standard
             "/usr/bin/node"               // System
         ]
-        
+
         for path in commonPaths {
             if FileManager.default.fileExists(atPath: path) {
                 addLog(.debug, "Auto-detected node at: \(path)")
                 return path
             }
         }
-        
+
         // Priority 4: Try using which command
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/which")
         task.arguments = ["node"]
         let pipe = Pipe()
         task.standardOutput = pipe
-        
+
         do {
             try task.run()
             task.waitUntilExit()
-            
+
             if task.terminationStatus == 0 {
                 let data = pipe.fileHandleForReading.readDataToEndOfFile()
                 if let path = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) {
@@ -322,7 +339,7 @@ extension ServerManager {
         } catch {
             addLog(.debug, "Which command failed: \(error)")
         }
-        
+
         // Final fallback
         addLog(.warning, "Could not auto-detect node, using default /usr/local/bin/node")
         return "/usr/local/bin/node"
@@ -336,7 +353,7 @@ extension ServerManager {
             addLog(.debug, "Using npm path from settings: \(expandedPath)")
             return expandedPath
         }
-        
+
         // Priority 2: Check for NVM installation
         let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
         let nvmPath = "\(homeDir)/.nvm/versions/node"
@@ -354,32 +371,32 @@ extension ServerManager {
                 addLog(.debug, "Could not read NVM directory: \(error)")
             }
         }
-        
+
         // Priority 3: Check common installation locations
         let commonPaths = [
             "/opt/homebrew/bin/npm",     // Apple Silicon Homebrew
             "/usr/local/bin/npm",        // Intel Homebrew or standard
             "/usr/bin/npm"                // System
         ]
-        
+
         for path in commonPaths {
             if FileManager.default.fileExists(atPath: path) {
                 addLog(.debug, "Auto-detected npm at: \(path)")
                 return path
             }
         }
-        
+
         // Priority 4: Try using which command
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/which")
         task.arguments = ["npm"]
         let pipe = Pipe()
         task.standardOutput = pipe
-        
+
         do {
             try task.run()
             task.waitUntilExit()
-            
+
             if task.terminationStatus == 0 {
                 let data = pipe.fileHandleForReading.readDataToEndOfFile()
                 if let path = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) {
@@ -390,7 +407,7 @@ extension ServerManager {
         } catch {
             addLog(.debug, "Which command failed: \(error)")
         }
-        
+
         // Final fallback
         addLog(.warning, "Could not auto-detect npm, using default /usr/local/bin/npm")
         return "/usr/local/bin/npm"
@@ -406,7 +423,7 @@ extension ServerManager {
                     addLog(.info, "🌐 Tunnel established: \(url)")
                 }
             }
-            
+
             // Also check for explicit tunnel URL announcements
             if line.contains("Public URL:") || line.contains("Forwarding") {
                 if let url = extractTunnelURL(from: line) {

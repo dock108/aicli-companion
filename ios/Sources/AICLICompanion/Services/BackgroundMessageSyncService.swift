@@ -242,7 +242,8 @@ actor AsyncSemaphore {
     }
     
     func wait() async {
-        if !count.isZero {
+        // swiftlint:disable:next empty_count
+        if count > 0 {
             count -= 1
         } else {
             await withCheckedContinuation { continuation in

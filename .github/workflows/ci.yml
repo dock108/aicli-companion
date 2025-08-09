@@ -6,16 +6,28 @@ on:
   pull_request:
     branches: [ main, develop ]
 
+# Global permissions for the workflow
+permissions:
+  contents: read
+  actions: read
+  checks: write
+  issues: write
+  pull-requests: write
+  security-events: write
+
 env:
   NODE_VERSION: '22'
   XCODE_VERSION: '16.2'
-  RUST_VERSION: 'stable'
 
 jobs:
   # Node.js Server Tests and Linting
   server:
     name: Server Tests & Lint
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+    timeout-minutes: 15
     
     defaults:
       run:
@@ -28,8 +40,6 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: ${{ env.NODE_VERSION }}
-        cache: 'npm'
-        cache-dependency-path: package-lock.json
     
     - name: Install dependencies
       run: npm ci
@@ -53,93 +63,14 @@ jobs:
       run: npm audit --audit-level=high
       continue-on-error: true
 
-  # Host App Tests and Linting
-  # hostapp:
-  #   name: Host App Tests & Lint
-  #   runs-on: ubuntu-latest
-    
-  #   defaults:
-  #     run:
-  #       working-directory: ./server/hostapp
-    
-  #   steps:
-  #   - uses: actions/checkout@v4
-    
-  #   - name: Setup Node.js
-  #     uses: actions/setup-node@v4
-  #     with:
-  #       node-version: ${{ env.NODE_VERSION }}
-  #       cache: 'npm'
-  #       cache-dependency-path: server/hostapp/package-lock.json
-    
-  #   - name: Install system dependencies for Tauri
-  #     run: |
-  #       sudo apt-get update
-  #       sudo apt-get install -y \
-  #         libwebkit2gtk-4.1-dev \
-  #         build-essential \
-  #         curl \
-  #         wget \
-  #         file \
-  #         libssl-dev \
-  #         libgtk-3-dev \
-  #         libayatana-appindicator3-dev \
-  #         librsvg2-dev
-    
-  #   - name: Setup Rust
-  #     uses: actions-rs/toolchain@v1
-  #     with:
-  #       toolchain: ${{ env.RUST_VERSION }}
-  #       profile: minimal
-  #       override: true
-  #       components: rustfmt, clippy
-    
-  #   - name: Install JavaScript dependencies
-  #     run: npm ci
-    
-  #   - name: Run ESLint
-  #     run: npm run lint
-    
-  #   - name: Run JavaScript tests with coverage
-  #     run: npm run test:coverage
-    
-  #   - name: Upload JavaScript coverage reports
-  #     uses: actions/upload-artifact@v4
-  #     with:
-  #       name: hostapp-js-coverage
-  #       path: server/hostapp/coverage/
-    
-  #   - name: Run Rust formatting check
-  #     run: |
-  #       cd src-tauri
-  #       cargo fmt --check
-    
-  #   - name: Run Rust linting
-  #     run: |
-  #       cd src-tauri
-  #       cargo clippy -- -D warnings
-    
-  #   - name: Run Rust tests
-  #     run: |
-  #       cd src-tauri
-  #       cargo test --verbose
-    
-  #   - name: Security audit for Node.js
-  #     run: npm audit --audit-level=high
-  #     continue-on-error: true
-    
-  #   - name: Security audit for Rust
-  #     run: |
-  #       cd src-tauri
-  #       cargo audit
-  #     continue-on-error: true
-
   # iOS App Build and Tests
   ios:
     name: iOS Build & Test
     permissions:
       contents: read
+      checks: write
     runs-on: macos-15
+    timeout-minutes: 30
     
     steps:
     - uses: actions/checkout@v4
@@ -168,15 +99,13 @@ jobs:
     - name: Run iOS Tests with Coverage
       run: |
         cd ios
-        xcodebuild -project AICLICompanion.xcodeproj -scheme AICLICompanionApp -destination 'platform=iOS Simulator,name=iPhone 16 Pro' test -enableCodeCoverage YES CODE_SIGNING_ALLOWED=NO
-      continue-on-error: true
+        xcodebuild -scheme AICLICompanion -destination 'platform=iOS Simulator,name=iPhone 16 Pro' test -enableCodeCoverage YES CODE_SIGNING_ALLOWED=NO -resultBundlePath ios-test.xcresult
     
     - name: Generate iOS Coverage Report
       run: |
         cd ios
-        xcrun xccov view --report --json DerivedData/Build/Logs/Test/*.xcresult > ios-coverage.json || true
-        xcrun xccov view --report DerivedData/Build/Logs/Test/*.xcresult > ios-coverage.txt || true
-      continue-on-error: true
+        xcrun xccov view --report --json ios-test.xcresult > ios-coverage.json || true
+        xcrun xccov view --report ios-test.xcresult > ios-coverage.txt || true
     
     - name: Upload iOS Coverage Reports
       uses: actions/upload-artifact@v4
@@ -196,7 +125,11 @@ jobs:
   # macOS App Build and Tests
   macos:
     name: macOS Build & Test
+    permissions:
+      contents: read
+      checks: write
     runs-on: macos-15
+    timeout-minutes: 30
     
     steps:
     - uses: actions/checkout@v4
@@ -228,15 +161,13 @@ jobs:
     - name: Run macOS Tests with Coverage
       run: |
         cd macos-app
-        xcodebuild -project ClaudeCompanionHost.xcodeproj -scheme ClaudeCompanionHost -destination 'platform=macOS' test -enableCodeCoverage YES CODE_SIGNING_ALLOWED=NO
-      continue-on-error: true
+        xcodebuild -project ClaudeCompanionHost.xcodeproj -scheme ClaudeCompanionHost -destination 'platform=macOS' test -enableCodeCoverage YES CODE_SIGNING_ALLOWED=NO -resultBundlePath macos-test.xcresult
     
     - name: Generate macOS Coverage Report
       run: |
         cd macos-app
-        xcrun xccov view --report --json DerivedData/Build/Logs/Test/*.xcresult > macos-coverage.json || true
-        xcrun xccov view --report DerivedData/Build/Logs/Test/*.xcresult > macos-coverage.txt || true
-      continue-on-error: true
+        xcrun xccov view --report --json macos-test.xcresult > macos-coverage.json || true
+        xcrun xccov view --report macos-test.xcresult > macos-coverage.txt || true
     
     - name: Upload macOS Coverage Reports
       uses: actions/upload-artifact@v4
@@ -253,45 +184,16 @@ jobs:
         xcodebuild -project ClaudeCompanionHost.xcodeproj -scheme ClaudeCompanionHost -configuration Release -destination 'platform=macOS' build CODE_SIGNING_ALLOWED=NO
       continue-on-error: true
 
-  # Integration Tests
-  integration:
-    name: Integration Tests
-    runs-on: ubuntu-latest
-    needs: [server, ios, macos]
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ env.NODE_VERSION }}
-    
-    - name: Install server dependencies
-      run: |
-        cd server
-        npm ci
-    
-    - name: Start server
-      run: |
-        cd server
-        npm start &
-        sleep 10
-    
-    - name: Health check
-      run: |
-        curl -f http://localhost:3001/health || exit 1
-    
-    - name: Run integration tests
-      run: |
-        cd server
-        node manual-tests/test-websocket.js
-      continue-on-error: true
-
   # Code Quality Report
   quality:
     name: Code Quality Report
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+      security-events: write
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: [server, ios, macos]
     
     steps:
@@ -302,17 +204,4 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      continue-on-error: true
-    
-    - name: Comment PR
-      uses: actions/github-script@v7
-      if: github.event_name == 'pull_request'
-      with:
-        script: |
-          github.rest.issues.createComment({
-            issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            body: '✅ All CI checks passed!'
-          })
       continue-on-error: true

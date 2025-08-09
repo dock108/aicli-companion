@@ -4,14 +4,14 @@
 import PackageDescription
 
 let package = Package(
-    name: "ClaudeCompanionHost",
+    name: "AICLICompanionHost",
     platforms: [
         .macOS(.v14)
     ],
     products: [
         .executable(
-            name: "ClaudeCompanionHost",
-            targets: ["ClaudeCompanionHost"]
+            name: "AICLICompanionHost",
+            targets: ["AICLICompanionHost"]
         )
     ],
     dependencies: [
@@ -19,16 +19,17 @@ let package = Package(
     ],
     targets: [
         .executableTarget(
-            name: "ClaudeCompanionHost",
+            name: "AICLICompanionHost",
             dependencies: [],
-            path: "ClaudeCompanionHost",
+            path: "AICLICompanionHost",
             resources: [
                 .process("Assets.xcassets")
             ]
         ),
         .testTarget(
-            name: "ClaudeCompanionHostTests",
-            dependencies: ["ClaudeCompanionHost"]
+            name: "AICLICompanionHostTests",
+            dependencies: ["AICLICompanionHost"],
+            path: "AICLICompanionHostTests"
         )
     ]
 )

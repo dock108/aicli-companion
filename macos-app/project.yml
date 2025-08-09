@@ -1,21 +1,21 @@
-name: ClaudeCompanionHost
+name: AICLICompanionHost
 options:
-  bundleIdPrefix: com.claude.companion
+  bundleIdPrefix: com.aicli.companion
   deploymentTarget:
     macOS: "14.0"
 settings:
   MARKETING_VERSION: "1.0"
   CURRENT_PROJECT_VERSION: "1"
 targets:
-  ClaudeCompanionHost:
+  AICLICompanionHost:
     type: application
     platform: macOS
     sources:
-      - ClaudeCompanionHost
+      - AICLICompanionHost
     resources:
-      - ClaudeCompanionHost/Assets.xcassets
+      - AICLICompanionHost/Assets.xcassets
     info:
-      path: ClaudeCompanionHost/Info.plist
+      path: AICLICompanionHost/Info.plist
       properties:
         CFBundleDisplayName: AICLI Companion Host
         LSUIElement: true
@@ -23,9 +23,11 @@ targets:
         NSSupportsAutomaticTermination: false
         NSSupportsSuddenTermination: false
     entitlements:
-      path: ClaudeCompanionHost/ClaudeCompanionHost.entitlements
+      path: AICLICompanionHost/AICLICompanionHost.entitlements
+      properties:
+        com.apple.security.get-task-allow: true
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.claude.companion.host
+      PRODUCT_BUNDLE_IDENTIFIER: com.aicli.companion.host
       INFOPLIST_KEY_LSUIElement: true
       ENABLE_HARDENED_RUNTIME: true
       CODE_SIGN_STYLE: Automatic
@@ -39,16 +41,16 @@ targets:
       - sdk: Security.framework
       - sdk: UserNotifications.framework
   
-  ClaudeCompanionHostTests:
+  AICLICompanionHostTests:
     type: bundle.unit-test
     platform: macOS
     sources:
-      - ClaudeCompanionHostTests
+      - AICLICompanionHostTests
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.claude.companion.host.tests
+      PRODUCT_BUNDLE_IDENTIFIER: com.aicli.companion.host.tests
       SWIFT_VERSION: "5.0"
       MACOSX_DEPLOYMENT_TARGET: "14.0"
       GENERATE_INFOPLIST_FILE: true
       CODE_SIGN_STYLE: Automatic
     dependencies:
-      - target: ClaudeCompanionHost
+      - target: AICLICompanionHost

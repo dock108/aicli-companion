@@ -1,0 +1,200 @@
+
+> aicli-companion-server@1.0.0 start
+> node src/index.js
+
+⚠️  Push notifications not configured - missing certificate or key path
+🚀 Setting up WebSocket service with modular architecture...
+📋 Registered handler for message type: ask
+📋 Registered handler for message type: streamStart
+📋 Registered handler for message type: streamSend
+📋 Registered handler for message type: streamClose
+📋 Registered handler for message type: permission
+📋 Registered handler for message type: ping
+📋 Registered handler for message type: subscribe
+📋 Registered handler for message type: setWorkingDirectory
+📋 Registered handler for message type: claudeCommand
+📋 Registered handler for message type: client_backgrounding
+📋 Registered handler for message type: getMessageHistory
+📋 Registered handler for message type: registerDevice
+📡 Set up 1 AICLI service event listeners
+🎉 WebSocket service setup complete!
+   Registered message types: ask, streamStart, streamSend, streamClose, permission, ping, subscribe, setWorkingDirectory, claudeCommand, client_backgrounding, getMessageHistory, registerDevice
+   Health monitoring: enabled
+   Event broadcasting: enabled
+   Authentication: disabled
+🔄 Initializing session persistence...
+📖 Loaded 0 valid sessions from disk
+📚 Session persistence initialized: 0 sessions loaded
+🔄 Restoring 0 persisted sessions
+📖 Loaded message buffer for session session123 (1 assistant messages)
+📚 Loaded 1 message buffers from disk
+🔄 Reconciling session state with AICLI CLI...
+✅ Session reconciliation complete: removed 0 stale sessions
+📊 Session reconciliation stats: { totalPersisted: 0, staleRemoved: 0, activeInMemory: 0 }
+Checking AICLI CLI availability at: claude
+AICLI Code version: 1.0.68 (Claude Code)
+   📡 Bonjour service advertising on port 3001
+🚀 AICLI Companion Server started
+   HTTP Server: http://localhost:3001
+   WebSocket: ws://localhost:3001/ws
+   🔓 Authentication disabled (AUTH_REQUIRED=false)
+   📱 Mobile app connection: ws://localhost:3001/ws
+   ✅ AICLI Code CLI detected
+🔍 Bonjour service published: AICLI Companion Server._aiclicode._tcp.local
+192.168.68.114 - - [05/Aug/2025:02:04:41 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:04:49 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:04:50 +0000] "GET /api/status HTTP/1.1" 404 149 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+Listing projects from directory: claude-companion
+192.168.68.114 - - [05/Aug/2025:02:04:51 +0000] "GET /api/projects HTTP/1.1" 200 585 "-" "AICLI%20Companion/1 CFNetwork/3826.400.120 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:04:55 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:05:00 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:05:05 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:05:10 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:05:15 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:05:20 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:05:25 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:05:30 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+Listing projects from directory: claude-companion
+192.168.68.114 - - [05/Aug/2025:02:05:33 +0000] "GET /api/projects HTTP/1.1" 304 - "-" "AICLI%20Companion/1 CFNetwork/3826.400.120 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:05:35 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+WebSocket client connected: 7d2506e7-1437-41db-881d-0a75bafc8010 from 192.168.68.114 (IPv4)
+   User-Agent: unknown
+   Total clients: 1
+✅ Welcome message sent to client 7d2506e7-1437-41db-881d-0a75bafc8010
+🔗 Client connected: 7d2506e7-1437-41db-881d-0a75bafc8010 from 192.168.68.114
+✅ WebSocket connection fully configured: 7d2506e7-1437-41db-881d-0a75bafc8010
+📡 Pinged 1 WebSocket clients
+192.168.68.114 - - [05/Aug/2025:02:05:40 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:05:42 +0000] "POST /api/shutdown HTTP/1.1" 404 152 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:05:43 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:05:43 +0000] "GET /api/status HTTP/1.1" 404 149 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+📡 Pinged 1 WebSocket clients
+📡 Pinged 1 WebSocket clients
+📡 Pinged 1 WebSocket clients
+🧹 Cleaned 1 expired connection history entries
+📡 Pinged 1 WebSocket clients
+📡 Pinged 1 WebSocket clients
+📡 Pinged 1 WebSocket clients
+📡 Pinged 1 WebSocket clients
+📡 Pinged 1 WebSocket clients
+📡 Pinged 1 WebSocket clients
+📡 Pinged 1 WebSocket clients
+127.0.0.1 - - [05/Aug/2025:02:08:17 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:08:17 +0000] "GET /api/status HTTP/1.1" 404 149 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+📡 Pinged 1 WebSocket clients
+192.168.68.114 - - [05/Aug/2025:02:08:23 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:08:27 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+Listing projects from directory: claude-companion
+192.168.68.114 - - [05/Aug/2025:02:08:29 +0000] "GET /api/projects HTTP/1.1" 304 - "-" "AICLI%20Companion/1 CFNetwork/3826.400.120 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:08:32 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:08:37 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+📡 Pinged 1 WebSocket clients
+192.168.68.114 - - [05/Aug/2025:02:08:42 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+Listing projects from directory: claude-companion
+192.168.68.114 - - [05/Aug/2025:02:08:45 +0000] "GET /api/projects HTTP/1.1" 304 - "-" "AICLI%20Companion/1 CFNetwork/3826.400.120 Darwin/24.5.0"
+Starting AICLI CLI session for project: node_modules
+Project path: /Users/michaelfuscoletti/Desktop/claude-companion/node_modules
+Session ID: b9a5c861-6621-4e40-8284-f783d4645653
+Continue session: false
+Checking AICLI CLI availability at: claude
+AICLI Code version: 1.0.68 (Claude Code)
+📋 Creating AICLI CLI session...
+🚀 Creating AICLI CLI session (metadata-only)
+   Session ID: b9a5c861-6621-4e40-8284-f783d4645653
+   Working directory: /Users/michaelfuscoletti/Desktop/claude-companion/node_modules
+   Initial prompt: "You are now working in the node_modules project. You have access to all files in this directory. Do not mention git branches, repository status, or version control information unless specifically asked about it."
+💾 Saved 1 sessions to disk
+💾 Persisted session b9a5c861-6621-4e40-8284-f783d4645653 (conversation: false)
+💾 Session b9a5c861-6621-4e40-8284-f783d4645653 persisted to disk
+✅ AICLI CLI session metadata created successfully
+✅ AICLI CLI session created successfully!
+   Session ID: b9a5c861-6621-4e40-8284-f783d4645653
+   Message: Session ready for commands
+📊 Active sessions: 1
+   Sessions: b9a5c861-6621-4e40-8284-f783d4645653
+192.168.68.114 - - [05/Aug/2025:02:08:47 +0000] "POST /api/projects/node_modules/start HTTP/1.1" 200 310 "-" "AICLI%20Companion/1 CFNetwork/3826.400.120 Darwin/24.5.0"
+📨 Routing message: subscribe from client 7d2506e7-1437-41db-881d-0a75bafc8010
+📨 Message received: subscribe from 7d2506e7-1437-41db-881d-0a75bafc8010
+📡 Client 7d2506e7-1437-41db-881d-0a75bafc8010 subscribing to events: [
+  'streamData',
+  'streamComplete',
+  'toolUse',
+  'toolResult',
+  'assistantMessage'
+]
+📡 Client 7d2506e7-1437-41db-881d-0a75bafc8010 subscribing to sessions: [ 'b9a5c861-6621-4e40-8284-f783d4645653' ]
+📡 Client 7d2506e7-1437-41db-881d-0a75bafc8010 subscribed to events: streamData, streamComplete, toolUse, toolResult, assistantMessage
+📎 Added session b9a5c861-6621-4e40-8284-f783d4645653 to client 7d2506e7-1437-41db-881d-0a75bafc8010 (total: 1)
+📤 Found 0 undelivered messages for session b9a5c861-6621-4e40-8284-f783d4645653, client 7d2506e7-1437-41db-881d-0a75bafc8010
+✅ Successfully subscribed client 7d2506e7-1437-41db-881d-0a75bafc8010 to 5 events and 1 sessions
+192.168.68.114 - - [05/Aug/2025:02:08:47 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+Listing projects from directory: claude-companion
+192.168.68.114 - - [05/Aug/2025:02:08:50 +0000] "GET /api/projects HTTP/1.1" 304 - "-" "AICLI%20Companion/1 CFNetwork/3826.400.120 Darwin/24.5.0"
+📨 Routing message: streamClose from client 7d2506e7-1437-41db-881d-0a75bafc8010
+📨 Message received: streamClose from 7d2506e7-1437-41db-881d-0a75bafc8010
+⏸️ Pausing stream session b9a5c861-6621-4e40-8284-f783d4645653 for client 7d2506e7-1437-41db-881d-0a75bafc8010 (session will remain active for continuation)
+📎 Removed session b9a5c861-6621-4e40-8284-f783d4645653 from client 7d2506e7-1437-41db-881d-0a75bafc8010 (remaining: 0)
+📝 Session b9a5c861-6621-4e40-8284-f783d4645653 paused - can be continued later
+✅ Successfully paused session b9a5c861-6621-4e40-8284-f783d4645653 for client 7d2506e7-1437-41db-881d-0a75bafc8010
+192.168.68.114 - - [05/Aug/2025:02:08:52 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+📡 Pinged 1 WebSocket clients
+192.168.68.114 - - [05/Aug/2025:02:08:57 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:09:02 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:09:05 +0000] "POST /api/shutdown HTTP/1.1" 404 152 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:09:06 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:09:06 +0000] "GET /api/status HTTP/1.1" 404 149 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:09:07 +0000] "POST /api/shutdown HTTP/1.1" 404 152 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+📡 Pinged 1 WebSocket clients
+192.168.68.114 - - [05/Aug/2025:02:09:08 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:09:08 +0000] "GET /api/status HTTP/1.1" 404 149 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:09:09 +0000] "POST /api/shutdown HTTP/1.1" 404 152 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:09:11 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:09:11 +0000] "GET /api/status HTTP/1.1" 404 149 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:09:16 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:09:21 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+📡 Pinged 1 WebSocket clients
+192.168.68.114 - - [05/Aug/2025:02:09:26 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:09:31 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:09:36 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+📡 Pinged 1 WebSocket clients
+192.168.68.114 - - [05/Aug/2025:02:09:41 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:09:46 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:09:51 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+📡 Pinged 1 WebSocket clients
+192.168.68.114 - - [05/Aug/2025:02:09:56 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:10:01 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:10:06 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+📡 Pinged 1 WebSocket clients
+192.168.68.114 - - [05/Aug/2025:02:10:11 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:10:16 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:10:21 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+📡 Pinged 1 WebSocket clients
+192.168.68.114 - - [05/Aug/2025:02:10:26 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:10:31 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+192.168.68.114 - - [05/Aug/2025:02:10:36 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+📡 Pinged 1 WebSocket clients
+192.168.68.114 - - [05/Aug/2025:02:10:41 +0000] "GET /health HTTP/1.1" 200 103 "-" "ClaudeCompanionHost/1 CFNetwork/3826.500.131 Darwin/24.5.0"
+🔄 Shutting down server...
+🔄 Shutting down AICLI Code Service...
+🔄 Shutting down AICLI Session Manager...
+🔚 Closing AICLI CLI session: b9a5c861-6621-4e40-8284-f783d4645653
+   Session type: metadata-only (no long-running process)
+   Cleared timeout for session b9a5c861-6621-4e40-8284-f783d4645653
+💾 Saved 0 sessions to disk
+🗑️ Removed session b9a5c861-6621-4e40-8284-f783d4645653 from persistence
+💾 Session b9a5c861-6621-4e40-8284-f783d4645653 removed from persistent storage
+🧹 Cleaned up session b9a5c861-6621-4e40-8284-f783d4645653 from projects.js tracking (reason: user_requested)
+📊 Remaining project sessions: 0
+✅ Session b9a5c861-6621-4e40-8284-f783d4645653 closed successfully
+   Remaining active sessions: 0
+✅ AICLI Session Manager shut down complete
+✅ AICLI Code Service shut down complete
+📡 Pinged 1 WebSocket clients
+⚠️  Force shutting down...
+npm error Lifecycle script `start` failed with error:
+npm error code 1
+npm error path /Users/michaelfuscoletti/Desktop/claude-companion/server
+npm error workspace aicli-companion-server@1.0.0
+npm error location /Users/michaelfuscoletti/Desktop/claude-companion/server
+npm error command failed
+npm error command sh -c node src/index.js

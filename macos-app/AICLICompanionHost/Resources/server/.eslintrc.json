@@ -1,0 +1,36 @@
+{
+  "env": {
+    "es2021": true,
+    "node": true
+  },
+  "extends": ["eslint:recommended", "plugin:prettier/recommended"],
+  "parserOptions": {
+    "ecmaVersion": "latest",
+    "sourceType": "module"
+  },
+  "rules": {
+    "prettier/prettier": "error",
+    "no-unused-vars": [
+      "error",
+      {
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_"
+      }
+    ],
+    "no-console": "off",
+    "no-process-exit": "off",
+    "prefer-const": "error",
+    "no-var": "error",
+    "object-shorthand": "error",
+    "prefer-arrow-callback": "error",
+    "prefer-template": "error",
+    "no-param-reassign": "error",
+    "no-shadow": "error",
+    "no-return-await": "error",
+    "require-await": "off",
+    "no-throw-literal": "error",
+    "no-unneeded-ternary": "error",
+    "prefer-promise-reject-errors": "error"
+  },
+  "ignorePatterns": ["node_modules/", "dist/", "build/", "coverage/", "test-*.js"]
+}

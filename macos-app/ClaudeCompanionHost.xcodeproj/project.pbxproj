@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 56;
+	objectVersion = 54;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -14,6 +14,7 @@
 		3F52C22067E594C4C99A53A7 /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 507BD2219D728ED3A8A5CC40 /* SettingsManager.swift */; };
 		41B4E8126E4AC950501AF813 /* Network.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 74BB01E7B6E6B04554438DEF /* Network.framework */; };
 		49765D7DB30E24D4B9A5F595 /* ActivityMonitorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5551CA47170A5C2379869D12 /* ActivityMonitorView.swift */; };
+		592EC89BF0EB5C1F15E37BA5 /* ClaudeCompanionHostTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A58FCE1AB86DC2B9A41EF681 /* ClaudeCompanionHostTests.swift */; };
 		5939494769DEA51A4F8E077B /* VisualEffectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4498ED1C634F182D1DEAB0FA /* VisualEffectView.swift */; };
 		5B4690F8EAAB1712868A83A5 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D889D76CE0F97AE4EBCC3EDD /* Assets.xcassets */; };
 		5C6601594BAE39E514A44D16 /* ServerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E606C181796BF7876E70DC4 /* ServerManager.swift */; };
@@ -27,6 +28,16 @@
 		CDF04B318995A84AA91C22CE /* MenuBarIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7534B1382D52E1F0FF12325B /* MenuBarIcon.swift */; };
 		F44C16FB9A9BAE598C659205 /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29E0360E0BE61428A55B99FA /* NetworkMonitor.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		9CC1C001FD84C08E1BED0AAC /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C4A2AE20A000C79F8E68D301 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 4675535F2FCD0083CB5F445B;
+			remoteInfo = ClaudeCompanionHost;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		0AD86B7865A81456EF003A53 /* QRCodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRCodeView.swift; sourceTree = "<group>"; };
@@ -45,6 +56,8 @@
 		78EF4FAD7D12A53896922606 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		7E606C181796BF7876E70DC4 /* ServerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerManager.swift; sourceTree = "<group>"; };
 		92A3F367CD46094CEEC95EA1 /* ClaudeCompanionApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeCompanionApp.swift; sourceTree = "<group>"; };
+		9DB0140A3EC13DC654DA8A4E /* ClaudeCompanionHostTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ClaudeCompanionHostTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A58FCE1AB86DC2B9A41EF681 /* ClaudeCompanionHostTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeCompanionHostTests.swift; sourceTree = "<group>"; };
 		B242D22E770B5EC0075F714F /* UserNotifications.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UserNotifications.framework; path = System/Library/Frameworks/UserNotifications.framework; sourceTree = SDKROOT; };
 		D6DF68F554FA8086A4E55C06 /* ClaudeCompanionHost.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ClaudeCompanionHost.entitlements; sourceTree = "<group>"; };
 		D889D76CE0F97AE4EBCC3EDD /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -85,6 +98,14 @@
 				5E3211A638950CEC95209C22 /* NotificationManager.swift */,
 			);
 			path = Utilities;
+			sourceTree = "<group>";
+		};
+		19988D96B15555C625F04F6E /* ClaudeCompanionHostTests */ = {
+			isa = PBXGroup;
+			children = (
+				A58FCE1AB86DC2B9A41EF681 /* ClaudeCompanionHostTests.swift */,
+			);
+			path = ClaudeCompanionHostTests;
 			sourceTree = "<group>";
 		};
 		3690D0B5D14179E5B45898B5 /* ClaudeCompanionHost */ = {
@@ -139,6 +160,7 @@
 			isa = PBXGroup;
 			children = (
 				458042747E77309122592C28 /* ClaudeCompanionHost.app */,
+				9DB0140A3EC13DC654DA8A4E /* ClaudeCompanionHostTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -147,6 +169,7 @@
 			isa = PBXGroup;
 			children = (
 				3690D0B5D14179E5B45898B5 /* ClaudeCompanionHost */,
+				19988D96B15555C625F04F6E /* ClaudeCompanionHostTests */,
 				91F275664652A5BF75E254F4 /* Frameworks */,
 				EBA7FCE6C7715ADF7EE48C6E /* Products */,
 			);
@@ -172,6 +195,22 @@
 			productReference = 458042747E77309122592C28 /* ClaudeCompanionHost.app */;
 			productType = "com.apple.product-type.application";
 		};
+		9865C393F42285A300006C95 /* ClaudeCompanionHostTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 167E8E80DDB01110C05D6C9C /* Build configuration list for PBXNativeTarget "ClaudeCompanionHostTests" */;
+			buildPhases = (
+				706C5E23B8C9C835DE467783 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C103AA0EA36A88B738692DEC /* PBXTargetDependency */,
+			);
+			name = ClaudeCompanionHostTests;
+			productName = ClaudeCompanionHostTests;
+			productReference = 9DB0140A3EC13DC654DA8A4E /* ClaudeCompanionHostTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -179,10 +218,13 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 1620;
+				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					4675535F2FCD0083CB5F445B = {
 						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+					9865C393F42285A300006C95 = {
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -200,6 +242,7 @@
 			projectRoot = "";
 			targets = (
 				4675535F2FCD0083CB5F445B /* ClaudeCompanionHost */,
+				9865C393F42285A300006C95 /* ClaudeCompanionHostTests */,
 			);
 		};
 /* End PBXProject section */
@@ -237,7 +280,23 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		706C5E23B8C9C835DE467783 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				592EC89BF0EB5C1F15E37BA5 /* ClaudeCompanionHostTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		C103AA0EA36A88B738692DEC /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 4675535F2FCD0083CB5F445B /* ClaudeCompanionHost */;
+			targetProxy = 9CC1C001FD84C08E1BED0AAC /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		205364B6B1F9C6A56BC1E065 /* Release */ = {
@@ -275,11 +334,9 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -297,6 +354,26 @@
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		277B6FD79C2DBD2226E5BC3F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.claude.companion.host.tests;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ClaudeCompanionHost.app/Contents/MacOS/ClaudeCompanionHost";
 			};
 			name = Release;
 		};
@@ -335,11 +412,9 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -371,10 +446,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION = YES;
 				CODE_SIGN_ENTITLEMENTS = ClaudeCompanionHost/ClaudeCompanionHost.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = ClaudeCompanionHost/Info.plist;
@@ -394,10 +469,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION = YES;
 				CODE_SIGN_ENTITLEMENTS = ClaudeCompanionHost/ClaudeCompanionHost.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = ClaudeCompanionHost/Info.plist;
@@ -413,9 +488,38 @@
 			};
 			name = Release;
 		};
+		F8C5619E7108A2BCA8B3DD9A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.claude.companion.host.tests;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ClaudeCompanionHost.app/Contents/MacOS/ClaudeCompanionHost";
+			};
+			name = Debug;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		167E8E80DDB01110C05D6C9C /* Build configuration list for PBXNativeTarget "ClaudeCompanionHostTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F8C5619E7108A2BCA8B3DD9A /* Debug */,
+				277B6FD79C2DBD2226E5BC3F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		2A56CC3E3D57DAFF13855316 /* Build configuration list for PBXProject "ClaudeCompanionHost" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

@@ -32,8 +32,23 @@ targets:
       DEVELOPMENT_TEAM: ""
       SWIFT_VERSION: "5.0"
       MACOSX_DEPLOYMENT_TARGET: "14.0"
+      CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION: true
     dependencies:
       - sdk: SwiftUI.framework
       - sdk: Network.framework
       - sdk: Security.framework
       - sdk: UserNotifications.framework
+  
+  ClaudeCompanionHostTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - ClaudeCompanionHostTests
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.claude.companion.host.tests
+      SWIFT_VERSION: "5.0"
+      MACOSX_DEPLOYMENT_TARGET: "14.0"
+      GENERATE_INFOPLIST_FILE: true
+      CODE_SIGN_STYLE: Automatic
+    dependencies:
+      - target: ClaudeCompanionHost

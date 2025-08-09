@@ -11,7 +11,7 @@ import UserNotifications
 import Combine
 import ServiceManagement
 
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
     private var cancellables = Set<AnyCancellable>()
@@ -93,6 +93,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // Create new window if needed
             let windowController = NSWindowController()
             windowController.showWindow(nil)
+        }
+    }
+
+    @objc func openLogs() {
+        // Open the logs window by creating a new window
+        if let window = NSApp.windows.first(where: { $0.title == "Activity Monitor" }) {
+            window.makeKeyAndOrderFront(nil)
+        } else {
+            // Create a new window for logs
+            let logsWindow = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
+                styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                backing: .buffered,
+                defer: false
+            )
+            logsWindow.title = "Activity Monitor"
+            logsWindow.center()
+            logsWindow.contentView = NSHostingView(rootView: LogsView().environmentObject(ServerManager.shared))
+            logsWindow.makeKeyAndOrderFront(nil)
         }
     }
 

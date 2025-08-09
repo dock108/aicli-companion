@@ -31,7 +31,10 @@ class NotificationManager: NSObject, ObservableObject {
                 self.isAuthorized = authorized
             }
         } catch {
-            print("Failed to request notification authorization: \(error)")
+            // Silently handle - user has denied or system has blocked
+            await MainActor.run {
+                self.isAuthorized = false
+            }
         }
     }
 
@@ -44,6 +47,12 @@ class NotificationManager: NSObject, ObservableObject {
         userInfo: [String: Any] = [:]
     ) {
         guard SettingsManager.shared.enableNotifications else { return }
+
+        // Check if we have permission first
+        guard isAuthorized else {
+            // Silently fail if not authorized - don't spam console
+            return
+        }
 
         let content = UNMutableNotificationContent()
         content.title = title
@@ -66,7 +75,10 @@ class NotificationManager: NSObject, ObservableObject {
 
         notificationCenter.add(request) { error in
             if let error = error {
-                print("Failed to show notification: \(error)")
+                // Only log errors that aren't permission-related
+                if !error.localizedDescription.contains("not allowed") {
+                    print("Failed to show notification: \(error)")
+                }
             }
         }
     }
@@ -104,6 +116,7 @@ class NotificationManager: NSObject, ObservableObject {
 
         Task {
             await checkAuthorizationStatus()
+            // Don't automatically request - wait for user to enable in settings
         }
     }
 
@@ -160,4 +173,5 @@ extension NotificationManager: UNUserNotificationCenterDelegate {
 // MARK: - App Commands
 @objc protocol AppCommands {
     func openActivityMonitor()
+    func openLogs()
 }

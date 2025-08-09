@@ -296,32 +296,37 @@ Throughout implementation, TODOs will be marked with:
    - Handles ping/pong
    - Basic connection management
 
-### Implementation Checklist
+## macOS App UI Enhancement - Execute All Improvements
 
-#### Phase 1: Remove Server State Management ✅
-- [x] Remove session creation from streamStart
-- [x] Remove session tracking from claudeCommand  
-- [x] Remove session management from connection manager
-- [x] Remove welcome message with capabilities
-- [x] Remove 'sessions' meta-command
+Execute all enhancements in one comprehensive update to fix all identified UI issues:
 
-#### Phase 2: Simplify Message Handlers 🚧
-- [ ] Remove all session lifecycle management
-- [ ] Remove message buffering and queuing
-- [ ] Remove session persistence calls
-- [ ] Simplify to pure message routing
+### Settings Layout Redesign
+- Move server directory from Advanced to General tab - This is a basic configuration, not advanced
+- Fix centered/backwards formatting - Left-align all content, improve spacing and hierarchy
+- Improve field visibility - Make text fields and controls properly sized and visible
 
-#### Phase 3: Clean iOS App 🚧
-- [ ] Remove project start notifications
-- [ ] Remove session pre-creation
-- [ ] Use requestId for message routing
-- [ ] Store Claude session IDs locally
+### Menu Integration & Activity Monitor
+- Integrate Activity Monitor with Logs - Replace "View Activity Monitor" menu item with direct logs access
+- Add PID to logs display - Show process ID in log entries for better debugging
+- Improve menu item visibility - Fix shrunk/hard to see menu items
 
-#### Phase 4: Testing & Validation 🚧
-- [ ] Test parallel message handling
-- [ ] Test session ID flow
-- [ ] Test memory reset
-- [ ] Verify no state persistence
+### QR Code Display Fix
+- Fix 125% zoom issue - Correct the oversized QR code popout to proper 100% scale
+- Improve QR code window sizing - Better proportions for the modal
+
+### Implementation Strategy
+- Single comprehensive update - All changes in one coordinated effort
+- Maintain existing functionality - Preserve all current features while improving UX
+- Follow macOS design guidelines - Ensure native look and feel
+
+### Specific Code Changes
+- `SettingsView.swift`: Move server directory to GeneralSettingsView, fix layout alignment
+- `MenuBarView.swift`: Change "View Activity Monitor" to "View Logs", improve button sizing
+- `LogsView.swift`: Add PID column to log entries
+- `QRCodeView.swift`: Fix frame sizing from 350x500 to proper proportions
+- `ActivityMonitorView.swift`: Integrate with logs workflow
+
+This addresses all stated issues: server directory placement, settings formatting, menu visibility, activity monitor integration, PID display, and QR code zoom - all in one coordinated implementation.
 
 ### Success Metrics
 

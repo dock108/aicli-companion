@@ -31,21 +31,24 @@ struct MenuBarView: View {
                 .environmentObject(serverManager)
                 .padding(.vertical, 8)
 
+            Divider()
+                .padding(.vertical, 8)
+
+            // Active Sessions
+            if !serverManager.activeSessions.isEmpty {
+                ActiveSessionsSection()
+                    .environmentObject(serverManager)
+
+                Divider()
+                    .padding(.vertical, 8)
+            }
+
             // Quick Actions
             QuickActionsSection(
                 showingQRCode: $showingQRCode,
                 copiedToClipboard: $copiedToClipboard
             )
             .environmentObject(serverManager)
-
-            // Active Sessions
-            if !serverManager.activeSessions.isEmpty {
-                Divider()
-                    .padding(.vertical, 8)
-
-                ActiveSessionsSection()
-                    .environmentObject(serverManager)
-            }
 
             Divider()
                 .padding(.vertical, 8)
@@ -155,15 +158,14 @@ struct QuickActionsSection: View {
             }
             .popover(isPresented: $showingQRCode) {
                 QRCodeView(connectionString: serverManager.connectionString)
-                    .frame(width: 300, height: 350)
             }
 
             // Open Logs Button
             QuickActionButton(
-                title: "View Activity Monitor",
-                icon: "chart.line.uptrend.xyaxis"
+                title: "View Logs",
+                icon: "doc.text"
             ) {
-                NSApp.sendAction(#selector(AppCommands.openActivityMonitor), to: nil, from: nil)
+                NSApp.sendAction(#selector(AppCommands.openLogs), to: nil, from: nil)
             }
         }
     }
@@ -279,6 +281,7 @@ struct FooterSection: View {
     var body: some View {
         HStack {
             Button("Settings...") {
+                NSApp.activate(ignoringOtherApps: true)
                 openSettings()
             }
             .buttonStyle(.plain)
@@ -352,20 +355,23 @@ struct QuickActionButton: View {
 
     var body: some View {
         Button(action: action) {
-            HStack {
+            HStack(spacing: 10) {
                 Image(systemName: icon)
-                    .font(.body)
+                    .font(.system(size: 14, weight: .medium))
                     .frame(width: 20)
+                    .foregroundStyle(.primary)
 
                 Text(title)
-                    .font(.body)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.primary)
 
                 Spacer()
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
             .background(Color(NSColor.controlBackgroundColor))
-            .cornerRadius(6)
+            .cornerRadius(8)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(isDisabled)

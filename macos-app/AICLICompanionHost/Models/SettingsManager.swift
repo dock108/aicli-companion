@@ -114,17 +114,18 @@ class SettingsManager: ObservableObject {
         return try? JSONSerialization.data(withJSONObject: settings, options: .prettyPrinted)
     }
 
-    // swiftlint:disable:next cyclomatic_complexity
     func importSettings(from data: Data) throws {
         guard let settings = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw SettingsError.invalidFormat
         }
 
-        // Import each setting with validation
-        if let port = settings["serverPort"] as? Int, port >= 1024, port <= 65535 {
-            serverPort = port
-        }
+        importGeneralSettings(from: settings)
+        importServerSettings(from: settings)
+        importSecuritySettings(from: settings)
+        importAdvancedSettings(from: settings)
+    }
 
+    private func importGeneralSettings(from settings: [String: Any]) {
         if let autoStart = settings["autoStartServer"] as? Bool {
             autoStartServer = autoStart
         }
@@ -145,6 +146,20 @@ class SettingsManager: ObservableObject {
             enableSounds = sounds
         }
 
+        if let themeValue = settings["theme"] as? String {
+            theme = themeValue
+        }
+
+        if let projectDir = settings["defaultProjectDirectory"] as? String {
+            defaultProjectDirectory = projectDir
+        }
+    }
+
+    private func importServerSettings(from settings: [String: Any]) {
+        if let port = settings["serverPort"] as? Int, port >= 1024, port <= 65535 {
+            serverPort = port
+        }
+
         if let level = settings["logLevel"] as? String {
             logLevel = level
         }
@@ -156,11 +171,9 @@ class SettingsManager: ObservableObject {
         if let bonjour = settings["enableBonjour"] as? Bool {
             enableBonjour = bonjour
         }
+    }
 
-        if let themeValue = settings["theme"] as? String {
-            theme = themeValue
-        }
-
+    private func importSecuritySettings(from settings: [String: Any]) {
         if let auth = settings["requireAuthentication"] as? Bool {
             requireAuthentication = auth
         }
@@ -180,11 +193,9 @@ class SettingsManager: ObservableObject {
         if let ngrokToken = settings["ngrokAuthToken"] as? String {
             ngrokAuthToken = ngrokToken
         }
+    }
 
-        if let projectDir = settings["defaultProjectDirectory"] as? String {
-            defaultProjectDirectory = projectDir
-        }
-
+    private func importAdvancedSettings(from settings: [String: Any]) {
         if let cmd = settings["serverCommand"] as? String {
             serverCommand = cmd
         }

@@ -23,12 +23,21 @@ extension ServerManager {
         await ensurePortAvailable()
 
         // Create and configure server process
-        let process = Process()
+        let process = try await createConfiguredProcess()
         serverProcess = process
 
-        // Setup environment
-        var environment = try await setupServerEnvironment()
+        // Setup output handling
+        setupProcessOutputHandling(for: process)
 
+        // Start the process
+        try await launchProcess(process)
+    }
+
+    private func createConfiguredProcess() async throws -> Process {
+        let process = Process()
+
+        // Setup environment
+        let environment = try await setupServerEnvironment()
         process.environment = environment
 
         // Setup working directory
@@ -41,7 +50,10 @@ extension ServerManager {
         process.executableURL = URL(fileURLWithPath: executablePath)
         process.arguments = arguments
 
-        // Setup output handling
+        return process
+    }
+
+    private func setupProcessOutputHandling(for process: Process) {
         let outputPipe = Pipe()
         let errorPipe = Pipe()
         process.standardOutput = outputPipe
@@ -72,8 +84,9 @@ extension ServerManager {
                 self?.handleServerTermination(process)
             }
         }
+    }
 
-        // Start the process
+    private func launchProcess(_ process: Process) async throws {
         do {
             try process.run()
             isRunning = true
@@ -326,56 +339,17 @@ extension ServerManager {
             return expandedPath
         }
 
-        // Priority 2: Check for NVM installation
-        let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
-        let nvmPath = "\(homeDir)/.nvm/versions/node"
-        if FileManager.default.fileExists(atPath: nvmPath) {
-            do {
-                let versions = try FileManager.default.contentsOfDirectory(atPath: nvmPath)
-                if let latestVersion = versions.sorted().last {
-                    let nvmNodePath = "\(nvmPath)/\(latestVersion)/bin/node"
-                    if FileManager.default.fileExists(atPath: nvmNodePath) {
-                        addLog(.debug, "Auto-detected NVM node at: \(nvmNodePath)")
-                        return nvmNodePath
-                    }
-                }
-            } catch {
-                addLog(.debug, "Could not read NVM directory: \(error)")
-            }
+        // Try other detection methods
+        if let nvmPath = findExecutableInNVM(executable: "node") {
+            return nvmPath
         }
 
-        // Priority 3: Check common installation locations
-        let commonPaths = [
-            "/opt/homebrew/bin/node",    // Apple Silicon Homebrew
-            "/usr/local/bin/node",       // Intel Homebrew or standard
-            "/usr/bin/node"               // System
-        ]
-
-        for path in commonPaths where FileManager.default.fileExists(atPath: path) {
-            addLog(.debug, "Auto-detected node at: \(path)")
-            return path
+        if let commonPath = findExecutableInCommonPaths(executable: "node") {
+            return commonPath
         }
 
-        // Priority 4: Try using which command
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/which")
-        task.arguments = ["node"]
-        let pipe = Pipe()
-        task.standardOutput = pipe
-
-        do {
-            try task.run()
-            task.waitUntilExit()
-
-            if task.terminationStatus == 0 {
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                if let path = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) {
-                    addLog(.debug, "Found node via which: \(path)")
-                    return path
-                }
-            }
-        } catch {
-            addLog(.debug, "Which command failed: \(error)")
+        if let whichPath = findExecutableUsingWhich(executable: "node") {
+            return whichPath
         }
 
         // Final fallback
@@ -392,56 +366,17 @@ extension ServerManager {
             return expandedPath
         }
 
-        // Priority 2: Check for NVM installation
-        let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
-        let nvmPath = "\(homeDir)/.nvm/versions/node"
-        if FileManager.default.fileExists(atPath: nvmPath) {
-            do {
-                let versions = try FileManager.default.contentsOfDirectory(atPath: nvmPath)
-                if let latestVersion = versions.sorted().last {
-                    let nvmNpmPath = "\(nvmPath)/\(latestVersion)/bin/npm"
-                    if FileManager.default.fileExists(atPath: nvmNpmPath) {
-                        addLog(.debug, "Auto-detected NVM npm at: \(nvmNpmPath)")
-                        return nvmNpmPath
-                    }
-                }
-            } catch {
-                addLog(.debug, "Could not read NVM directory: \(error)")
-            }
+        // Try other detection methods
+        if let nvmPath = findExecutableInNVM(executable: "npm") {
+            return nvmPath
         }
 
-        // Priority 3: Check common installation locations
-        let commonPaths = [
-            "/opt/homebrew/bin/npm",     // Apple Silicon Homebrew
-            "/usr/local/bin/npm",        // Intel Homebrew or standard
-            "/usr/bin/npm"                // System
-        ]
-
-        for path in commonPaths where FileManager.default.fileExists(atPath: path) {
-            addLog(.debug, "Auto-detected npm at: \(path)")
-            return path
+        if let commonPath = findExecutableInCommonPaths(executable: "npm") {
+            return commonPath
         }
 
-        // Priority 4: Try using which command
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/which")
-        task.arguments = ["npm"]
-        let pipe = Pipe()
-        task.standardOutput = pipe
-
-        do {
-            try task.run()
-            task.waitUntilExit()
-
-            if task.terminationStatus == 0 {
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                if let path = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) {
-                    addLog(.debug, "Found npm via which: \(path)")
-                    return path
-                }
-            }
-        } catch {
-            addLog(.debug, "Which command failed: \(error)")
+        if let whichPath = findExecutableUsingWhich(executable: "npm") {
+            return whichPath
         }
 
         // Final fallback
@@ -527,5 +462,69 @@ extension ServerManager {
         if publicURL == nil {
             addLog(.warning, "⚠️ Tunnel URL not detected after 30 seconds")
         }
+    }
+
+    // MARK: - Executable Discovery Helpers
+
+    private func findExecutableInNVM(executable: String) -> String? {
+        let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
+        let nvmPath = "\(homeDir)/.nvm/versions/node"
+
+        guard FileManager.default.fileExists(atPath: nvmPath) else { return nil }
+
+        do {
+            let versions = try FileManager.default.contentsOfDirectory(atPath: nvmPath)
+            if let latestVersion = versions.sorted().last {
+                let nvmExecutablePath = "\(nvmPath)/\(latestVersion)/bin/\(executable)"
+                if FileManager.default.fileExists(atPath: nvmExecutablePath) {
+                    addLog(.debug, "Auto-detected NVM \(executable) at: \(nvmExecutablePath)")
+                    return nvmExecutablePath
+                }
+            }
+        } catch {
+            addLog(.debug, "Could not read NVM directory: \(error)")
+        }
+
+        return nil
+    }
+
+    private func findExecutableInCommonPaths(executable: String) -> String? {
+        let commonPaths = [
+            "/opt/homebrew/bin/\(executable)",    // Apple Silicon Homebrew
+            "/usr/local/bin/\(executable)",       // Intel Homebrew or standard
+            "/usr/bin/\(executable)"               // System
+        ]
+
+        for path in commonPaths where FileManager.default.fileExists(atPath: path) {
+            addLog(.debug, "Auto-detected \(executable) at: \(path)")
+            return path
+        }
+
+        return nil
+    }
+
+    private func findExecutableUsingWhich(executable: String) -> String? {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/which")
+        task.arguments = [executable]
+        let pipe = Pipe()
+        task.standardOutput = pipe
+
+        do {
+            try task.run()
+            task.waitUntilExit()
+
+            if task.terminationStatus == 0 {
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                if let path = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) {
+                    addLog(.debug, "Found \(executable) via which: \(path)")
+                    return path
+                }
+            }
+        } catch {
+            addLog(.debug, "Which command failed for \(executable): \(error)")
+        }
+
+        return nil
     }
 }

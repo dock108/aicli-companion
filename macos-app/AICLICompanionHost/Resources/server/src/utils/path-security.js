@@ -1,6 +1,6 @@
 /**
  * Secure path validation utilities to prevent directory traversal attacks
- * 
+ *
  * This module provides robust protection against various attack vectors including:
  * - Path traversal with ../
  * - Symlink attacks
@@ -34,7 +34,7 @@ export class PathValidator {
   /**
    * Validate that a target path is safely contained within a base directory
    * Uses path.resolve() and real filesystem resolution to prevent bypasses
-   * 
+   *
    * @param {string} basePath - The base directory path
    * @param {string} targetPath - The path to validate
    * @param {Object} options - Validation options
@@ -45,17 +45,13 @@ export class PathValidator {
    * @throws {PathSecurityError} - If validation fails
    */
   static async validatePath(basePath, targetPath, options = {}) {
-    const {
-      allowSymlinks = false,
-      mustExist = false,
-      mustBeDirectory = false
-    } = options;
+    const { allowSymlinks = false, mustExist = false, mustBeDirectory = false } = options;
 
     // Input validation
     if (!basePath || typeof basePath !== 'string') {
       throw new PathSecurityError('Base path must be a non-empty string', 'INVALID_BASE_PATH');
     }
-    
+
     if (!targetPath || typeof targetPath !== 'string') {
       throw new PathSecurityError('Target path must be a non-empty string', 'INVALID_TARGET_PATH');
     }
@@ -67,7 +63,7 @@ export class PathValidator {
 
     // URL decode to prevent encoded path traversal
     const decodedTargetPath = decodeURIComponent(targetPath);
-    
+
     try {
       // Resolve both paths to absolute paths
       const resolvedBase = path.resolve(basePath);
@@ -77,12 +73,11 @@ export class PathValidator {
         basePath,
         targetPath,
         resolvedBase,
-        resolvedTarget
+        resolvedTarget,
       });
 
       // First check: ensure target is within base using string comparison
-      if (resolvedTarget !== resolvedBase && 
-          !resolvedTarget.startsWith(resolvedBase + path.sep)) {
+      if (resolvedTarget !== resolvedBase && !resolvedTarget.startsWith(resolvedBase + path.sep)) {
         throw new PathSecurityError(
           `Path '${targetPath}' is outside base directory '${basePath}'`,
           'PATH_TRAVERSAL_ATTEMPT'
@@ -95,10 +90,7 @@ export class PathValidator {
           await access(resolvedTarget, constants.F_OK);
         } catch (error) {
           if (mustExist) {
-            throw new PathSecurityError(
-              `Path '${targetPath}' does not exist`,
-              'PATH_NOT_FOUND'
-            );
+            throw new PathSecurityError(`Path '${targetPath}' does not exist`, 'PATH_NOT_FOUND');
           }
           // If path doesn't exist and we don't require it to exist,
           // we can't check for symlinks, so just return the resolved path
@@ -120,8 +112,7 @@ export class PathValidator {
         if (!allowSymlinks && realTargetPath !== resolvedTarget) {
           // Additional check: ensure the real path is still within bounds
           const realBase = await realpath(resolvedBase);
-          if (realTargetPath !== realBase && 
-              !realTargetPath.startsWith(realBase + path.sep)) {
+          if (realTargetPath !== realBase && !realTargetPath.startsWith(realBase + path.sep)) {
             throw new PathSecurityError(
               `Symlink '${targetPath}' points outside base directory`,
               'SYMLINK_ATTACK'
@@ -131,8 +122,7 @@ export class PathValidator {
 
         // Final security check: ensure real path is within real base
         const realBase = await realpath(resolvedBase);
-        if (realTargetPath !== realBase && 
-            !realTargetPath.startsWith(realBase + path.sep)) {
+        if (realTargetPath !== realBase && !realTargetPath.startsWith(realBase + path.sep)) {
           throw new PathSecurityError(
             `Real path '${realTargetPath}' is outside base directory`,
             'REAL_PATH_OUTSIDE_BASE'
@@ -162,23 +152,19 @@ export class PathValidator {
       }
 
       return resolvedTarget;
-      
     } catch (error) {
       if (error instanceof PathSecurityError) {
         logger.warn('Path security violation', {
           basePath,
           targetPath,
           error: error.message,
-          code: error.code
+          code: error.code,
         });
         throw error;
       }
-      
+
       // Wrap unexpected errors
-      throw new PathSecurityError(
-        `Path validation failed: ${error.message}`,
-        'VALIDATION_ERROR'
-      );
+      throw new PathSecurityError(`Path validation failed: ${error.message}`, 'VALIDATION_ERROR');
     }
   }
 
@@ -193,14 +179,18 @@ export class PathValidator {
     if (!basePath || typeof basePath !== 'string') {
       throw new PathSecurityError('Base path must be a non-empty string');
     }
-    
+
     if (!projectName || typeof projectName !== 'string') {
       throw new PathSecurityError('Project name must be a non-empty string');
     }
 
     // Check for dangerous characters
-    if (projectName.includes('\0') || projectName.includes('/') || 
-        projectName.includes('\\') || projectName.includes('..')) {
+    if (
+      projectName.includes('\0') ||
+      projectName.includes('/') ||
+      projectName.includes('\\') ||
+      projectName.includes('..')
+    ) {
       throw new PathSecurityError('Project name contains invalid characters');
     }
 
@@ -208,8 +198,7 @@ export class PathValidator {
     const resolvedTarget = path.resolve(resolvedBase, projectName);
 
     // Ensure target is within base
-    if (resolvedTarget !== resolvedBase && 
-        !resolvedTarget.startsWith(resolvedBase + path.sep)) {
+    if (resolvedTarget !== resolvedBase && !resolvedTarget.startsWith(resolvedBase + path.sep)) {
       throw new PathSecurityError('Project path is outside base directory');
     }
 
@@ -235,7 +224,7 @@ export class PathValidator {
  * @param {Object} options - Validation options
  * @returns {Promise<string>} - Validated path
  */
-export const validateSecurePath = (basePath, targetPath, options) => 
+export const validateSecurePath = (basePath, targetPath, options) =>
   PathValidator.validatePath(basePath, targetPath, options);
 
 /**
@@ -250,7 +239,7 @@ export const validateProjectPath = (basePath, projectName) =>
 /**
  * Convenience function for creating safe project paths
  * @param {string} basePath - Base directory
- * @param {string} projectName - Project name  
+ * @param {string} projectName - Project name
  * @returns {string} - Safe project path
  */
 export const createSafeProjectPath = (basePath, projectName) =>

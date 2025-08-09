@@ -76,14 +76,14 @@ export function setupProjectRoutes(app, _aicliService) {
         validatedPath = await validateSecurePath(projectsDir, name, {
           allowSymlinks: false,
           mustExist: true,
-          mustBeDirectory: true
+          mustBeDirectory: true,
         });
       } catch (error) {
         if (error instanceof PathSecurityError) {
           console.warn(`Path security violation in project access: ${error.message}`, {
             projectsDir,
             requestedName: name,
-            code: error.code
+            code: error.code,
           });
           return res.status(403).json({
             error: 'Access denied',

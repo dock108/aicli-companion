@@ -26,7 +26,7 @@ export async function atomicWriteFile(filePath, data, options = {}) {
     resolvedFilePath = await validateSecurePath(rootDir, fileName, {
       allowSymlinks: false,
       mustExist: false, // File might not exist yet
-      mustBeDirectory: false
+      mustBeDirectory: false,
     });
   } catch (error) {
     if (error instanceof PathSecurityError) {

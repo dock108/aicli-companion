@@ -1,13 +1,12 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import {
-  SessionIdParser,
   parseSessionId,
   extractProjectName,
   extractSessionId,
   isValidSessionId,
   createCompositeSessionId,
-  SESSION_ID_FORMATS
+  SESSION_ID_FORMATS,
 } from '../../utils/session-parser.js';
 
 describe('SessionIdParser', () => {
@@ -15,7 +14,7 @@ describe('SessionIdParser', () => {
     it('should parse UUID format correctly', () => {
       const sessionId = '550e8400-e29b-41d4-a716-446655440000';
       const result = parseSessionId(sessionId);
-      
+
       assert.strictEqual(result.isValid, true);
       assert.strictEqual(result.format, SESSION_ID_FORMATS.UUID);
       assert.strictEqual(result.sessionId, sessionId);
@@ -26,7 +25,7 @@ describe('SessionIdParser', () => {
     it('should parse composite format with UUID correctly', () => {
       const sessionId = 'my_project_550e8400-e29b-41d4-a716-446655440000';
       const result = parseSessionId(sessionId);
-      
+
       assert.strictEqual(result.isValid, true);
       assert.strictEqual(result.format, SESSION_ID_FORMATS.COMPOSITE);
       assert.strictEqual(result.sessionId, '550e8400-e29b-41d4-a716-446655440000');
@@ -37,7 +36,7 @@ describe('SessionIdParser', () => {
     it('should parse composite format with simple session ID', () => {
       const sessionId = 'test_session_uuid123';
       const result = parseSessionId(sessionId);
-      
+
       assert.strictEqual(result.isValid, true);
       assert.strictEqual(result.format, SESSION_ID_FORMATS.COMPOSITE);
       assert.strictEqual(result.sessionId, 'uuid123');
@@ -47,7 +46,7 @@ describe('SessionIdParser', () => {
     it('should handle complex project names with multiple underscores', () => {
       const sessionId = 'my_complex_project_name_abc123';
       const result = parseSessionId(sessionId);
-      
+
       assert.strictEqual(result.isValid, true);
       assert.strictEqual(result.format, SESSION_ID_FORMATS.COMPOSITE);
       assert.strictEqual(result.sessionId, 'abc123');
@@ -57,7 +56,7 @@ describe('SessionIdParser', () => {
     it('should handle simple format', () => {
       const sessionId = 'abc123';
       const result = parseSessionId(sessionId);
-      
+
       assert.strictEqual(result.isValid, true);
       assert.strictEqual(result.format, SESSION_ID_FORMATS.SIMPLE);
       assert.strictEqual(result.sessionId, 'abc123');
@@ -66,8 +65,8 @@ describe('SessionIdParser', () => {
 
     it('should handle invalid inputs', () => {
       const invalidInputs = [null, undefined, '', '   '];
-      
-      invalidInputs.forEach(input => {
+
+      invalidInputs.forEach((input) => {
         const result = parseSessionId(input);
         if (input === '   ') {
           // Whitespace-only is treated as simple format after trimming
@@ -110,14 +109,18 @@ describe('SessionIdParser', () => {
   describe('extractSessionId', () => {
     it('should extract session ID from composite format', () => {
       assert.strictEqual(extractSessionId('test_session_uuid123'), 'uuid123');
-      assert.strictEqual(extractSessionId('my_project_550e8400-e29b-41d4-a716-446655440000'), 
-                        '550e8400-e29b-41d4-a716-446655440000');
+      assert.strictEqual(
+        extractSessionId('my_project_550e8400-e29b-41d4-a716-446655440000'),
+        '550e8400-e29b-41d4-a716-446655440000'
+      );
     });
 
     it('should return original ID for simple formats', () => {
       assert.strictEqual(extractSessionId('abc123'), 'abc123');
-      assert.strictEqual(extractSessionId('550e8400-e29b-41d4-a716-446655440000'), 
-                        '550e8400-e29b-41d4-a716-446655440000');
+      assert.strictEqual(
+        extractSessionId('550e8400-e29b-41d4-a716-446655440000'),
+        '550e8400-e29b-41d4-a716-446655440000'
+      );
     });
   });
 
@@ -163,7 +166,7 @@ describe('SessionIdParser', () => {
       // This test ensures the exact behavior expected by the existing long-running task manager test
       const sessionId = 'test_session_uuid123';
       const projectName = extractProjectName(sessionId, 'Project');
-      
+
       assert.strictEqual(projectName, 'test_session');
     });
   });

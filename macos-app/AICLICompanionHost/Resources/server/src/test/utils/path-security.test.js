@@ -4,11 +4,10 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { tmpdir } from 'os';
 import {
-  PathValidator,
   validateSecurePath,
   validateProjectPath,
   createSafeProjectPath,
-  PathSecurityError
+  PathSecurityError,
 } from '../../utils/path-security.js';
 
 describe('PathSecurity', () => {
@@ -26,7 +25,7 @@ describe('PathSecurity', () => {
 
     await fs.mkdir(subDir);
     await fs.writeFile(testFile, 'test content');
-    
+
     // Create a symlink that points outside the base directory
     const outsideFile = path.join(tmpdir(), 'outside.txt');
     await fs.writeFile(outsideFile, 'outside content');
@@ -43,7 +42,7 @@ describe('PathSecurity', () => {
     if (testDir) {
       await fs.rm(testDir, { recursive: true, force: true });
     }
-    
+
     // Cleanup outside file
     try {
       await fs.unlink(path.join(tmpdir(), 'outside.txt'));
@@ -55,7 +54,7 @@ describe('PathSecurity', () => {
   describe('validateSecurePath', () => {
     it('should allow valid paths within base directory', async () => {
       const result = await validateSecurePath(testDir, 'subdir/test.txt', {
-        mustExist: true
+        mustExist: true,
       });
       // Compare normalized/resolved paths since different systems may have different symlink setups
       const expectedPath = await fs.realpath(testFile);
@@ -108,9 +107,10 @@ describe('PathSecurity', () => {
 
     it('should reject non-existent paths when mustExist is true', async () => {
       await assert.rejects(
-        () => validateSecurePath(testDir, 'nonexistent.txt', {
-          mustExist: true
-        }),
+        () =>
+          validateSecurePath(testDir, 'nonexistent.txt', {
+            mustExist: true,
+          }),
         (error) => {
           assert(error instanceof PathSecurityError);
           assert.strictEqual(error.code, 'PATH_NOT_FOUND');
@@ -121,17 +121,18 @@ describe('PathSecurity', () => {
 
     it('should allow non-existent paths when mustExist is false', async () => {
       const result = await validateSecurePath(testDir, 'nonexistent.txt', {
-        mustExist: false
+        mustExist: false,
       });
       assert.strictEqual(result, path.join(testDir, 'nonexistent.txt'));
     });
 
     it('should reject files when mustBeDirectory is true', async () => {
       await assert.rejects(
-        () => validateSecurePath(testDir, 'subdir/test.txt', {
-          mustExist: true,
-          mustBeDirectory: true
-        }),
+        () =>
+          validateSecurePath(testDir, 'subdir/test.txt', {
+            mustExist: true,
+            mustBeDirectory: true,
+          }),
         (error) => {
           assert(error instanceof PathSecurityError);
           assert.strictEqual(error.code, 'NOT_DIRECTORY');
@@ -143,24 +144,25 @@ describe('PathSecurity', () => {
     it('should allow directories when mustBeDirectory is true', async () => {
       const result = await validateSecurePath(testDir, 'subdir', {
         mustExist: true,
-        mustBeDirectory: true
+        mustBeDirectory: true,
       });
       // Compare normalized/resolved paths
       const expectedPath = await fs.realpath(subDir);
       assert.strictEqual(result, expectedPath);
     });
 
-    it('should reject symlinks by default', async function() {
+    it('should reject symlinks by default', async function () {
       if (!symlinkFile) {
         this.skip('Symlinks not supported on this system');
         return;
       }
 
       await assert.rejects(
-        () => validateSecurePath(testDir, 'symlink.txt', {
-          mustExist: true,
-          allowSymlinks: false
-        }),
+        () =>
+          validateSecurePath(testDir, 'symlink.txt', {
+            mustExist: true,
+            allowSymlinks: false,
+          }),
         (error) => {
           assert(error instanceof PathSecurityError);
           assert(error.code === 'SYMLINK_ATTACK' || error.code === 'REAL_PATH_OUTSIDE_BASE');
@@ -242,20 +244,11 @@ describe('PathSecurity', () => {
     });
 
     it('should validate input parameters', () => {
-      assert.throws(
-        () => validateProjectPath('', 'project'),
-        PathSecurityError
-      );
+      assert.throws(() => validateProjectPath('', 'project'), PathSecurityError);
 
-      assert.throws(
-        () => validateProjectPath(testDir, ''),
-        PathSecurityError
-      );
+      assert.throws(() => validateProjectPath(testDir, ''), PathSecurityError);
 
-      assert.throws(
-        () => validateProjectPath(null, 'project'),
-        PathSecurityError
-      );
+      assert.throws(() => validateProjectPath(null, 'project'), PathSecurityError);
     });
   });
 
@@ -266,10 +259,7 @@ describe('PathSecurity', () => {
     });
 
     it('should reject unsafe project names', () => {
-      assert.throws(
-        () => createSafeProjectPath(testDir, '../unsafe'),
-        PathSecurityError
-      );
+      assert.throws(() => createSafeProjectPath(testDir, '../unsafe'), PathSecurityError);
     });
   });
 
@@ -297,23 +287,17 @@ describe('PathSecurity', () => {
     });
 
     it('should handle very long paths with traversal attempts', async () => {
-      const longPath = 'a'.repeat(1000) + '/../../../etc/passwd';
-      await assert.rejects(
-        () => validateSecurePath(testDir, longPath),
-        PathSecurityError
-      );
+      const longPath = `${'a'.repeat(1000)}/../../../etc/passwd`;
+      await assert.rejects(() => validateSecurePath(testDir, longPath), PathSecurityError);
     });
 
     it('should safely handle normal file paths', async () => {
       // Test normal paths that should work fine
-      const normalPaths = [
-        'normal-file.txt',
-        'file.ext'
-      ];
+      const normalPaths = ['normal-file.txt', 'file.ext'];
 
       for (const normalPath of normalPaths) {
         const result = await validateSecurePath(testDir, normalPath, {
-          mustExist: false
+          mustExist: false,
         });
         // Should be a valid path
         assert.ok(result);

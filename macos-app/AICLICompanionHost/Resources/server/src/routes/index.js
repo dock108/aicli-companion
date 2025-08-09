@@ -24,7 +24,7 @@ export function setupRoutes(app, aicliService) {
       const validatedPath = await validateSecurePath(baseDir, workingDirectory, {
         allowSymlinks: false,
         mustExist: false, // Working directory might not exist yet
-        mustBeDirectory: false // Will be created if it doesn't exist
+        mustBeDirectory: false, // Will be created if it doesn't exist
       });
       return validatedPath;
     } catch (error) {
@@ -32,7 +32,7 @@ export function setupRoutes(app, aicliService) {
         console.warn(`Working directory path security violation: ${error.message}`, {
           baseDir,
           workingDirectory,
-          code: error.code
+          code: error.code,
         });
         throw new Error('Invalid working directory: Access denied');
       }

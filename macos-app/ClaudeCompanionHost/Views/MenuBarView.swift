@@ -16,11 +16,32 @@ struct MenuBarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Footer Actions (moved to top)
-            FooterSection()
+            // Header
+            HeaderSection()
 
             Divider()
                 .padding(.vertical, 8)
+
+            // Server Status
+            ServerStatusSection()
+                .environmentObject(serverManager)
+
+            // Start/Stop Button - Prominent
+            StartStopButton()
+                .environmentObject(serverManager)
+                .padding(.vertical, 8)
+
+            Divider()
+                .padding(.vertical, 8)
+
+            // Active Sessions
+            if !serverManager.activeSessions.isEmpty {
+                ActiveSessionsSection()
+                    .environmentObject(serverManager)
+
+                Divider()
+                    .padding(.vertical, 8)
+            }
 
             // Quick Actions
             QuickActionsSection(
@@ -29,32 +50,11 @@ struct MenuBarView: View {
             )
             .environmentObject(serverManager)
 
-            // Active Sessions
-            if !serverManager.activeSessions.isEmpty {
-                Divider()
-                    .padding(.vertical, 8)
-
-                ActiveSessionsSection()
-                    .environmentObject(serverManager)
-            }
-
             Divider()
                 .padding(.vertical, 8)
 
-            // Start/Stop Button - Prominent
-            StartStopButton()
-                .environmentObject(serverManager)
-                .padding(.vertical, 8)
-
-            // Server Status
-            ServerStatusSection()
-                .environmentObject(serverManager)
-
-            Divider()
-                .padding(.vertical, 8)
-
-            // Header (moved to bottom)
-            HeaderSection()
+            // Footer Actions
+            FooterSection()
         }
         .frame(width: 320)
         .padding()

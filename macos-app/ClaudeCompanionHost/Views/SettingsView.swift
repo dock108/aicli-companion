@@ -53,7 +53,7 @@ struct SettingsView: View {
                 }
                 .tag(Tabs.advanced)
         }
-        .frame(width: 600, height: 500)
+        .frame(minWidth: 600, idealWidth: 700, minHeight: 500, idealHeight: 550)
     }
 }
 
@@ -65,66 +65,69 @@ struct GeneralSettingsView: View {
     @State private var showingDirectoryPicker = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            GroupBox("General") {
-                VStack(alignment: .leading, spacing: 12) {
-                    Toggle("Launch at Login", isOn: $settingsManager.launchAtLogin)
-                        .onChange(of: settingsManager.launchAtLogin) { _, newValue in
-                            updateLaunchAtLogin(newValue)
-                        }
+        Form {
+            Section {
+                Toggle("Launch at Login", isOn: $settingsManager.launchAtLogin)
+                    .onChange(of: settingsManager.launchAtLogin) { _, newValue in
+                        updateLaunchAtLogin(newValue)
+                    }
 
-                    Toggle("Show Dock Icon", isOn: $settingsManager.showDockIcon)
-                        .onChange(of: settingsManager.showDockIcon) { _, newValue in
-                            updateDockIconVisibility(newValue)
-                        }
+                Toggle("Show Dock Icon", isOn: $settingsManager.showDockIcon)
+                    .onChange(of: settingsManager.showDockIcon) { _, newValue in
+                        updateDockIconVisibility(newValue)
+                    }
 
-                    Toggle("Auto-start Server", isOn: $settingsManager.autoStartServer)
-                }
+                Toggle("Auto-start Server", isOn: $settingsManager.autoStartServer)
+            } header: {
+                Text("General")
             }
 
-            GroupBox("Server Directory") {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Default Directory")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
+            Section {
+                LabeledContent("Default Directory") {
                     HStack {
                         Text(settingsManager.serverDirectory)
                             .fontDesign(.monospaced)
                             .font(.caption)
                             .lineLimit(1)
                             .truncationMode(.middle)
-                            .padding(6)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color(NSColor.controlBackgroundColor))
-                            .cornerRadius(4)
+                            .frame(maxWidth: 300, alignment: .leading)
 
                         Button("Browse...") {
                             showingDirectoryPicker = true
                         }
-                        .buttonStyle(.borderless)
                     }
                 }
+            } header: {
+                Text("Server Directory")
             }
 
-            GroupBox("Notifications") {
-                VStack(alignment: .leading, spacing: 12) {
-                    Toggle("Enable Notifications", isOn: $settingsManager.enableNotifications)
-                    Toggle("Enable Sounds", isOn: $settingsManager.enableSounds)
-                        .disabled(!settingsManager.enableNotifications)
-                }
+            Section {
+                Toggle("Enable Notifications", isOn: $settingsManager.enableNotifications)
+                    .onChange(of: settingsManager.enableNotifications) { _, newValue in
+                        if newValue {
+                            Task {
+                                await NotificationManager.shared.requestAuthorization()
+                            }
+                        }
+                    }
+                Toggle("Enable Sounds", isOn: $settingsManager.enableSounds)
+                    .disabled(!settingsManager.enableNotifications)
+            } header: {
+                Text("Notifications")
             }
 
-            GroupBox("Appearance") {
+            Section {
                 Picker("Theme", selection: $settingsManager.theme) {
                     Text("System").tag("system")
                     Text("Light").tag("light")
                     Text("Dark").tag("dark")
                 }
                 .pickerStyle(.segmented)
+            } header: {
+                Text("Appearance")
             }
 
-            GroupBox("Settings Management") {
+            Section {
                 HStack {
                     Button("Export Settings...") {
                         showingExportPicker = true
@@ -141,10 +144,11 @@ struct GeneralSettingsView: View {
                     }
                     .foregroundStyle(.red)
                 }
+            } header: {
+                Text("Settings Management")
             }
         }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .formStyle(.grouped)
         .fileImporter(
             isPresented: $showingImportPicker,
             allowedContentTypes: [.json],
@@ -261,8 +265,8 @@ struct ServerSettingsView: View {
     @State private var selectedInterface: NetworkInterface?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            GroupBox("Server Configuration") {
+        Form {
+            Section {
                 HStack {
                     TextField("Port", value: $settingsManager.serverPort, format: .number.grouping(.never))
                         .textFieldStyle(.roundedBorder)
@@ -288,9 +292,11 @@ struct ServerSettingsView: View {
 
                 Toggle("Enable Bonjour Discovery", isOn: $settingsManager.enableBonjour)
                     .help("Allows devices on the local network to discover this server")
+            } header: {
+                Text("Server Configuration")
             }
 
-            GroupBox("Logging") {
+            Section {
                 Picker("Log Level", selection: $settingsManager.logLevel) {
                     Text("Debug").tag("debug")
                     Text("Info").tag("info")
@@ -306,9 +312,11 @@ struct ServerSettingsView: View {
                     Text("entries")
                         .foregroundStyle(.secondary)
                 }
+            } header: {
+                Text("Logging")
             }
 
-            GroupBox("Status") {
+            Section {
                 LabeledContent("Current Status") {
                     HStack {
                         Circle()
@@ -332,10 +340,11 @@ struct ServerSettingsView: View {
                             .font(.caption)
                     }
                 }
+            } header: {
+                Text("Status")
             }
         }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .formStyle(.grouped)
         .onAppear {
             selectedInterface = NetworkMonitor.shared.availableInterfaces.first
         }
@@ -349,8 +358,8 @@ struct SecuritySettingsView: View {
     @State private var showingTokenAlert = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            GroupBox("Authentication") {
+        Form {
+            Section {
                 Toggle("Require Authentication", isOn: $settingsManager.requireAuthentication)
                     .help("Clients must provide an authentication token to connect")
 
@@ -390,19 +399,22 @@ struct SecuritySettingsView: View {
                         }
                     }
                 }
+            } header: {
+                Text("Authentication")
             }
 
-            GroupBox("macOS Security") {
+            Section {
                 Toggle("Enable Touch ID", isOn: $settingsManager.enableTouchID)
                     .help("Use Touch ID to authenticate admin actions")
 
                 Text("The authentication token is securely stored in the macOS Keychain")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            } header: {
+                Text("macOS Security")
             }
         }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .formStyle(.grouped)
         .alert("Generate New Token?", isPresented: $showingTokenAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Generate", role: .destructive) {
@@ -420,48 +432,49 @@ struct AdvancedSettingsView: View {
     @State private var showingDirectoryPicker = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            GroupBox("Server Configuration") {
-                VStack(alignment: .leading, spacing: 12) {
-                    LabeledContent("Server Command") {
-                        TextField("", text: $settingsManager.serverCommand)
-                            .textFieldStyle(.roundedBorder)
-                            .fontDesign(.monospaced)
-                            .font(.caption)
-                            .frame(width: 200)
-                    }
-                    .help("Command to start the server (e.g., 'npm start')")
+        Form {
+            Section {
+                LabeledContent("Server Command") {
+                    TextField("", text: $settingsManager.serverCommand)
+                        .textFieldStyle(.roundedBorder)
+                        .fontDesign(.monospaced)
+                        .font(.caption)
+                        .frame(width: 200)
                 }
+                .help("Command to start the server (e.g., 'npm start')")
+            } header: {
+                Text("Server Configuration")
             }
 
-            GroupBox("Executables") {
-                VStack(alignment: .leading, spacing: 12) {
-                    LabeledContent("Node.js Path") {
-                        TextField("", text: $settingsManager.nodeExecutable)
-                            .textFieldStyle(.roundedBorder)
-                            .fontDesign(.monospaced)
-                            .font(.caption)
-                            .frame(width: 200)
-                    }
-
-                    LabeledContent("npm Path") {
-                        TextField("", text: $settingsManager.npmExecutable)
-                            .textFieldStyle(.roundedBorder)
-                            .fontDesign(.monospaced)
-                            .font(.caption)
-                            .frame(width: 200)
-                    }
+            Section {
+                LabeledContent("Node.js Path") {
+                    TextField("", text: $settingsManager.nodeExecutable)
+                        .textFieldStyle(.roundedBorder)
+                        .fontDesign(.monospaced)
+                        .font(.caption)
+                        .frame(width: 200)
                 }
+
+                LabeledContent("npm Path") {
+                    TextField("", text: $settingsManager.npmExecutable)
+                        .textFieldStyle(.roundedBorder)
+                        .fontDesign(.monospaced)
+                        .font(.caption)
+                        .frame(width: 200)
+                }
+            } header: {
+                Text("Executables")
             }
 
-            GroupBox("Warning") {
+            Section {
                 Text("⚠️ Modifying these settings may prevent the server from starting correctly")
                     .font(.caption)
                     .foregroundStyle(.orange)
+            } header: {
+                Text("Warning")
             }
         }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .formStyle(.grouped)
         .fileImporter(
             isPresented: $showingDirectoryPicker,
             allowedContentTypes: [.folder],

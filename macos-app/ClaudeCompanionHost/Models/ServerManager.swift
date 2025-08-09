@@ -93,10 +93,18 @@ class ServerManager: ObservableObject {
         guard isRunning else { return }
 
         isProcessing = true
-        defer { isProcessing = false }
 
-        // Stop health checking
+        // Stop health checking immediately
         stopHealthChecking()
+
+        // Update state immediately to prevent any new requests
+        isRunning = false
+        serverHealth = .unknown
+        activeSessions.removeAll()
+
+        defer {
+            isProcessing = false
+        }
 
         // Check if this is our process or external
         if let process = serverProcess {
@@ -109,14 +117,8 @@ class ServerManager: ObservableObject {
             }
 
             serverProcess = nil
-        } else {
-            // External process - send shutdown request
-            await sendShutdownRequest()
         }
-
-        isRunning = false
-        activeSessions.removeAll()
-        serverHealth = .unknown
+        // Removed shutdown request for external process - just stop tracking it
 
         // Send notification
         NotificationManager.shared.showNotification(
@@ -242,12 +244,28 @@ class ServerManager: ObservableObject {
 
     private func waitForServerReady() async throws {
         for _ in 0..<30 { // 30 attempts, 1 second each
-            if await checkServerHealth() {
+            // Use a simple health check without the isRunning guard
+            if await checkServerHealthDuringStartup() {
                 return
             }
             try await Task.sleep(for: .seconds(1))
         }
         throw ServerError.startupTimeout
+    }
+
+    private func checkServerHealthDuringStartup() async -> Bool {
+        // Use localhost for startup checks
+        guard let url = URL(string: "http://localhost:\(port)/health") else { return false }
+
+        do {
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 2.0
+
+            let (_, response) = try await URLSession.shared.data(for: request)
+            return (response as? HTTPURLResponse)?.statusCode == 200
+        } catch {
+            return false
+        }
     }
 
     private func checkExternalServer() async -> Bool {
@@ -262,10 +280,22 @@ class ServerManager: ObservableObject {
     }
 
     private func checkServerHealth() async -> Bool {
-        guard let url = URL(string: "\(serverFullURL)/health") else { return false }
+        // Don't check if we know the server isn't running
+        guard isRunning else {
+            await MainActor.run {
+                self.serverHealth = .unknown
+            }
+            return false
+        }
+
+        // Use localhost for local health checks
+        guard let url = URL(string: "http://localhost:\(port)/health") else { return false }
 
         do {
-            let (data, response) = try await URLSession.shared.data(from: url)
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 2.0 // Short timeout to prevent hanging
+
+            let (data, response) = try await URLSession.shared.data(for: request)
 
             if (response as? HTTPURLResponse)?.statusCode == 200 {
                 // Parse health data
@@ -278,8 +308,11 @@ class ServerManager: ObservableObject {
                 return true
             }
         } catch {
-            await MainActor.run {
-                self.serverHealth = .unhealthy
+            // Only update to unhealthy if we think the server should be running
+            if isRunning {
+                await MainActor.run {
+                    self.serverHealth = .unhealthy
+                }
             }
         }
 
@@ -287,25 +320,36 @@ class ServerManager: ObservableObject {
     }
 
     private func fetchServerStatus() async {
+        // Only fetch if server is running
+        guard isRunning else { return }
         guard let url = URL(string: "\(serverFullURL)/api/status") else { return }
 
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 2.0
+
+            let (data, _) = try await URLSession.shared.data(for: request)
             if let status = try? JSONDecoder().decode(ServerStatus.self, from: data) {
                 await MainActor.run {
                     self.updateFromStatus(status)
                 }
             }
         } catch {
-            addLog(.error, "Failed to fetch server status: \(error.localizedDescription)")
+            // Only log if we expect the server to be running
+            if isRunning {
+                addLog(.warning, "Could not fetch server status")
+            }
         }
     }
 
     private func sendShutdownRequest() async {
+        // Only send if we think server is running
+        guard isRunning else { return }
         guard let url = URL(string: "\(serverFullURL)/api/shutdown") else { return }
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
+        request.timeoutInterval = 2.0
         if let token = authToken {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
@@ -313,16 +357,20 @@ class ServerManager: ObservableObject {
         do {
             let (_, _) = try await URLSession.shared.data(for: request)
         } catch {
-            addLog(.error, "Failed to send shutdown request: \(error.localizedDescription)")
+            // Silently fail - server might already be stopped
         }
     }
 
     private func startHealthChecking() {
         stopHealthChecking()
 
-        healthCheckTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+        // Only start health checking if server is running
+        guard isRunning else { return }
+
+        healthCheckTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
+            guard let self = self, self.isRunning else { return }
             Task {
-                await self?.checkServerHealth()
+                await self.checkServerHealth()
             }
         }
     }

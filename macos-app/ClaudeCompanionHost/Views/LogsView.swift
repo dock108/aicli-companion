@@ -37,9 +37,9 @@ struct LogsView: View {
                 // Filter controls
                 HStack {
                     // Time filter
-                    HStack {
-                        Text("Last")
-                        Picker("Time Range", selection: $showLastMinutes) {
+                    HStack(spacing: 4) {
+                        Text("Last:")
+                        Picker("", selection: $showLastMinutes) {
                             Text("5 min").tag(5)
                             Text("10 min").tag(10)
                             Text("30 min").tag(30)
@@ -47,22 +47,25 @@ struct LogsView: View {
                             Text("All").tag(Int.max)
                         }
                         .pickerStyle(.menu)
-                        .frame(width: 80)
+                        .labelsHidden()
+                        .frame(width: 100)
                     }
 
                     Spacer()
 
                     // Log level filter
-                    HStack {
+                    HStack(spacing: 4) {
                         Text("Level:")
-                        Picker("Log Level", selection: $selectedLogLevel) {
+                        Picker("", selection: $selectedLogLevel) {
                             Text("All").tag(nil as LogLevel?)
+                            Divider()
                             Text("Debug").tag(LogLevel.debug)
                             Text("Info").tag(LogLevel.info)
                             Text("Warning").tag(LogLevel.warning)
                             Text("Error").tag(LogLevel.error)
                         }
                         .pickerStyle(.menu)
+                        .labelsHidden()
                         .frame(width: 100)
                     }
                 }

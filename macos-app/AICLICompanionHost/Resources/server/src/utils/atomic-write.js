@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { validateSecurePath, PathSecurityError } from './path-security.js';
 
 /**
  * Atomically write data to a file
@@ -19,11 +20,19 @@ export async function atomicWriteFile(filePath, data, options = {}) {
     throw new Error('Invalid filename: Only alphanumeric, dash, underscore, and dot are allowed');
   }
 
-  // Resolve and normalize the file path
-  const resolvedFilePath = path.resolve(rootDir, fileName);
-  const normalizedRoot = path.normalize(rootDir);
-  if (!resolvedFilePath.startsWith(normalizedRoot)) {
-    throw new Error('Invalid file path: Access denied');
+  // Secure path validation to prevent directory traversal
+  let resolvedFilePath;
+  try {
+    resolvedFilePath = await validateSecurePath(rootDir, fileName, {
+      allowSymlinks: false,
+      mustExist: false, // File might not exist yet
+      mustBeDirectory: false
+    });
+  } catch (error) {
+    if (error instanceof PathSecurityError) {
+      throw new Error(`Invalid file path: ${error.message}`);
+    }
+    throw error;
   }
 
   // Generate unique temp file name with random suffix to avoid collisions

@@ -1,8 +1,9 @@
 import { Bonjour } from 'bonjour-service';
+import { isTestEnvironment, isNotTestEnvironment } from '../utils/environment.js';
 
 export function setupBonjour(port, enableTLS = false) {
   // Skip Bonjour setup in test environment to prevent network conflicts
-  if (process.env.NODE_ENV === 'test') {
+  if (isTestEnvironment()) {
     console.log('   📡 Bonjour service skipped in test environment');
     return {
       on: () => {},
@@ -36,7 +37,7 @@ export function setupBonjour(port, enableTLS = false) {
     });
 
     // Graceful cleanup (skip in test environment)
-    if (process.env.NODE_ENV !== 'test') {
+    if (isNotTestEnvironment()) {
       process.on('SIGINT', () => {
         bonjour.unpublishAll(() => {
           bonjour.destroy();

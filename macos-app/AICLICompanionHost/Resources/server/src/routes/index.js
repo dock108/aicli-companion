@@ -2,13 +2,14 @@ import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import { ServerConfig } from '../config/server-config.js';
+import { validateSecurePath, PathSecurityError } from '../utils/path-security.js';
 
 export function setupRoutes(app, aicliService) {
   const router = express.Router();
   const config = new ServerConfig();
 
-  // Validate working directory to prevent directory traversal
-  const validateWorkingDirectory = (workingDirectory) => {
+  // Validate working directory to prevent directory traversal attacks
+  const validateWorkingDirectory = async (workingDirectory) => {
     if (!workingDirectory) return null;
 
     const baseDir = config.configPath;
@@ -17,16 +18,26 @@ export function setupRoutes(app, aicliService) {
     if (path.isAbsolute(workingDirectory)) {
       throw new Error('Invalid working directory: Absolute paths are not allowed');
     }
-    const requestedPath = path.resolve(baseDir, workingDirectory);
-    const normalizedPath = path.normalize(requestedPath);
-    const normalizedBase = path.normalize(baseDir);
 
-    // Ensure the requested path is within the configured base directory
-    if (!normalizedPath.startsWith(normalizedBase)) {
-      throw new Error('Invalid working directory: Access denied');
+    try {
+      // Use secure path validation with comprehensive protection
+      const validatedPath = await validateSecurePath(baseDir, workingDirectory, {
+        allowSymlinks: false,
+        mustExist: false, // Working directory might not exist yet
+        mustBeDirectory: false // Will be created if it doesn't exist
+      });
+      return validatedPath;
+    } catch (error) {
+      if (error instanceof PathSecurityError) {
+        console.warn(`Working directory path security violation: ${error.message}`, {
+          baseDir,
+          workingDirectory,
+          code: error.code
+        });
+        throw new Error('Invalid working directory: Access denied');
+      }
+      throw error;
     }
-
-    return normalizedPath;
   };
 
   // Health check for AICLI Code service
@@ -56,7 +67,7 @@ export function setupRoutes(app, aicliService) {
       // Validate working directory if provided
       let validatedWorkingDir;
       try {
-        validatedWorkingDir = validateWorkingDirectory(workingDirectory);
+        validatedWorkingDir = await validateWorkingDirectory(workingDirectory);
       } catch (error) {
         return res.status(403).json({
           error: error.message,
@@ -94,7 +105,7 @@ export function setupRoutes(app, aicliService) {
       // Validate working directory if provided
       let validatedWorkingDir;
       try {
-        validatedWorkingDir = validateWorkingDirectory(workingDirectory);
+        validatedWorkingDir = await validateWorkingDirectory(workingDirectory);
       } catch (error) {
         return res.status(403).json({
           error: error.message,

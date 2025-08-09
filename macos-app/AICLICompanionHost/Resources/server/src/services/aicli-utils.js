@@ -2,6 +2,7 @@ import { resolve } from 'path';
 import { access, constants } from 'fs/promises';
 import { existsSync } from 'fs';
 import { execSync } from 'child_process';
+import { isTestEnvironment } from '../utils/environment.js';
 
 // Input validation and sanitization utilities
 export class InputValidator {
@@ -775,7 +776,7 @@ export class AICLIConfig {
     }
 
     // CRITICAL: Never run execSync in test environment
-    if (process.env.NODE_ENV === 'test') {
+    if (isTestEnvironment()) {
       return 'claude';
     }
 

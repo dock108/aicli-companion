@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
 import { AICLIConfig } from './aicli-utils.js';
 import { pushNotificationService } from './push-notification.js';
+import { extractProjectName } from '../utils/session-parser.js';
 
 /**
  * Manages long-running AICLI CLI tasks with background processing and push notifications
@@ -164,9 +165,8 @@ export class AICLILongRunningTaskManager extends EventEmitter {
     isError = false,
     errorMessage = null
   ) {
-    // Extract project name from session ID (format: project_name_uuid)
-    const sessionParts = sessionId.split('_');
-    const projectName = sessionParts.slice(0, -1).join('_') || 'Project';
+    // Extract project name from session ID using parser
+    const projectName = extractProjectName(sessionId, 'Project');
 
     // Device tokens are now managed via HTTP/push notification registration
     const deviceTokens = [];

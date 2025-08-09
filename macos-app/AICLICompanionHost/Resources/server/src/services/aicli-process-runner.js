@@ -1,6 +1,7 @@
 import { spawn } from 'child_process';
 import { EventEmitter } from 'events';
 import { processMonitor } from '../utils/process-monitor.js';
+import { isTestEnvironment } from '../utils/environment.js';
 import { InputValidator, MessageProcessor } from './aicli-utils.js';
 import { ClaudeStreamParser } from './stream-parser.js';
 import { createLogger } from '../utils/logger.js';
@@ -30,7 +31,7 @@ export class AICLIProcessRunner extends EventEmitter {
   get aicliCommand() {
     if (!this._aicliCommand) {
       // Skip command detection in test environment to avoid spawning processes
-      this._aicliCommand = process.env.NODE_ENV === 'test' ? 'claude' : this.findAICLICommand();
+      this._aicliCommand = isTestEnvironment() ? 'claude' : this.findAICLICommand();
     }
     return this._aicliCommand;
   }
@@ -409,7 +410,7 @@ export class AICLIProcessRunner extends EventEmitter {
         });
 
         // Safety check for test environment
-        if (process.env.NODE_ENV === 'test' && this.spawnFunction === spawn) {
+        if (isTestEnvironment() && this.spawnFunction === spawn) {
           console.error(
             'WARNING: Using real spawn in test environment! This will create real processes.'
           );
@@ -832,7 +833,7 @@ export class AICLIProcessRunner extends EventEmitter {
    */
   findAICLICommand() {
     // CRITICAL: Never spawn real processes in test environment
-    if (process.env.NODE_ENV === 'test') {
+    if (isTestEnvironment()) {
       return 'claude';
     }
 

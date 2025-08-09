@@ -2,6 +2,7 @@ import express from 'express';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { ServerConfig } from '../config/server-config.js';
+import { validateSecurePath, PathSecurityError } from '../utils/path-security.js';
 import rateLimit from 'express-rate-limit';
 export function setupProjectRoutes(app, _aicliService) {
   const router = express.Router();
@@ -68,31 +69,32 @@ export function setupProjectRoutes(app, _aicliService) {
     try {
       const { name } = req.params;
       const projectsDir = getProjectsDir();
-      const projectPath = path.join(projectsDir, name);
 
-      // Security check - prevent directory traversal
-      const normalizedPath = path.normalize(projectPath);
-      const normalizedBase = path.normalize(projectsDir);
-
-      if (!normalizedPath.startsWith(normalizedBase)) {
-        return res.status(403).json({
-          error: 'Access denied',
-          message: 'Invalid project path',
-        });
-      }
-
-      // Check if project exists
+      // Secure path validation to prevent directory traversal attacks
+      let validatedPath;
       try {
-        const stat = await fs.stat(projectPath);
-        if (!stat.isDirectory()) {
-          throw new Error('Not a directory');
-        }
-      } catch (error) {
-        return res.status(404).json({
-          error: 'Project not found',
-          message: `Project '${name}' does not exist`,
+        validatedPath = await validateSecurePath(projectsDir, name, {
+          allowSymlinks: false,
+          mustExist: true,
+          mustBeDirectory: true
         });
+      } catch (error) {
+        if (error instanceof PathSecurityError) {
+          console.warn(`Path security violation in project access: ${error.message}`, {
+            projectsDir,
+            requestedName: name,
+            code: error.code
+          });
+          return res.status(403).json({
+            error: 'Access denied',
+            message: 'Invalid project path',
+          });
+        }
+        throw error;
       }
+
+      const projectPath = validatedPath;
+      // Note: Path validation already confirmed it exists and is a directory
 
       // Get project info
       const info = {

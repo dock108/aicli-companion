@@ -2,6 +2,7 @@ import { spawn, exec } from 'child_process';
 import { promisify } from 'util';
 import { EventEmitter } from 'events';
 import { processMonitor } from '../utils/process-monitor.js';
+import { isTestEnvironment } from '../utils/environment.js';
 import { InputValidator, MessageProcessor, AICLIConfig } from './aicli-utils.js';
 import { AICLIMessageHandler } from './aicli-message-handler.js';
 // import { ClaudeStreamParser } from './stream-parser.js';
@@ -118,7 +119,7 @@ export class AICLIService extends EventEmitter {
   // Start process health monitoring
   startProcessHealthMonitoring() {
     // Skip in test environment to prevent hanging tests
-    if (process.env.NODE_ENV === 'test') {
+    if (isTestEnvironment()) {
       return;
     }
 
@@ -193,7 +194,7 @@ export class AICLIService extends EventEmitter {
 
   async checkAvailability() {
     // Skip real execution in test environment
-    if (process.env.NODE_ENV === 'test') {
+    if (isTestEnvironment()) {
       return true;
     }
 

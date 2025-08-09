@@ -28,9 +28,6 @@ final class AICLICompanionHostTests: XCTestCase {
         XCTAssertNotNil(settings)
         // requireAuthentication may be true or false, just verify it can be accessed
         _ = settings.requireAuthentication
-        // Remove tests for properties that don't exist
-        // XCTAssertTrue(settings.startAtLogin)
-        // XCTAssertTrue(settings.showInDock)
     }
     
     func testKeychainManagerInitialization() throws {

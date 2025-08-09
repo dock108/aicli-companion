@@ -40,7 +40,8 @@ class SettingsManager: ObservableObject {
 
     // Advanced Settings
     @AppStorage("serverCommand") var serverCommand: String = "npm start"
-    @AppStorage("serverDirectory") var serverDirectory: String = "/Users/michaelfuscoletti/Desktop/claude-companion/server"
+    // Server directory - deprecated, kept for compatibility
+    @AppStorage("serverDirectory") var serverDirectory: String = ""
     @AppStorage("nodeExecutable") var nodeExecutable: String = ""  // Empty means auto-detect
     @AppStorage("npmExecutable") var npmExecutable: String = ""  // Empty means auto-detect
 

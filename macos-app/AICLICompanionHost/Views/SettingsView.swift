@@ -87,7 +87,9 @@ struct GeneralSettingsView: View {
             Section {
                 LabeledContent("Default Project Directory") {
                     HStack {
-                        Text(settingsManager.defaultProjectDirectory.isEmpty ? "Not Set" : settingsManager.defaultProjectDirectory)
+                        Text(settingsManager.defaultProjectDirectory.isEmpty
+                             ? "Not Set"
+                             : settingsManager.defaultProjectDirectory)
                             .fontDesign(.monospaced)
                             .font(.caption)
                             .lineLimit(1)

@@ -150,7 +150,7 @@ jobs:
     
     - name: Run SwiftLint
       run: |
-        cd macos-app
+        cd macos-app/AICLICompanionHost
         swiftlint lint --strict --reporter github-actions-logging
     
     - name: Build macOS App

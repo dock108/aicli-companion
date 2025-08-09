@@ -961,9 +961,9 @@ class ChatViewModel: ObservableObject {
     // MARK: - CloudKit Sync Methods
     
     func syncMessages(for project: Project) async {
-        guard cloudKitManager.iCloudAvailable else { 
+        guard cloudKitManager.iCloudAvailable else {
             print("⚠️ iCloud not available, skipping sync")
-            return 
+            return
         }
         
         do {
@@ -982,11 +982,11 @@ class ChatViewModel: ObservableObject {
     
     private func mergeCloudMessages(_ cloudMessages: [Message]) {
         var newMessagesCount = 0
-        var foundSessionId: String? = nil
+        var foundSessionId: String?
         
         for cloudMessage in cloudMessages {
             // Extract sessionId from CloudKit messages if we don't have one
-            if currentSessionId == nil, 
+            if currentSessionId == nil,
                let sessionId = cloudMessage.metadata?.sessionId,
                !sessionId.isEmpty {
                 foundSessionId = sessionId

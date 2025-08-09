@@ -15,8 +15,8 @@ extension ServerManager {
     func setupNetworkMonitoring() {
         NetworkMonitor.shared.$localIP
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] ip in
-                self?.localIP = ip
+            .sink { [weak self] ipAddress in
+                self?.localIP = ipAddress
             }
             .store(in: &cancellables)
     }
@@ -156,10 +156,8 @@ extension ServerManager {
     }
 
     func findAvailablePort(starting: Int = 3001) async -> Int {
-        for port in starting...(starting + 100) {
-            if await isPortAvailable(port) {
-                return port
-            }
+        for port in starting...(starting + 100) where await isPortAvailable(port) {
+            return port
         }
         return starting
     }

@@ -1,55 +1,46 @@
 # Claude Companion Documentation
 
-Welcome to the Claude Companion documentation! This comprehensive guide covers everything you need to know about using, developing, and deploying Claude Companion.
+Welcome to the Claude Companion documentation! This guide covers everything you need to know about using, developing, and deploying Claude Companion.
 
 ## 📚 Documentation Structure
 
 ### 🚀 Getting Started
 - [Installation Guide](./getting-started/installation.md) - Complete setup instructions
 - [Quick Start](./getting-started/quickstart.md) - Get running in minutes
-- [Troubleshooting](./getting-started/troubleshooting.md) - Common issues and solutions
+- [Troubleshooting](./getting-started/troubleshooting.md) - All troubleshooting guides
 
 ### 🏗️ Architecture
-- [System Overview](./architecture/overview.md) - High-level architecture
-- [Server Architecture](./architecture/server.md) - Companion server internals
+- [System Architecture](./ARCHITECTURE.md) - Complete system architecture and design
 - [iOS App Architecture](./architecture/ios-app.md) - Mobile app structure
 
 ### 📡 API Reference
-- [REST API](./api/rest-api.md) - HTTP endpoints
-- [WebSocket API](./api/websocket-api.md) - Real-time communication
-
-### 🔧 Features
-- [Streaming & Notifications](./features/streaming-and-notifications.md) - Real-time response streaming
-- [Session Persistence](./features/session-persistence.md) - Conversation continuity
-- [Push Notifications Backend](./features/push-notifications-backend.md) - Server-side push setup
+- [Complete API Documentation](./api/API.md) - REST and WebSocket APIs
 
 ### 💻 Development
-- [Development Setup](./development/setup.md) - Environment configuration
-- [Testing Guide](./development/testing.md) - Unit and integration testing
-- [Building for iOS](./development/build-ios.md) - iOS build process
-- [Host App Development](./development/hostapp-testing.md) - Tauri app testing
+- [Development Setup](./development/setup.md) - Complete environment setup and build guides
+- [Testing Guide](./development/testing.md) - All testing documentation (unit, integration, UAT)
 - [Contributing](./development/contributing.md) - Contribution guidelines
+- [Host App Guide](./development/hostapp-guide.md) - Tauri/desktop app development
 
-### 🚀 Operations
-- [Deployment Guide](./operations/deployment.md) - Production deployment
+### 📱 Platform Guides
+- [iOS Guide](./platform-guides/ios-guide.md) - iOS app development and integration
+- [macOS Guide](./platform-guides/macos-guide.md) - macOS app documentation
+- [Server Guide](./platform-guides/server-guide.md) - Server implementation and logging
 
-### 🔒 Security
-- [Tauri Security Update](./security/tauri-security-update.md) - Security considerations
-
-### 🧪 Testing
-- [UAT Scenarios](./testing/uat-scenarios.md) - User acceptance testing
+### 🚀 Deployment
+- [Deployment Guide](./deployment.md) - Production deployment and operations
 
 ## 🎯 Quick Links
 
 ### For Users
-- [Download Latest Release](https://github.com/your-repo/claude-companion/releases)
-- [Report an Issue](https://github.com/your-repo/claude-companion/issues)
-- [Feature Requests](https://github.com/your-repo/claude-companion/discussions)
+- Start with the [Installation Guide](./getting-started/installation.md)
+- Follow the [Quick Start](./getting-started/quickstart.md) guide
+- Check [Troubleshooting](./getting-started/troubleshooting.md) for issues
 
 ### For Developers
-- [API Documentation](./api/rest-api.md)
-- [Contributing Guide](../CONTRIBUTING.md)
-- [Architecture Overview](./architecture/overview.md)
+- [API Documentation](./api/API.md) for integration
+- [Development Setup](./development/setup.md) to get started
+- [Architecture Overview](./ARCHITECTURE.md) for system design
 
 ## 🌟 Key Features
 
@@ -85,17 +76,9 @@ Before you begin, ensure you have:
 - **Documentation**: You're here! 📖
 - **Issues**: [GitHub Issues](https://github.com/your-repo/claude-companion/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/your-repo/claude-companion/discussions)
-- **Contributing**: See our [Contributing Guide](../CONTRIBUTING.md)
-
-## 📈 Version History
-
-- **v1.0.0** - Initial release with core features
-  - iOS app with chat interface
-  - Companion server with Claude Code integration
-  - Real-time streaming and notifications
-  - Session persistence
+- **Contributing**: See our [Contributing Guide](./development/contributing.md)
 
 ---
 
-**Last Updated**: 2025-07-30  
-**Documentation Version**: 1.0.0
+**Last Updated**: 2025-08-09  
+**Documentation Version**: 2.0.0

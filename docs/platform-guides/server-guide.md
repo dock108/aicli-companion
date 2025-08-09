@@ -457,3 +457,184 @@ See [Contributing Guide](../CONTRIBUTING.md) for development guidelines.
 ## License
 
 MIT - See [LICENSE](../LICENSE) for details.
+
+---
+
+
+# Logging Improvements Summary
+
+## Overview
+Implemented a structured logging system to replace 330+ console.log statements across the server, making it easier to debug parallel session issues.
+
+## Logger Features
+
+### Logger Utility (`src/utils/logger.js`)
+- **Log Levels**: debug, info, warn, error (controlled by LOG_LEVEL env var)
+- **Session Context**: Automatically includes sessionId in all logs
+- **Request Tracking**: Includes requestId for tracing message flow
+- **Child Loggers**: Create loggers with default context
+- **Smart Helpers**: 
+  - `logger.stream()` - Reduces stream operation verbosity
+  - `logger.chunk()` - Only logs every 10th chunk or final chunks
+  - `logger.session()` - Standardized session operation logging
+
+### Log Format
+```
+2024-01-15T10:30:45.123Z 📘 [INFO] [ModuleName] [Session: abc12345] [Req: def67890] Message content {"extra": "context"}
+```
+
+## Files Refactored
+
+### ✅ websocket-message-handlers.js
+- **Before**: 51 console.log statements
+- **After**: Structured logging with session context
+- **Key Improvements**:
+  - All handlers use sessionLogger with automatic session context
+  - Reduced verbosity for routine operations
+  - Clear error context for debugging
+
+### ✅ aicli-process-runner.js  
+- **Before**: 46 console.log statements (worst offender!)
+- **After**: Clean, contextual logging
+- **Key Improvements**:
+  - Replaced 15+ lines of verbose startup logs with 2 structured logs
+  - Stream chunks only log at debug level
+  - Process monitoring logs include session context
+
+## Usage Examples
+
+### Set Log Level
+```bash
+# Production (less verbose)
+LOG_LEVEL=info npm start
+
+# Development (see everything)
+LOG_LEVEL=debug npm start
+```
+
+### Filtering Logs
+```bash
+# See only logs for a specific session
+npm start | grep "Session: abc12345"
+
+# See only errors
+LOG_LEVEL=error npm start
+
+# See logs for specific module
+npm start | grep "[AICLI]"
+```
+
+## Benefits for Parallel Sessions
+
+1. **Session Isolation**: Every log includes session ID, making it easy to filter
+2. **Reduced Noise**: Stream chunks and routine operations at debug level
+3. **Request Tracking**: Follow a message through the system with request ID
+4. **Performance**: Only compute/format logs when needed (level checking)
+
+## Next Steps
+
+- [ ] Refactor aicli-session-manager.js (38 console.logs)
+- [ ] Refactor remaining high-traffic services
+- [ ] Add session debugging endpoint
+- [ ] Create iOS Logger utility
+- [ ] Add log aggregation/filtering tools
+
+---
+
+
+# Long-Running Task Recovery
+
+This document explains how the server handles long-running tasks when iOS clients disconnect due to background limitations.
+
+## Problem
+
+When the iOS app goes to background, the WebSocket connection disconnects. If a long-running task (> 5 minutes) is running on the server, by the time it completes, there are no connected clients to receive the results.
+
+## Solution
+
+We've implemented a three-part solution:
+
+### 1. Message Queue Service
+
+- **Location**: `src/services/message-queue.js`
+- **Purpose**: Stores messages for disconnected clients
+- **Features**:
+  - In-memory storage (can be upgraded to Redis)
+  - 24-hour TTL for messages
+  - Automatic cleanup of expired messages
+  - Per-client delivery tracking
+
+### 2. Push Notifications
+
+- **Enhanced**: `src/services/push-notification.js`
+- **Features**:
+  - Sends notification when long-running task completes
+  - Different notification for success vs failure
+  - Deep linking to reconnect to specific session
+  - Custom sounds and categories
+
+### 3. Automatic Message Delivery
+
+When a client reconnects:
+1. Server checks for queued messages
+2. Delivers any pending messages for active sessions
+3. Marks messages as delivered
+
+## How It Works
+
+### During Task Execution
+
+1. Server detects long-running task (> 5 minutes)
+2. Sends immediate status to client
+3. Runs task in background
+4. Sends periodic status updates
+
+### When Client Disconnects
+
+1. WebSocket detects disconnection
+2. Any new messages are queued instead of lost
+3. Queue stores messages with session ID
+
+### On Task Completion
+
+1. Server completes the task
+2. If no clients connected, messages are queued
+3. Push notification sent to registered devices
+4. Results stored for later delivery
+
+### When Client Reconnects
+
+1. Client establishes WebSocket connection
+2. Server checks for queued messages
+3. Delivers all pending messages
+4. Client receives results seamlessly
+
+## Configuration
+
+### Environment Variables
+
+- `APNS_CERT_PATH`: Path to Apple Push Notification certificate
+- `APNS_KEY_PATH`: Path to Apple Push Notification key
+- `APNS_PASSPHRASE`: Certificate passphrase (optional)
+- `APNS_BUNDLE_ID`: iOS app bundle identifier
+
+### Message Queue Settings
+
+- Default TTL: 24 hours
+- Cleanup interval: 1 hour
+- Storage: In-memory (upgradeable to Redis)
+
+## Testing
+
+Run the message queue tests:
+```bash
+npm test -- src/test/services/message-queue.test.js
+```
+
+## Future Enhancements
+
+1. **Redis Storage**: Replace in-memory storage with Redis for persistence
+2. **Message Priority**: Add priority levels for different message types
+3. **Compression**: Compress large messages to save memory
+4. **Analytics**: Track delivery rates and queue performance
+5. **Retry Logic**: Implement exponential backoff for failed deliveries

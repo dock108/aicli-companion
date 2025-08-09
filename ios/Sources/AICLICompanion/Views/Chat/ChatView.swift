@@ -179,6 +179,11 @@ struct ChatView: View {
                     
                     print("🔷 ChatView: Loaded \(self.viewModel.messages.count) messages for restored session")
                     
+                    // Sync messages from CloudKit
+                    Task {
+                        await self.viewModel.syncMessages(for: project)
+                    }
+                    
                     // Check for any new messages that may have been saved while in a different project
                     self.refreshMessagesAfterProjectSwitch()
                     
@@ -195,6 +200,11 @@ struct ChatView: View {
                     if let pendingMessages = BackgroundSessionCoordinator.shared.retrievePendingMessages(for: project.path) {
                         print("🔄 ChatView: Found \(pendingMessages.count) pending messages for project")
                         self.viewModel.messages = pendingMessages
+                    }
+                    
+                    // Still sync from CloudKit even without a session
+                    Task {
+                        await self.viewModel.syncMessages(for: project)
                     }
                 }
             }
@@ -279,6 +289,17 @@ struct ChatView: View {
         
         // Clear current session ID - next message will be a fresh chat
         viewModel.currentSessionId = nil
+        
+        // Sync clear operation to CloudKit for cross-device consistency
+        Task {
+            do {
+                try await CloudKitSyncManager.shared.clearChat(for: project.path)
+                print("✅ Chat cleared in CloudKit for project: \(project.path)")
+            } catch {
+                print("⚠️ Failed to clear chat in CloudKit: \(error)")
+                // Continue anyway - local clear succeeded
+            }
+        }
         
         // HTTP doesn't maintain active sessions - they're request-scoped
     }
@@ -440,6 +461,11 @@ struct ChatView: View {
         
         // Use the new deduplication method to safely merge messages
         let newMessageCount = viewModel.mergePersistedMessages(savedMessages)
+        
+        // Also sync from CloudKit when becoming active
+        Task {
+            await viewModel.syncMessages(for: project)
+        }
         
         if newMessageCount > 0 {
             print("✅ ChatView: Successfully merged \(newMessageCount) new messages after returning from background")

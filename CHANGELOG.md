@@ -1,22 +1,21 @@
 # Changelog
 
-All notable changes to Claude Companion will be documented in this file.
+All notable changes to AICLI Companion will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0] - 2025-07-30
+## [1.0.0] - 2025-08-09
 
 ### Added
-- Initial release of Claude Companion
+- Initial release of AICLI Companion
 - iOS app with native SwiftUI interface
-- Companion server for bridging iOS app with Claude Code CLI
-- Real-time streaming of Claude responses
-- Push notifications when Claude completes a response
-- Session persistence across app launches
-- Project management and switching
-- WebSocket support for real-time communication
-- REST API for one-time queries
+- Companion server for bridging iOS app with Claude CLI
+- HTTP + APNS architecture for message delivery
+- Push notifications for Claude responses
+- Session management with timeout tracking
+- Project directory browsing and selection
+- REST API for chat and session management
 - Service discovery via Bonjour/mDNS
 - TLS encryption and token-based authentication
 - Tauri-based desktop host app for easy server management

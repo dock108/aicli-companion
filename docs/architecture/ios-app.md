@@ -1,6 +1,6 @@
 # iOS App Architecture
 
-The Claude Companion iOS app is built with SwiftUI and follows modern iOS development patterns for a responsive, native experience.
+The AICLI Companion iOS app is built with SwiftUI and follows modern iOS development patterns for a responsive, native experience.
 
 ## App Structure
 
@@ -270,4 +270,4 @@ TestFlight: Beta testing, crash reporting
 
 ---
 
-**Last Updated**: 2025-07-27
+**Last Updated**: 2025-08-09

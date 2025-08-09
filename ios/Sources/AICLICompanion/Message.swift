@@ -1,4 +1,5 @@
 import Foundation
+import CloudKit
 
 struct Message: Identifiable, Codable {
     let id: UUID
@@ -10,6 +11,18 @@ struct Message: Identifiable, Codable {
     var streamingState: StreamingState?
     let requestId: String?
     let richContent: RichContent?
+    
+    // CloudKit sync properties (excluded from Codable)
+    var cloudKitRecordID: CKRecord.ID?
+    var readByDevices: [String] = []
+    var deletedByDevices: [String] = []
+    var syncedAt: Date?
+    var needsSync: Bool = true
+    
+    // Custom Codable implementation to exclude CloudKit properties
+    enum CodingKeys: String, CodingKey {
+        case id, content, sender, timestamp, type, metadata, streamingState, requestId, richContent
+    }
 
     init(id: UUID = UUID(), content: String, sender: MessageSender, timestamp: Date = Date(), type: MessageType = .text, metadata: AICLIMessageMetadata? = nil, streamingState: StreamingState? = nil, requestId: String? = nil, richContent: RichContent? = nil) {
         self.id = id
@@ -21,6 +34,13 @@ struct Message: Identifiable, Codable {
         self.streamingState = streamingState
         self.requestId = requestId
         self.richContent = richContent
+        
+        // Initialize CloudKit properties
+        self.cloudKitRecordID = nil
+        self.readByDevices = []
+        self.deletedByDevices = []
+        self.syncedAt = nil
+        self.needsSync = true
     }
 }
 
@@ -1045,4 +1065,71 @@ struct RegisterDeviceRequest: Codable {
 struct DeviceRegisteredResponse: Codable {
     let success: Bool
     let message: String?
+}
+
+// MARK: - CloudKit Extensions
+
+extension Message {
+    func toCKRecord() -> CKRecord {
+        let recordID = cloudKitRecordID ?? CKRecord.ID(recordName: id.uuidString)
+        let record = CKRecord(recordType: CKRecordType.message, recordID: recordID)
+        
+        record[CKField.messageId] = id.uuidString
+        record[CKField.content] = content
+        record[CKField.sender] = sender.rawValue
+        record[CKField.timestamp] = timestamp
+        record[CKField.messageType] = type.rawValue
+        record[CKField.readByDevices] = readByDevices as CKRecordValue
+        record[CKField.deletedByDevices] = deletedByDevices as CKRecordValue
+        
+        // Add session/project info if available
+        if let sessionId = metadata?.sessionId {
+            record[CKField.sessionId] = sessionId
+        }
+        
+        // TODO: [OPTIMIZE] Add projectPath field when available from context
+        // Current assumption: projectPath will be added by the sync manager
+        
+        return record
+    }
+    
+    static func from(record: CKRecord) -> Message? {
+        guard let messageId = record[CKField.messageId] as? String,
+              let content = record[CKField.content] as? String,
+              let senderRaw = record[CKField.sender] as? String,
+              let sender = MessageSender(rawValue: senderRaw),
+              let timestamp = record[CKField.timestamp] as? Date else {
+            return nil
+        }
+        
+        let messageTypeRaw = record[CKField.messageType] as? String ?? "text"
+        let messageType = MessageType(rawValue: messageTypeRaw) ?? .text
+        
+        var message = Message(
+            id: UUID(uuidString: messageId) ?? UUID(),
+            content: content,
+            sender: sender,
+            timestamp: timestamp,
+            type: messageType
+        )
+        
+        message.cloudKitRecordID = record.recordID
+        message.readByDevices = (record[CKField.readByDevices] as? [String]) ?? []
+        message.deletedByDevices = (record[CKField.deletedByDevices] as? [String]) ?? []
+        message.syncedAt = Date()
+        message.needsSync = false
+        
+        // Reconstruct metadata if sessionId exists in CloudKit record
+        // This preserves the session across devices for project continuity
+        if let sessionId = record[CKField.sessionId] as? String {
+            message.metadata = AICLIMessageMetadata(
+                sessionId: sessionId,
+                duration: 0,
+                cost: nil,
+                tools: nil
+            )
+        }
+        
+        return message
+    }
 }

@@ -1,10 +1,10 @@
 # Installation Guide
 
-This guide will walk you through installing all components of Claude Companion.
+This guide will walk you through installing all components of AICLI Companion.
 
 ## Prerequisites
 
-Before installing Claude Companion, ensure you have:
+Before installing AICLI Companion, ensure you have:
 
 - **macOS**: 12.0 or later (for development)
 - **Node.js**: Version 18 or later
@@ -58,7 +58,7 @@ npm run build
 ### From TestFlight (Coming Soon)
 1. Download TestFlight from the App Store
 2. Join the beta using the invitation link
-3. Install Claude Companion from TestFlight
+3. Install AICLI Companion from TestFlight
 
 ### From Source (Development)
 
@@ -176,4 +176,4 @@ curl http://localhost:3001/health
 
 ---
 
-**Last Updated**: 2025-07-27
+**Last Updated**: 2025-08-09

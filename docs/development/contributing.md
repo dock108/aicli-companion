@@ -1,6 +1,6 @@
-# Contributing to Claude Companion
+# Contributing to AICLI Companion
 
-Thank you for your interest in contributing to Claude Companion! This guide will help you get started.
+Thank you for your interest in contributing to AICLI Companion! This guide will help you get started.
 
 ## Code of Conduct
 
@@ -312,10 +312,10 @@ By contributing, you agree that your contributions will be licensed under the pr
 
 ## Thank You!
 
-Your contributions make Claude Companion better for everyone. Whether it's code, documentation, or community support, every contribution matters.
+Your contributions make AICLI Companion better for everyone. Whether it's code, documentation, or community support, every contribution matters.
 
 Welcome to the team! 🚀
 
 ---
 
-**Last Updated**: 2025-07-27
+**Last Updated**: 2025-08-09

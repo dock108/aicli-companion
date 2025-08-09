@@ -1,4 +1,4 @@
-# Claude Companion iOS App
+# AICLI Companion iOS App
 
 A native iOS application that brings Claude's AI assistance to your mobile device through an elegant, modern interface. Built with SwiftUI for optimal performance and seamless iOS integration.
 
@@ -33,7 +33,7 @@ A native iOS application that brings Claude's AI assistance to your mobile devic
 - iOS 16.0 or later
 - iPhone or iPad
 - Xcode 15.0+ (for building from source)
-- Claude Companion server running on your network
+- AICLI Companion server running on your network
 
 ## Installation
 
@@ -73,7 +73,7 @@ We plan to release on the App Store once the app reaches stability milestones.
 ### 1. Server Connection
 
 On first launch:
-1. Ensure your Claude Companion server is running
+1. Ensure your AICLI Companion server is running
 2. The app will automatically discover servers on your network
 3. Select your server from the list
 4. Enter authentication token if required
@@ -363,11 +363,11 @@ MIT License - See [LICENSE](../LICENSE) for details.
 ---
 
 
-# iOS Integration Guide for Claude Companion Server
+# iOS Integration Guide for AICLI Companion Server
 
 ## Overview
 
-This guide documents all iOS-specific features and integration points for the Claude Companion Server. It includes implementation guidelines, API usage examples, and best practices.
+This guide documents all iOS-specific features and integration points for the AICLI Companion Server. It includes implementation guidelines, API usage examples, and best practices.
 
 ## 1. Session Management
 

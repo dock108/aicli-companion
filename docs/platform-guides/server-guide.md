@@ -1,6 +1,6 @@
-# Claude Companion Server
+# AICLI Companion Server
 
-The Node.js backend server that bridges the Claude Companion iOS app with AICLI, providing real-time communication, session management, and intelligent message handling.
+The Node.js backend server that bridges the AICLI Companion iOS app with AICLI, providing real-time communication, session management, and intelligent message handling.
 
 ## Overview
 

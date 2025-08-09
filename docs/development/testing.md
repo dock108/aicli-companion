@@ -1,6 +1,6 @@
 # Testing Guide
 
-Comprehensive testing guide for Claude Companion, covering unit tests, integration tests, and user acceptance testing.
+Comprehensive testing guide for AICLI Companion, covering unit tests, integration tests, and user acceptance testing.
 
 ## Testing Overview
 
@@ -487,7 +487,7 @@ node --inspect-brk node_modules/.bin/vitest run
 
 ---
 
-**Last Updated**: 2025-07-27# End-to-End Message Delivery Test Plan
+**Last Updated**: 2025-08-09# End-to-End Message Delivery Test Plan
 
 ## Test Scenarios
 

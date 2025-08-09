@@ -1,6 +1,6 @@
-# Claude Companion macOS App
+# AICLI Companion macOS App
 
-A native macOS menu bar application for managing the Claude Companion server. Built with SwiftUI for optimal performance and seamless macOS integration.
+A native macOS menu bar application for managing the AICLI Companion server. Built with SwiftUI for optimal performance and seamless macOS integration.
 
 ## Features
 
@@ -55,7 +55,7 @@ Download the latest `.dmg` from the [Releases](https://github.com/your-username/
 
 ### First Launch
 
-1. The app will appear in your menu bar with the Claude Companion icon
+1. The app will appear in your menu bar with the AICLI Companion icon
 2. Click the icon to open the dropdown menu
 3. Configure your settings in the Settings tab
 

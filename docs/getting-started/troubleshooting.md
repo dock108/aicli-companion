@@ -1,6 +1,6 @@
 # Troubleshooting Guide
 
-Common issues and solutions for Claude Companion.
+Common issues and solutions for AICLI Companion.
 
 ## Connection Issues
 
@@ -91,7 +91,7 @@ Common issues and solutions for Claude Companion.
 
 **Solutions**:
 1. Delete and reinstall the app
-2. Clear app data: Settings → Claude Companion → Clear Data
+2. Clear app data: Settings → AICLI Companion → Clear Data
 3. Update to latest version
 4. Check iOS compatibility (requires iOS 15+)
 
@@ -250,11 +250,11 @@ When reporting issues, include:
 
 ---
 
-**Last Updated**: 2025-07-27# Claude Companion Server - Troubleshooting Guide
+**Last Updated**: 2025-08-09# AICLI Companion Server - Troubleshooting Guide
 
 ## Overview
 
-This guide helps diagnose and resolve common issues with Claude Companion Server. Issues are organized by category with symptoms, causes, and solutions.
+This guide helps diagnose and resolve common issues with AICLI Companion Server. Issues are organized by category with symptoms, causes, and solutions.
 
 ## Quick Diagnostics
 

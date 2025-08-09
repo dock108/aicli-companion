@@ -1,6 +1,6 @@
 # Development Setup Guide
 
-This guide will help you set up your development environment for contributing to Claude Companion.
+This guide will help you set up your development environment for contributing to AICLI Companion.
 
 ## Prerequisites
 
@@ -350,7 +350,7 @@ npm install
 
 ---
 
-**Last Updated**: 2025-07-27# Build Instructions - UI Changes and Assets
+**Last Updated**: 2025-08-09# Build Instructions - UI Changes and Assets
 
 ## Clean Build Steps
 

@@ -1,6 +1,6 @@
-# Claude Companion Documentation
+# AICLI Companion Documentation
 
-Welcome to the Claude Companion documentation! This guide covers everything you need to know about using, developing, and deploying Claude Companion.
+Welcome to the AICLI Companion documentation! This guide covers everything you need to know about using, developing, and deploying AICLI Companion.
 
 ## 📚 Documentation Structure
 
@@ -74,8 +74,8 @@ Before you begin, ensure you have:
 ## 🤝 Getting Help
 
 - **Documentation**: You're here! 📖
-- **Issues**: [GitHub Issues](https://github.com/your-repo/claude-companion/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-repo/claude-companion/discussions)
+- **Issues**: [GitHub Issues](https://github.com/your-repo/aicli-companion/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/your-repo/aicli-companion/discussions)
 - **Contributing**: See our [Contributing Guide](./development/contributing.md)
 
 ---

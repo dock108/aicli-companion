@@ -1,6 +1,6 @@
 # Quick Start Guide
 
-Get Claude Companion up and running in 5 minutes!
+Get AICLI Companion up and running in 5 minutes!
 
 ## Prerequisites
 
@@ -26,7 +26,7 @@ npm start
 
 You'll see:
 ```
-🚀 Claude Companion Server v1.0.0
+🚀 AICLI Companion Server v1.0.0
 🔐 Auth Token: abc123xyz...
 📡 Server running on https://0.0.0.0:8765
 🔍 Bonjour: _aiclicode._tcp
@@ -59,7 +59,7 @@ open AICLICompanion.xcodeproj
 
 1. **Launch the app** on your iOS device
 2. The app will automatically discover the server via Bonjour
-3. **Tap on the discovered server** (shows as "Claude Companion Server")
+3. **Tap on the discovered server** (shows as "AICLI Companion Server")
 4. **Enter the auth token** from step 2
 5. **Tap "Connect"**
 
@@ -162,4 +162,4 @@ CLAUDE_ALLOWED_TOOLS=read,write,edit,list
 
 **Happy Coding with Claude! 🚀**
 
-*Last Updated: 2025-07-30*
+*Last Updated: 2025-08-09*

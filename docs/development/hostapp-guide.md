@@ -69,11 +69,11 @@ To fully test these fixes, you need:
 - ✅ Parameter naming fixed
 - ✅ Server path resolution improved
 - ⏳ Browse button needs testing (likely works now)
-- ⏳ Full integration testing pending Rust installation# Claude Companion Host App - Testing Guide
+- ⏳ Full integration testing pending Rust installation# AICLI Companion Host App - Testing Guide
 
 ## Overview
 
-The Claude Companion Host App has comprehensive test coverage for both JavaScript/TypeScript frontend code and Rust backend code.
+The AICLI Companion Host App has comprehensive test coverage for both JavaScript/TypeScript frontend code and Rust backend code.
 
 ## JavaScript Testing
 

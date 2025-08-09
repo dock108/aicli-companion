@@ -1,8 +1,8 @@
-# Claude Companion Server - Production Deployment Guide
+# AICLI Companion Server - Production Deployment Guide
 
 ## Overview
 
-This comprehensive guide covers deploying the Claude Companion Server in production environments. It includes configuration, security hardening, performance optimization, monitoring, and operational best practices for maintaining a reliable AI assistance platform.
+This comprehensive guide covers deploying the AICLI Companion Server in production environments. It includes configuration, security hardening, performance optimization, monitoring, and operational best practices for maintaining a reliable AI assistance platform.
 
 ## Prerequisites
 
@@ -861,7 +861,7 @@ sudo systemctl start netdata
 sudo tee /usr/local/bin/claude-monitor > /dev/null << 'EOF'
 #!/bin/bash
 
-echo "=== Claude Companion System Monitor ==="
+echo "=== AICLI Companion System Monitor ==="
 echo "Time: $(date)"
 echo ""
 
@@ -965,7 +965,7 @@ sudo tee /usr/local/bin/claude-logs > /dev/null << 'EOF'
 LOG_DIR="/var/log/claude-companion"
 OUTPUT_FILE="$LOG_DIR/daily-report-$(date +%Y%m%d).txt"
 
-echo "Claude Companion Daily Log Report - $(date)" > "$OUTPUT_FILE"
+echo "AICLI Companion Daily Log Report - $(date)" > "$OUTPUT_FILE"
 echo "==========================================" >> "$OUTPUT_FILE"
 
 # Error summary
@@ -986,7 +986,7 @@ grep "Session created" "$LOG_DIR"/output.log | wc -l | xargs echo "Sessions crea
 grep "Session expired" "$LOG_DIR"/output.log | wc -l | xargs echo "Sessions expired:" >> "$OUTPUT_FILE"
 
 # Email report (optional)
-# mail -s "Claude Companion Daily Report" admin@claudecompanion.com < "$OUTPUT_FILE"
+# mail -s "AICLI Companion Daily Report" admin@claudecompanion.com < "$OUTPUT_FILE"
 EOF
 
 sudo chmod +x /usr/local/bin/claude-logs
@@ -1067,10 +1067,10 @@ fi
 
 # Send alerts if failures detected
 if [ "$FAILURES" -gt 0 ]; then
-    MESSAGE="Claude Companion health check failed with $FAILURES issues at $(date)"
+    MESSAGE="AICLI Companion health check failed with $FAILURES issues at $(date)"
     
     # Email alert
-    echo "$MESSAGE" | mail -s "[ALERT] Claude Companion Health Check Failed" "$ALERT_EMAIL"
+    echo "$MESSAGE" | mail -s "[ALERT] AICLI Companion Health Check Failed" "$ALERT_EMAIL"
     
     # Slack alert (if configured)
     if [ -n "$SLACK_WEBHOOK" ]; then
@@ -1407,8 +1407,8 @@ BACKUP_SIZE=$(du -sh "$BACKUP_ROOT/claude-companion-backup-$DATE.tar.gz" | cut -
 log "Backup completed successfully. Size: $BACKUP_SIZE"
 
 # 12. Send notification
-echo "Claude Companion backup completed at $(date). Size: $BACKUP_SIZE" | \
-    mail -s "[Backup] Claude Companion" admin@claudecompanion.com
+echo "AICLI Companion backup completed at $(date). Size: $BACKUP_SIZE" | \
+    mail -s "[Backup] AICLI Companion" admin@claudecompanion.com
 
 exit 0
 EOF
@@ -1427,7 +1427,7 @@ sudo chown claude-companion:claude-companion /usr/local/bin/claude-backup
 sudo tee /usr/local/bin/claude-restore > /dev/null << 'EOF'
 #!/bin/bash
 
-# Recovery script for Claude Companion
+# Recovery script for AICLI Companion
 set -e
 
 if [ "$#" -ne 1 ]; then
@@ -1444,7 +1444,7 @@ if [ ! -f "$BACKUP_FILE" ]; then
     exit 1
 fi
 
-echo "=== Claude Companion Disaster Recovery ==="
+echo "=== AICLI Companion Disaster Recovery ==="
 echo "Backup file: $BACKUP_FILE"
 echo "Restore directory: $RESTORE_DIR"
 echo ""
@@ -1559,7 +1559,7 @@ sudo chmod +x /usr/local/bin/claude-restore
 
 # Create recovery documentation
 sudo tee /home/claude-companion/RECOVERY.md > /dev/null << 'EOF'
-# Claude Companion Disaster Recovery Guide
+# AICLI Companion Disaster Recovery Guide
 
 ## Quick Recovery Steps
 
@@ -1763,7 +1763,7 @@ sudo tee /usr/local/bin/claude-diagnostic > /dev/null << 'EOF'
 
 REPORT_FILE="/tmp/claude-diagnostic-$(date +%Y%m%d_%H%M%S).txt"
 
-echo "Claude Companion Diagnostic Report" > "$REPORT_FILE"
+echo "AICLI Companion Diagnostic Report" > "$REPORT_FILE"
 echo "Generated: $(date)" >> "$REPORT_FILE"
 echo "======================================" >> "$REPORT_FILE"
 
@@ -1945,7 +1945,7 @@ log() {
     echo "[$(date)] $1"
 }
 
-log "Starting Claude Companion update process..."
+log "Starting AICLI Companion update process..."
 
 # 1. Pre-update checks
 log "Running pre-update checks..."

@@ -145,8 +145,8 @@ describe('TLS Utilities', () => {
         .replace(/\n/g, '');
 
       const decoded = JSON.parse(Buffer.from(base64Content, 'base64').toString());
-      assert.strictEqual(decoded.subject.commonName, 'Claude Companion Server');
-      assert.strictEqual(decoded.issuer.commonName, 'Claude Companion Server');
+      assert.strictEqual(decoded.subject.commonName, 'AICLI Companion Server');
+      assert.strictEqual(decoded.issuer.commonName, 'AICLI Companion Server');
       assert.strictEqual(decoded.publicKey, publicKey);
     });
 

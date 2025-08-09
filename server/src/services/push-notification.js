@@ -219,7 +219,7 @@ class PushNotificationService {
       notification.badge = 1;
       notification.sound = 'default';
       notification.alert = {
-        title: data.title || 'Claude Companion',
+        title: data.title || 'AICLI Companion',
         body: data.message || 'New notification',
       };
       notification.topic = this.bundleId || process.env.APNS_BUNDLE_ID || 'com.aiclicompanion.ios';

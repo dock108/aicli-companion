@@ -122,7 +122,7 @@ describe('Push Notifications Routes', () => {
       // Verify default message was used
       const [, testData] =
         pushNotificationService.sendClaudeResponseNotification.mock.calls[0].arguments;
-      assert.strictEqual(testData.message, 'Test notification from Claude Companion');
+      assert.strictEqual(testData.message, 'Test notification from AICLI Companion');
     });
 
     it('should handle send errors', async () => {

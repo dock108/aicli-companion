@@ -1,6 +1,26 @@
-# Claude Companion Development Rules
+# AICLI Companion Development Guidelines
 
-This document contains the coding standards, guidelines, and architectural principles that must be followed when working on the Claude Companion project.
+**IMPORTANT: This document contains critical instructions that MUST be followed when working on this codebase. Read this ENTIRE document before making any changes.**
+
+## Priority Documents
+
+### 1. Check for Active Plans
+**ALWAYS check if a `plan.md` file exists in the root directory FIRST.**
+
+If `plan.md` exists:
+1. Read the entire plan to understand current implementation status
+2. Look for TODOs marked with ✅ (completed) vs unmarked (pending)
+3. Continue with the next uncompleted TODO
+4. Update the plan as you work:
+   - Mark completed TODOs with ✅
+   - Add any issues encountered as comments
+   - Update the "Current Status" section
+   - Update "Last Updated" date
+5. Test each phase before proceeding to the next
+6. Do NOT deviate from the plan without explicit user approval
+
+### 2. Follow These Guidelines
+This document (CLAUDE.md) contains the coding standards and principles for the project. These guidelines OVERRIDE any default behavior.
 
 ## Core Development Principles
 
@@ -36,6 +56,77 @@ This document contains the coding standards, guidelines, and architectural princ
 // Decision: Immediate persistence ensures no data loss on crashes
 ```
 
+## Working with Plans
+
+### When a plan.md Exists
+
+1. **Start Each Session**:
+   ```markdown
+   1. Check for plan.md in root directory
+   2. Read entire plan to understand scope
+   3. Identify current status and next TODO
+   4. Review any noted issues or blockers
+   ```
+
+2. **During Implementation**:
+   ```markdown
+   - Complete TODOs in order unless specified otherwise
+   - Test each component before marking complete
+   - Update plan with any deviations or issues
+   - Keep "Current Status" section current
+   ```
+
+3. **Updating the Plan**:
+   ```markdown
+   ## Mark Completed Items
+   #### TODO 1.1: Enable CloudKit Capability ✅
+   
+   ## Add Implementation Notes
+   #### TODO 2.1: Create User Model
+   Note: Implemented with additional error handling for network failures
+   
+   ## Update Status
+   **Current Status**: Phase 2 in progress, TODO 2.3 blocked by [issue]
+   **Last Updated**: [Today's date]
+   ```
+
+### Creating New Plans
+
+If asked to create a plan for a new feature:
+
+1. **Structure**:
+   ```markdown
+   # [Feature Name] Implementation Plan
+   
+   ## Executive Summary
+   [Brief description of what we're building]
+   
+   ## Current State Analysis
+   ### What We Have Now
+   ### What We're Building
+   
+   ## Implementation Plan
+   ### Phase 1: [Name] (Day X)
+   #### TODO 1.1: [Specific task]
+   #### TODO 1.2: [Specific task]
+   
+   ## Testing Plan
+   ## Success Metrics
+   
+   ## AI Assistant Instructions
+   [Clear instructions for continuing work]
+   
+   **Current Status**: [Status]
+   **Next Step**: [Specific TODO]
+   **Last Updated**: [Date]
+   ```
+
+2. **Make It Resumable**:
+   - Number all TODOs clearly
+   - Include code examples
+   - Specify test requirements
+   - Add clear success criteria
+
 ## TODO Tracking Standards
 
 All TODOs must be marked with specific tags:
@@ -43,6 +134,9 @@ All TODOs must be marked with specific tags:
 - `TODO: [QUESTION]` - Need user input, but can continue
 - `TODO: [OPTIMIZE]` - Performance improvement opportunity
 - `TODO: [RESEARCH]` - Need to investigate best approach
+- `TODO: [PLAN]` - Refers to item in plan.md
+
+When you see a TODO tag, check if there's a plan.md that addresses it.
 
 ## Quality Standards
 
@@ -59,6 +153,7 @@ All TODOs must be marked with specific tags:
 - Configuration changes must update README.md
 - Architecture decisions should be recorded in relevant documentation
 - Keep documentation in sync with code changes
+- **Update plan.md if one exists for the current work**
 
 ### Testing Requirements
 - Unit tests for all new functionality
@@ -66,6 +161,7 @@ All TODOs must be marked with specific tags:
 - Error scenarios must be tested explicitly
 - Performance impact should be measured for critical paths
 - Test both success and failure cases
+- **Run tests specified in plan.md for each phase**
 
 ## Architecture Principles
 
@@ -77,14 +173,14 @@ All TODOs must be marked with specific tags:
    - Server doesn't manage session lifecycle
 
 2. **Pure Message Routing**
-   - Receives WebSocket messages from iOS app
+   - Receives HTTP requests from iOS app
    - Passes messages to Claude CLI
-   - Returns Claude's response unchanged
+   - Returns Claude's response via APNS
    - Uses requestId for proper message routing
 
 3. **No Message Buffering**
    - Doesn't store messages
-   - Doesn't queue messages
+   - Doesn't queue messages (except for APNS delivery)
    - Doesn't track conversation history
    - Doesn't cache responses
 
@@ -105,6 +201,7 @@ All TODOs must be marked with specific tags:
 - Manages conversation history
 - Handles project context
 - Maintains UI state independently
+- **If plan.md includes CloudKit sync, follows sync architecture**
 
 ### Project Path as Initial Context
 - First message includes project path
@@ -116,7 +213,7 @@ All TODOs must be marked with specific tags:
 
 ### What Server MUST NOT Do
 1. Create or manage sessions
-2. Store or buffer messages
+2. Store or buffer messages (except APNS queue)
 3. Track client state or navigation
 4. Send welcome or initialization messages
 5. Modify Claude responses
@@ -129,7 +226,7 @@ All TODOs must be marked with specific tags:
 3. Execute Claude CLI commands faithfully
 4. Pass through session IDs unchanged
 5. Use requestId for response routing
-6. Maintain WebSocket connections
+6. Deliver responses via APNS
 7. Handle errors gracefully
 
 ## iOS/macOS App Standards
@@ -147,6 +244,7 @@ All TODOs must be marked with specific tags:
 - Follow MVVM architecture pattern
 - Use appropriate view modifiers for layout
 - Maintain view composition over complex views
+- **Follow CloudKit integration patterns if specified in plan.md**
 
 ### Settings Organization
 - Basic settings belong in General tab, not Advanced
@@ -161,6 +259,7 @@ All TODOs must be marked with specific tags:
 - Provide recovery suggestions when possible
 - Never crash on recoverable errors
 - Handle network failures gracefully
+- **Handle CloudKit sync errors as specified in plan.md**
 
 ## Code Style Guidelines
 
@@ -200,6 +299,13 @@ All TODOs must be marked with specific tags:
 - Test concurrent operations
 - Verify error propagation
 
+### Plan-Based Testing
+**If a plan.md exists, follow its testing requirements**:
+- Complete tests for each phase before proceeding
+- Run manual test checklists if specified
+- Update test results in plan.md
+- Document any test failures as blockers
+
 ## Performance Guidelines
 
 - Profile before optimizing
@@ -229,6 +335,7 @@ All TODOs must be marked with specific tags:
 - Use feature branches for development
 - Squash commits when merging
 - Update documentation with code changes
+- **Reference plan.md TODOs in commit messages when applicable**
 
 ## Debugging Guidelines
 
@@ -239,6 +346,7 @@ All TODOs must be marked with specific tags:
 - Use breakpoints over console.log debugging
 - Profile performance issues
 - Document known issues
+- **Log progress through plan.md phases during development**
 
 ## Success Metrics
 
@@ -263,12 +371,69 @@ All TODOs must be marked with specific tags:
 - Consistent behavior
 - Fast response times
 
+### Plan Completion Metrics
+**When working from plan.md**:
+- All TODOs marked complete
+- All tests passing
+- Success metrics achieved
+- Documentation updated
+- Plan marked as COMPLETED
+
+## AI Assistant Workflow
+
+### Starting Work on This Project
+
+1. **First Actions**:
+   ```
+   1. Read this CLAUDE.md file completely
+   2. Check if plan.md exists in root
+   3. If plan.md exists, read it completely
+   4. Identify current work status
+   5. Continue from appropriate point
+   ```
+
+2. **If No Active Plan**:
+   ```
+   1. Ask user what they want to work on
+   2. Check if it relates to existing documentation
+   3. Follow these guidelines for implementation
+   4. Create plan.md if task is complex (>1 day)
+   ```
+
+3. **If Plan Exists**:
+   ```
+   1. Continue from next uncompleted TODO
+   2. Follow plan's testing requirements
+   3. Update plan as you progress
+   4. Alert user if blocked
+   ```
+
 ## Remember
 
+- **Plans First**: Always check for and follow plan.md
+- **Guidelines Second**: Follow this CLAUDE.md for all decisions
 - **Simplicity over complexity**: Choose the simpler solution when possible
 - **Clarity over cleverness**: Write code that's easy to understand
 - **Consistency over perfection**: Follow existing patterns in the codebase
 - **User needs over developer preferences**: Build what users need, not what's fun to build
 - **Quality over speed**: Take time to do things right the first time
 
-When in doubt, refer back to these principles and ask for clarification rather than making assumptions.
+When in doubt:
+1. Check plan.md for guidance
+2. Refer to these principles
+3. Ask for clarification rather than making assumptions
+
+## Important Reminders
+
+- **Do what has been asked; nothing more, nothing less**
+- **NEVER create files unless they're absolutely necessary**
+- **ALWAYS prefer editing an existing file to creating a new one**
+- **NEVER proactively create documentation files unless explicitly requested**
+- **ALWAYS check for plan.md before starting any work**
+- **ALWAYS update plan.md progress if working from it**
+
+---
+
+**Document Version**: 2.0.0  
+**Last Updated**: 2025-08-09  
+**Status**: Active Development Guidelines

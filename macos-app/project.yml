@@ -17,7 +17,7 @@ targets:
     info:
       path: ClaudeCompanionHost/Info.plist
       properties:
-        CFBundleDisplayName: Claude Companion Host
+        CFBundleDisplayName: AICLI Companion Host
         LSUIElement: true
         LSApplicationCategoryType: public.app-category.developer-tools
         NSSupportsAutomaticTermination: false

@@ -69,13 +69,13 @@ export class TLSManager {
     // This is a placeholder - real implementation would use proper ASN.1 encoding
     const certData = {
       subject: {
-        commonName: 'Claude Companion Server',
-        organizationName: 'Claude Companion',
+        commonName: 'AICLI Companion Server',
+        organizationName: 'AICLI Companion',
         countryName: 'US',
       },
       issuer: {
-        commonName: 'Claude Companion Server',
-        organizationName: 'Claude Companion',
+        commonName: 'AICLI Companion Server',
+        organizationName: 'AICLI Companion',
         countryName: 'US',
       },
       serialNumber: '01',

@@ -20,6 +20,7 @@ class ChatViewModel: ObservableObject {
     private let performanceMonitor = PerformanceMonitor.shared
     private let aicliService: HTTPAICLIService
     private let settings: SettingsManager
+    private let cloudKitManager = CloudKitSyncManager.shared
     
     // MARK: - Project Reference
     var currentProject: Project?
@@ -63,6 +64,17 @@ class ChatViewModel: ObservableObject {
             type: .text
         )
         messages.append(userMessage)
+        
+        // Sync to CloudKit in background
+        Task {
+            do {
+                try await cloudKitManager.saveMessage(userMessage, projectPath: project.path)
+                print("✅ Message synced to CloudKit")
+            } catch {
+                print("⚠️ Failed to sync message to CloudKit: \(error)")
+                // Continue anyway - local first approach
+            }
+        }
         
         // Send command
         isLoading = true
@@ -135,18 +147,12 @@ class ChatViewModel: ObservableObject {
                 
                 switch result {
                 case .success(let response):
-                    // Handle response first to determine if this is acknowledgment or direct response
+                    // Handle response (session management only)
                     self.handleHTTPResponse(response)
                     
-                    // Only clear loading state for direct responses, not acknowledgments
-                    if response.deliveryMethod != "apns" && response.content != nil {
-                        // Direct Claude response - clear loading state
-                        self.messageTimeout?.invalidate()
-                        self.messageTimeout = nil
-                        self.isLoading = false
-                        self.isWaitingForClaudeResponse = false
-                    }
-                    // For acknowledgments, keep loading state and timeout active until APNS response
+                    // ALWAYS keep loading state active - wait for APNS delivery
+                    // All responses come through APNS for cross-device sync
+                    print("⏳ Keeping loading state active until APNS delivers Claude's response")
                     
                 case .failure(let error):
                     // Always clear loading state on error
@@ -188,49 +194,21 @@ class ChatViewModel: ObservableObject {
             }
         }
         
-        // Check if this is an acknowledgment (APNS delivery) vs direct Claude response
-        if response.deliveryMethod == "apns" || response.content == nil {
-            // This is an acknowledgment - Claude response will come via APNS
-            print("📋 ChatViewModel: Received acknowledgment - Claude response will arrive via APNS")
-            print("   Keeping loading state active until Claude response arrives")
-            
-            if response.sessionId == nil {
-                print("   📝 New conversation - waiting for Claude to generate session ID")
-            }
-            
-            if let message = response.message {
-                print("   Acknowledgment: \(message)")
-            }
-            
-            // Don't add acknowledgment to chat messages - only handle session management
-            // IMPORTANT: Don't set isLoading = false here - keep thinking state until APNS response
-            // The actual Claude response will be delivered via push notification
-            
-        } else if let content = response.content, !content.isEmpty {
-            // This is a direct Claude response (fallback mode)
-            print("📝 ChatViewModel: Received direct Claude response")
-            
-            let assistantMessage = Message(
-                content: content,
-                sender: .assistant,
-                type: .markdown,
-                metadata: AICLIMessageMetadata(
-                    sessionId: response.sessionId ?? "",
-                    duration: 0,
-                    additionalInfo: [
-                        "httpResponse": true,
-                        "timestamp": response.timestamp
-                    ]
-                )
-            )
-            messages.append(assistantMessage)
-            print("✅ ChatViewModel: Added HTTP response message to chat")
-            
-            // Save conversation
-            if let project = getProjectFromSession() {
-                saveMessages(for: project)
-            }
+        // ALL responses go through APNS - no direct response path
+        // This ensures all messages sync across devices via CloudKit
+        print("📋 ChatViewModel: Acknowledgment received - waiting for APNS delivery")
+        
+        if response.sessionId == nil {
+            print("   📝 New conversation - waiting for Claude to generate session ID")
         }
+        
+        if let message = response.message {
+            print("   Server acknowledgment: \(message)")
+        }
+        
+        // Keep loading state active - APNS will deliver the actual response
+        // DO NOT append any messages here - let APNS handler do it
+        // DO NOT clear loading state here - wait for APNS delivery
     }
     
     private func handleHTTPError(_ error: AICLICompanionError) {
@@ -452,6 +430,18 @@ class ChatViewModel: ObservableObject {
             #endif
             print("🔵 Cleared badge count after processing Claude response")
             
+            // Sync assistant message to CloudKit for cross-device sync
+            if let project = currentProject {
+                Task {
+                    do {
+                        try await cloudKitManager.saveMessage(message, projectPath: project.path)
+                        print("✅ APNS assistant message synced to CloudKit")
+                    } catch {
+                        print("⚠️ Failed to sync APNS assistant message to CloudKit: \(error)")
+                    }
+                }
+            }
+            
             // Save the updated conversation
             if let project = getProjectFromSession() {
                 print("💾 Saving conversation with \(messages.count) messages...")
@@ -566,6 +556,18 @@ class ChatViewModel: ObservableObject {
                 )
                 messages.append(assistantMessage)
                 print("✅ ChatViewModel: Added Claude response message to chat")
+                
+                // Sync assistant message to CloudKit
+                if let project = currentProject {
+                    Task {
+                        do {
+                            try await cloudKitManager.saveMessage(assistantMessage, projectPath: project.path)
+                            print("✅ Assistant message synced to CloudKit")
+                        } catch {
+                            print("⚠️ Failed to sync assistant message to CloudKit: \(error)")
+                        }
+                    }
+                }
                 
                 // Also save the complete conversation now that we have a session ID
                 if let project = getProjectFromSession() {
@@ -954,5 +956,84 @@ class ChatViewModel: ObservableObject {
         }
         
         return newMessages.count
+    }
+    
+    // MARK: - CloudKit Sync Methods
+    
+    func syncMessages(for project: Project) async {
+        guard cloudKitManager.iCloudAvailable else { 
+            print("⚠️ iCloud not available, skipping sync")
+            return 
+        }
+        
+        do {
+            print("🔄 Starting CloudKit sync for project: \(project.path)")
+            let cloudMessages = try await cloudKitManager.fetchMessages(for: project.path)
+            
+            await MainActor.run {
+                self.mergeCloudMessages(cloudMessages)
+            }
+            
+            print("✅ CloudKit sync completed for project: \(project.path)")
+        } catch {
+            print("❌ Failed to sync messages from CloudKit: \(error)")
+        }
+    }
+    
+    private func mergeCloudMessages(_ cloudMessages: [Message]) {
+        var newMessagesCount = 0
+        var foundSessionId: String? = nil
+        
+        for cloudMessage in cloudMessages {
+            // Extract sessionId from CloudKit messages if we don't have one
+            if currentSessionId == nil, 
+               let sessionId = cloudMessage.metadata?.sessionId,
+               !sessionId.isEmpty {
+                foundSessionId = sessionId
+            }
+            
+            // Check if message already exists locally
+            if !messages.contains(where: { $0.id == cloudMessage.id }) {
+                // Find correct insertion point to maintain chronological order
+                if let insertIndex = messages.firstIndex(where: { $0.timestamp > cloudMessage.timestamp }) {
+                    messages.insert(cloudMessage, at: insertIndex)
+                } else {
+                    // Message is newest, append to end
+                    messages.append(cloudMessage)
+                }
+                newMessagesCount += 1
+            }
+        }
+        
+        // Adopt the sessionId from CloudKit messages for project continuity
+        if let sessionId = foundSessionId, currentSessionId == nil {
+            currentSessionId = sessionId
+            print("📱 Adopted sessionId from CloudKit: \(sessionId)")
+            print("🔄 This device will now continue the same conversation")
+        }
+        
+        if newMessagesCount > 0 {
+            print("✅ Merged \(newMessagesCount) new messages from CloudKit")
+            print("📊 Total messages now: \(messages.count)")
+        } else {
+            print("📝 No new messages from CloudKit (all already local)")
+        }
+    }
+    
+    func performManualSync(for project: Project) async {
+        guard cloudKitManager.iCloudAvailable else { return }
+        
+        // First, sync messages from CloudKit
+        await syncMessages(for: project)
+        
+        // Then, upload any local messages that need syncing
+        for message in messages where message.needsSync {
+            do {
+                try await cloudKitManager.saveMessage(message, projectPath: project.path)
+                print("✅ Uploaded message to CloudKit: \(message.id)")
+            } catch {
+                print("⚠️ Failed to upload message \(message.id): \(error)")
+            }
+        }
     }
 }

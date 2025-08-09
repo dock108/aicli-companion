@@ -78,7 +78,7 @@ class ServerManager: ObservableObject {
             // Send notification
             NotificationManager.shared.showNotification(
                 title: "Server Started",
-                body: "Claude Companion server is now running on port \(port)"
+                body: "AICLI Companion server is now running on port \(port)"
             )
 
             // Log the event
@@ -123,7 +123,7 @@ class ServerManager: ObservableObject {
         // Send notification
         NotificationManager.shared.showNotification(
             title: "Server Stopped",
-            body: "Claude Companion server has been stopped"
+            body: "AICLI Companion server has been stopped"
         )
 
         addLog(.info, "Server stopped")

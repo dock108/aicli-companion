@@ -22,7 +22,7 @@ struct QRCodeView: View {
                     Text("Mobile Connection")
                         .font(.headline)
 
-                    Text("Scan with Claude Companion app")
+                    Text("Scan with AICLI Companion app")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -95,7 +95,7 @@ struct QRCodeView: View {
 
             // Instructions
             VStack(alignment: .leading, spacing: 6) {
-                Label("Open Claude Companion on your iOS device", systemImage: "1.circle.fill")
+                Label("Open AICLI Companion on your iOS device", systemImage: "1.circle.fill")
                 Label("Tap the + button to add a server", systemImage: "2.circle.fill")
                 Label("Scan this QR code or paste the connection string", systemImage: "3.circle.fill")
             }

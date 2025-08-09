@@ -206,4 +206,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-Made with ❤️ by the Claude Companion team
+Made with ❤️ by the AICLI Companion team

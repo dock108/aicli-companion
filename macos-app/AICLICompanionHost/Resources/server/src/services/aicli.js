@@ -271,6 +271,11 @@ export class AICLIService extends EventEmitter {
     // Input validation already done in sendPrompt, but double-check critical params
     const sanitizedPrompt = InputValidator.sanitizePrompt(prompt);
     const validatedFormat = InputValidator.validateFormat(format);
+    // SECURITY: Always validate working directory to prevent path traversal attacks
+    const validatedWorkingDir = await InputValidator.validateWorkingDirectory(
+      workingDirectory,
+      this.safeRootDirectory
+    );
 
     console.log(
       `   Sanitized prompt: "${sanitizedPrompt.substring(0, 50)}${sanitizedPrompt.length > 50 ? '...' : ''}"`
@@ -314,7 +319,7 @@ export class AICLIService extends EventEmitter {
     console.log(
       `   Prompt: "${sanitizedPrompt.substring(0, 50)}${sanitizedPrompt.length > 50 ? '...' : ''}"`
     );
-    console.log(`   Working directory: ${workingDirectory}`);
+    console.log(`   Working directory: ${validatedWorkingDir}`);
     console.log(`   Full args array length: ${args.length}`);
     console.log(
       `   Last arg (should be prompt): "${args[args.length - 1]?.substring(0, 50)}${args[args.length - 1]?.length > 50 ? '...' : ''}"`
@@ -329,7 +334,7 @@ export class AICLIService extends EventEmitter {
       let aicliProcess;
       try {
         aicliProcess = spawn(this.aicliCommand, args, {
-          cwd: workingDirectory,
+          cwd: validatedWorkingDir,
           stdio: ['pipe', 'pipe', 'pipe'],
         });
       } catch (spawnError) {
@@ -374,7 +379,7 @@ export class AICLIService extends EventEmitter {
         pid: aicliProcess.pid,
         command: this.aicliCommand,
         args: args.slice(0, 3), // Don't include full prompt
-        workingDirectory,
+        workingDirectory: validatedWorkingDir,
         type: 'one-time',
       });
 

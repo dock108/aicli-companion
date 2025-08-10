@@ -54,7 +54,9 @@ export class AICLIProcessRunner extends EventEmitter {
    * Returns the process and initial session info
    */
   async createInteractiveSession(workingDirectory) {
-    const sessionLogger = logger.child({ workingDirectory });
+    // SECURITY: Validate working directory to prevent path traversal attacks
+    const validatedWorkingDir = await InputValidator.validateWorkingDirectory(workingDirectory);
+    const sessionLogger = logger.child({ workingDirectory: validatedWorkingDir });
 
     // Build args for interactive mode (no --print flag)
     const args = ['--output-format', 'stream-json', '--verbose'];
@@ -63,7 +65,7 @@ export class AICLIProcessRunner extends EventEmitter {
     this.addPermissionArgs(args);
 
     sessionLogger.info('Creating interactive Claude session', {
-      workingDirectory,
+      workingDirectory: validatedWorkingDir,
       args: args.slice(0, 3), // Log first few args
     });
 
@@ -75,7 +77,7 @@ export class AICLIProcessRunner extends EventEmitter {
       try {
         // Spawn Claude in interactive mode
         claudeProcess = this.spawnFunction(this.aicliCommand, args, {
-          cwd: workingDirectory,
+          cwd: validatedWorkingDir,
           stdio: ['pipe', 'pipe', 'pipe'], // Keep pipes open for communication
         });
       } catch (spawnError) {
@@ -131,7 +133,7 @@ export class AICLIProcessRunner extends EventEmitter {
                   sessionId: initialSessionId,
                   pid: claudeProcess.pid,
                   streamParser,
-                  workingDirectory,
+                  workingDirectory: validatedWorkingDir,
                 });
               }
             }
@@ -387,13 +389,15 @@ export class AICLIProcessRunner extends EventEmitter {
    * Run AICLI CLI process with comprehensive monitoring and parsing
    */
   async runAICLIProcess(args, prompt, workingDirectory, sessionId, requestId = null) {
+    // SECURITY: Validate working directory to prevent path traversal attacks
+    const validatedWorkingDir = await InputValidator.validateWorkingDirectory(workingDirectory);
     const processLogger = logger.child({ sessionId });
 
     processLogger.debug('Running AICLI process', {
       argCount: args.length,
       hasPrompt: !!prompt,
       promptLength: prompt?.length || 0,
-      workingDirectory,
+      workingDirectory: validatedWorkingDir,
     });
 
     return new Promise((promiseResolve, reject) => {
@@ -418,7 +422,7 @@ export class AICLIProcessRunner extends EventEmitter {
         }
 
         aicliProcess = this.spawnFunction(this.aicliCommand, fullArgs, {
-          cwd: workingDirectory,
+          cwd: validatedWorkingDir,
           stdio: ['pipe', 'pipe', 'pipe'],
         });
       } catch (spawnError) {

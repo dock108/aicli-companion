@@ -1,8 +1,7 @@
-import { resolve } from 'path';
-import { access, constants } from 'fs/promises';
 import { existsSync } from 'fs';
 import { execSync } from 'child_process';
 import { isTestEnvironment } from '../utils/environment.js';
+import { validateSecurePath, PathSecurityError } from '../utils/path-security.js';
 
 // Input validation and sanitization utilities
 export class InputValidator {
@@ -43,25 +42,22 @@ export class InputValidator {
       return safeRoot || process.cwd();
     }
 
-    // Resolve to absolute path
-    const resolvedPath = resolve(workingDir);
+    // Always require a safeRoot for security - if not provided, use user's home directory as a safe default
+    const effectiveSafeRoot = safeRoot || process.env.HOME || process.cwd();
 
-    // Security check: prevent path traversal attacks
-    const forbiddenPaths = ['/etc', '/usr', '/bin', '/sbin', '/sys', '/proc', '/root'];
-    const isDangerous = forbiddenPaths.some(
-      (forbidden) => resolvedPath === forbidden || resolvedPath.startsWith(`${forbidden}/`)
-    );
-
-    if (isDangerous) {
-      throw new Error(`Access denied: Directory ${resolvedPath} is not allowed`);
-    }
-
-    // Check if directory exists and is accessible
     try {
-      await access(resolvedPath, constants.R_OK);
-      return resolvedPath;
+      // Use our secure path validator for all cases
+      const validatedPath = await validateSecurePath(effectiveSafeRoot, workingDir, {
+        allowSymlinks: false,
+        mustExist: true,
+        mustBeDirectory: true,
+      });
+      return validatedPath;
     } catch (error) {
-      throw new Error(`Directory not accessible: ${resolvedPath}`);
+      if (error instanceof PathSecurityError) {
+        throw new Error(`Access denied: ${error.message}`);
+      }
+      throw new Error(`Directory validation failed: ${error.message}`);
     }
   }
 

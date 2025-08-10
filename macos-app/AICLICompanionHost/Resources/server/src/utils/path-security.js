@@ -84,7 +84,18 @@ export class PathValidator {
         );
       }
 
-      // If target must exist, validate existence and get real path
+      // Get real base path first (safe since basePath is controlled by us)
+      let realBase;
+      try {
+        realBase = await realpath(resolvedBase);
+      } catch (error) {
+        throw new PathSecurityError(
+          `Cannot resolve base path '${basePath}': ${error.message}`,
+          'BASE_PATH_ERROR'
+        );
+      }
+
+      // If target must exist or we need to check symlinks, validate using safe operations
       if (mustExist || !allowSymlinks) {
         try {
           await access(resolvedTarget, constants.F_OK);
@@ -97,10 +108,14 @@ export class PathValidator {
           return resolvedTarget;
         }
 
-        // Get real path to resolve any symlinks
+        // For symlink checking, build a safe target path
+        const relativePath = path.relative(resolvedBase, resolvedTarget);
+        const safeTargetPath = path.resolve(realBase, relativePath);
+        
+        // Get real path using our safe constructed path to avoid user-controlled realpath calls
         let realTargetPath;
         try {
-          realTargetPath = await realpath(resolvedTarget);
+          realTargetPath = await realpath(safeTargetPath);
         } catch (error) {
           throw new PathSecurityError(
             `Cannot resolve real path for '${targetPath}': ${error.message}`,
@@ -108,10 +123,9 @@ export class PathValidator {
           );
         }
 
-        // Check for symlink attacks by comparing resolved and real paths
-        if (!allowSymlinks && realTargetPath !== resolvedTarget) {
-          // Additional check: ensure the real path is still within bounds
-          const realBase = await realpath(resolvedBase);
+        // Check for symlink attacks by comparing safe and real paths
+        if (!allowSymlinks && realTargetPath !== safeTargetPath) {
+          // Ensure the real path is still within bounds using already resolved realBase
           if (realTargetPath !== realBase && !realTargetPath.startsWith(realBase + path.sep)) {
             throw new PathSecurityError(
               `Symlink '${targetPath}' points outside base directory`,
@@ -121,7 +135,6 @@ export class PathValidator {
         }
 
         // Final security check: ensure real path is within real base
-        const realBase = await realpath(resolvedBase);
         if (realTargetPath !== realBase && !realTargetPath.startsWith(realBase + path.sep)) {
           throw new PathSecurityError(
             `Real path '${realTargetPath}' is outside base directory`,
@@ -132,7 +145,8 @@ export class PathValidator {
         // Directory validation if required
         if (mustBeDirectory) {
           try {
-            const stat = await lstat(resolvedTarget);
+            // Use the validated realTargetPath instead of uncontrolled resolvedTarget
+            const stat = await lstat(realTargetPath);
             if (!stat.isDirectory()) {
               throw new PathSecurityError(
                 `Path '${targetPath}' is not a directory`,

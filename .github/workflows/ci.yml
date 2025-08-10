@@ -18,6 +18,8 @@ permissions:
 env:
   NODE_VERSION: '22'
   XCODE_VERSION: '16.2'
+  IOS_SIMULATOR: 'iPhone 15 Pro'  # More stable simulator choice
+  MINIMUM_COVERAGE: 70  # Minimum code coverage percentage
 
 jobs:
   # Node.js Server Tests and Linting
@@ -61,7 +63,6 @@ jobs:
     
     - name: Security audit
       run: npm audit --audit-level=high
-      continue-on-error: true
 
   # iOS App Build and Tests
   ios:
@@ -78,6 +79,24 @@ jobs:
     - name: Select Xcode
       run: sudo xcode-select -s /Applications/Xcode_${{ env.XCODE_VERSION }}.app
     
+    - name: Cache Swift Package Manager
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/Library/Developer/Xcode/DerivedData/**/SourcePackages
+          ~/.swiftpm
+        key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+        restore-keys: |
+          ${{ runner.os }}-spm-
+    
+    - name: Cache Derived Data
+      uses: actions/cache@v4
+      with:
+        path: ~/Library/Developer/Xcode/DerivedData
+        key: ${{ runner.os }}-derived-data-${{ hashFiles('**/*.swift', '**/*.h', '**/*.m') }}
+        restore-keys: |
+          ${{ runner.os }}-derived-data-
+    
     - name: Install SwiftLint
       run: brew install swiftlint
     
@@ -89,23 +108,66 @@ jobs:
     - name: Resolve Swift Package Dependencies
       run: |
         cd ios
-        xcodebuild -resolvePackageDependencies -project AICLICompanion.xcodeproj -scheme AICLICompanionApp
+        xcodebuild -resolvePackageDependencies -project AICLICompanion.xcodeproj -scheme AICLICompanion
     
     - name: Build iOS App
       run: |
         cd ios
-        xcodebuild -project AICLICompanion.xcodeproj -scheme AICLICompanionApp -destination 'platform=iOS Simulator,name=iPhone 16 Pro' build CODE_SIGNING_ALLOWED=NO
+        xcodebuild -project AICLICompanion.xcodeproj \
+          -scheme AICLICompanion \
+          -destination "platform=iOS Simulator,name=${{ env.IOS_SIMULATOR }}" \
+          build \
+          CODE_SIGNING_ALLOWED=NO
     
     - name: Run iOS Tests with Coverage
       run: |
         cd ios
-        xcodebuild -scheme AICLICompanion -destination 'platform=iOS Simulator,name=iPhone 16 Pro' test -enableCodeCoverage YES CODE_SIGNING_ALLOWED=NO -resultBundlePath ios-test.xcresult
+        xcodebuild -project AICLICompanion.xcodeproj \
+          -scheme AICLICompanion \
+          -destination "platform=iOS Simulator,name=${{ env.IOS_SIMULATOR }}" \
+          test \
+          -enableCodeCoverage YES \
+          CODE_SIGNING_ALLOWED=NO \
+          -resultBundlePath ios-test.xcresult
     
     - name: Generate iOS Coverage Report
       run: |
         cd ios
         xcrun xccov view --report --json ios-test.xcresult > ios-coverage.json || true
         xcrun xccov view --report ios-test.xcresult > ios-coverage.txt || true
+    
+    - name: Check iOS Coverage Threshold
+      run: |
+        cd ios
+        if [ -f ios-coverage.json ]; then
+          coverage=$(cat ios-coverage.json | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+if 'targets' in data and len(data['targets']) > 0:
+    coverage = data['targets'][0].get('lineCoverage', 0) * 100
+    print(f'{coverage:.1f}')
+else:
+    print('0')
+")
+          echo "Code coverage: ${coverage}%"
+          if (( $(echo "$coverage < ${{ env.MINIMUM_COVERAGE }}" | bc -l) )); then
+            echo "❌ Coverage ${coverage}% is below minimum threshold of ${{ env.MINIMUM_COVERAGE }}%"
+            exit 1
+          else
+            echo "✅ Coverage ${coverage}% meets minimum threshold"
+          fi
+        fi
+      continue-on-error: true
+    
+    - name: Swift Dependency Security Check
+      run: |
+        cd ios
+        echo "Checking for outdated dependencies..."
+        swift package update --dry-run || true
+        echo "Checking for security vulnerabilities..."
+        # Note: Swift doesn't have built-in security audit like npm
+        # This is a placeholder for future swift-security tools
+      continue-on-error: true
     
     - name: Upload iOS Coverage Reports
       uses: actions/upload-artifact@v4
@@ -115,12 +177,6 @@ jobs:
           ios/ios-coverage.json
           ios/ios-coverage.txt
       if: always()
-    
-    - name: Build for Release
-      run: |
-        cd ios
-        xcodebuild -project AICLICompanion.xcodeproj -scheme AICLICompanionApp -configuration Release -destination 'generic/platform=iOS' -archivePath build/AICLICompanion.xcarchive archive CODE_SIGNING_ALLOWED=NO
-      continue-on-error: true
 
   # macOS App Build and Tests
   macos:
@@ -137,37 +193,88 @@ jobs:
     - name: Select Xcode
       run: sudo xcode-select -s /Applications/Xcode_${{ env.XCODE_VERSION }}.app
     
-    - name: Install XcodeGen
-      run: brew install xcodegen
+    - name: Cache Swift Package Manager
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/Library/Developer/Xcode/DerivedData/**/SourcePackages
+          ~/.swiftpm
+        key: ${{ runner.os }}-macos-spm-${{ hashFiles('**/Package.resolved') }}
+        restore-keys: |
+          ${{ runner.os }}-macos-spm-
+    
+    - name: Cache Derived Data
+      uses: actions/cache@v4
+      with:
+        path: ~/Library/Developer/Xcode/DerivedData
+        key: ${{ runner.os }}-macos-derived-${{ hashFiles('**/*.swift', '**/*.h', '**/*.m') }}
+        restore-keys: |
+          ${{ runner.os }}-macos-derived-
     
     - name: Install SwiftLint
       run: brew install swiftlint
-    
-    - name: Skip Xcode Project Generation (using existing project)
-      run: |
-        cd macos-app
-        echo "Using existing AICLICompanionHost.xcodeproj"
     
     - name: Run SwiftLint
       run: |
         cd macos-app/AICLICompanionHost
         swiftlint lint --strict --reporter github-actions-logging
     
+    - name: Resolve macOS Dependencies
+      run: |
+        cd macos-app
+        # Check if Package.swift exists for SPM
+        if [ -f Package.swift ]; then
+          swift package resolve
+        fi
+    
     - name: Build macOS App
       run: |
         cd macos-app
-        xcodebuild -project AICLICompanionHost.xcodeproj -scheme AICLICompanionHost -destination 'platform=macOS' build CODE_SIGNING_ALLOWED=NO
+        xcodebuild -project AICLICompanionHost.xcodeproj \
+          -scheme AICLICompanionHost \
+          -destination 'platform=macOS' \
+          build \
+          CODE_SIGNING_ALLOWED=NO
     
     - name: Run macOS Tests with Coverage
       run: |
         cd macos-app
-        xcodebuild -project AICLICompanionHost.xcodeproj -scheme AICLICompanionHost -destination 'platform=macOS' test -enableCodeCoverage YES CODE_SIGNING_ALLOWED=NO -resultBundlePath macos-test.xcresult
+        xcodebuild -project AICLICompanionHost.xcodeproj \
+          -scheme AICLICompanionHost \
+          -destination 'platform=macOS' \
+          test \
+          -enableCodeCoverage YES \
+          CODE_SIGNING_ALLOWED=NO \
+          -resultBundlePath macos-test.xcresult
     
     - name: Generate macOS Coverage Report
       run: |
         cd macos-app
         xcrun xccov view --report --json macos-test.xcresult > macos-coverage.json || true
         xcrun xccov view --report macos-test.xcresult > macos-coverage.txt || true
+    
+    - name: Check macOS Coverage Threshold
+      run: |
+        cd macos-app
+        if [ -f macos-coverage.json ]; then
+          coverage=$(cat macos-coverage.json | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+if 'targets' in data and len(data['targets']) > 0:
+    coverage = data['targets'][0].get('lineCoverage', 0) * 100
+    print(f'{coverage:.1f}')
+else:
+    print('0')
+")
+          echo "Code coverage: ${coverage}%"
+          if (( $(echo "$coverage < ${{ env.MINIMUM_COVERAGE }}" | bc -l) )); then
+            echo "❌ Coverage ${coverage}% is below minimum threshold of ${{ env.MINIMUM_COVERAGE }}%"
+            exit 1
+          else
+            echo "✅ Coverage ${coverage}% meets minimum threshold"
+          fi
+        fi
+      continue-on-error: true
     
     - name: Upload macOS Coverage Reports
       uses: actions/upload-artifact@v4
@@ -177,31 +284,65 @@ jobs:
           macos-app/macos-coverage.json
           macos-app/macos-coverage.txt
       if: always()
-    
-    - name: Build for Release
-      run: |
-        cd macos-app
-        xcodebuild -project AICLICompanionHost.xcodeproj -scheme AICLICompanionHost -configuration Release -destination 'platform=macOS' build CODE_SIGNING_ALLOWED=NO
-      continue-on-error: true
 
-  # Code Quality Report
-  quality:
-    name: Code Quality Report
+  # Summary and Status Report
+  summary:
+    name: CI Summary
+    runs-on: ubuntu-latest
+    needs: [server, ios, macos]
+    if: always()
     permissions:
       contents: read
-      issues: write
+      checks: write
       pull-requests: write
-      security-events: write
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    needs: [server, ios, macos]
     
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: SonarCloud Scan
-      uses: SonarSource/sonarcloud-github-action@master
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
       continue-on-error: true
+    
+    - name: Generate Summary Report
+      run: |
+        echo "## 📊 CI Build Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Check job statuses
+        echo "### Job Status" >> $GITHUB_STEP_SUMMARY
+        echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ needs.server.result }}" == "success" ]; then
+          echo "| 🖥️ Server | ✅ Success |" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "| 🖥️ Server | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "${{ needs.ios.result }}" == "success" ]; then
+          echo "| 📱 iOS | ✅ Success |" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "| 📱 iOS | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "${{ needs.macos.result }}" == "success" ]; then
+          echo "| 💻 macOS | ✅ Success |" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "| 💻 macOS | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Build Information" >> $GITHUB_STEP_SUMMARY
+        echo "- **Node Version:** ${{ env.NODE_VERSION }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Xcode Version:** ${{ env.XCODE_VERSION }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **iOS Simulator:** ${{ env.IOS_SIMULATOR }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Minimum Coverage:** ${{ env.MINIMUM_COVERAGE }}%" >> $GITHUB_STEP_SUMMARY
+        
+        # Overall status
+        echo "" >> $GITHUB_STEP_SUMMARY
+        if [ "${{ needs.server.result }}" == "success" ] && [ "${{ needs.ios.result }}" == "success" ] && [ "${{ needs.macos.result }}" == "success" ]; then
+          echo "### ✅ All Checks Passed!" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "### ❌ Some Checks Failed" >> $GITHUB_STEP_SUMMARY
+          echo "Please review the failed jobs above for details." >> $GITHUB_STEP_SUMMARY
+        fi

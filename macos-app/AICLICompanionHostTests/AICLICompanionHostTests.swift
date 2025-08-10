@@ -48,8 +48,6 @@ final class AICLICompanionHostTests: XCTestCase {
     
     func testLogEntryCreation() throws {
         let logEntry = LogEntry(
-            id: UUID(),
-            timestamp: Date(),
             level: .info,
             message: "Test message"
         )
@@ -75,7 +73,7 @@ final class AICLICompanionHostTests: XCTestCase {
         let warning = LogLevel.warning
         let error = LogLevel.error
         
-        XCTAssertEqual(debug.icon, "ant.circle")
+        XCTAssertEqual(debug.icon, "ladybug")
         XCTAssertEqual(info.icon, "info.circle")
         XCTAssertEqual(warning.icon, "exclamationmark.triangle")
         XCTAssertEqual(error.icon, "xmark.circle")

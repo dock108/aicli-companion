@@ -42,7 +42,7 @@ export function authMiddleware(expectedToken) {
     if (req.path === '/health') {
       return next();
     }
-    
+
     // Skip auth for QR code setup endpoint
     if (req.path === '/auth/setup' || req.path === '/auth/status') {
       return next();

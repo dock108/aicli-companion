@@ -1,7 +1,7 @@
 import { describe, it, beforeEach, mock } from 'node:test';
 import assert from 'node:assert';
 import express from 'express';
-import { setupRoutes } from '../../routes/index.js';
+import { setupRoutes } from '../../routes/api-routes.js';
 
 // Create a test app with route capturing
 function createTestApp() {

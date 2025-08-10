@@ -8,7 +8,6 @@
 import Foundation
 
 extension ServerManager {
-
     // MARK: - Server Process Management
 
     func startServerProcess() async throws {
@@ -81,7 +80,6 @@ extension ServerManager {
                 // Log connection string for local connection
                 addLog(.info, "📱 Mobile app connection: \(connectionString)")
             }
-
         } catch {
             isRunning = false
             serverProcess = nil

@@ -2,7 +2,7 @@
 
 # Paths to include
 included:
-  - ClaudeCompanionHost
+  - AICLICompanionHost
 
 # Paths to exclude
 excluded:

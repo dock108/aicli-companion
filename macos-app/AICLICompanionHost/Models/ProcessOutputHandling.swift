@@ -8,7 +8,6 @@
 import Foundation
 
 extension ServerManager {
-
     // MARK: - Process Output Handling
 
     func setupProcessOutputHandling(for process: Process) {
@@ -55,7 +54,7 @@ extension ServerManager {
                     addLog(.info, "🔐 Captured generated auth token")
                 }
             }
-            
+
             // Check for mobile app connection URL with token
             if line.contains("📱 Mobile app connection:") {
                 if let token = extractAuthToken(from: line) {
@@ -66,9 +65,9 @@ extension ServerManager {
                     }
                 }
             }
-            
+
             // Check for iOS Connection URL (from tunnel output)
-            if line.contains("iOS Connection URL:") || 
+            if line.contains("iOS Connection URL:") ||
                (line.contains("https://") && line.contains(".ngrok") && line.contains("token=")) {
                 if let token = extractAuthToken(from: line) {
                     // Only update if we don't already have a token
@@ -78,7 +77,7 @@ extension ServerManager {
                     }
                 }
             }
-            
+
             // Check for tunnel URL in output - look for various patterns
             if line.contains("https://") && (line.contains("ngrok") || line.contains("Tunnel")) {
                 if let url = extractTunnelURL(from: line) {
@@ -149,12 +148,12 @@ extension ServerManager {
 
         return nil
     }
-    
+
     private func extractAuthToken(from line: String) -> String? {
         // Look for token in URL query parameter: ?token=<token>
         // The token format is typically a long hex string or similar
         let pattern = #"[?&]token=([a-zA-Z0-9_\-=+/]+)"#
-        
+
         if let regex = try? NSRegularExpression(pattern: pattern),
            let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) {
             // Extract the capture group (the token value)
@@ -169,15 +168,15 @@ extension ServerManager {
                 }
             }
         }
-        
+
         return nil
     }
-    
+
     private func extractTokenFromGeneratedLine(_ line: String) -> String? {
         // Look for pattern: "🔑 Generated auth token: <token>...****"
         // We want to extract the first part of the token before it's masked
         let pattern = #"Generated auth token:\s*([a-fA-F0-9]{8,})"#
-        
+
         if let regex = try? NSRegularExpression(pattern: pattern),
            let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) {
             if match.numberOfRanges > 1 {
@@ -190,7 +189,7 @@ extension ServerManager {
                 }
             }
         }
-        
+
         return nil
     }
 

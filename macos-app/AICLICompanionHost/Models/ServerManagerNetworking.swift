@@ -9,7 +9,6 @@ import Foundation
 import Network
 
 extension ServerManager {
-
     // MARK: - Network Monitoring
 
     func setupNetworkMonitoring() {
@@ -65,7 +64,6 @@ extension ServerManager {
 
             if let httpResponse = response as? HTTPURLResponse,
                httpResponse.statusCode == 200 {
-
                 // Parse health response
                 if let health = try? JSONDecoder().decode(HealthResponse.self, from: data) {
                     serverHealth = health.status == "ok" ? .healthy : .unhealthy
@@ -111,7 +109,6 @@ extension ServerManager {
 
             if let httpResponse = response as? HTTPURLResponse,
                httpResponse.statusCode == 200 {
-
                 let sessionInfo = try JSONDecoder().decode(SessionInfo.self, from: data)
 
                 // Convert to Session objects

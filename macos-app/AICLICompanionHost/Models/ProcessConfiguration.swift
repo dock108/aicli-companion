@@ -8,7 +8,6 @@
 import Foundation
 
 extension ServerManager {
-
     // MARK: - Environment & Configuration Setup
 
     func setupServerEnvironment() async throws -> [String: String] {
@@ -26,7 +25,7 @@ extension ServerManager {
         environment["NODE_ENV"] = "production"
         // Use development/sandbox APNS for iOS app compatibility
         environment["APNS_PRODUCTION"] = "false"
-        
+
         // Set project directory for the server
         if !SettingsManager.shared.defaultProjectDirectory.isEmpty {
             environment["CONFIG_PATH"] = SettingsManager.shared.defaultProjectDirectory
@@ -91,7 +90,7 @@ extension ServerManager {
             addLog(.info, "🔓 Authentication disabled")
         }
     }
-    
+
     private func generateSecureToken() -> String {
         // Generate a cryptographically secure random token
         let tokenLength = 32

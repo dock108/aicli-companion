@@ -44,12 +44,12 @@ class ServerManager: ObservableObject {
             } else if publicURL.hasPrefix("http://") {
                 wsURL = publicURL.replacingOccurrences(of: "http://", with: "ws://")
             }
-            
+
             // Add WebSocket path if not present
             if !wsURL.contains("/ws") {
                 wsURL = wsURL.trimmingCharacters(in: .init(charactersIn: "/")) + "/ws"
             }
-            
+
             // Add auth token if required
             if let token = authToken, SettingsManager.shared.requireAuthentication {
                 if wsURL.contains("?") {
@@ -60,10 +60,10 @@ class ServerManager: ObservableObject {
             }
             return wsURL
         }
-        
+
         // Build local WebSocket URL (always use ws for local connections)
         let baseURL = "ws://\(localIP):\(port)/ws"
-        
+
         if let token = authToken, SettingsManager.shared.requireAuthentication {
             return "\(baseURL)?token=\(token)"
         } else {
@@ -93,7 +93,7 @@ class ServerManager: ObservableObject {
 
         isProcessing = true
         defer { isProcessing = false }
-        
+
         // Ensure auth token is generated BEFORE starting server if auth is required
         if SettingsManager.shared.requireAuthentication && authToken == nil {
             generateAuthToken()
@@ -295,7 +295,6 @@ class ServerManager: ObservableObject {
 
             if let httpResponse = response as? HTTPURLResponse,
                httpResponse.statusCode == 200 {
-
                 if let health = try? JSONDecoder().decode(HealthResponse.self, from: data) {
                     return health.status == "ok"
                 }

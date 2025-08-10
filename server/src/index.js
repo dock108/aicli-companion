@@ -6,7 +6,7 @@ import { createServer as createHttpsServer } from 'https';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
-import { setupRoutes } from './routes/index.js';
+import { setupRoutes } from './routes/api-routes.js';
 import { setupProjectRoutes } from './routes/projects.js';
 import { setupAICLIStatusRoutes } from './routes/aicli-status.js';
 import sessionRoutes from './routes/sessions.js';
@@ -93,7 +93,7 @@ class AICLICompanionServer {
     this.app.locals.authToken = this.authToken;
     this.app.locals.port = this.config.port;
     this.app.locals.enableTLS = this.config.enableTLS;
-    
+
     // Health check (no auth required)
     this.app.get('/health', (req, res) => {
       res.json({
@@ -106,7 +106,7 @@ class AICLICompanionServer {
 
     // Auth routes (QR code generation, etc.)
     this.app.use('/api/auth', authRoutes);
-    
+
     // API routes
     setupRoutes(this.app, this.aicliService);
     setupProjectRoutes(this.app, this.aicliService);
@@ -137,7 +137,7 @@ class AICLICompanionServer {
           chat: '/api/chat',
           devices: '/api/devices',
           projects: '/api/projects',
-          qrCode: '/api/auth/setup'
+          qrCode: '/api/auth/setup',
         },
       });
     });

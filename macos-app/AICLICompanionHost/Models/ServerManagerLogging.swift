@@ -8,7 +8,6 @@
 import Foundation
 
 extension ServerManager {
-
     // MARK: - Logging
 
     func addLog(_ level: LogLevel, _ message: String) {

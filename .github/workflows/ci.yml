@@ -140,15 +140,7 @@ jobs:
       run: |
         cd ios
         if [ -f ios-coverage.json ]; then
-          coverage=$(cat ios-coverage.json | python3 -c "
-import json, sys
-data = json.load(sys.stdin)
-if 'targets' in data and len(data['targets']) > 0:
-    coverage = data['targets'][0].get('lineCoverage', 0) * 100
-    print(f'{coverage:.1f}')
-else:
-    print('0')
-")
+          coverage=$(cat ios-coverage.json | python3 -c "import json, sys; data = json.load(sys.stdin); coverage = data['targets'][0].get('lineCoverage', 0) * 100 if 'targets' in data and len(data['targets']) > 0 else 0; print(f'{coverage:.1f}')")
           echo "Code coverage: ${coverage}%"
           if (( $(echo "$coverage < ${{ env.MINIMUM_COVERAGE }}" | bc -l) )); then
             echo "❌ Coverage ${coverage}% is below minimum threshold of ${{ env.MINIMUM_COVERAGE }}%"
@@ -257,15 +249,7 @@ else:
       run: |
         cd macos-app
         if [ -f macos-coverage.json ]; then
-          coverage=$(cat macos-coverage.json | python3 -c "
-import json, sys
-data = json.load(sys.stdin)
-if 'targets' in data and len(data['targets']) > 0:
-    coverage = data['targets'][0].get('lineCoverage', 0) * 100
-    print(f'{coverage:.1f}')
-else:
-    print('0')
-")
+          coverage=$(cat macos-coverage.json | python3 -c "import json, sys; data = json.load(sys.stdin); coverage = data['targets'][0].get('lineCoverage', 0) * 100 if 'targets' in data and len(data['targets']) > 0 else 0; print(f'{coverage:.1f}')")
           echo "Code coverage: ${coverage}%"
           if (( $(echo "$coverage < ${{ env.MINIMUM_COVERAGE }}" | bc -l) )); then
             echo "❌ Coverage ${coverage}% is below minimum threshold of ${{ env.MINIMUM_COVERAGE }}%"

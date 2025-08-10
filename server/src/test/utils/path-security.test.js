@@ -9,7 +9,7 @@ import {
   PathSecurityError,
   validateSecurePath,
   validateProjectPath,
-  createSafeProjectPath
+  createSafeProjectPath,
 } from '../../utils/path-security.js';
 
 describe('PathSecurity', () => {
@@ -25,7 +25,7 @@ describe('PathSecurity', () => {
     // Create a temporary test directory
     testDir = path.join(os.tmpdir(), `path-security-test-${Date.now()}`);
     baseDir = path.join(testDir, 'base');
-    
+
     await mkdir(baseDir, { recursive: true });
     await mkdir(path.join(baseDir, 'subdirectory'), { recursive: true });
     await writeFile(path.join(baseDir, 'test.txt'), 'test content');
@@ -34,7 +34,7 @@ describe('PathSecurity', () => {
 
   afterEach(async () => {
     mock.restoreAll();
-    
+
     // Clean up test directory
     if (existsSync(testDir)) {
       await rm(testDir, { recursive: true, force: true });
@@ -77,7 +77,7 @@ describe('PathSecurity', () => {
 
     it('should reject path traversal attempts with ../', async () => {
       await assert.rejects(
-        async () => await PathValidator.validatePath(baseDir, '../outside'),
+        async () => PathValidator.validatePath(baseDir, '../outside'),
         (error) => {
           assert.ok(error instanceof PathSecurityError);
           assert.strictEqual(error.code, 'PATH_TRAVERSAL_ATTEMPT');
@@ -88,7 +88,7 @@ describe('PathSecurity', () => {
 
     it('should reject multiple path traversal attempts', async () => {
       await assert.rejects(
-        async () => await PathValidator.validatePath(baseDir, '../../outside'),
+        async () => PathValidator.validatePath(baseDir, '../../outside'),
         (error) => {
           assert.ok(error instanceof PathSecurityError);
           assert.strictEqual(error.code, 'PATH_TRAVERSAL_ATTEMPT');
@@ -99,7 +99,7 @@ describe('PathSecurity', () => {
 
     it('should reject path traversal in middle of path', async () => {
       await assert.rejects(
-        async () => await PathValidator.validatePath(baseDir, 'subdirectory/../../outside'),
+        async () => PathValidator.validatePath(baseDir, 'subdirectory/../../outside'),
         (error) => {
           assert.ok(error instanceof PathSecurityError);
           assert.strictEqual(error.code, 'PATH_TRAVERSAL_ATTEMPT');
@@ -110,7 +110,7 @@ describe('PathSecurity', () => {
 
     it('should reject null byte injection', async () => {
       await assert.rejects(
-        async () => await PathValidator.validatePath(baseDir, 'test\0.txt'),
+        async () => PathValidator.validatePath(baseDir, 'test\0.txt'),
         (error) => {
           assert.ok(error instanceof PathSecurityError);
           assert.strictEqual(error.code, 'NULL_BYTE_ATTACK');
@@ -121,7 +121,7 @@ describe('PathSecurity', () => {
 
     it('should reject null byte in base path', async () => {
       await assert.rejects(
-        async () => await PathValidator.validatePath('base\0dir', 'test.txt'),
+        async () => PathValidator.validatePath('base\0dir', 'test.txt'),
         (error) => {
           assert.ok(error instanceof PathSecurityError);
           assert.strictEqual(error.code, 'NULL_BYTE_ATTACK');
@@ -132,7 +132,7 @@ describe('PathSecurity', () => {
 
     it('should handle URL encoded path traversal', async () => {
       await assert.rejects(
-        async () => await PathValidator.validatePath(baseDir, '..%2F..%2Foutside'),
+        async () => PathValidator.validatePath(baseDir, '..%2F..%2Foutside'),
         (error) => {
           assert.ok(error instanceof PathSecurityError);
           assert.strictEqual(error.code, 'PATH_TRAVERSAL_ATTEMPT');
@@ -149,7 +149,7 @@ describe('PathSecurity', () => {
 
     it('should reject non-existent path with mustExist option', async () => {
       await assert.rejects(
-        async () => await PathValidator.validatePath(baseDir, 'nonexistent.txt', { mustExist: true }),
+        async () => PathValidator.validatePath(baseDir, 'nonexistent.txt', { mustExist: true }),
         (error) => {
           assert.ok(error instanceof PathSecurityError);
           assert.strictEqual(error.code, 'PATH_NOT_FOUND');
@@ -159,9 +159,9 @@ describe('PathSecurity', () => {
     });
 
     it('should validate directory with mustBeDirectory option', async () => {
-      const result = await PathValidator.validatePath(baseDir, 'subdirectory', { 
-        mustExist: true, 
-        mustBeDirectory: true 
+      const result = await PathValidator.validatePath(baseDir, 'subdirectory', {
+        mustExist: true,
+        mustBeDirectory: true,
       });
       const expectedPath = await realpath(path.join(baseDir, 'subdirectory'));
       assert.strictEqual(result, expectedPath);
@@ -169,10 +169,11 @@ describe('PathSecurity', () => {
 
     it('should reject file when mustBeDirectory is true', async () => {
       await assert.rejects(
-        async () => await PathValidator.validatePath(baseDir, 'test.txt', { 
-          mustExist: true, 
-          mustBeDirectory: true 
-        }),
+        async () =>
+          PathValidator.validatePath(baseDir, 'test.txt', {
+            mustExist: true,
+            mustBeDirectory: true,
+          }),
         (error) => {
           assert.ok(error instanceof PathSecurityError);
           assert.strictEqual(error.code, 'NOT_DIRECTORY');
@@ -186,15 +187,16 @@ describe('PathSecurity', () => {
       const outsideDir = path.join(testDir, 'outside');
       await mkdir(outsideDir, { recursive: true });
       await writeFile(path.join(outsideDir, 'secret.txt'), 'secret content');
-      
+
       const symlinkPath = path.join(baseDir, 'link');
       await symlink(outsideDir, symlinkPath);
 
       await assert.rejects(
-        async () => await PathValidator.validatePath(baseDir, 'link', { 
-          allowSymlinks: false,
-          mustExist: true 
-        }),
+        async () =>
+          PathValidator.validatePath(baseDir, 'link', {
+            allowSymlinks: false,
+            mustExist: true,
+          }),
         (error) => {
           assert.ok(error instanceof PathSecurityError);
           assert.strictEqual(error.code, 'SYMLINK_ATTACK');
@@ -209,16 +211,16 @@ describe('PathSecurity', () => {
       const symlinkPath = path.join(baseDir, 'link');
       await symlink(targetPath, symlinkPath);
 
-      const result = await PathValidator.validatePath(baseDir, 'link', { 
+      const result = await PathValidator.validatePath(baseDir, 'link', {
         allowSymlinks: true,
-        mustExist: true 
+        mustExist: true,
       });
       assert.ok(result);
     });
 
     it('should reject invalid base path', async () => {
       await assert.rejects(
-        async () => await PathValidator.validatePath(null, 'test.txt'),
+        async () => PathValidator.validatePath(null, 'test.txt'),
         (error) => {
           assert.ok(error instanceof PathSecurityError);
           assert.strictEqual(error.code, 'INVALID_BASE_PATH');
@@ -227,7 +229,7 @@ describe('PathSecurity', () => {
       );
 
       await assert.rejects(
-        async () => await PathValidator.validatePath('', 'test.txt'),
+        async () => PathValidator.validatePath('', 'test.txt'),
         (error) => {
           assert.ok(error instanceof PathSecurityError);
           assert.strictEqual(error.code, 'INVALID_BASE_PATH');
@@ -238,7 +240,7 @@ describe('PathSecurity', () => {
 
     it('should reject invalid target path', async () => {
       await assert.rejects(
-        async () => await PathValidator.validatePath(baseDir, null),
+        async () => PathValidator.validatePath(baseDir, null),
         (error) => {
           assert.ok(error instanceof PathSecurityError);
           assert.strictEqual(error.code, 'INVALID_TARGET_PATH');
@@ -247,7 +249,7 @@ describe('PathSecurity', () => {
       );
 
       await assert.rejects(
-        async () => await PathValidator.validatePath(baseDir, ''),
+        async () => PathValidator.validatePath(baseDir, ''),
         (error) => {
           assert.ok(error instanceof PathSecurityError);
           assert.strictEqual(error.code, 'INVALID_TARGET_PATH');
@@ -258,7 +260,7 @@ describe('PathSecurity', () => {
 
     it('should handle absolute paths in target', async () => {
       await assert.rejects(
-        async () => await PathValidator.validatePath(baseDir, '/etc/passwd'),
+        async () => PathValidator.validatePath(baseDir, '/etc/passwd'),
         (error) => {
           assert.ok(error instanceof PathSecurityError);
           assert.strictEqual(error.code, 'PATH_TRAVERSAL_ATTEMPT');
@@ -268,7 +270,9 @@ describe('PathSecurity', () => {
     });
 
     it('should allow non-existent paths when mustExist is false', async () => {
-      const result = await PathValidator.validatePath(baseDir, 'new-file.txt', { mustExist: false });
+      const result = await PathValidator.validatePath(baseDir, 'new-file.txt', {
+        mustExist: false,
+      });
       assert.strictEqual(result, path.join(baseDir, 'new-file.txt'));
     });
   });
@@ -411,7 +415,9 @@ describe('PathSecurity', () => {
   describe('Edge cases', () => {
     it('should handle dots in filenames', async () => {
       await writeFile(path.join(baseDir, 'file.with.dots.txt'), 'content');
-      const result = await PathValidator.validatePath(baseDir, 'file.with.dots.txt', { mustExist: true });
+      const result = await PathValidator.validatePath(baseDir, 'file.with.dots.txt', {
+        mustExist: true,
+      });
       const expectedPath = await realpath(path.join(baseDir, 'file.with.dots.txt'));
       assert.strictEqual(result, expectedPath);
     });

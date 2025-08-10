@@ -14,13 +14,13 @@ describe('Auth Routes', () => {
     // Create a fresh Express app for each test
     app = express();
     app.use(express.json());
-    
+
     // Set up app locals for auth config
     app.locals.authRequired = false;
     app.locals.authToken = null;
     app.locals.port = 3001;
     app.locals.enableTLS = false;
-    
+
     app.use('/api/auth', authRoutes);
 
     // Mock console methods
@@ -42,21 +42,23 @@ describe('Auth Routes', () => {
     it('should generate QR code for connection without auth', async () => {
       // Mock network interfaces
       os.networkInterfaces = () => ({
-        eth0: [{
-          family: 'IPv4',
-          internal: false,
-          address: '192.168.1.100'
-        }],
-        lo: [{
-          family: 'IPv4',
-          internal: true,
-          address: '127.0.0.1'
-        }]
+        eth0: [
+          {
+            family: 'IPv4',
+            internal: false,
+            address: '192.168.1.100',
+          },
+        ],
+        lo: [
+          {
+            family: 'IPv4',
+            internal: true,
+            address: '127.0.0.1',
+          },
+        ],
       });
 
-      const response = await request(app)
-        .get('/api/auth/setup')
-        .expect(200);
+      const response = await request(app).get('/api/auth/setup').expect(200);
 
       assert.strictEqual(response.body.success, true);
       assert.ok(response.body.connectionInfo);
@@ -66,12 +68,12 @@ describe('Auth Routes', () => {
       assert.strictEqual(response.body.connectionInfo.protocol, 'ws');
       assert.strictEqual(response.body.connectionInfo.authRequired, false);
       assert.strictEqual(response.body.connectionInfo.hasToken, false);
-      
+
       assert.ok(response.body.qrCode);
       assert.ok(response.body.qrCode.dataUrl);
       assert.ok(response.body.qrCode.svg);
       assert.ok(response.body.qrCode.dataUrl.startsWith('data:image/png;base64,'));
-      
+
       assert.ok(response.body.availableAddresses);
       assert.strictEqual(response.body.availableAddresses.length, 1);
       assert.strictEqual(response.body.availableAddresses[0].interface, 'eth0');
@@ -83,40 +85,46 @@ describe('Auth Routes', () => {
       app.locals.authToken = 'test-auth-token-12345';
 
       os.networkInterfaces = () => ({
-        eth0: [{
-          family: 'IPv4',
-          internal: false,
-          address: '192.168.1.100'
-        }]
+        eth0: [
+          {
+            family: 'IPv4',
+            internal: false,
+            address: '192.168.1.100',
+          },
+        ],
       });
 
-      const response = await request(app)
-        .get('/api/auth/setup')
-        .expect(200);
+      const response = await request(app).get('/api/auth/setup').expect(200);
 
       assert.strictEqual(response.body.success, true);
-      assert.strictEqual(response.body.connectionInfo.url, 'ws://192.168.1.100:3001/ws?token=test-auth-token-12345');
+      assert.strictEqual(
+        response.body.connectionInfo.url,
+        'ws://192.168.1.100:3001/ws?token=test-auth-token-12345'
+      );
       assert.strictEqual(response.body.connectionInfo.authRequired, true);
       assert.strictEqual(response.body.connectionInfo.hasToken, true);
-      
+
       // Check that token is included in available addresses
-      assert.strictEqual(response.body.availableAddresses[0].url, 'ws://192.168.1.100:3001/ws?token=test-auth-token-12345');
+      assert.strictEqual(
+        response.body.availableAddresses[0].url,
+        'ws://192.168.1.100:3001/ws?token=test-auth-token-12345'
+      );
     });
 
     it('should generate QR code with TLS enabled', async () => {
       app.locals.enableTLS = true;
 
       os.networkInterfaces = () => ({
-        wlan0: [{
-          family: 'IPv4',
-          internal: false,
-          address: '10.0.0.50'
-        }]
+        wlan0: [
+          {
+            family: 'IPv4',
+            internal: false,
+            address: '10.0.0.50',
+          },
+        ],
       });
 
-      const response = await request(app)
-        .get('/api/auth/setup')
-        .expect(200);
+      const response = await request(app).get('/api/auth/setup').expect(200);
 
       assert.strictEqual(response.body.success, true);
       assert.strictEqual(response.body.connectionInfo.protocol, 'wss');
@@ -126,31 +134,35 @@ describe('Auth Routes', () => {
 
     it('should handle multiple network interfaces', async () => {
       os.networkInterfaces = () => ({
-        eth0: [{
-          family: 'IPv4',
-          internal: false,
-          address: '192.168.1.100'
-        }],
-        wlan0: [{
-          family: 'IPv4',
-          internal: false,
-          address: '10.0.0.50'
-        }],
-        docker0: [{
-          family: 'IPv4',
-          internal: false,
-          address: '172.17.0.1'
-        }]
+        eth0: [
+          {
+            family: 'IPv4',
+            internal: false,
+            address: '192.168.1.100',
+          },
+        ],
+        wlan0: [
+          {
+            family: 'IPv4',
+            internal: false,
+            address: '10.0.0.50',
+          },
+        ],
+        docker0: [
+          {
+            family: 'IPv4',
+            internal: false,
+            address: '172.17.0.1',
+          },
+        ],
       });
 
-      const response = await request(app)
-        .get('/api/auth/setup')
-        .expect(200);
+      const response = await request(app).get('/api/auth/setup').expect(200);
 
       assert.strictEqual(response.body.success, true);
       assert.strictEqual(response.body.availableAddresses.length, 3);
-      
-      const addresses = response.body.availableAddresses.map(a => a.address);
+
+      const addresses = response.body.availableAddresses.map((a) => a.address);
       assert.ok(addresses.includes('192.168.1.100'));
       assert.ok(addresses.includes('10.0.0.50'));
       assert.ok(addresses.includes('172.17.0.1'));
@@ -159,9 +171,7 @@ describe('Auth Routes', () => {
     it('should fallback to localhost when no network interfaces found', async () => {
       os.networkInterfaces = () => ({});
 
-      const response = await request(app)
-        .get('/api/auth/setup')
-        .expect(200);
+      const response = await request(app).get('/api/auth/setup').expect(200);
 
       assert.strictEqual(response.body.success, true);
       assert.strictEqual(response.body.connectionInfo.host, 'localhost');
@@ -174,19 +184,17 @@ describe('Auth Routes', () => {
           {
             family: 'IPv4',
             internal: false,
-            address: '192.168.1.100'
+            address: '192.168.1.100',
           },
           {
             family: 'IPv6',
             internal: false,
-            address: 'fe80::1'
-          }
-        ]
+            address: 'fe80::1',
+          },
+        ],
       });
 
-      const response = await request(app)
-        .get('/api/auth/setup')
-        .expect(200);
+      const response = await request(app).get('/api/auth/setup').expect(200);
 
       assert.strictEqual(response.body.success, true);
       assert.strictEqual(response.body.availableAddresses.length, 1);
@@ -201,16 +209,16 @@ describe('Auth Routes', () => {
       };
 
       os.networkInterfaces = () => ({
-        eth0: [{
-          family: 'IPv4',
-          internal: false,
-          address: '192.168.1.100'
-        }]
+        eth0: [
+          {
+            family: 'IPv4',
+            internal: false,
+            address: '192.168.1.100',
+          },
+        ],
       });
 
-      const response = await request(app)
-        .get('/api/auth/setup')
-        .expect(500);
+      const response = await request(app).get('/api/auth/setup').expect(500);
 
       assert.strictEqual(response.body.success, false);
       assert.strictEqual(response.body.error, 'Failed to generate QR code');
@@ -224,16 +232,16 @@ describe('Auth Routes', () => {
       app.locals.port = 8080;
 
       os.networkInterfaces = () => ({
-        eth0: [{
-          family: 'IPv4',
-          internal: false,
-          address: '192.168.1.100'
-        }]
+        eth0: [
+          {
+            family: 'IPv4',
+            internal: false,
+            address: '192.168.1.100',
+          },
+        ],
       });
 
-      const response = await request(app)
-        .get('/api/auth/setup')
-        .expect(200);
+      const response = await request(app).get('/api/auth/setup').expect(200);
 
       assert.strictEqual(response.body.success, true);
       assert.strictEqual(response.body.connectionInfo.port, 8080);
@@ -246,9 +254,7 @@ describe('Auth Routes', () => {
       app.locals.authRequired = false;
       app.locals.authToken = null;
 
-      const response = await request(app)
-        .get('/api/auth/status')
-        .expect(200);
+      const response = await request(app).get('/api/auth/status').expect(200);
 
       assert.strictEqual(response.body.authRequired, false);
       assert.strictEqual(response.body.hasToken, false);
@@ -259,9 +265,7 @@ describe('Auth Routes', () => {
       app.locals.authRequired = true;
       app.locals.authToken = 'secret-token';
 
-      const response = await request(app)
-        .get('/api/auth/status')
-        .expect(200);
+      const response = await request(app).get('/api/auth/status').expect(200);
 
       assert.strictEqual(response.body.authRequired, true);
       assert.strictEqual(response.body.hasToken, true);
@@ -300,9 +304,7 @@ describe('Auth Routes', () => {
       app.locals.authRequired = true;
       app.locals.authToken = 'secret-token';
 
-      const response = await request(app)
-        .get('/api/auth/status')
-        .expect(200);
+      const response = await request(app).get('/api/auth/status').expect(200);
 
       assert.strictEqual(response.body.authenticated, false);
     });
@@ -311,9 +313,7 @@ describe('Auth Routes', () => {
       app.locals.authRequired = undefined;
       app.locals.authToken = 'token';
 
-      const response = await request(app)
-        .get('/api/auth/status')
-        .expect(200);
+      const response = await request(app).get('/api/auth/status').expect(200);
 
       assert.strictEqual(response.body.authRequired, true);
     });

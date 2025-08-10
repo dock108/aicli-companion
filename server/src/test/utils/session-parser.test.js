@@ -7,7 +7,7 @@ import {
   extractProjectName,
   extractSessionId,
   isValidSessionId,
-  createCompositeSessionId
+  createCompositeSessionId,
 } from '../../utils/session-parser.js';
 
 describe('SessionIdParser', () => {
@@ -15,7 +15,7 @@ describe('SessionIdParser', () => {
     it('should parse standard UUID format', () => {
       const uuid = '550e8400-e29b-41d4-a716-446655440000';
       const result = SessionIdParser.parseSessionId(uuid);
-      
+
       assert.strictEqual(result.isValid, true);
       assert.strictEqual(result.format, SESSION_ID_FORMATS.UUID);
       assert.strictEqual(result.sessionId, uuid);
@@ -26,7 +26,7 @@ describe('SessionIdParser', () => {
     it('should parse UUID v4 format', () => {
       const uuid = 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
       const result = SessionIdParser.parseSessionId(uuid);
-      
+
       assert.strictEqual(result.isValid, true);
       assert.strictEqual(result.format, SESSION_ID_FORMATS.UUID);
       assert.strictEqual(result.sessionId, uuid);
@@ -35,7 +35,7 @@ describe('SessionIdParser', () => {
     it('should parse composite format with project name and UUID', () => {
       const compositeId = 'my-project_550e8400-e29b-41d4-a716-446655440000';
       const result = SessionIdParser.parseSessionId(compositeId);
-      
+
       assert.strictEqual(result.isValid, true);
       assert.strictEqual(result.format, SESSION_ID_FORMATS.COMPOSITE);
       assert.strictEqual(result.sessionId, '550e8400-e29b-41d4-a716-446655440000');
@@ -46,7 +46,7 @@ describe('SessionIdParser', () => {
     it('should parse composite format with multi-part project name', () => {
       const compositeId = 'my_awesome_project_550e8400-e29b-41d4-a716-446655440000';
       const result = SessionIdParser.parseSessionId(compositeId);
-      
+
       assert.strictEqual(result.isValid, true);
       assert.strictEqual(result.format, SESSION_ID_FORMATS.COMPOSITE);
       assert.strictEqual(result.sessionId, '550e8400-e29b-41d4-a716-446655440000');
@@ -56,7 +56,7 @@ describe('SessionIdParser', () => {
     it('should parse composite format with simple session ID', () => {
       const compositeId = 'project_name_session123';
       const result = SessionIdParser.parseSessionId(compositeId);
-      
+
       assert.strictEqual(result.isValid, true);
       assert.strictEqual(result.format, SESSION_ID_FORMATS.COMPOSITE);
       assert.strictEqual(result.sessionId, 'session123');
@@ -66,7 +66,7 @@ describe('SessionIdParser', () => {
     it('should parse simple format without underscores', () => {
       const simpleId = 'session12345';
       const result = SessionIdParser.parseSessionId(simpleId);
-      
+
       assert.strictEqual(result.isValid, true);
       assert.strictEqual(result.format, SESSION_ID_FORMATS.SIMPLE);
       assert.strictEqual(result.sessionId, simpleId);
@@ -76,7 +76,7 @@ describe('SessionIdParser', () => {
     it('should handle single underscore as composite', () => {
       const id = 'project_123';
       const result = SessionIdParser.parseSessionId(id);
-      
+
       assert.strictEqual(result.isValid, true);
       assert.strictEqual(result.format, SESSION_ID_FORMATS.COMPOSITE);
       assert.strictEqual(result.sessionId, '123');
@@ -86,14 +86,14 @@ describe('SessionIdParser', () => {
     it('should handle trailing spaces', () => {
       const id = '  session123  ';
       const result = SessionIdParser.parseSessionId(id);
-      
+
       assert.strictEqual(result.isValid, true);
       assert.strictEqual(result.sessionId, 'session123');
     });
 
     it('should handle null input', () => {
       const result = SessionIdParser.parseSessionId(null);
-      
+
       assert.strictEqual(result.isValid, false);
       assert.strictEqual(result.format, null);
       assert.strictEqual(result.sessionId, null);
@@ -103,21 +103,21 @@ describe('SessionIdParser', () => {
 
     it('should handle undefined input', () => {
       const result = SessionIdParser.parseSessionId(undefined);
-      
+
       assert.strictEqual(result.isValid, false);
       assert.strictEqual(result.error, 'Invalid or missing session ID');
     });
 
     it('should handle empty string', () => {
       const result = SessionIdParser.parseSessionId('');
-      
+
       assert.strictEqual(result.isValid, false);
       assert.strictEqual(result.error, 'Invalid or missing session ID');
     });
 
     it('should handle non-string input', () => {
       const result = SessionIdParser.parseSessionId(12345);
-      
+
       assert.strictEqual(result.isValid, false);
       assert.strictEqual(result.error, 'Invalid or missing session ID');
     });
@@ -125,7 +125,7 @@ describe('SessionIdParser', () => {
     it('should be case-insensitive for UUID detection', () => {
       const uuid = '550E8400-E29B-41D4-A716-446655440000';
       const result = SessionIdParser.parseSessionId(uuid);
-      
+
       assert.strictEqual(result.isValid, true);
       assert.strictEqual(result.format, SESSION_ID_FORMATS.UUID);
     });
@@ -133,7 +133,7 @@ describe('SessionIdParser', () => {
     it('should handle project names with numbers', () => {
       const id = 'project123_session456';
       const result = SessionIdParser.parseSessionId(id);
-      
+
       assert.strictEqual(result.isValid, true);
       assert.strictEqual(result.format, SESSION_ID_FORMATS.COMPOSITE);
       assert.strictEqual(result.sessionId, 'session456');
@@ -143,7 +143,7 @@ describe('SessionIdParser', () => {
     it('should handle project names with hyphens', () => {
       const id = 'my-cool-project_session789';
       const result = SessionIdParser.parseSessionId(id);
-      
+
       assert.strictEqual(result.isValid, true);
       assert.strictEqual(result.format, SESSION_ID_FORMATS.COMPOSITE);
       assert.strictEqual(result.sessionId, 'session789');
@@ -201,7 +201,9 @@ describe('SessionIdParser', () => {
     });
 
     it('should extract from composite with UUID', () => {
-      const result = SessionIdParser.extractSessionId('project_550e8400-e29b-41d4-a716-446655440000');
+      const result = SessionIdParser.extractSessionId(
+        'project_550e8400-e29b-41d4-a716-446655440000'
+      );
       assert.strictEqual(result, '550e8400-e29b-41d4-a716-446655440000');
     });
 
@@ -213,7 +215,10 @@ describe('SessionIdParser', () => {
 
   describe('isValidSessionId', () => {
     it('should validate UUID format', () => {
-      assert.strictEqual(SessionIdParser.isValidSessionId('550e8400-e29b-41d4-a716-446655440000'), true);
+      assert.strictEqual(
+        SessionIdParser.isValidSessionId('550e8400-e29b-41d4-a716-446655440000'),
+        true
+      );
     });
 
     it('should validate composite format', () => {
@@ -239,11 +244,17 @@ describe('SessionIdParser', () => {
 
   describe('getFormat', () => {
     it('should identify UUID format', () => {
-      assert.strictEqual(SessionIdParser.getFormat('550e8400-e29b-41d4-a716-446655440000'), SESSION_ID_FORMATS.UUID);
+      assert.strictEqual(
+        SessionIdParser.getFormat('550e8400-e29b-41d4-a716-446655440000'),
+        SESSION_ID_FORMATS.UUID
+      );
     });
 
     it('should identify composite format', () => {
-      assert.strictEqual(SessionIdParser.getFormat('project_session'), SESSION_ID_FORMATS.COMPOSITE);
+      assert.strictEqual(
+        SessionIdParser.getFormat('project_session'),
+        SESSION_ID_FORMATS.COMPOSITE
+      );
     });
 
     it('should identify simple format', () => {
@@ -351,7 +362,7 @@ describe('SessionIdParser', () => {
     it('should handle session ID that looks like UUID but isnt valid v4', () => {
       const fakeUuid = '550e8400-e29b-11d4-a716-446655440000'; // 11d4 instead of 41d4
       const result = SessionIdParser.parseSessionId(fakeUuid);
-      
+
       assert.strictEqual(result.isValid, true);
       assert.strictEqual(result.format, SESSION_ID_FORMATS.SIMPLE); // Not recognized as UUID v4
       assert.strictEqual(result.sessionId, fakeUuid);
@@ -360,7 +371,7 @@ describe('SessionIdParser', () => {
     it('should handle very long session IDs', () => {
       const longId = 'a'.repeat(1000);
       const result = SessionIdParser.parseSessionId(longId);
-      
+
       assert.strictEqual(result.isValid, true);
       assert.strictEqual(result.format, SESSION_ID_FORMATS.SIMPLE);
       assert.strictEqual(result.sessionId, longId);
@@ -369,7 +380,7 @@ describe('SessionIdParser', () => {
     it('should handle session ID with only underscores', () => {
       const id = '___';
       const result = SessionIdParser.parseSessionId(id);
-      
+
       assert.strictEqual(result.isValid, true);
       assert.strictEqual(result.format, SESSION_ID_FORMATS.COMPOSITE);
       assert.strictEqual(result.projectName, '__');
@@ -379,7 +390,7 @@ describe('SessionIdParser', () => {
     it('should handle single underscore', () => {
       const id = '_';
       const result = SessionIdParser.parseSessionId(id);
-      
+
       assert.strictEqual(result.isValid, true);
       assert.strictEqual(result.format, SESSION_ID_FORMATS.SIMPLE); // Single underscore treated as simple
       assert.strictEqual(result.sessionId, '_');
@@ -387,7 +398,7 @@ describe('SessionIdParser', () => {
 
     it('should handle whitespace-only input', () => {
       const result = SessionIdParser.parseSessionId('   ');
-      
+
       assert.strictEqual(result.isValid, false);
       assert.strictEqual(result.error, 'Invalid or missing session ID');
     });

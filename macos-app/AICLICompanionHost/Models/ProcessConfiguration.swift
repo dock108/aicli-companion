@@ -33,7 +33,8 @@ extension ServerManager {
         } else {
             // Default to user's home directory if not set
             environment["CONFIG_PATH"] = FileManager.default.homeDirectoryForCurrentUser.path
-            addLog(.debug, "CONFIG_PATH defaulted to home directory: \(FileManager.default.homeDirectoryForCurrentUser.path)")
+            let homePath = FileManager.default.homeDirectoryForCurrentUser.path
+            addLog(.debug, "CONFIG_PATH defaulted to home directory: \(homePath)")
         }
 
         // Configure authentication

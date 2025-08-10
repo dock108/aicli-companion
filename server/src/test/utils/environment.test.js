@@ -6,7 +6,7 @@ import {
   isNotTestEnvironment,
   isProductionEnvironment,
   isDevelopmentEnvironment,
-  getCurrentEnvironment
+  getCurrentEnvironment,
 } from '../../utils/environment.js';
 
 describe('EnvironmentUtils', () => {

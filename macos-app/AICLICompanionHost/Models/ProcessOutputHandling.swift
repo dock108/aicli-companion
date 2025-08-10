@@ -46,70 +46,63 @@ extension ServerManager {
     func handleServerOutput(_ output: String) {
         let lines = output.components(separatedBy: .newlines)
         for line in lines where !line.isEmpty {
-            // Check for auth token generation
-            if line.contains("🔑 Generated auth token:") {
-                // The token might be on this line after the colon
-                if let token = extractTokenFromGeneratedLine(line) {
-                    authToken = token
-                    addLog(.info, "🔐 Captured generated auth token")
-                }
-            }
+            processOutputLine(line)
+        }
+    }
 
-            // Check for mobile app connection URL with token
-            if line.contains("📱 Mobile app connection:") {
-                if let token = extractAuthToken(from: line) {
-                    // Only update if we don't already have a token
-                    if authToken == nil {
-                        authToken = token
-                        addLog(.info, "🔐 Captured auth token from connection URL")
-                    }
-                }
-            }
+    private func processOutputLine(_ line: String) {
+        processAuthTokenFromLine(line)
+        processTunnelURLFromLine(line)
+        logServerOutputLine(line)
+    }
 
-            // Check for iOS Connection URL (from tunnel output)
-            if line.contains("iOS Connection URL:") ||
-               (line.contains("https://") && line.contains(".ngrok") && line.contains("token=")) {
-                if let token = extractAuthToken(from: line) {
-                    // Only update if we don't already have a token
-                    if authToken == nil {
-                        authToken = token
-                        addLog(.info, "🔐 Captured auth token from iOS connection URL")
-                    }
-                }
+    private func processAuthTokenFromLine(_ line: String) {
+        if line.contains("🔑 Generated auth token:") {
+            if let token = extractTokenFromGeneratedLine(line) {
+                authToken = token
+                addLog(.info, "🔐 Captured generated auth token")
             }
+        } else if line.contains("📱 Mobile app connection:") {
+            updateAuthTokenIfNeeded(from: line, source: "connection URL")
+        } else if line.contains("iOS Connection URL:") ||
+                  (line.contains("https://") && line.contains(".ngrok") && line.contains("token=")) {
+            updateAuthTokenIfNeeded(from: line, source: "iOS connection URL")
+        }
+    }
 
-            // Check for tunnel URL in output - look for various patterns
-            if line.contains("https://") && (line.contains("ngrok") || line.contains("Tunnel")) {
-                if let url = extractTunnelURL(from: line) {
-                    publicURL = url
-                    addLog(.info, "🌐 Tunnel established: \(url)")
-                    // Log the current connection string
-                    Task { @MainActor in
-                        addLog(.debug, "Updated connection string after tunnel: \(connectionString)")
-                    }
-                }
-            }
+    private func updateAuthTokenIfNeeded(from line: String, source: String) {
+        guard authToken == nil, let token = extractAuthToken(from: line) else { return }
+        authToken = token
+        addLog(.info, "🔐 Captured auth token from \(source)")
+    }
 
-            // Also check for explicit tunnel URL announcements
-            if line.contains("Public URL:") || line.contains("Forwarding") {
-                if let url = extractTunnelURL(from: line) {
-                    publicURL = url
-                    addLog(.info, "🌐 Tunnel URL detected: \(url)")
-                    // Log the current connection string
-                    Task { @MainActor in
-                        addLog(.debug, "Updated connection string after public URL: \(connectionString)")
-                    }
-                }
-            }
+    private func processTunnelURLFromLine(_ line: String) {
+        let hasTunnelPattern = line.contains("https://") && (line.contains("ngrok") || line.contains("Tunnel"))
+        let hasExplicitPattern = line.contains("Public URL:") || line.contains("Forwarding")
 
-            // Log server output
-            if line.contains("error") || line.contains("Error") {
-                addLog(.error, line)
-            } else if line.contains("warning") || line.contains("Warning") {
-                addLog(.warning, line)
-            } else {
-                addLog(.info, line)
+        if hasTunnelPattern || hasExplicitPattern {
+            if let url = extractTunnelURL(from: line) {
+                publicURL = url
+                let message = hasTunnelPattern ? "🌐 Tunnel established: \(url)" : "🌐 Tunnel URL detected: \(url)"
+                addLog(.info, message)
+                logConnectionStringUpdate()
             }
+        }
+    }
+
+    private func logConnectionStringUpdate() {
+        Task { @MainActor in
+            addLog(.debug, "Updated connection string: \(connectionString)")
+        }
+    }
+
+    private func logServerOutputLine(_ line: String) {
+        if line.contains("error") || line.contains("Error") {
+            addLog(.error, line)
+        } else if line.contains("warning") || line.contains("Warning") {
+            addLog(.warning, line)
+        } else {
+            addLog(.info, line)
         }
     }
 

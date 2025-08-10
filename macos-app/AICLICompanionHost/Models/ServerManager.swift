@@ -35,40 +35,46 @@ class ServerManager: ObservableObject {
     var connectionString: String {
         guard isRunning else { return "" }
 
-        // If we have a public URL from tunneling, convert it to WebSocket URL
         if let publicURL = publicURL {
-            // Convert ngrok HTTPS URL to WSS WebSocket URL
-            var wsURL = publicURL
-            if publicURL.hasPrefix("https://") {
-                wsURL = publicURL.replacingOccurrences(of: "https://", with: "wss://")
-            } else if publicURL.hasPrefix("http://") {
-                wsURL = publicURL.replacingOccurrences(of: "http://", with: "ws://")
-            }
+            return buildPublicConnectionString(from: publicURL)
+        } else {
+            return buildLocalConnectionString()
+        }
+    }
 
-            // Add WebSocket path if not present
-            if !wsURL.contains("/ws") {
-                wsURL = wsURL.trimmingCharacters(in: .init(charactersIn: "/")) + "/ws"
-            }
+    private func buildPublicConnectionString(from publicURL: String) -> String {
+        let wsURL = convertToWebSocketURL(publicURL)
+        return addAuthTokenToURL(wsURL)
+    }
 
-            // Add auth token if required
-            if let token = authToken, SettingsManager.shared.requireAuthentication {
-                if wsURL.contains("?") {
-                    return "\(wsURL)&token=\(token)"
-                } else {
-                    return "\(wsURL)?token=\(token)"
-                }
-            }
-            return wsURL
+    private func buildLocalConnectionString() -> String {
+        let baseURL = "ws://\(localIP):\(port)/ws"
+        return addAuthTokenToURL(baseURL)
+    }
+
+    private func convertToWebSocketURL(_ url: String) -> String {
+        var wsURL = url
+        if url.hasPrefix("https://") {
+            wsURL = url.replacingOccurrences(of: "https://", with: "wss://")
+        } else if url.hasPrefix("http://") {
+            wsURL = url.replacingOccurrences(of: "http://", with: "ws://")
         }
 
-        // Build local WebSocket URL (always use ws for local connections)
-        let baseURL = "ws://\(localIP):\(port)/ws"
+        // Add WebSocket path if not present
+        if !wsURL.contains("/ws") {
+            wsURL = wsURL.trimmingCharacters(in: .init(charactersIn: "/")) + "/ws"
+        }
 
-        if let token = authToken, SettingsManager.shared.requireAuthentication {
-            return "\(baseURL)?token=\(token)"
-        } else {
+        return wsURL
+    }
+
+    private func addAuthTokenToURL(_ baseURL: String) -> String {
+        guard let token = authToken, SettingsManager.shared.requireAuthentication else {
             return baseURL
         }
+
+        let separator = baseURL.contains("?") ? "&" : "?"
+        return "\(baseURL)\(separator)token=\(token)"
     }
 
     var serverFullURL: String {

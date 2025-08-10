@@ -16,6 +16,7 @@ public class HTTPAICLIService: ObservableObject {
     private var baseURL: URL?
     private var urlSession: URLSession
     private var deviceToken: String?
+    private var authToken: String?
     private var cancellables = Set<AnyCancellable>()
 
     private let encoder = JSONEncoder()
@@ -63,6 +64,7 @@ public class HTTPAICLIService: ObservableObject {
         }
 
         baseURL = url
+        self.authToken = authToken // Store the auth token for later use
         
         // Test connection by hitting the health endpoint
         testConnection { [weak self] result in
@@ -117,6 +119,11 @@ public class HTTPAICLIService: ObservableObject {
         var request = URLRequest(url: healthURL)
         request.httpMethod = "GET"
         request.addValue("application/json", forHTTPHeaderField: "Accept")
+        
+        // Add authorization header if we have a token
+        if let token = authToken {
+            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
 
         urlSession.dataTask(with: request) { _, response, error in
             if let error = error {
@@ -191,6 +198,11 @@ public class HTTPAICLIService: ObservableObject {
         var request = URLRequest(url: registerURL)
         request.httpMethod = "POST"
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        // Add authorization header if we have a token
+        if let token = authToken {
+            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
 
         let payload = [
             "deviceToken": deviceToken,
@@ -242,6 +254,11 @@ public class HTTPAICLIService: ObservableObject {
         request.httpMethod = "POST"
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 120 // Extended timeout for Claude processing
+        
+        // Add authorization header if we have a token
+        if let token = authToken {
+            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
 
         var payload: [String: Any] = [
             "message": message
@@ -312,8 +329,33 @@ public class HTTPAICLIService: ObservableObject {
                 completion(.failure(.noData))
                 return
             }
+            
+            // Handle authentication errors
+            if httpResponse.statusCode == 401 {
+                // Try to parse error response
+                if let errorDict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let errorMessage = errorDict["message"] as? String {
+                    print("❌ Authentication error: \(errorMessage)")
+                    completion(.failure(.connectionFailed("Authentication failed: \(errorMessage)")))
+                } else {
+                    completion(.failure(.connectionFailed("Authentication failed. Please check your credentials.")))
+                }
+                return
+            }
+            
+            // Check for other error status codes
+            guard 200...299 ~= httpResponse.statusCode else {
+                // Try to parse error response
+                if let errorDict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let errorMessage = errorDict["message"] as? String ?? errorDict["error"] as? String {
+                    completion(.failure(.connectionFailed("Server error: \(errorMessage)")))
+                } else {
+                    completion(.failure(.httpError(httpResponse.statusCode)))
+                }
+                return
+            }
 
-            // Parse the response
+            // Parse the successful response
             do {
                 let chatResponse = try self.decoder.decode(ClaudeChatResponse.self, from: data)
                 print("✅ Chat response received: \(chatResponse.content?.prefix(100) ?? "acknowledgment")...")
@@ -328,6 +370,10 @@ public class HTTPAICLIService: ObservableObject {
                 completion(.success(chatResponse))
             } catch {
                 print("❌ JSON parsing error: \(error)")
+                // Log the raw response for debugging
+                if let responseString = String(data: data, encoding: .utf8) {
+                    print("   Raw response: \(responseString)")
+                }
                 completion(.failure(.jsonParsingError(error)))
             }
         }
@@ -347,6 +393,11 @@ public class HTTPAICLIService: ObservableObject {
         request.httpMethod = "GET"
         request.addValue("application/json", forHTTPHeaderField: "Accept")
         request.timeoutInterval = 10 // Quick status check
+        
+        // Add authorization header if we have a token
+        if let token = authToken {
+            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
         
         print("📡 Checking session status: \(statusURL)")
         
@@ -388,6 +439,11 @@ public class HTTPAICLIService: ObservableObject {
         var request = URLRequest(url: projectsURL)
         request.httpMethod = "GET"
         request.addValue("application/json", forHTTPHeaderField: "Accept")
+        
+        // Add authorization header if we have a token
+        if let token = authToken {
+            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
 
         urlSession.dataTask(with: request) { data, _, error in
             if let error = error {

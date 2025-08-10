@@ -18,7 +18,7 @@ permissions:
 env:
   NODE_VERSION: '22'
   XCODE_VERSION: '16.2'
-  IOS_SIMULATOR: 'iPhone 15 Pro'  # More stable simulator choice
+  IOS_SIMULATOR: 'iPhone 16 Pro'  # Updated for Xcode 16.2
   MINIMUM_COVERAGE: 70  # Minimum code coverage percentage
 
 jobs:

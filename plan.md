@@ -1,365 +1,253 @@
-# Claude Companion - Simplified Message Flow Architecture
+# Server Authentication & Internet Exposure Implementation Plan
 
-## Development Guidelines
+## 🎯 Mission
+Implement secure authentication for the Claude Companion server with automatic enforcement for internet-exposed instances, while maintaining local-first simplicity.
 
-### Core Principles
-1. **No Random Fallbacks**: Never add arbitrary default values or fallback behaviors. If something is unclear, ask for clarification or mark with a TODO comment.
+## 📋 Current State
+- ✅ Auth middleware exists but has timing issues
+- ✅ Bearer token support implemented
+- ❌ Auth middleware applied too late in startup
+- ❌ No tunneling support for internet exposure
+- ❌ iOS settings don't clearly indicate auth requirements
+- ❌ No rate limiting for public exposure
 
-2. **Ask Questions Sparingly**: 
-   - Only interrupt for showstoppers (e.g., missing critical dependencies, architectural decisions)
-   - For non-blocking issues, add descriptive TODO comments and continue
-   - Batch questions when possible to minimize interruptions
+## 🏗️ Implementation Plan
 
-3. **No Invented Functionality**:
-   - Only implement what's explicitly requested or clearly needed
-   - Don't add "nice-to-have" features without discussion
-   - Stick to fixing the identified problems
+### Phase 0: Documentation Setup ✅
+**Status:** COMPLETED
+- Created new plan.md for server authentication
 
-4. **Clear TODOs for Unclear Areas**:
-   ```javascript
-   // TODO: [QUESTION] Should we limit message history size to prevent memory issues?
-   // Current assumption: store all messages, but may need pagination
-   // Questions: 
-   // - Max messages per session?
-   // - Should old messages be archived?
-   ```
+### Phase 1: Fix Authentication System
 
-5. **Descriptive Comments for Complex Logic**:
-   ```javascript
-   // IMPLEMENTATION NOTE: Persisting messages to disk on each buffer update
-   // Alternative considered: Batch writes every N seconds for performance
-   // Decision: Immediate persistence ensures no data loss on crashes
-   ```
+#### 1.1 Fix Auth Middleware Timing
+**Problem:** Auth middleware is applied after server starts, leaving routes unprotected initially
 
-## TODO Tracking Guidelines
-Throughout implementation, TODOs will be marked with:
-- `TODO: [BLOCKING]` - Must be resolved before continuing
-- `TODO: [QUESTION]` - Need user input, but can continue
-- `TODO: [OPTIMIZE]` - Performance improvement opportunity
-- `TODO: [RESEARCH]` - Need to investigate best approach
+**Files to modify:**
+- `server/src/index.js` - Move auth middleware configuration before route setup
+- `server/src/config/middleware-config.js` - Ensure auth applies to all /api routes
 
-## Quality Standards
+**Implementation:**
+```javascript
+// In index.js constructor, move auth setup BEFORE setupRoutes()
+setupBasicMiddleware();
+setupAuthMiddleware(); // NEW - configure auth before routes
+setupRoutes();
+```
 
-### Code Quality
-- All tests must pass before marking a phase complete
-- Maintain >80% code coverage
-- Zero linting errors allowed
-- Proper error handling and logging
-- Consistent code style throughout
+#### 1.2 Enhance Authentication Logic
+**Principle:** Auth requirements based on exposure
+- **Local-only (localhost/LAN):** Auth optional (default: off)
+- **Internet-exposed:** Auth mandatory (auto-enforce)
 
-### Documentation Standards
-- Every new API endpoint must be documented
-- Complex functions need JSDoc comments
-- Configuration changes must update README
-- Architecture decisions should be recorded
+**Files to modify:**
+- `server/src/config/server-config.js`:
+  ```javascript
+  // Add detection for internet exposure
+  get isInternetExposed() {
+    return process.env.ENABLE_TUNNEL === 'true' || 
+           this.host === '0.0.0.0' && process.env.EXPOSE_PUBLIC === 'true';
+  }
+  
+  // Auto-require auth if exposed
+  constructor() {
+    this.authRequired = this.isInternetExposed || process.env.AUTH_REQUIRED === 'true';
+  }
+  ```
 
-### Testing Requirements
-- Unit tests for all new functionality
-- Integration tests for API endpoints
-- Error scenarios must be tested
-- Performance impact should be measured
+#### 1.3 Environment Configuration
+**File:** `server/.env.example`
+```env
+# Server Configuration
+PORT=5173
+HOST=0.0.0.0
+
+# Authentication (optional for local, required for public)
+AUTH_REQUIRED=false
+AUTH_TOKEN=
+
+# Internet Exposure (auth auto-required when enabled)
+ENABLE_TUNNEL=false
+TUNNEL_PROVIDER=ngrok
+NGROK_AUTH_TOKEN=
+```
+
+### Phase 2: Add Tunneling Support
+
+#### 2.1 Create Tunnel Service
+**New file:** `server/src/services/tunnel.js`
+
+Features:
+- Ngrok integration using `@ngrok/ngrok` package
+- Auto-detect when tunnel is active
+- Return public URL for iOS app connection
+- Future support for Cloudflare Tunnel
+
+#### 2.2 Integrate with Server Startup
+**Files to modify:**
+- `server/src/index.js`:
+  - Check for `ENABLE_TUNNEL` environment variable
+  - Start tunnel after server starts
+  - Display public URL in console logs
+  
+- `server/src/config/server-startup.js`:
+  - Add tunnel information to startup display
+  - Show auth token requirement for public URLs
+  - Display QR code for easy mobile connection
+
+#### 2.3 Update Dependencies
+**File:** `server/package.json`
+```json
+{
+  "dependencies": {
+    "@ngrok/ngrok": "^1.0.0",
+    "express-rate-limit": "^7.0.0"
+  }
+}
+```
+
+### Phase 3: iOS App Settings Update
+
+#### 3.1 Enhance Connection Settings
+**Files to modify:**
+- `ios/Sources/AICLICompanion/SettingsView.swift`:
+  - Add "Connection Type" picker:
+    - Local Network (no auth by default)
+    - Custom Server (optional auth)
+    - Public Tunnel (auth required)
+  - Show/hide auth token field based on selection
+  - Add validation for public URLs requiring auth
+
+#### 3.2 Update Connection Model
+**Files to modify:**
+- `ios/Sources/AICLICompanion/Models/ServerConnection.swift`:
+  ```swift
+  enum ConnectionType {
+      case local      // 192.168.x.x, 10.x.x.x, localhost
+      case custom     // User-provided URL
+      case tunnel     // Public ngrok/cloudflare URL
+  }
+  
+  var isAuthRequired: Bool {
+      return connectionType == .tunnel || authToken != nil
+  }
+  ```
+
+#### 3.3 Improve UI/UX
+- Clear labeling: "Auth Token (required for public servers)"
+- Auto-detect if URL is public (not private IP ranges)
+- Warning when connecting to public server without auth
+- Success/error feedback for auth validation
+
+### Phase 4: Security Hardening
+
+#### 4.1 Rate Limiting
+**New file:** `server/src/middleware/security.js`
+
+Features:
+- 100 requests/minute for authenticated users
+- 10 requests/minute for non-authenticated (if allowed)
+- Block after 5 failed auth attempts
+- IP-based tracking with exponential backoff
+
+#### 4.2 Security Headers
+**File:** `server/src/config/middleware-config.js`
+
+Enhancements:
+- Strict CORS for public exposure
+- Enhanced Helmet configuration
+- Request size limits (10MB max)
+- XSS protection headers
+
+#### 4.3 Monitoring & Logging
+- Log all authentication failures
+- Track request origins
+- Alert on suspicious patterns
+- Rate limit violations logged
+
+### Phase 5: Documentation & Testing
+
+#### 5.1 Documentation Updates
+**All docs in `/docs` folder:**
+- `docs/server/authentication.md` - Complete auth setup guide
+- `docs/server/tunneling.md` - Public exposure with ngrok/cloudflare
+- `docs/security/best-practices.md` - Security recommendations
+- `docs/operations/deployment.md` - Update with auth requirements
+
+#### 5.2 Testing Plan
+1. **Local network:** No auth required, works as before
+2. **Local with auth:** Optional auth token works correctly
+3. **Ngrok tunnel:** Auth automatically required and enforced
+4. **iOS connection:** Auth token properly sent in Bearer header
+5. **Rate limiting:** Requests blocked after limit exceeded
+6. **Security headers:** All headers present in responses
+
+## 📝 Implementation Status
+
+### ✅ Completed
+- [x] Created new plan.md document
+
+### 🔄 In Progress
+- [ ] Fix auth middleware timing issue
+
+### 📋 Pending
+- [ ] Add auth auto-enforcement for public exposure
+- [ ] Create tunnel service with ngrok
+- [ ] Update iOS settings UI
+- [ ] Add rate limiting
+- [ ] Create documentation
+- [ ] Test all scenarios
+
+## 🔑 Key Principles
+
+1. **Local-first:** Works without auth on local network by default
+2. **Secure-by-default:** Auto-requires auth when exposed to internet
+3. **User-friendly:** Clear UI indicates when auth is needed
+4. **Flexible:** Supports multiple tunneling providers
+5. **Safe:** Rate limiting and security headers protect public endpoints
+
+## ✅ Success Criteria
+
+- [ ] Auth middleware protects routes from server start
+- [ ] Public exposure auto-requires authentication
+- [ ] iOS app handles auth tokens in Bearer headers
+- [ ] Settings UI clearly shows auth requirements
+- [ ] Ngrok tunnel creates public URL successfully
+- [ ] Rate limiting prevents abuse
+- [ ] All documentation in `/docs` folder
+
+## 🚨 Potential Issues & Solutions
+
+### Issue: Auth token in URL vs Header
+**Solution:** Support both for compatibility, prefer Bearer header
+
+### Issue: Certificate validation for tunnels
+**Solution:** Tunnels provide valid HTTPS certificates
+
+### Issue: Rate limiting affects legitimate users
+**Solution:** Higher limits for authenticated users
+
+## 📊 Testing Checklist
+
+### Local Testing
+- [ ] Server starts without auth on local network
+- [ ] Can enable auth optionally for local
+- [ ] iOS app connects without auth locally
+
+### Public Testing
+- [ ] Ngrok tunnel starts successfully
+- [ ] Auth required when tunnel active
+- [ ] Unauthorized requests rejected (401)
+- [ ] iOS app sends auth token correctly
+
+### Security Testing
+- [ ] Rate limiting blocks excessive requests
+- [ ] Failed auth attempts tracked
+- [ ] Security headers present
+- [ ] CORS properly configured
+
+## 🔄 Current Task
+**Fixing auth middleware timing issue in server/src/index.js**
 
 ---
-
-## Simplified Architecture: Server as Stateless Message Router
-
-### Core Architecture Principles
-
-1. **Server is a Pure Message Router**
-   - No session management
-   - No state persistence
-   - No welcome messages or session tracking
-   - Just routes messages between iOS app and Claude CLI
-
-2. **Claude CLI is Source of Truth**
-   - Claude manages all session state
-   - Claude generates session IDs
-   - Server passes through whatever Claude returns
-
-3. **iOS App Manages State**
-   - Stores session IDs locally
-   - Manages conversation history
-   - Handles project context
-
-4. **Project Path as Initial Context**
-   - First message includes project path
-   - No session ID on first message
-   - Claude returns session ID in response
-   - Subsequent messages use that session ID
-
-### Message Flow Walkthrough
-
-#### Server Startup
-1. Server starts on configured port (3001)
-2. Broadcasts connection URL to network
-3. Makes root directory available for listing
-4. NO welcome messages sent
-5. NO session initialization
-
-#### iOS App Connection
-1. App discovers server via broadcast
-2. Connects to WebSocket endpoint
-3. Requests folder list from root directory via `/api/projects`
-4. NO session creation on connection
-5. NO welcome message received
-
-#### Project Selection
-1. User selects project folder in iOS app
-2. App stores project path locally
-3. NO notification sent to server
-4. NO session created on server
-5. Chat view opens with empty conversation
-
-#### First Message (No Session)
-```javascript
-// iOS sends:
-{
-  type: "claudeCommand",
-  requestId: "req-123",
-  data: {
-    sessionId: null,  // No session yet
-    command: "Help me understand this codebase",
-    projectPath: "/Users/michael/project"
-  }
-}
-
-// Server processes:
-1. Receives message with null sessionId
-2. Runs: claude --output-format json "Help me understand this codebase"
-3. Claude creates session internally, returns session ID
-4. Server extracts session ID from Claude response
-5. Passes response back to iOS with session ID
-
-// iOS receives:
-{
-  type: "claudeResponse",
-  requestId: "req-123",
-  data: {
-    sessionId: "claude-session-abc123",  // Claude's session ID
-    content: "I'll help you understand this codebase...",
-    success: true
-  }
-}
-
-// iOS stores session ID for future messages
-```
-
-#### Continued Conversation (With Session)
-```javascript
-// iOS sends:
-{
-  type: "claudeCommand",
-  requestId: "req-456",
-  data: {
-    sessionId: "claude-session-abc123",  // Using Claude's session ID
-    command: "What does the main function do?",
-    projectPath: "/Users/michael/project"
-  }
-}
-
-// Server processes:
-1. Receives message with sessionId
-2. Runs: claude --session-id claude-session-abc123 --output-format json "What does the main function do?"
-3. Claude continues existing conversation
-4. Server passes response back to iOS
-
-// iOS receives:
-{
-  type: "claudeResponse",
-  requestId: "req-456",
-  data: {
-    sessionId: "claude-session-abc123",
-    content: "The main function in this codebase...",
-    success: true
-  }
-}
-```
-
-#### Parallel Fresh Chats
-```javascript
-// Chat A sends (no session):
-{
-  type: "claudeCommand",
-  requestId: "chat-a-001",
-  data: {
-    sessionId: null,
-    command: "Explain the auth system",
-    projectPath: "/Users/michael/auth-project"
-  }
-}
-
-// Chat B sends (no session) - SIMULTANEOUSLY:
-{
-  type: "claudeCommand",
-  requestId: "chat-b-001",
-  data: {
-    sessionId: null,
-    command: "Debug this error",
-    projectPath: "/Users/michael/debug-project"
-  }
-}
-
-// Server handles both in parallel:
-- Each gets its own Claude process
-- Each gets unique session ID from Claude
-- RequestId ensures responses route to correct chat
-
-// Chat A receives:
-{
-  type: "claudeResponse",
-  requestId: "chat-a-001",  // Routes to Chat A
-  data: {
-    sessionId: "claude-session-xyz789",
-    content: "The authentication system..."
-  }
-}
-
-// Chat B receives:
-{
-  type: "claudeResponse",
-  requestId: "chat-b-001",  // Routes to Chat B
-  data: {
-    sessionId: "claude-session-def456",
-    content: "Looking at the error..."
-  }
-}
-```
-
-#### Memory Reset
-```javascript
-// iOS sends clear request:
-{
-  type: "clearChat",
-  requestId: "req-789",
-  data: {
-    sessionId: "claude-session-abc123"
-  }
-}
-
-// Server responds (no actual cleanup):
-{
-  type: "clearChat",
-  requestId: "req-789",
-  data: {
-    success: true,
-    oldSessionId: "claude-session-abc123",
-    newSessionId: null,  // iOS will get new one on next message
-    message: "Ready for new conversation"
-  }
-}
-
-// Next message starts fresh (no session ID)
-```
-
-### What Server Does NOT Do
-
-1. **No Session Management**
-   - Doesn't create sessions
-   - Doesn't track active sessions
-   - Doesn't persist session state
-   - Doesn't manage session lifecycle
-
-2. **No Message Buffering**
-   - Doesn't store messages
-   - Doesn't queue messages
-   - Doesn't track conversation history
-
-3. **No Client State Tracking**
-   - Doesn't track which project is selected
-   - Doesn't know client navigation state
-   - Doesn't manage client sessions
-
-4. **No Welcome Messages**
-   - No initialization handshake
-   - No capability announcements
-   - No session setup
-
-### What Server DOES Do
-
-1. **Routes Messages**
-   - Receives WebSocket messages
-   - Passes to Claude CLI
-   - Returns Claude's response
-   - Uses requestId for routing
-
-2. **Provides Directory Listing**
-   - `/api/projects` endpoint for folder listing
-   - Basic file system access for project selection
-
-3. **Runs Claude CLI**
-   - Executes claude commands
-   - Passes through session IDs
-   - Returns raw responses
-
-4. **Maintains WebSocket Connection**
-   - Keeps connection alive
-   - Handles ping/pong
-   - Basic connection management
-
-## macOS App UI Enhancement - Execute All Improvements
-
-Execute all enhancements in one comprehensive update to fix all identified UI issues:
-
-### Settings Layout Redesign
-- Move server directory from Advanced to General tab - This is a basic configuration, not advanced
-- Fix centered/backwards formatting - Left-align all content, improve spacing and hierarchy
-- Improve field visibility - Make text fields and controls properly sized and visible
-
-### Menu Integration & Activity Monitor
-- Integrate Activity Monitor with Logs - Replace "View Activity Monitor" menu item with direct logs access
-- Add PID to logs display - Show process ID in log entries for better debugging
-- Improve menu item visibility - Fix shrunk/hard to see menu items
-
-### QR Code Display Fix
-- Fix 125% zoom issue - Correct the oversized QR code popout to proper 100% scale
-- Improve QR code window sizing - Better proportions for the modal
-
-### Implementation Strategy
-- Single comprehensive update - All changes in one coordinated effort
-- Maintain existing functionality - Preserve all current features while improving UX
-- Follow macOS design guidelines - Ensure native look and feel
-
-### Specific Code Changes
-- `SettingsView.swift`: Move server directory to GeneralSettingsView, fix layout alignment
-- `MenuBarView.swift`: Change "View Activity Monitor" to "View Logs", improve button sizing
-- `LogsView.swift`: Add PID column to log entries
-- `QRCodeView.swift`: Fix frame sizing from 350x500 to proper proportions
-- `ActivityMonitorView.swift`: Integrate with logs workflow
-
-This addresses all stated issues: server directory placement, settings formatting, menu visibility, activity monitor integration, PID display, and QR code zoom - all in one coordinated implementation.
-
-### Success Metrics
-
-1. **Zero State on Server**
-   - Server can restart without losing context
-   - No session files created
-   - No memory of past conversations
-
-2. **Reliable Message Routing**
-   - RequestId ensures correct routing
-   - Parallel messages work correctly
-   - No message loss or confusion
-
-3. **Simple Architecture**
-   - < 50% of current code complexity
-   - Easy to understand and maintain
-   - No hidden state management
-
-4. **iOS App Independence**
-   - App manages all its own state
-   - No dependency on server memory
-   - Can work with any compliant server
-
-### Migration Notes
-
-Current issues to fix:
-1. Server still sends welcome messages
-2. Server still has session management code
-3. iOS app still notifies server of project selection
-4. Message handlers still track state
-
-Next steps:
-1. Remove all remaining session management
-2. Simplify handlers to pure passthrough
-3. Update iOS to stop project notifications
-4. Test parallel message scenarios
+Last Updated: 2025-08-09
+Status: Implementation in progress

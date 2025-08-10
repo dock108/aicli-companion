@@ -1,16 +1,16 @@
-# Claude Companion
+# AICLI Companion
 
 A comprehensive AI assistant integration system that brings Claude's capabilities to iOS through a modern, native experience. The system consists of three core components working seamlessly together.
 
 ## 🎯 Overview
 
-Claude Companion enables iOS users to interact with Claude (via AICLI) from their mobile devices, with full project context, streaming responses, and persistent conversations. Perfect for developers who want to leverage AI assistance on the go.
+AICLI Companion enables iOS users to interact with AI assistants (currently via Claude CLI) from their mobile devices, with full project context, push notification delivery, and persistent conversations. Perfect for developers who want to leverage AI assistance on the go.
 
 ### Core Components
 
 1. **📱 iOS App** - Native SwiftUI application with modern chat interface
 2. **🖥️ macOS Companion** - Menu bar app for server lifecycle management  
-3. **🚀 Server** - Node.js backend bridging iOS app with AICLI
+3. **🚀 Server** - Node.js backend bridging iOS app with Claude CLI
 
 ## ✨ Key Features
 
@@ -31,17 +31,17 @@ Claude Companion enables iOS users to interact with Claude (via AICLI) from thei
 - **Native Performance**: Built with SwiftUI for optimal macOS experience
 
 ### Server
-- **AICLI Integration**: Seamless bridge to Claude via AICLI CLI
-- **WebSocket Communication**: Real-time bidirectional messaging
-- **Session Management**: Intelligent session handling with persistence
+- **Claude CLI Integration**: Seamless bridge to Claude via Claude CLI
+- **HTTP + APNS**: Asynchronous message delivery via Apple Push Notifications
+- **Session Management**: Active session tracking with timeout management
 - **Security First**: Token authentication, TLS support, configurable permissions
 - **Service Discovery**: Automatic discovery via Bonjour/mDNS
-- **RESTful API**: Clean API for project management and configuration
+- **RESTful API**: Clean API for chat, sessions, and project management
 
 ## 🏗️ Architecture
 
 ```
-claude-companion/
+aicli-companion/
 ├── ios/                    # iOS app (SwiftUI)
 │   ├── Sources/           # Swift source code
 │   ├── Tests/             # Unit tests
@@ -206,4 +206,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-Made with ❤️ by the Claude Companion team
+Made with ❤️ by the AICLI Companion team

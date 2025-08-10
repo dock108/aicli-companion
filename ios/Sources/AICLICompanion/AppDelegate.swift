@@ -214,6 +214,15 @@ public class AppDelegate: NSObject, UIApplicationDelegate {
             
             print("💾 Saved Claude response to persistence")
             
+            // Sync to CloudKit for cross-device sync
+            do {
+                try await CloudKitSyncManager.shared.saveMessage(claudeMessage, projectPath: projectPath)
+                print("☁️ APNS Claude response synced to CloudKit successfully")
+            } catch {
+                print("⚠️ Failed to sync APNS Claude response to CloudKit: \(error)")
+                // Continue anyway - local first approach
+            }
+            
             // Update session tracking
             BackgroundSessionCoordinator.shared.processSavedMessagesWithSessionId(sessionId, for: project)
             

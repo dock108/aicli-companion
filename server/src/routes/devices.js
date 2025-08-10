@@ -93,7 +93,7 @@ router.delete('/:deviceId', async (req, res) => {
  * POST /api/devices/test-push - Test push notification
  */
 router.post('/test-push', async (req, res) => {
-  const { deviceToken, message = 'Test notification from Claude Companion' } = req.body;
+  const { deviceToken, message = 'Test notification from AICLI Companion' } = req.body;
 
   if (!deviceToken) {
     return res.status(400).json({

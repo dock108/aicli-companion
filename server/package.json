@@ -8,7 +8,7 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "test": "NODE_ENV=test node --test --test-force-exit --experimental-test-isolation=none src/test/**/*.test.js",
-    "test:coverage": "NODE_ENV=test c8 --reporter=lcov --reporter=text node --test --test-force-exit --experimental-test-isolation=none src/test/**/*.test.js",
+    "test:coverage": "rm -rf coverage .nyc_output && NODE_ENV=test npx c8 --reporter=text --reporter=lcov --reporter=json-summary node --test --test-force-exit --test-timeout=30000 --experimental-test-isolation=none src/test/**/*.test.js",
     "test:integration": "NODE_ENV=test node --test src/test-integration/**/*.test.js",
     "test:uat": "NODE_ENV=test node --test --test-force-exit src/test-uat/**/*.test.js",
     "test:uat:message-flow": "NODE_ENV=test node --test --test-force-exit src/test-uat/message-flow.test.js",
@@ -36,6 +36,7 @@
   "author": "Michael Fuscoletti",
   "license": "MIT",
   "dependencies": {
+    "@ngrok/ngrok": "^1.5.2",
     "@parse/node-apn": "^6.5.0",
     "bonjour-service": "^1.2.1",
     "cors": "^2.8.5",

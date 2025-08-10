@@ -30,7 +30,7 @@ router.get('/api/push-notifications/stats', authenticate, (req, res) => {
  */
 router.post('/api/push-notifications/test', authenticate, async (req, res) => {
   try {
-    const { clientId, message = 'Test notification from Claude Companion' } = req.body;
+    const { clientId, message = 'Test notification from AICLI Companion' } = req.body;
 
     if (!clientId) {
       return res.status(400).json({

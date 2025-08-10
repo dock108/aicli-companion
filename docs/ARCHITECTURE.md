@@ -1,18 +1,18 @@
-# Claude Companion Architecture
+# AICLI Companion Architecture
 
 ## System Overview
 
-Claude Companion is a distributed system consisting of three primary components that work together to provide AI assistance through a native mobile experience:
+AICLI Companion is a distributed system consisting of three primary components that work together to provide AI assistance through a native mobile experience:
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   iOS App       │────▶│  Node.js Server │────▶│  AICLI (Claude) │
+│   iOS App       │────▶│  Node.js Server │────▶│  Claude CLI     │
 │  (SwiftUI)      │◀────│   (Express)     │◀────│                 │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
          ▲                       ▲
          │                       │
          └───────────────────────┘
-              WebSocket/REST
+           HTTP + APNS
          ┌─────────────────┐
          │  macOS Menu Bar │
          │    (SwiftUI)    │
@@ -44,22 +44,22 @@ iOS App/
 ```
 
 **Key Services**:
-- `WebSocketService`: Manages real-time communication
+- `HTTPService`: Manages HTTP API communication
 - `ChatSessionManager`: Handles conversation state
 - `MessagePersistenceService`: Local storage with CoreData
-- `PushNotificationService`: APNS integration
+- `PushNotificationService`: APNS integration for receiving responses
 - `ConnectionReliabilityManager`: Network resilience
 
 ### 2. Node.js Server
 
-**Technology Stack**: Node.js, Express, WebSocket (ws), EventEmitter
+**Technology Stack**: Node.js, Express, Apple Push Notification Service (APNS)
 
 **Key Responsibilities**:
-- Bridge between iOS app and AICLI
-- WebSocket connection management
-- Session and message persistence
+- Bridge between iOS app and Claude CLI
+- HTTP API endpoint management
+- Session lifecycle management
 - Service discovery (Bonjour/mDNS)
-- Push notification relay
+- Push notification delivery via APNS
 - Authentication and security
 
 **Architecture Pattern**: Service-oriented with event-driven communication
@@ -74,11 +74,11 @@ Server/
 ```
 
 **Core Services**:
-- `AICLIService`: AICLI process management
-- `WebSocketService`: Client connection handling
-- `SessionPersistenceService`: Session/message storage
-- `MessageQueueService`: Reliable message delivery
-- `StreamParserService`: AICLI output parsing
+- `AICLIService`: Claude CLI process management
+- `PushNotificationService`: APNS message delivery
+- `SessionManager`: Active session tracking
+- `MessageQueueService`: Message queuing for APNS
+- `StreamParserService`: Claude output parsing
 - `TelemetryService`: Performance monitoring
 
 ### 3. macOS Companion App
@@ -104,46 +104,54 @@ macOS App/
 
 ## Communication Protocols
 
-### WebSocket Protocol
+### HTTP + APNS Architecture
 
-**Connection Flow**:
+**Message Flow**:
 ```
-1. Client connects with auth token and device ID
-2. Server sends welcome message with session info
-3. Client subscribes to events
-4. Bidirectional message flow begins
+1. Client sends message via HTTP POST /api/chat
+2. Server queues message with device token
+3. Server executes Claude CLI command
+4. Server sends response via APNS to device
+5. iOS app receives push notification with response
 ```
 
-**Message Format**:
+**HTTP Request Format**:
 ```typescript
-interface WebSocketMessage {
-  type: string;          // Message type identifier
-  requestId?: string;    // Client request tracking
-  data: any;            // Payload
-  error?: Error;        // Error information
+interface ChatRequest {
+  message: string;         // User message
+  projectPath?: string;    // Working directory
+  sessionId?: string;      // Existing session
+  deviceToken: string;     // APNS device token
 }
 ```
 
-**Message Types**:
-- `welcome`: Initial connection confirmation
-- `sendCommand`: User message to Claude
-- `streamData`: Streaming response chunks
-- `assistantMessage`: Complete response
-- `sessionStatus`: Session state updates
-- `error`: Error notifications
-- `heartbeat`: Connection keep-alive
+**APNS Payload**:
+```typescript
+interface APNSPayload {
+  aps: {
+    alert: string;         // Notification text
+    badge?: number;        // App badge count
+    sound?: string;        // Notification sound
+  };
+  sessionId: string;       // Session identifier
+  messageId: string;       // Message identifier
+  content: string;         // Claude response
+  type: 'response' | 'error' | 'stream';
+}
+```
 
 ### REST API
 
-**Endpoints**:
+**Core Endpoints**:
 ```
-GET  /health                    # Server health check
-GET  /api/info                  # Server capabilities
-GET  /api/projects              # List available projects
-POST /api/projects/:name/start  # Start Claude session
-GET  /api/sessions              # Active sessions
-POST /api/sessions/continue     # Continue existing session
-GET  /api/telemetry            # Performance metrics
+GET  /health                         # Server health check
+POST /api/chat                       # Send message to Claude
+GET  /api/projects                   # List available projects
+GET  /api/sessions                   # Active sessions
+GET  /api/sessions/:id/status        # Session status
+POST /api/sessions/:id/keepalive     # Keep session alive
+POST /api/devices/register           # Register for APNS
+GET  /api/telemetry                  # Performance metrics
 ```
 
 **Authentication**: Bearer token in Authorization header
@@ -154,28 +162,29 @@ GET  /api/telemetry            # Performance metrics
 
 ```
 1. User types message in iOS app
-2. iOS sends via WebSocket to server
+2. iOS sends HTTP POST to /api/chat
 3. Server validates and queues message
-4. Server sends to AICLI subprocess
-5. AICLI processes with Claude
-6. Response streams back through same path
+4. Server executes Claude CLI command
+5. Claude processes the request
+6. Response sent via APNS to device
+7. iOS app receives push notification
 ```
 
-### Stream Processing
+### Response Delivery
 
 ```
-AICLI Output → StreamParser → ChunkValidator → WebSocket → iOS App
-     ↓              ↓              ↓                ↓
-  Raw text    Structured     Validated      Real-time
-             chunks         content       updates
+Claude Output → StreamParser → APNS Service → iOS Device
+     ↓              ↓              ↓             ↓
+  Raw text    Structured     Push payload   Notification
+             response                       received
 ```
 
-### Session Persistence
+### Session Management
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Memory    │────▶│    Disk     │────▶│   Restore   │
-│   Cache     │     │   Storage   │     │  on Start   │
+│   Active    │────▶│   Timeout   │────▶│   Cleanup   │
+│  Sessions   │     │  Tracking   │     │   Process   │
 └─────────────┘     └─────────────┘     └─────────────┘
 ```
 
@@ -186,30 +195,30 @@ AICLI Output → StreamParser → ChunkValidator → WebSocket → iOS App
 **Session Lifecycle**:
 ```
 Created → Active → Idle → Expired/Closed
-           ↓        ↓
-      Persisted  Restored
+           ↓        ↓         ↓
+      Keep-alive  Timeout  Cleanup
 ```
 
-**Message Buffer**:
-- In-memory circular buffer per session
-- Persisted to disk on each update
-- Configurable size limits
+**Session Tracking**:
+- Active session map in memory
+- Timeout monitoring per session
+- Keep-alive endpoint for extension
 - Automatic cleanup on expiry
 
 ### iOS State
 
-**Connection States**:
+**Request States**:
 ```
-Disconnected → Connecting → Connected → Reconnecting
-                              ↓             ↑
-                          Authenticated ─────┘
+Ready → Sending → Awaiting Push → Received → Displayed
+           ↓            ↓             ↓
+        Failed      Timeout       Error
 ```
 
-**Message States**:
+**Push Notification States**:
 ```
-Pending → Sending → Sent → Delivered → Read
-            ↓         ↓
-         Failed   Acknowledged
+Registered → Token Active → Receiving → Processing
+                ↓               ↓           ↓
+            Expired         Failed     Displayed
 ```
 
 ## Security Architecture
@@ -228,26 +237,27 @@ Pending → Sending → Sent → Delivered → Read
 
 ### Security Measures
 
-- **Transport**: Optional TLS encryption
+- **Transport**: HTTPS with optional TLS certificates
 - **Authentication**: Bearer token validation
-- **Session Isolation**: Separate AICLI processes
+- **Session Isolation**: Separate Claude CLI processes
 - **Input Validation**: Message sanitization
-- **Rate Limiting**: Connection and message limits
-- **Permission Control**: Configurable AICLI tools
+- **Rate Limiting**: API endpoint rate limits
+- **Permission Control**: Configurable Claude CLI tools
+- **APNS Security**: Certificate-based authentication
 
 ## Performance Optimizations
 
-### Message Streaming
-- Chunked transfer encoding
-- Stream backpressure handling
-- Empty chunk filtering
-- Adaptive buffer sizing
+### Response Optimization
+- Efficient APNS payload formatting
+- Message batching for multiple responses
+- Priority-based delivery
+- Payload size optimization
 
-### Connection Management
-- Connection pooling
-- Automatic reconnection
-- Exponential backoff
-- Heartbeat monitoring
+### API Performance
+- Request queuing and throttling
+- Async processing with callbacks
+- Connection pooling for Claude CLI
+- Resource usage monitoring
 
 ### Caching Strategy
 - In-memory session cache
@@ -265,8 +275,8 @@ Pending → Sending → Sent → Delivered → Read
 
 ### Horizontal Scaling
 - Stateless REST endpoints
-- Session affinity for WebSockets
-- Distributed session storage (future)
+- Session management via shared state
+- APNS delivery from any instance
 - Load balancer compatible
 
 ### Vertical Scaling
@@ -279,11 +289,11 @@ Pending → Sending → Sent → Delivered → Read
 
 ### Metrics Collection
 ```
-- Connection metrics (count, duration, errors)
-- Message metrics (sent, received, failed)
+- API metrics (requests, latency, errors)
+- Push notification metrics (sent, delivered, failed)
 - Session metrics (active, created, expired)
-- Performance metrics (latency, throughput)
-- Resource metrics (CPU, memory, disk)
+- Claude CLI metrics (executions, duration, errors)
+- Resource metrics (CPU, memory, processes)
 ```
 
 ### Logging Strategy
@@ -294,24 +304,25 @@ Pending → Sending → Sent → Delivered → Read
 
 ### Health Checks
 - Server process health
-- AICLI availability
-- Database connectivity
+- Claude CLI availability
+- APNS service connectivity
 - Resource thresholds
 
 ## Error Handling
 
 ### Error Categories
-1. **Network Errors**: Connection failures, timeouts
-2. **Process Errors**: AICLI crashes, spawn failures
-3. **Validation Errors**: Invalid input, auth failures
-4. **System Errors**: Resource exhaustion, permissions
+1. **Network Errors**: API failures, timeouts
+2. **Process Errors**: Claude CLI crashes, spawn failures
+3. **Push Errors**: APNS delivery failures, invalid tokens
+4. **Validation Errors**: Invalid input, auth failures
+5. **System Errors**: Resource exhaustion, permissions
 
 ### Recovery Strategies
-- Automatic reconnection
-- Process restart
-- Message retry with backoff
-- Graceful degradation
-- Circuit breaker pattern
+- API request retry with backoff
+- Claude CLI process restart
+- APNS token refresh
+- Session recovery
+- Graceful error responses
 
 ## Future Architecture Considerations
 
@@ -356,11 +367,16 @@ Git   Jest   npm    Electron  PM2    Datadog
 
 ## Conclusion
 
-The Claude Companion architecture prioritizes:
-- **Reliability**: Through persistent sessions and message queuing
-- **Performance**: Via streaming and efficient state management
-- **Security**: With authentication and isolation
-- **User Experience**: Through native apps and real-time updates
+The AICLI Companion architecture prioritizes:
+- **Reliability**: Through managed sessions and APNS delivery
+- **Performance**: Via async processing and push notifications
+- **Security**: With authentication and process isolation
+- **User Experience**: Through native apps and push updates
 - **Maintainability**: With clear separation of concerns
 
 This architecture provides a solid foundation for current needs while remaining flexible for future enhancements.
+
+---
+
+**Last Updated**: 2025-08-09  
+**Architecture Version**: 2.0.0

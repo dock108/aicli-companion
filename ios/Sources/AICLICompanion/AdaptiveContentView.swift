@@ -96,12 +96,21 @@ public struct AdaptiveContentView: View {
                     .allowsHitTesting(isInteractionEnabled)
                     .navigationTitle("Projects")
                     .toolbar {
+                        #if os(iOS)
                         ToolbarItem(placement: .navigationBarTrailing) {
                             Button(action: { showSettings = true }) {
                                 Image(systemName: "gear")
                                     .foregroundColor(Colors.textSecondary(for: colorScheme))
                             }
                         }
+                        #else
+                        ToolbarItem(placement: .automatic) {
+                            Button(action: { showSettings = true }) {
+                                Image(systemName: "gear")
+                                    .foregroundColor(Colors.textSecondary(for: colorScheme))
+                            }
+                        }
+                        #endif
                     }
                 }
             }

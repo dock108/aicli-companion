@@ -24,6 +24,16 @@ extension ServerManager {
 
         environment["PORT"] = String(port)
         environment["NODE_ENV"] = "production"
+        
+        // Set project directory for the server
+        if !SettingsManager.shared.defaultProjectDirectory.isEmpty {
+            environment["CONFIG_PATH"] = SettingsManager.shared.defaultProjectDirectory
+            addLog(.debug, "CONFIG_PATH set to: \(SettingsManager.shared.defaultProjectDirectory)")
+        } else {
+            // Default to user's home directory if not set
+            environment["CONFIG_PATH"] = FileManager.default.homeDirectoryForCurrentUser.path
+            addLog(.debug, "CONFIG_PATH defaulted to home directory: \(FileManager.default.homeDirectoryForCurrentUser.path)")
+        }
 
         // Configure authentication
         configureAuthentication(&environment)
@@ -63,17 +73,29 @@ extension ServerManager {
     private func configureAuthentication(_ environment: inout [String: String]) {
         if SettingsManager.shared.requireAuthentication {
             if authToken == nil {
-                generateAuthToken()
+                // Generate a secure random token
+                authToken = generateSecureToken()
+                addLog(.info, "🔑 Generated new auth token: \(authToken?.prefix(8) ?? "")...")
             }
             if let token = authToken {
                 environment["AUTH_REQUIRED"] = "true"
                 environment["AUTH_TOKEN"] = token
-                addLog(.info, "🔐 Authentication enabled with token")
+                addLog(.info, "🔐 Authentication enabled with token: \(token.prefix(8))...")
+                addLog(.debug, "Full auth token set in environment")
             }
         } else {
             environment["AUTH_REQUIRED"] = "false"
+            authToken = nil
             addLog(.info, "🔓 Authentication disabled")
         }
+    }
+    
+    private func generateSecureToken() -> String {
+        // Generate a cryptographically secure random token
+        let tokenLength = 32
+        var bytes = [UInt8](repeating: 0, count: tokenLength)
+        _ = SecRandomCopyBytes(kSecRandomDefault, tokenLength, &bytes)
+        return bytes.map { String(format: "%02x", $0) }.joined()
     }
 
     private func configureTunneling(_ environment: inout [String: String]) {

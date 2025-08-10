@@ -47,7 +47,17 @@ public class HTTPAICLIService: ObservableObject {
 
     func connect(to address: String, port: Int, authToken: String?, completion: @escaping (Result<Void, AICLICompanionError>) -> Void) {
         let scheme = port == 443 || address.contains("https") ? "https" : "http"
-        guard let url = URL(string: "\(scheme)://\(address):\(port)") else {
+        
+        // For default ports (443 for https, 80 for http), don't include port in URL
+        // This is especially important for ngrok URLs like domain.ngrok-free.app
+        let urlString: String
+        if (scheme == "https" && port == 443) || (scheme == "http" && port == 80) {
+            urlString = "\(scheme)://\(address)"
+        } else {
+            urlString = "\(scheme)://\(address):\(port)"
+        }
+        
+        guard let url = URL(string: urlString) else {
             completion(.failure(.invalidURL))
             return
         }

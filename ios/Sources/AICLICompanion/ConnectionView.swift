@@ -17,6 +17,7 @@ struct ConnectionView: View {
     @State private var errorMessage: String?
     @State private var showManualSetup = false
     @State private var showQRScanner = false
+    @State private var isLoadingQR = false
     @State private var showHelp = false
     @State private var heroScale: CGFloat = 0.9
     @State private var heroOpacity: Double = 0
@@ -53,7 +54,7 @@ struct ConnectionView: View {
                 // Scan QR Code button with loading state
                 LoadingPrimaryButton(
                     "Scan QR Code",
-                    isLoading: $showQRScanner
+                    isLoading: $isLoadingQR
                 ) {
                     await scanQRCode()
                 }
@@ -95,7 +96,10 @@ struct ConnectionView: View {
         .onAppear {
             animateHero()
         }
-        .sheet(isPresented: $showQRScanner) {
+        .sheet(isPresented: $showQRScanner, onDismiss: {
+            // Reset loading state when sheet is dismissed
+            isLoadingQR = false
+        }) {
             #if os(iOS)
             if #available(iOS 16.0, *) {
                 QRScannerSheet(
@@ -104,13 +108,14 @@ struct ConnectionView: View {
                         switch result {
                         case .success(let url):
                             handleScanResult(url.absoluteString)
-                        case .failure:
+                        case .failure(let error):
                             withAnimation {
                                 connectionState = .error
-                                errorMessage = "Failed to scan QR code"
+                                errorMessage = error.localizedDescription
                             }
                         }
                         showQRScanner = false
+                        isLoadingQR = false
                     }
                 )
             } else {
@@ -128,7 +133,7 @@ struct ConnectionView: View {
                     showQRScanner = false
                     showManualSetup = true
                 }
-                .buttonStyle(PrimaryButtonStyle())
+                .buttonStyle(.borderedProminent)
                 .padding()
             }
             #endif
@@ -141,7 +146,15 @@ struct ConnectionView: View {
         .sheet(isPresented: $showHelp) {
             HelpSheet()
         }
-        .alert("Connection Error", isPresented: .constant(connectionState == .error)) {
+        .alert("Connection Error", isPresented: Binding(
+            get: { connectionState == .error },
+            set: { _ in
+                withAnimation {
+                    connectionState = .default
+                    errorMessage = nil
+                }
+            }
+        )) {
             Button("OK") {
                 withAnimation {
                     connectionState = .default
@@ -163,9 +176,9 @@ struct ConnectionView: View {
     }
     
     private func scanQRCode() async {
-        // Simulate QR scanning
-        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        // Show QR scanner immediately
         showQRScanner = true
+        // The loading state will be managed by LoadingPrimaryButton
     }
     
     private func handleScanResult(_ result: String) {
@@ -203,20 +216,35 @@ struct ConnectionView: View {
     }
     
     private func parseConnectionString(_ string: String) -> ServerConnection? {
-        // Format: ws://host:port/ws?token=xxx
+        // Format: ws://host:port/ws?token=xxx or wss://domain.ngrok.app/ws?token=xxx
+        print("🔍 Parsing QR code: \(string)")
+        
         guard let url = URL(string: string),
               url.scheme == "ws" || url.scheme == "wss",
-              let host = url.host,
-              let port = url.port else {
+              let host = url.host else {
+            print("❌ Failed to parse URL - scheme: \(URL(string: string)?.scheme ?? "nil"), host: \(URL(string: string)?.host ?? "nil")")
             return nil
         }
         
+        // Use explicit port if available, otherwise use default ports
+        let port: Int
+        if let explicitPort = url.port {
+            port = explicitPort
+        } else {
+            // Use default ports: 443 for wss, 80 for ws
+            port = (url.scheme == "wss") ? 443 : 80
+        }
+        
         let token = url.queryParameters?["token"]
+        let isSecure = (url.scheme == "wss")
+        
+        print("✅ Parsed - host: \(host), port: \(port), token: \(token ?? "none"), secure: \(isSecure)")
         
         return ServerConnection(
             address: host,
             port: port,
-            authToken: token
+            authToken: token,
+            isSecure: isSecure
         )
     }
 }
@@ -224,9 +252,10 @@ struct ConnectionView: View {
 // MARK: - Manual Setup Sheet
 @available(iOS 16.0, macOS 13.0, *)
 struct ManualSetupSheet: View {
-    @State private var address = ""
-    @State private var port = "3001"
+    @State private var serverURL = ""
     @State private var authToken = ""
+    @State private var showError = false
+    @State private var errorMessage = ""
     
     let onConnect: (ServerConnection) -> Void
     
@@ -237,21 +266,19 @@ struct ManualSetupSheet: View {
         NavigationStack {
             VStack(spacing: Spacing.lg) {
                 VStack(alignment: .leading, spacing: Spacing.md) {
-                    Text("Server Address")
+                    Text("Server URL")
                         .font(Typography.font(.heading3))
                         .foregroundColor(Colors.textPrimary(for: colorScheme))
                     
-                    TextField("192.168.1.100", text: $address)
+                    TextField("ws://192.168.1.100:3001 or wss://domain.ngrok.app", text: $serverURL)
                         .textFieldStyle(TerminalTextFieldStyle())
+                        .autocapitalization(.none)
+                        .disableAutocorrection(true)
                     
-                    Text("Port")
-                        .font(Typography.font(.heading3))
-                        .foregroundColor(Colors.textPrimary(for: colorScheme))
-                        .padding(.top, Spacing.sm)
-                    
-                    TextField("3001", text: $port)
-                        .textFieldStyle(TerminalTextFieldStyle())
-                        .keyboardType(.numberPad)
+                    Text("Enter the WebSocket URL from your server. This can be a local address (ws://192.168.1.100:3001) or an ngrok URL (wss://domain.ngrok-free.app)")
+                        .font(Typography.font(.caption))
+                        .foregroundColor(Colors.textSecondary(for: colorScheme))
+                        .padding(.top, Spacing.xs)
                     
                     Text("Auth Token (optional)")
                         .font(Typography.font(.heading3))
@@ -260,18 +287,20 @@ struct ManualSetupSheet: View {
                     
                     TextField("Enter token if required", text: $authToken)
                         .textFieldStyle(TerminalTextFieldStyle())
+                        .autocapitalization(.none)
+                        .disableAutocorrection(true)
                 }
                 .padding()
                 
                 Spacer()
                 
-                PrimaryButton("Connect", isEnabled: !address.isEmpty) {
-                    let connection = ServerConnection(
-                        address: address,
-                        port: Int(port) ?? 3001,
-                        authToken: authToken.isEmpty ? nil : authToken
-                    )
-                    onConnect(connection)
+                PrimaryButton("Connect", isEnabled: !serverURL.isEmpty) {
+                    if let connection = parseManualURL(serverURL, token: authToken.isEmpty ? nil : authToken) {
+                        onConnect(connection)
+                    } else {
+                        errorMessage = "Invalid URL format. Please use ws:// or wss:// scheme."
+                        showError = true
+                    }
                 }
                 .padding()
             }
@@ -287,7 +316,58 @@ struct ManualSetupSheet: View {
                     }
                 }
             }
+            .alert("Invalid URL", isPresented: $showError) {
+                Button("OK") { }
+            } message: {
+                Text(errorMessage)
+            }
         }
+    }
+    
+    private func parseManualURL(_ urlString: String, token: String?) -> ServerConnection? {
+        var normalizedURL = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Add ws:// prefix if no scheme is present
+        if !normalizedURL.contains("://") {
+            normalizedURL = "ws://\(normalizedURL)"
+        }
+        
+        // Ensure the URL has /ws path if not present
+        if !normalizedURL.contains("/ws") && (normalizedURL.hasPrefix("ws://") || normalizedURL.hasPrefix("wss://")) {
+            normalizedURL = normalizedURL.trimmingCharacters(in: .init(charactersIn: "/")) + "/ws"
+        }
+        
+        // Add token if provided and not in URL
+        if let token = token, !token.isEmpty, !normalizedURL.contains("?token=") {
+            normalizedURL = normalizedURL.contains("?") ? "\(normalizedURL)&token=\(token)" : "\(normalizedURL)?token=\(token)"
+        }
+        
+        // Parse using the same logic as QR scanner
+        guard let url = URL(string: normalizedURL),
+              url.scheme == "ws" || url.scheme == "wss",
+              let host = url.host else {
+            return nil
+        }
+        
+        // Use explicit port if available, otherwise use default ports
+        let port: Int
+        if let explicitPort = url.port {
+            port = explicitPort
+        } else {
+            // Use default ports: 443 for wss, 80 for ws
+            port = (url.scheme == "wss") ? 443 : 80
+        }
+        
+        // Extract token from URL if present, otherwise use the provided one
+        let finalToken = url.queryParameters?["token"] ?? token
+        let isSecure = (url.scheme == "wss")
+        
+        return ServerConnection(
+            address: host,
+            port: port,
+            authToken: finalToken,
+            isSecure: isSecure
+        )
     }
 }
 
@@ -360,6 +440,7 @@ struct HelpStep: View {
 }
 
 // MARK: - Terminal Text Field Style
+@available(iOS 13.0, macOS 10.15, *)
 struct TerminalTextFieldStyle: TextFieldStyle {
     @Environment(\.colorScheme) var colorScheme
     

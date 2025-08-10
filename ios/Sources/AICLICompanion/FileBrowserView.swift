@@ -164,7 +164,13 @@ struct FileBrowserView: View {
 
             #endif
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: {
+                    #if os(iOS)
+                    return .navigationBarLeading
+                    #else
+                    return .automatic
+                    #endif
+                }()) {
                     Button("Cancel") {
                         dismiss()
                     }
@@ -191,6 +197,7 @@ struct FileBrowserView: View {
             }
         }
         .searchable(text: $searchText, prompt: "Search files")
+        #if os(iOS)
         .actionSheet(isPresented: $showingQuickActions) {
             if let file = selectedFile {
                 return ActionSheet(
@@ -202,6 +209,16 @@ struct FileBrowserView: View {
                 return ActionSheet(title: Text("File Actions"))
             }
         }
+        #else
+        .sheet(isPresented: $showingQuickActions) {
+            if let file = selectedFile {
+                FileActionsSheet(file: file, fileManagementService: fileManagementService) {
+                    onFileSelected(file)
+                    dismiss()
+                }
+            }
+        }
+        #endif
         .sheet(isPresented: $showingRecentFiles) {
             RecentFilesView(
                 fileManagementService: fileManagementService,
@@ -236,6 +253,7 @@ struct FileBrowserView: View {
         }
     }
 
+    #if os(iOS)
     private func generateActionButtons(for file: FileItem) -> [ActionSheet.Button] {
         let prompts = fileManagementService.generateFilePrompts(for: file)
         var buttons: [ActionSheet.Button] = []
@@ -270,6 +288,7 @@ struct FileBrowserView: View {
 
         return buttons
     }
+    #endif
 }
 
 @available(iOS 16.0, macOS 13.0, *)
@@ -578,6 +597,86 @@ struct DetailRow: View {
         }
     }
 }
+
+// MARK: - File Actions Sheet for macOS
+
+#if os(macOS)
+@available(macOS 13.0, *)
+struct FileActionsSheet: View {
+    let file: FileItem
+    let fileManagementService: FileManagementService
+    let onAction: () -> Void
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            Text(file.name)
+                .font(.title2)
+                .fontWeight(.semibold)
+            
+            Text("Choose an action for this file")
+                .font(.body)
+                .foregroundColor(.secondary)
+            
+            Divider()
+            
+            VStack(spacing: 8) {
+                // Quick action buttons based on file type
+                let prompts = fileManagementService.generateFilePrompts(for: file)
+                ForEach(prompts.prefix(3), id: \.self) { prompt in
+                    Button(action: {
+                        onAction()
+                        dismiss()
+                    }) {
+                        Text(prompt)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                
+                // Watch/Unwatch toggle
+                if fileManagementService.watchedFiles.contains(file.path) {
+                    Button(action: {
+                        fileManagementService.unwatchFile(file)
+                        dismiss()
+                    }) {
+                        Label("Unwatch File", systemImage: "eye.slash")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                } else {
+                    Button(action: {
+                        fileManagementService.watchFile(file)
+                        dismiss()
+                    }) {
+                        Label("Watch File", systemImage: "eye")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                }
+                
+                // Add to context button - TODO: Implement addToContext
+                // Button(action: {
+                //     fileManagementService.addToContext(file)
+                //     dismiss()
+                // }) {
+                //     Label("Add to Context", systemImage: "doc.badge.plus")
+                //         .frame(maxWidth: .infinity)
+                // }
+                // .buttonStyle(.bordered)
+                
+                // Cancel button
+                Button("Cancel", role: .cancel) {
+                    dismiss()
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding()
+        .frame(width: 400)
+    }
+}
+#endif
 
 enum FileAction {
     case select

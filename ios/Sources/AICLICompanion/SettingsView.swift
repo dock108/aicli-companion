@@ -198,8 +198,10 @@ struct SettingsView: View {
                     .foregroundColor(Colors.accentPrimaryEnd)
                 }
             }
+            #if os(iOS)
             .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
+            #endif
         }
     }
 }

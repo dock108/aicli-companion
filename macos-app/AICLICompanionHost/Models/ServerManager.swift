@@ -35,20 +35,39 @@ class ServerManager: ObservableObject {
     var connectionString: String {
         guard isRunning else { return "" }
 
-        // Use public URL if available (when tunneling is active)
-        let baseURL = publicURL ?? "http://\(localIP):\(port)"
-
-        if let token = authToken, SettingsManager.shared.requireAuthentication {
-            // For public URLs, append token as query parameter
-            if publicURL != nil {
-                return "\(baseURL)?token=\(token)"
-            } else {
-                // For local connections, use the local format
-                return "\(localIP):\(port)?token=\(token)"
+        // If we have a public URL from tunneling, convert it to WebSocket URL
+        if let publicURL = publicURL {
+            // Convert ngrok HTTPS URL to WSS WebSocket URL
+            var wsURL = publicURL
+            if publicURL.hasPrefix("https://") {
+                wsURL = publicURL.replacingOccurrences(of: "https://", with: "wss://")
+            } else if publicURL.hasPrefix("http://") {
+                wsURL = publicURL.replacingOccurrences(of: "http://", with: "ws://")
             }
+            
+            // Add WebSocket path if not present
+            if !wsURL.contains("/ws") {
+                wsURL = wsURL.trimmingCharacters(in: .init(charactersIn: "/")) + "/ws"
+            }
+            
+            // Add auth token if required
+            if let token = authToken, SettingsManager.shared.requireAuthentication {
+                if wsURL.contains("?") {
+                    return "\(wsURL)&token=\(token)"
+                } else {
+                    return "\(wsURL)?token=\(token)"
+                }
+            }
+            return wsURL
+        }
+        
+        // Build local WebSocket URL (always use ws for local connections)
+        let baseURL = "ws://\(localIP):\(port)/ws"
+        
+        if let token = authToken, SettingsManager.shared.requireAuthentication {
+            return "\(baseURL)?token=\(token)"
         } else {
-            // Return public URL if available, otherwise local
-            return publicURL ?? "\(localIP):\(port)"
+            return baseURL
         }
     }
 
@@ -74,6 +93,12 @@ class ServerManager: ObservableObject {
 
         isProcessing = true
         defer { isProcessing = false }
+        
+        // Ensure auth token is generated BEFORE starting server if auth is required
+        if SettingsManager.shared.requireAuthentication && authToken == nil {
+            generateAuthToken()
+            addLog(.info, "🔑 Pre-generated auth token for server startup")
+        }
 
         // Always kill any existing process on our port first
         addLog(.debug, "Checking for existing process on port \(port)...")

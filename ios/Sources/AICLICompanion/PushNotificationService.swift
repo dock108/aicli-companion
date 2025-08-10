@@ -2,6 +2,8 @@ import Foundation
 import UserNotifications
 #if os(iOS)
 import UIKit
+#elseif os(macOS)
+import AppKit
 #endif
 
 /// Service that manages push notifications for Claude responses
@@ -262,7 +264,7 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
                 UIPasteboard.general.string = fullResponse
                 #elseif os(macOS)
                 NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(fullResponse, forType: .string)
+                NSPasteboard.general.setString(fullResponse, forType: NSPasteboard.PasteboardType.string)
                 #endif
                 print("📋 Response copied to clipboard")
             }

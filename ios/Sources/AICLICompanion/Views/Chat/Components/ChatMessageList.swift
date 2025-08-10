@@ -78,15 +78,15 @@ struct ChatMessageList: View {
                         handleMessageCountChange(oldCount: oldCount, newCount: newCount, proxy: proxy)
                     }
                 }
-                .onChange(of: messages.isEmpty) { wasEmpty, isEmpty in
+                .onChange(of: messages.isEmpty) { isEmpty in
                     // Handle when messages array changes from empty to populated
-                    if wasEmpty && !isEmpty {
+                    if !isEmpty {
                         // Messages just loaded, scroll to bottom
                         scrollToBottomReliably(proxy: proxy)
                     }
                 }
-                .onChange(of: isLoading) { oldLoading, newLoading in
-                    handleLoadingStateChange(oldLoading: oldLoading, newLoading: newLoading, proxy: proxy)
+                .onChange(of: isLoading) { newLoading in
+                    handleLoadingStateChange(oldLoading: !newLoading, newLoading: newLoading, proxy: proxy)
                 }
             }
         }

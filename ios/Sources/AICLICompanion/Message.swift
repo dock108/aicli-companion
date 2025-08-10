@@ -300,14 +300,21 @@ struct ServerConnection: Codable {
         
         // Handle IPv6 addresses by wrapping them in brackets
         let formattedAddress: String
-        if address.contains(":") && !address.hasPrefix("[") {
+        if address.contains(":") && !address.hasPrefix("[") && !address.contains(".") {
             // This is likely an IPv6 address that needs brackets
+            // (contains colons, no brackets, and no dots which would indicate a domain)
             formattedAddress = "[\(address)]"
         } else {
             formattedAddress = address
         }
         
-        return URL(string: "\(scheme)://\(formattedAddress):\(port)")
+        // Don't include port if it's the default for the scheme
+        let defaultPort = isSecure ? 443 : 80
+        if port == defaultPort {
+            return URL(string: "\(scheme)://\(formattedAddress)")
+        } else {
+            return URL(string: "\(scheme)://\(formattedAddress):\(port)")
+        }
     }
 
     var wsURL: URL? {
@@ -315,14 +322,21 @@ struct ServerConnection: Codable {
         
         // Handle IPv6 addresses by wrapping them in brackets
         let formattedAddress: String
-        if address.contains(":") && !address.hasPrefix("[") {
+        if address.contains(":") && !address.hasPrefix("[") && !address.contains(".") {
             // This is likely an IPv6 address that needs brackets
+            // (contains colons, no brackets, and no dots which would indicate a domain)
             formattedAddress = "[\(address)]"
         } else {
             formattedAddress = address
         }
         
-        return URL(string: "\(scheme)://\(formattedAddress):\(port)/ws")
+        // Don't include port if it's the default for the scheme
+        let defaultPort = isSecure ? 443 : 80
+        if port == defaultPort {
+            return URL(string: "\(scheme)://\(formattedAddress)/ws")
+        } else {
+            return URL(string: "\(scheme)://\(formattedAddress):\(port)/ws")
+        }
     }
 }
 

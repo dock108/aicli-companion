@@ -33,8 +33,8 @@ struct QuickActionsSection: View {
                 showingQRCode = true
             }
             .popover(isPresented: $showingQRCode) {
-                // Use public URL if tunneling is enabled, otherwise use local connection
-                QRCodeView(connectionString: serverManager.publicURL ?? serverManager.connectionString)
+                // Always use connectionString which includes WebSocket path and auth token
+                QRCodeView(connectionString: serverManager.connectionString)
             }
 
             // Open Logs Button
@@ -48,8 +48,8 @@ struct QuickActionsSection: View {
     }
 
     private func copyConnectionURL() {
-        // Use public URL if available, otherwise use local connection
-        let urlToCopy = serverManager.publicURL ?? serverManager.connectionString
+        // Always use connectionString which includes WebSocket path and auth token
+        let urlToCopy = serverManager.connectionString
 
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(urlToCopy, forType: .string)

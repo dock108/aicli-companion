@@ -128,6 +128,7 @@ extension Text {
 }
 
 // MARK: - Helper Methods
+@available(iOS 13.0, macOS 10.15, *)
 extension Typography {
     /// Calculate default line height for a font style
     static func defaultLineHeight(for style: FontStyle) -> CGFloat {

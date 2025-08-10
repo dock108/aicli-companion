@@ -95,7 +95,13 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
             guard let self = self else { return }
             
             // Only disconnect if the app is still in background after delay
-            if UIApplication.shared.applicationState != .active && self.isConnected {
+            #if os(iOS)
+            let shouldDisconnect = UIApplication.shared.applicationState != .active && self.isConnected
+            #else
+            let shouldDisconnect = self.isConnected
+            #endif
+            
+            if shouldDisconnect {
                 print("🌙 App still in background after delay - sending backgrounding message")
                 
                 // Send a graceful backgrounding message

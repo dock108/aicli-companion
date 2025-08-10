@@ -70,41 +70,6 @@ public struct SecondaryButton: View {
     }
 }
 
-/// Text link button style
-@available(iOS 16.0, macOS 13.0, *)
-public struct TextLinkButton: View {
-    let title: String
-    let action: () -> Void
-    
-    @State private var isHovered = false
-    @Environment(\.colorScheme) var colorScheme
-    
-    public init(
-        _ title: String,
-        action: @escaping () -> Void
-    ) {
-        self.title = title
-        self.action = action
-    }
-    
-    public var body: some View {
-        Button(action: {
-            HapticManager.shared.selectionChanged()
-            action()
-        }) {
-            Text(title)
-                .font(Typography.font(.bodySmall))
-                .foregroundColor(Colors.accentPrimaryEnd)
-                .underline(isHovered)
-        }
-        .buttonStyle(PlainButtonStyle())
-        .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isHovered = hovering
-            }
-        }
-    }
-}
 
 /// Icon button style
 @available(iOS 16.0, macOS 13.0, *)

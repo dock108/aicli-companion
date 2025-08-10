@@ -46,9 +46,16 @@ class SessionStatePersistenceService: ObservableObject {
         }
         
         var formattedExpiry: String {
-            let formatter = RelativeDateTimeFormatter()
-            formatter.unitsStyle = .short
-            return formatter.localizedString(for: expiresAt, relativeTo: Date())
+            if #available(macOS 10.15, iOS 13.0, *) {
+                let formatter = RelativeDateTimeFormatter()
+                formatter.unitsStyle = .short
+                return formatter.localizedString(for: expiresAt, relativeTo: Date())
+            } else {
+                let formatter = DateFormatter()
+                formatter.dateStyle = .short
+                formatter.timeStyle = .short
+                return formatter.string(from: expiresAt)
+            }
         }
     }
     
@@ -246,6 +253,7 @@ class SessionStatePersistenceService: ObservableObject {
 
 // MARK: - Extensions
 
+@available(iOS 16.0, macOS 13.0, *)
 extension SessionStatePersistenceService {
     /// Migrate session data from old format if needed
     func migrateFromLegacyStorage() {

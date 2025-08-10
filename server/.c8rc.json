@@ -7,15 +7,10 @@
     "src/test-integration/**/*.js",
     "src/__tests__/**/*.js", 
     "test-*.js",
-    "src/constants/index.js",
-    "src/config/server-config.js",
     "src/index.js",
-    "src/config/server-startup.js",
-    "src/config/tls-config.js",
-    "src/services/aicli.js",
-    "src/services/websocket.js"
+    "src/config/server-startup.js"
   ],
-  "reporter": ["text", "lcov", "html"],
+  "reporter": ["text", "lcov", "html", "json-summary"],
   "check-coverage": false,
   "watermarks": {
     "lines": [80, 95],

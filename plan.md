@@ -1,321 +1,172 @@
-# iOS App 80% Test Coverage Implementation Plan
+# macOS App Test Coverage Implementation Plan
 
 ## 🎯 Mission
-Implement comprehensive test coverage for the Claude Companion iOS app to achieve 80% code coverage and ensure robust, reliable functionality across all components.
+Increase macOS AICLI Companion Host app test coverage from 22% to 80% through comprehensive unit testing that doesn't launch the app UI or trigger system permissions.
 
-## 📋 Current State
-- ✅ iOS app has 73 Swift files requiring test coverage
-- ✅ Comprehensive test infrastructure established with mocks and test data factories
-- ✅ Core models (Message, MessageValidator) have extensive test coverage 
-- ✅ HTTP service layer testing implemented with mock infrastructure
-- ✅ SwiftLint applied - all 73 files cleaned with 0 violations
-- ✅ Test dependencies added (SnapshotTesting, ViewInspector)
-- 🔄 Ready to continue with Phase 4: Chat & Messaging Components
+## 📊 Current State Analysis
+- **Current Coverage:** 22% (1 test file with 8 basic tests)
+- **Total Swift Files:** 34 production files
+- **Test Files:** 1 (AICLICompanionHostTests.swift)
+- **Architecture:** SwiftUI + Combine, singleton services pattern
+- **Key Challenge:** Tests must be true unit tests - no app launch, no UI, no permissions
 
-## 🏗️ Implementation Plan
+## 🏗️ Test Implementation Strategy
 
-### Phase 1: Test Infrastructure Setup ✅
-**Status:** COMPLETED
+### Phase 1: Mock Infrastructure Setup
+**Priority: CRITICAL - Must complete first**
 
-#### 1.1 Enhanced Test Target Configuration
-**Files to modify:**
-- `ios/Package.swift` - Add test dependencies
-- Create `ios/Tests/AICLICompanionTests/TestHelpers/` directory structure
+Create comprehensive mock infrastructure to enable isolated unit testing:
+- `MockServerManager.swift` - Mock server lifecycle without actual processes
+- `MockSettingsManager.swift` - In-memory settings without UserDefaults
+- `MockNetworkMonitor.swift` - Simulated network state changes
+- `MockKeychainManager.swift` - In-memory keychain operations
+- `MockNotificationManager.swift` - Capture notifications without system calls
+- `MockProcess.swift` - Simulate process execution without spawning
+- `TestDataFactory.swift` - Generate consistent test data
 
-**Dependencies to add:**
+### Phase 2: Service Layer Testing (Target: 90% coverage)
+**Files to test with mocks:**
+
+#### Core Services
+- `ServerManager.swift` - Server lifecycle, health checks, auth token generation
+- `SettingsManager.swift` - Settings persistence, validation, migration
+- `NetworkMonitor.swift` - Network state detection, IP address discovery
+- `KeychainManager.swift` - Secure token storage/retrieval
+- `NotificationManager.swift` - Notification queuing and delivery
+
+#### Server Management
+- `ServerManager+Process.swift` - Process spawning, termination, monitoring
+- `ServerManager+Health.swift` - Health check logic, retry mechanisms
+- `ServerManager+Sessions.swift` - Session tracking, cleanup
+- `ServerManager+Network.swift` - Port availability, network utilities
+- `ServerManager+Logs.swift` - Log management, filtering, persistence
+
+### Phase 3: Model Testing (Target: 95% coverage)
+**Pure logic testing - no mocks needed:**
+
+- `LogEntry.swift` - Log level logic, formatting, serialization
+- `ServerHealth.swift` - Health state transitions, status determination
+- `Session.swift` - Session validation, expiry calculation
+- `ServerError.swift` - Error categorization, user-friendly messages
+- `HealthResponse.swift` - JSON parsing, validation
+- `ProjectsResponse.swift` - Project list parsing, sorting
+
+### Phase 4: ViewModel Testing (Target: 85% coverage)
+**Test with mock services:**
+
+- `ContentViewModel.swift` - App state management, command handling
+- `SettingsViewModel.swift` - Settings validation, apply logic
+- `LogsViewModel.swift` - Log filtering, search, export
+- `SessionsViewModel.swift` - Session lifecycle, refresh logic
+
+### Phase 5: View Component Testing (Target: 60% coverage)
+**Test presentational logic only:**
+
+- `ServerControlView.swift` - Button states, connection string generation
+- `LogsView.swift` - Log filtering UI logic, search state
+- `SettingsView.swift` - Form validation, tab management
+- `SessionsView.swift` - Session display logic, sorting
+
+### Phase 6: Utility Testing (Target: 100% coverage)
+**Pure functions and extensions:**
+
+- `Extensions/` - All Swift extensions
+- `Utilities/` - Helper functions, formatters
+- `Constants.swift` - Configuration validation
+
+## 📝 Test Implementation Guidelines
+
+### Mock Design Principles
 ```swift
-.package(url: "https://github.com/pointfreeco/swift-snapshot-testing.git", from: "1.15.0"),
-.package(url: "https://github.com/nalexn/ViewInspector.git", from: "0.9.0")
+// EXAMPLE: MockServerManager
+@MainActor
+class MockServerManager: ObservableObject {
+    @Published var isRunning = false
+    @Published var port = 3001
+    var startServerCalled = false
+    var stopServerCalled = false
+    
+    func startServer() async throws {
+        startServerCalled = true
+        isRunning = true
+        // NO actual process spawning
+        // NO UI interactions
+        // NO permission requests
+    }
+}
 ```
 
-#### 1.2 Mock Infrastructure
-**Create test helper files:**
-- `MockWebSocketService.swift` - Mock WebSocket connections
-- `MockHTTPAICLIService.swift` - Mock HTTP Claude API calls  
-- `MockMessagePersistenceService.swift` - Mock message storage
-- `MockKeychainManager.swift` - Mock keychain operations
-- `TestDataFactory.swift` - Generate test data objects
+### Test Structure Template
+```swift
+final class ServerManagerTests: XCTestCase {
+    var sut: ServerManager!  // System Under Test
+    var mockProcess: MockProcess!
+    var mockSettings: MockSettingsManager!
+    
+    override func setUp() {
+        super.setUp()
+        // Inject mocks, no app launch
+        mockProcess = MockProcess()
+        mockSettings = MockSettingsManager()
+        sut = ServerManager(
+            process: mockProcess,
+            settings: mockSettings
+        )
+    }
+    
+    override func tearDown() {
+        // Clean up all state
+        sut = nil
+        mockProcess = nil
+        mockSettings = nil
+        super.tearDown()
+    }
+}
+```
 
-### Phase 2: Core Models Testing (Target: 95% coverage) ✅
-**Status:** COMPLETED
+## 🚫 What NOT to Do
 
-#### 2.1 Message & Chat Models
-**Files to test:**
-- `Message.swift` - Message creation, validation, serialization
-- `Models/CloudKit/CloudKitSchema.swift` - CloudKit data models
-- Test message validation, timestamp handling, content sanitization
+1. **NO App Launch**: Tests must not instantiate AICLICompanionHostApp
+2. **NO UI Creation**: No actual SwiftUI views rendered
+3. **NO System Dialogs**: No permission requests, alerts, or notifications
+4. **NO Network Calls**: All networking must be mocked
+5. **NO File System**: Use in-memory storage for all persistence
+6. **NO Process Spawning**: Mock all Process interactions
+7. **NO Keychain Access**: Mock all security operations
+8. **NO UserDefaults**: Use in-memory settings storage
 
-#### 2.2 Project & Session Models  
-**Files to test:**
-- Project model creation and validation
-- Session state management and persistence
-- Project path resolution and validation
+## ✅ Success Criteria
 
-**Test files to create:**
-- `MessageTests.swift`
-- `CloudKitSchemaTests.swift` 
-- `ProjectModelTests.swift`
-- `SessionModelTests.swift`
+- [ ] All tests run without launching the app
+- [ ] No system permission dialogs appear during tests
+- [ ] Tests complete in under 10 seconds total
+- [ ] Code coverage reaches 80% minimum
+- [ ] All tests pass consistently (no flaky tests)
+- [ ] Mock infrastructure supports full isolation
+- [ ] CI pipeline validates coverage on every commit
 
-### Phase 3: Service Layer Testing (Target: 85% coverage) ✅
-**Status:** COMPLETED
+## 🔄 Implementation Order
 
-#### 3.1 HTTP & Communication Services
-**Files to test:**
-- `HTTPAICLIService.swift` - Claude API communication
-- `WebSocketService.swift` - WebSocket connection management  
-- `ServiceDiscoveryManager.swift` - Server discovery
-- `ConnectionReliabilityManager.swift` - Connection recovery
+1. **Week 1**: Mock infrastructure (Phase 1)
+2. **Week 1**: Service layer tests (Phase 2)
+3. **Week 2**: Model & ViewModel tests (Phases 3-4)
+4. **Week 2**: View & Utility tests (Phases 5-6)
+5. **Week 2**: Coverage validation & cleanup
 
-**Test scenarios:**
-- Successful API calls and responses
-- Network failure handling and retries
-- Authentication token management
-- Connection state transitions
+## 📊 Coverage Tracking
 
-#### 3.2 Persistence Services
-**Files to test:**
-- `MessagePersistenceService.swift` - Message storage/retrieval
-- `SessionStatePersistenceService.swift` - Session state management
-- `ConversationPersistenceService.swift` - Conversation history
-- `KeychainManager.swift` - Secure credential storage
+| Component | Current | Target | Priority |
+|-----------|---------|--------|----------|
+| Services | 10% | 90% | HIGH |
+| Models | 5% | 95% | HIGH |
+| ViewModels | 15% | 85% | MEDIUM |
+| Views | 20% | 60% | LOW |
+| Utilities | 30% | 100% | MEDIUM |
+| **TOTAL** | **22%** | **80%** | - |
 
-**Test scenarios:**
-- Data persistence and retrieval accuracy
-- Migration between storage versions
-- Data corruption handling
-- Keychain security operations
-
-#### 3.3 Specialized Services
-**Files to test:**
-- `MessageValidator.swift` - Message validation logic
-- `SessionDeduplicationManager.swift` - Session deduplication
-- `PerformanceMonitor.swift` - Performance tracking
-- `BackgroundSessionCoordinator.swift` - Background processing
-
-**Test files to create:**
-- `HTTPAICLIServiceTests.swift`
-- `WebSocketServiceTests.swift`
-- `MessagePersistenceServiceTests.swift`
-- `SessionPersistenceTests.swift`
-- `MessageValidatorTests.swift`
-- `PerformanceMonitorTests.swift`
-
-### Phase 4: Chat & Messaging Testing (Target: 80% coverage) ✅
-**Status:** COMPLETED
-
-#### 4.1 Chat Session Management
-**Files tested:**
-- `Services/Chat/ChatSessionManager.swift` - Session lifecycle (30+ tests)
-- `Views/Chat/ViewModels/ChatViewModel.swift` - Chat view logic (25+ tests)
-- Message queue management and delivery tracking
-
-#### 4.2 Message Processing
-**Files tested:**
-- `MessageQueueManager.swift` - Message queuing (30+ tests)
-- Persistence and state management
-- Thread-safety and concurrent operations
-
-**Test files created:**
-- `ChatSessionManagerTests.swift` ✅
-- `ChatViewModelTests.swift` ✅
-- `MessageQueueManagerTests.swift` ✅
-
-### Phase 5: UI Component Testing (Target: 70% coverage) ✅
-**Status:** COMPLETED
-
-#### 5.1 Core Views
-**Files tested:**
-- `ContentView.swift` - Main app view (comprehensive state testing)
-- `Views/Chat/ChatView.swift` - Chat interface (complex component testing)
-- `SettingsView.swift` - Settings management (configuration testing)
-
-#### 5.2 Components & Buttons
-**Files tested:**
-- `Components/Buttons/PrimaryButton.swift` - Full component testing
-- `Components/Buttons/SecondaryButton.swift` - State and interaction testing
-- `Components/Buttons/TextLinkButton.swift` - Accessibility testing
-
-**Test approaches implemented:**
-- ✅ ViewInspector for SwiftUI view testing
-- ✅ Component state and interaction testing
-- ✅ Accessibility structure validation
-- ✅ Performance and edge case testing
-
-**Test files created:**
-- `ContentViewTests.swift` ✅
-- `ChatViewTests.swift` ✅
-- `SettingsViewTests.swift` ✅
-- `ButtonComponentTests.swift` ✅
-
-### Phase 6: Persistence Services Testing (Target: 90% coverage) ✅
-**Status:** COMPLETED
-
-#### 6.1 Core Persistence Services
-**Files tested:**
-- `MessagePersistenceService.swift` - Message storage/retrieval (40+ tests)
-- `SessionStatePersistenceService.swift` - Session state management (35+ tests)
-- `ConversationPersistenceService.swift` - Conversation history (30+ tests)
-
-**Test scenarios covered:**
-- ✅ Data persistence and retrieval accuracy
-- ✅ Concurrent access and thread safety
-- ✅ Performance testing with large datasets
-- ✅ Edge cases and error handling
-- ✅ File system operations and cleanup
-
-**Test files created:**
-- `MessagePersistenceServiceTests.swift` ✅
-- `SessionStatePersistenceServiceTests.swift` ✅
-- `ConversationPersistenceServiceTests.swift` ✅
-
-### Phase 7: Test Coverage Analysis ✅
-**Status:** COMPLETED
-
-200+ individual test methods implemented across:
-- ✅ Model Layer: Message, MessageValidator, and related types
-- ✅ Service Layer: HTTP services, session management, queue management
-- ✅ View Layer: UI components, main views, and settings interface
-- ✅ Persistence Layer: Message storage, session state, conversation management
-
-### Phase 8: Test Compilation & Execution (Target: 100% pass rate) 🔄
-**Status:** IN PROGRESS
-
-#### 8.1 Critical Issues Identified:
-- Type mismatches (ProjectSession, StreamingState, ConnectionStatus)
-- ViewInspector integration problems
-- Mock service implementation gaps
-- TestDataFactory method signature issues
-
-#### 8.2 Phases for 100% Test Success:
-- Phase 9: Fix core type issues ⚠️
-- Phase 10: Resolve ViewInspector problems
-- Phase 11: Complete mock implementations
-- Phase 12: Fix dependencies & imports
-- Phase 13: Async/Combine testing patterns
-- Phase 14: Individual test suite validation
-- Phase 15: Achieve 100% test pass rate
-
-### Phase 9: Core Type Issues Resolution 🔄
-**Status:** IN PROGRESS
-
-#### 6.1 System Services
-**Files to test:**
-- `SettingsManager.swift` - Settings persistence
-- `HapticManager.swift` - Haptic feedback
-- `ClipboardManager.swift` - Clipboard operations
-- `FileManagementService.swift` - File operations
-
-#### 6.2 Design System
-**Files to test:**
-- `DesignSystem/Colors.swift` - Color definitions
-- `DesignSystem/Typography.swift` - Typography system
-- `DesignSystem/Spacing.swift` - Spacing constants
-- `AnimationConstants.swift` - Animation timing
-
-**Test files to create:**
-- `SettingsManagerTests.swift`
-- `HapticManagerTests.swift`
-- `ClipboardManagerTests.swift`
-- `DesignSystemTests.swift`
-
-### Phase 7: Integration & Performance Testing
-**Status:** PENDING
-
-#### 7.1 Integration Tests
-**Test scenarios:**
-- End-to-end message flow (user input → Claude response)
-- Session persistence across app launches
-- Background sync and notification handling
-- Network failure and recovery scenarios
-
-#### 7.2 Performance Tests
-**Test scenarios:**
-- Message persistence performance with large datasets
-- UI responsiveness with long conversation histories
-- Memory usage during extended chat sessions
-- Background processing efficiency
-
-#### 7.3 CloudKit Integration
-**Files to test:**
-- `Services/CloudKit/CloudKitSyncManager.swift` - CloudKit sync
-- `Services/BackgroundMessageSyncService.swift` - Background sync
-- CloudKit schema validation and migration
-
-**Test files to create:**
-- `IntegrationTests.swift`
-- `PerformanceTests.swift`
-- `CloudKitSyncTests.swift`
-
-## 📊 Coverage Targets by Category
-
-| Category | Files | Target Coverage | Priority |
-|----------|--------|----------------|----------|
-| Models | 8 files | 95% | High |
-| Core Services | 15 files | 85% | High |
-| Chat/Messaging | 12 files | 80% | High |
-| UI Components | 25 files | 70% | Medium |
-| Utilities | 10 files | 90% | Medium |
-| Integration | N/A | 80% | Medium |
-
-## 🔧 Test Execution Strategy
-
-### Development Workflow
-1. **Red-Green-Refactor:** Write failing tests first
-2. **Mock External Dependencies:** Ensure isolated unit tests
-3. **Test Edge Cases:** Handle error conditions and boundary values
-4. **Performance Benchmarks:** Establish baseline performance metrics
-5. **Continuous Coverage:** Run coverage reports after each phase
-
-### CI/CD Integration
-- Automated test execution on every commit
-- Coverage reports uploaded to CI dashboard
-- Performance regression detection
-- Snapshot test validation for UI changes
-
-## 📝 Implementation Status
-
-### ✅ Completed
-- [x] Project analysis and test plan creation
-
-### 🔄 In Progress
-- [ ] Phase 1: Test infrastructure setup
-
-### 📋 Pending
-- [ ] Phase 2: Core models testing
-- [ ] Phase 3: Service layer testing  
-- [ ] Phase 4: Chat & messaging testing
-- [ ] Phase 5: UI component testing
-- [ ] Phase 6: Utility & helper testing
-- [ ] Phase 7: Integration & performance testing
-
-## 🎯 Success Criteria
-
-- [ ] Overall test coverage ≥ 80%
-- [ ] All critical user flows covered by integration tests
-- [ ] Mock infrastructure supports isolated unit testing
-- [ ] Performance benchmarks established and monitored
-- [ ] CI/CD pipeline validates test coverage on every commit
-- [ ] Zero flaky tests - all tests consistently pass
-- [ ] Comprehensive edge case and error handling coverage
-
-## 🚨 Potential Challenges & Solutions
-
-### Challenge: SwiftUI View Testing Complexity
-**Solution:** Use ViewInspector library + snapshot testing for comprehensive UI coverage
-
-### Challenge: Async/Combine Testing
-**Solution:** Use TestScheduler and async/await testing patterns
-
-### Challenge: CloudKit Testing
-**Solution:** Mock CloudKit operations and test sync logic independently
-
-### Challenge: Performance Test Stability
-**Solution:** Use relative performance metrics and allow reasonable variance
-
-## 🔄 Current Task
-**Setting up test infrastructure and beginning Phase 1 implementation**
+## 🎯 Current Focus
+Starting with Phase 1: Creating mock infrastructure to enable proper unit testing without app launch or system interactions.
 
 ---
 Last Updated: 2025-08-10
-Status: Ready for execution
+Status: Ready for implementation

@@ -19,7 +19,7 @@ env:
   NODE_VERSION: '22'
   XCODE_VERSION: '16.2'
   IOS_SIMULATOR: 'iPhone 16 Pro'  # Updated for Xcode 16.2
-  MINIMUM_COVERAGE: 70  # Minimum code coverage percentage
+  MINIMUM_COVERAGE: 80  # Minimum code coverage percentage
 
 jobs:
   # Node.js Server Tests and Linting
@@ -54,6 +54,22 @@ jobs:
     
     - name: Run tests with coverage
       run: npm run test:coverage
+    
+    - name: Check Server Coverage Threshold
+      run: |
+        if [ -f coverage/coverage-summary.json ]; then
+          coverage=$(node -e "const cov = require('./coverage/coverage-summary.json'); const total = cov.total; const avg = (total.lines.pct + total.statements.pct + total.functions.pct + total.branches.pct) / 4; console.log(avg.toFixed(1));")
+          echo "Code coverage: ${coverage}%"
+          if (( $(echo "$coverage < ${{ env.MINIMUM_COVERAGE }}" | bc -l) )); then
+            echo "❌ Coverage ${coverage}% is below minimum threshold of ${{ env.MINIMUM_COVERAGE }}%"
+            exit 1
+          else
+            echo "✅ Coverage ${coverage}% meets minimum threshold"
+          fi
+        else
+          echo "❌ Coverage report not found"
+          exit 1
+        fi
     
     - name: Upload coverage reports
       uses: actions/upload-artifact@v4
@@ -149,7 +165,6 @@ jobs:
             echo "✅ Coverage ${coverage}% meets minimum threshold"
           fi
         fi
-      continue-on-error: true
     
     - name: Swift Dependency Security Check
       run: |
@@ -258,7 +273,6 @@ jobs:
             echo "✅ Coverage ${coverage}% meets minimum threshold"
           fi
         fi
-      continue-on-error: true
     
     - name: Upload macOS Coverage Reports
       uses: actions/upload-artifact@v4

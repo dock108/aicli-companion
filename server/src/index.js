@@ -171,7 +171,7 @@ class AICLICompanionServer {
         keyId: process.env.APNS_KEY_ID || '2Y226B9433',
         teamId: process.env.APNS_TEAM_ID || 'E3G5D247ZN',
         bundleId: process.env.APNS_BUNDLE_ID || 'com.aiclicompanion.ios',
-        production: process.env.NODE_ENV === 'production',
+        production: process.env.APNS_PRODUCTION === 'true', // Explicitly check APNS_PRODUCTION, default to false
       });
 
       // Set up TLS if enabled

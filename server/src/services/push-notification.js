@@ -27,7 +27,8 @@ class PushNotificationService {
       const keyId = config.keyId || process.env.APNS_KEY_ID;
       const teamId = config.teamId || process.env.APNS_TEAM_ID;
       const bundleId = config.bundleId || process.env.APNS_BUNDLE_ID;
-      const production = config.production || process.env.NODE_ENV === 'production';
+      const production = config.production !== undefined ? config.production : 
+                     (process.env.APNS_PRODUCTION === 'true' || process.env.NODE_ENV === 'production');
 
       if (!keyPath || !keyId || !teamId) {
         console.log('⚠️  Push notifications not configured - missing keyPath, keyId, or teamId');

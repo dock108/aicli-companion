@@ -24,6 +24,8 @@ extension ServerManager {
 
         environment["PORT"] = String(port)
         environment["NODE_ENV"] = "production"
+        // Use development/sandbox APNS for iOS app compatibility
+        environment["APNS_PRODUCTION"] = "false"
         
         // Set project directory for the server
         if !SettingsManager.shared.defaultProjectDirectory.isEmpty {

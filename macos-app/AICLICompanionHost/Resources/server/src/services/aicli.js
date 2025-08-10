@@ -1,6 +1,8 @@
 import { spawn, exec } from 'child_process';
 import { promisify } from 'util';
 import { EventEmitter } from 'events';
+import fs from 'fs';
+import path from 'path';
 import { processMonitor } from '../utils/process-monitor.js';
 import { isTestEnvironment } from '../utils/environment.js';
 import { InputValidator, MessageProcessor, AICLIConfig } from './aicli-utils.js';
@@ -81,7 +83,7 @@ export class AICLIService extends EventEmitter {
     // Configuration (will be delegated to appropriate managers)
     this.aicliCommand = this.processRunner.aicliCommand;
     this.defaultWorkingDirectory = process.cwd();
-    this.safeRootDirectory = null; // Will be set from server config
+    this.safeRootDirectory = options.safeRootDirectory || process.env.HOME || process.cwd();
 
     // Legacy permission properties (delegated to process runner)
     this.permissionMode = this.processRunner.permissionMode;
@@ -342,8 +344,26 @@ export class AICLIService extends EventEmitter {
     return new Promise((resolvePromise, reject) => {
       let aicliProcess;
       try {
+        // SECURITY: Final validation right before spawn to prevent TOCTOU attacks
+        // This is a defense-in-depth measure to ensure the path is absolutely safe
+        
+        // Resolve the validated working directory to its real path
+        const realWorkingDir = fs.realpathSync(validatedWorkingDir);
+        const realSafeRoot = fs.realpathSync(this.safeRootDirectory);
+        
+        // Ensure the real path is still within the safe root
+        if (!realWorkingDir.startsWith(realSafeRoot)) {
+          throw new Error(`Security violation: Working directory escapes safe root after resolution`);
+        }
+        
+        // Verify it's actually a directory
+        const stats = fs.statSync(realWorkingDir);
+        if (!stats.isDirectory()) {
+          throw new Error(`Security violation: Working directory is not a directory`);
+        }
+        
         aicliProcess = spawn(this.aicliCommand, args, {
-          cwd: validatedWorkingDir,
+          cwd: realWorkingDir,
           stdio: ['pipe', 'pipe', 'pipe'],
         });
       } catch (spawnError) {

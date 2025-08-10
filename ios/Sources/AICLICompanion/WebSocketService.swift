@@ -805,66 +805,88 @@ class WebSocketService: ObservableObject, WebSocketDelegate {
     // MARK: - WebSocketDelegate
 
     func didReceive(event: Starscream.WebSocketEvent, client: Starscream.WebSocketClient) {
-        // Check if this is a background connection event
-        if client === backgroundWebSocket {
-            handleBackgroundWebSocketEvent(event)
-            return
-        }
-        
-        // Handle regular connection events
-        switch event {
-        case .connected(let headers):
-            print("WebSocket connected: \(headers)")
-
-        case .disconnected(let reason, let code):
-            print("WebSocket disconnected: \(reason) with code: \(code)")
-            updateConnectionState(.disconnected)
-            reliabilityManager.recordDisconnection()
-
-            // Attempt reconnection if not manually disconnected
-            if code != CloseCode.normal.rawValue && currentURL != nil {
-                attemptReconnect()
-            }
-
-        case .text(let string):
-            print("📨 WebSocket: Received text message: \(string.prefix(200))...")
-            handleReceivedMessage(string)
-
-        case .binary(let data):
-            print("Received binary data: \(data.count) bytes")
-
-        case .ping:
-            // Starscream handles pong automatically
-            break
-
-        case .pong:
-            // Pong received
-            break
-
-        case .viabilityChanged(let isViable):
-            if !isViable {
-                updateConnectionState(.error("Connection not viable"))
-            }
-
-        case .reconnectSuggested(let shouldReconnect):
-            if shouldReconnect && currentURL != nil {
-                attemptReconnect()
-            }
-
-        case .cancelled:
-            updateConnectionState(.disconnected)
-
-        case .error(let error):
-            print("WebSocket error: \(String(describing: error))")
-            updateConnectionState(.error(error?.localizedDescription ?? "Unknown WebSocket error"))
-
-            if currentURL != nil {
-                attemptReconnect()
+        // Ensure we're on main thread for UI updates
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            // Check if this is a background connection event
+            if client === self.backgroundWebSocket {
+                self.handleBackgroundWebSocketEvent(event)
+                return
             }
             
-        case .peerClosed:
-            print("WebSocket peer closed connection")
-            updateConnectionState(.disconnected)
+            // Handle regular connection events
+            switch event {
+            case .connected(let headers):
+                print("WebSocket connected: \(headers)")
+
+            case .disconnected(let reason, let code):
+                print("WebSocket disconnected: \(reason) with code: \(code)")
+                self.updateConnectionState(.disconnected)
+                self.reliabilityManager.recordDisconnection()
+
+                // Attempt reconnection if not manually disconnected
+                if code != CloseCode.normal.rawValue && self.currentURL != nil {
+                    self.attemptReconnect()
+                }
+
+            case .text(let string):
+                print("📨 WebSocket: Received text message: \(string.prefix(200))...")
+                self.handleReceivedMessage(string)
+
+            case .binary(let data):
+                print("Received binary data: \(data.count) bytes")
+
+            case .ping:
+                // Starscream handles pong automatically
+                break
+
+            case .pong:
+                // Pong received
+                break
+
+            case .viabilityChanged(let isViable):
+                if !isViable {
+                    self.updateConnectionState(.error("Connection not viable"))
+                }
+
+            case .reconnectSuggested(let shouldReconnect):
+                if shouldReconnect && self.currentURL != nil {
+                    self.attemptReconnect()
+                }
+
+            case .cancelled:
+                self.updateConnectionState(.disconnected)
+
+            case .error(let error):
+                print("WebSocket error: \(String(describing: error))")
+                
+                // Handle network-specific errors more gracefully
+                if let nsError = error as? NSError {
+                    if nsError.domain == NSURLErrorDomain {
+                        switch nsError.code {
+                        case NSURLErrorNotConnectedToInternet:
+                            self.updateConnectionState(.error("No internet connection"))
+                        case NSURLErrorNetworkConnectionLost:
+                            self.updateConnectionState(.error("Network connection lost"))
+                        default:
+                            self.updateConnectionState(.error(error?.localizedDescription ?? "Unknown WebSocket error"))
+                        }
+                    } else {
+                        self.updateConnectionState(.error(error?.localizedDescription ?? "Unknown WebSocket error"))
+                    }
+                } else {
+                    self.updateConnectionState(.error(error?.localizedDescription ?? "Unknown WebSocket error"))
+                }
+
+                if self.currentURL != nil {
+                    self.attemptReconnect()
+                }
+                
+            case .peerClosed:
+                print("WebSocket peer closed connection")
+                self.updateConnectionState(.disconnected)
+            }
         }
     }
     

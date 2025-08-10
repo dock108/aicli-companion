@@ -15,12 +15,12 @@ class TestDataFactory {
     static func createLogEntry(
         level: LogLevel = .info,
         message: String = "Test log message",
-        timestamp: Date = Date()
+        category: String = "Test"
     ) -> LogEntry {
         return LogEntry(
             level: level,
             message: message,
-            timestamp: timestamp
+            category: category
         )
     }
     

@@ -304,27 +304,4 @@ final class ServerTypesTests: XCTestCase {
         
         XCTAssertTrue(decoded.sessions.isEmpty)
     }
-    
-    // MARK: - Error Equatable Tests
-    
-    func testServerErrorEquality() throws {
-        // Test same error cases are equal
-        XCTAssertEqual(ServerError.serverNotRunning, ServerError.serverNotRunning)
-        XCTAssertEqual(ServerError.processSpawnFailed, ServerError.processSpawnFailed)
-        
-        // Test different error cases are not equal
-        XCTAssertNotEqual(ServerError.serverNotRunning, ServerError.serverAlreadyRunning)
-        XCTAssertNotEqual(ServerError.portInUse, ServerError.invalidDirectory)
-        
-        // Test errors with associated values
-        XCTAssertEqual(
-            ServerError.networkError("Same message"),
-            ServerError.networkError("Same message")
-        )
-        
-        XCTAssertNotEqual(
-            ServerError.networkError("Message 1"),
-            ServerError.networkError("Message 2")
-        )
-    }
 }

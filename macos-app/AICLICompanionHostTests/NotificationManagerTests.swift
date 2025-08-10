@@ -234,7 +234,7 @@ final class NotificationManagerTests: XCTestCase {
     
     // MARK: - Reset Tests
     
-    func testResetClearsAllState() throws {
+    func testResetClearsAllState() async throws {
         // Set up complex state
         mockNotificationManager.hasPermission = false
         mockNotificationManager.permissionGranted = false
@@ -245,7 +245,7 @@ final class NotificationManagerTests: XCTestCase {
         mockNotificationManager.showServerStartedNotification(port: 8080)
         
         // Trigger tracking
-        _ = mockNotificationManager.requestPermission()
+        _ = await mockNotificationManager.requestPermission()
         
         // Verify state before reset
         XCTAssertFalse(mockNotificationManager.hasPermission)

@@ -60,7 +60,7 @@ class MockProcess: Process {
     
     // MARK: - Process Override Methods
     
-    override func launch() throws {
+    override func launch() {
         launchCalled = true
         launchCallCount += 1
         
@@ -70,16 +70,14 @@ class MockProcess: Process {
         capturedEnvironment = self.environment
         capturedCurrentDirectoryURL = self.currentDirectoryURL
         
+        // Don't actually throw since launch() is non-throwing
+        // Tests can check shouldFailOnLaunch to verify failure scenarios
         if shouldFailOnLaunch {
-            if let error = launchError {
-                throw error
-            } else {
-                throw NSError(
-                    domain: "MockProcessError",
-                    code: 1,
-                    userInfo: [NSLocalizedDescriptionKey: "Mock process launch failed"]
-                )
-            }
+            // Mark as not running to simulate failure
+            mockIsRunning = false
+            mockTerminationStatus = 1
+            mockTerminationReason = .exit
+            return
         }
         
         mockIsRunning = true

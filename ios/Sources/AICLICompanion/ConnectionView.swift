@@ -272,7 +272,9 @@ struct ManualSetupSheet: View {
                     
                     TextField("ws://192.168.1.100:3001 or wss://domain.ngrok.app", text: $serverURL)
                         .textFieldStyle(TerminalTextFieldStyle())
+                        #if os(iOS)
                         .autocapitalization(.none)
+                        #endif
                         .disableAutocorrection(true)
                     
                     Text("Enter the WebSocket URL from your server. This can be a local address (ws://192.168.1.100:3001) or an ngrok URL (wss://domain.ngrok-free.app)")
@@ -287,7 +289,9 @@ struct ManualSetupSheet: View {
                     
                     TextField("Enter token if required", text: $authToken)
                         .textFieldStyle(TerminalTextFieldStyle())
+                        #if os(iOS)
                         .autocapitalization(.none)
+                        #endif
                         .disableAutocorrection(true)
                 }
                 .padding()

@@ -1003,7 +1003,7 @@ struct AnyCodable: Codable {
     }
 }
 
-enum AICLICompanionError: LocalizedError {
+enum AICLICompanionError: LocalizedError, Equatable {
     case connectionFailed(String)
     case authenticationFailed
     case serverNotFound
@@ -1049,6 +1049,35 @@ enum AICLICompanionError: LocalizedError {
             return "Too many requests. Please try again later."
         case .timeout:
             return "Request timed out"
+        }
+    }
+    
+    // MARK: - Equatable Implementation
+    static func == (lhs: AICLICompanionError, rhs: AICLICompanionError) -> Bool {
+        switch (lhs, rhs) {
+        case (.connectionFailed(let lhsMessage), .connectionFailed(let rhsMessage)):
+            return lhsMessage == rhsMessage
+        case (.authenticationFailed, .authenticationFailed),
+             (.serverNotFound, .serverNotFound),
+             (.invalidResponse, .invalidResponse),
+             (.invalidURL, .invalidURL),
+             (.noData, .noData),
+             (.permissionDenied, .permissionDenied),
+             (.rateLimited, .rateLimited),
+             (.timeout, .timeout):
+            return true
+        case (.httpError(let lhsCode), .httpError(let rhsCode)):
+            return lhsCode == rhsCode
+        case (.networkError(let lhsError), .networkError(let rhsError)):
+            return lhsError.localizedDescription == rhsError.localizedDescription
+        case (.jsonParsingError(let lhsError), .jsonParsingError(let rhsError)):
+            return lhsError.localizedDescription == rhsError.localizedDescription
+        case (.webSocketError(let lhsMessage), .webSocketError(let rhsMessage)):
+            return lhsMessage == rhsMessage
+        case (.sessionNotFound(let lhsSession), .sessionNotFound(let rhsSession)):
+            return lhsSession == rhsSession
+        default:
+            return false
         }
     }
 }

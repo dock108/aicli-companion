@@ -144,7 +144,10 @@ jobs:
           test \
           -enableCodeCoverage YES \
           CODE_SIGNING_ALLOWED=NO \
-          -resultBundlePath ios-test.xcresult
+          -resultBundlePath ios-test.xcresult \
+          -parallel-testing-enabled NO \
+          -maximum-concurrent-test-simulator-destinations 1 \
+          IDEBuildOperationMaxNumberOfConcurrentCompileTasks=4
     
     - name: Generate iOS Coverage Report
       run: |

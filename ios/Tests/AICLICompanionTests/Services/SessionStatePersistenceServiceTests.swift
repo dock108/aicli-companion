@@ -21,13 +21,17 @@ final class SessionStatePersistenceServiceTests: XCTestCase {
         testProjectPath = "/test/project/path"
         cancellables = Set<AnyCancellable>()
         
-        // Clear any existing test data
-        persistenceService.removeSession(testSessionId)
+        // Clear ALL existing sessions to ensure test isolation
+        persistenceService.getActiveSessions().forEach { session in
+            persistenceService.removeSession(session.id)
+        }
     }
     
     override func tearDown() {
-        // Clean up test data
-        persistenceService.removeSession(testSessionId)
+        // Clean up ALL test data
+        persistenceService.getActiveSessions().forEach { session in
+            persistenceService.removeSession(session.id)
+        }
         cancellables.removeAll()
         persistenceService = nil
         super.tearDown()

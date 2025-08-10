@@ -178,12 +178,9 @@ struct ProjectSelectionView: View {
             request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         
-        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            // Use weak self to prevent retain cycles
-            guard let self = self else { return }
-            
+        URLSession.shared.dataTask(with: request) { data, response, error in
             DispatchQueue.main.async {
-                self.isLoading = false
+                isLoading = false
                 
                 if let error = error {
                     // Handle specific network errors more gracefully
@@ -191,18 +188,18 @@ struct ProjectSelectionView: View {
                     if nsError.domain == NSURLErrorDomain {
                         switch nsError.code {
                         case NSURLErrorNotConnectedToInternet:
-                            self.errorMessage = "No internet connection available"
+                            errorMessage = "No internet connection available"
                         case NSURLErrorTimedOut:
-                            self.errorMessage = "Request timed out. Please try again."
+                            errorMessage = "Request timed out. Please try again."
                         case NSURLErrorCannotFindHost, NSURLErrorCannotConnectToHost:
-                            self.errorMessage = "Cannot connect to server. Please check your connection."
+                            errorMessage = "Cannot connect to server. Please check your connection."
                         case NSURLErrorNetworkConnectionLost:
-                            self.errorMessage = "Network connection was lost. Please try again."
+                            errorMessage = "Network connection was lost. Please try again."
                         default:
-                            self.errorMessage = "Network error: \(error.localizedDescription)"
+                            errorMessage = "Network error: \(error.localizedDescription)"
                         }
                     } else {
-                        self.errorMessage = "Network error: \(error.localizedDescription)"
+                        errorMessage = "Network error: \(error.localizedDescription)"
                     }
                     return
                 }

@@ -404,8 +404,12 @@ test('TunnelService', async (t) => {
 
   await t.test('should generate connection QR without auth token', () => {
     const qr = tunnelService.generateConnectionQR('https://test.ngrok.io', null);
-    assert.ok(qr.includes('https://test.ngrok.io'));
-    assert.ok(!qr.includes('?token='));
+    // Extract the URL from the QR output and check it matches exactly
+    const urlMatch = qr.match(/https?:\/\/[^\s]+/);
+    assert.ok(urlMatch, 'QR output should contain a URL');
+    const parsedUrl = new URL(urlMatch[0]);
+    assert.strictEqual(parsedUrl.href, 'https://test.ngrok.io/');
+    assert.ok(!parsedUrl.searchParams.has('token'));
     assert.ok(qr.includes('Scan QR or use URL below to connect'));
   });
 

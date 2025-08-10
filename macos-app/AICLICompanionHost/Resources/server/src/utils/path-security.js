@@ -110,9 +110,26 @@ export class PathValidator {
 
         // For symlink checking, build a safe target path
         const relativePath = path.relative(resolvedBase, resolvedTarget);
+        
+        // SECURITY: Extra validation - ensure relative path doesn't escape
+        if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+          throw new PathSecurityError(
+            `Path '${targetPath}' attempts to escape base directory`,
+            'PATH_ESCAPE_ATTEMPT'
+          );
+        }
+        
         const safeTargetPath = path.resolve(realBase, relativePath);
         
-        // Get real path using our safe constructed path to avoid user-controlled realpath calls
+        // SECURITY: Final check before realpath - ensure constructed path is within base
+        if (!safeTargetPath.startsWith(realBase + path.sep) && safeTargetPath !== realBase) {
+          throw new PathSecurityError(
+            `Constructed path escapes base directory`,
+            'CONSTRUCTED_PATH_ESCAPE'
+          );
+        }
+        
+        // Get real path using our safe constructed path
         let realTargetPath;
         try {
           realTargetPath = await realpath(safeTargetPath);

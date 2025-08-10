@@ -27,8 +27,13 @@ export class AICLIService extends EventEmitter {
       });
 
     // Initialize process runner with dependency injection support
+    // Pass safe root directory for security validation
     this.processRunner =
-      options.processRunner || new AICLIProcessRunner(options.processRunnerOptions);
+      options.processRunner ||
+      new AICLIProcessRunner({
+        ...options.processRunnerOptions,
+        safeRootDirectory: options.safeRootDirectory || process.env.HOME || process.cwd(),
+      });
 
     // Initialize long-running task manager
     // Long-running task manager removed - trusting Claude CLI timeouts
@@ -109,6 +114,10 @@ export class AICLIService extends EventEmitter {
 
   setSafeRootDirectory(dir) {
     this.safeRootDirectory = dir;
+    // Also update the process runner's safe root directory
+    if (this.processRunner && this.processRunner.setSafeRootDirectory) {
+      this.processRunner.setSafeRootDirectory(dir);
+    }
   }
 
   setSkipPermissions(skip) {

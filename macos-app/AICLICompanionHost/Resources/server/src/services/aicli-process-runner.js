@@ -1,5 +1,6 @@
 import { spawn } from 'child_process';
 import { EventEmitter } from 'events';
+import path from 'path';
 import { processMonitor } from '../utils/process-monitor.js';
 import { isTestEnvironment } from '../utils/environment.js';
 import { InputValidator, MessageProcessor } from './aicli-utils.js';
@@ -25,6 +26,10 @@ export class AICLIProcessRunner extends EventEmitter {
     this.allowedTools = ['Read', 'Write', 'Edit'];
     this.disallowedTools = [];
     this.skipPermissions = false;
+    
+    // SECURITY: Safe root directory for all operations
+    // This ensures all paths are validated against a known safe directory
+    this.safeRootDirectory = options.safeRootDirectory || process.env.HOME || process.cwd();
   }
 
   // Lazy getter for AICLI command
@@ -50,12 +55,24 @@ export class AICLIProcessRunner extends EventEmitter {
   }
 
   /**
+   * Set the safe root directory for path validation
+   */
+  setSafeRootDirectory(directory) {
+    this.safeRootDirectory = directory;
+    logger.info('Safe root directory set', { directory });
+  }
+
+  /**
    * Create an interactive Claude CLI session that stays running
    * Returns the process and initial session info
    */
   async createInteractiveSession(workingDirectory) {
     // SECURITY: Validate working directory to prevent path traversal attacks
-    const validatedWorkingDir = await InputValidator.validateWorkingDirectory(workingDirectory);
+    // Always use the safe root directory for validation
+    const validatedWorkingDir = await InputValidator.validateWorkingDirectory(
+      workingDirectory,
+      this.safeRootDirectory
+    );
     const sessionLogger = logger.child({ workingDirectory: validatedWorkingDir });
 
     // Build args for interactive mode (no --print flag)
@@ -390,7 +407,17 @@ export class AICLIProcessRunner extends EventEmitter {
    */
   async runAICLIProcess(args, prompt, workingDirectory, sessionId, requestId = null) {
     // SECURITY: Validate working directory to prevent path traversal attacks
-    const validatedWorkingDir = await InputValidator.validateWorkingDirectory(workingDirectory);
+    // Always use the safe root directory for validation
+    // The InputValidator.validateWorkingDirectory method performs comprehensive checks including:
+    // - Path traversal prevention
+    // - Symlink attack prevention
+    // - Real path resolution
+    // - Boundary validation
+    const validatedWorkingDir = await InputValidator.validateWorkingDirectory(
+      workingDirectory,
+      this.safeRootDirectory
+    );
+    
     const processLogger = logger.child({ sessionId });
 
     processLogger.debug('Running AICLI process', {

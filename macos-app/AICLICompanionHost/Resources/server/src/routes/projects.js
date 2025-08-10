@@ -68,6 +68,25 @@ export function setupProjectRoutes(app, _aicliService) {
   router.get('/projects/:name', projectInfoLimiter, async (req, res) => {
     try {
       const { name } = req.params;
+      
+      // SECURITY: Validate project name format to prevent path traversal
+      // Only allow alphanumeric characters, dashes, underscores, and dots
+      const projectNameRegex = /^[a-zA-Z0-9._-]+$/;
+      if (!name || !projectNameRegex.test(name)) {
+        return res.status(400).json({
+          error: 'Invalid project name',
+          message: 'Project name contains invalid characters',
+        });
+      }
+      
+      // Additional checks for suspicious patterns
+      if (name.includes('..') || name.startsWith('.') || name === '.' || name === '..') {
+        return res.status(400).json({
+          error: 'Invalid project name',
+          message: 'Project name contains forbidden patterns',
+        });
+      }
+      
       const projectsDir = getProjectsDir();
 
       // Secure path validation to prevent directory traversal attacks

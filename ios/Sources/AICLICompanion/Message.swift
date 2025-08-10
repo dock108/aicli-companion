@@ -138,6 +138,26 @@ enum StreamingState: String, Codable, CaseIterable {
     case failed
 }
 
+enum ConnectionStatus: Equatable {
+    case disconnected
+    case connecting
+    case connected
+    case error(AICLICompanionError)
+    
+    static func == (lhs: ConnectionStatus, rhs: ConnectionStatus) -> Bool {
+        switch (lhs, rhs) {
+        case (.disconnected, .disconnected),
+             (.connecting, .connecting),
+             (.connected, .connected):
+            return true
+        case (.error(let lhsError), .error(let rhsError)):
+            return lhsError == rhsError
+        default:
+            return false
+        }
+    }
+}
+
 struct AICLIMessageMetadata: Codable {
     let sessionId: String
     let duration: TimeInterval
@@ -396,6 +416,14 @@ struct WebSocketMessage: Codable {
         case deviceRegistered(DeviceRegisteredResponse)
         case getMessageHistoryResponse(GetMessageHistoryResponse)
         case clearChatResponse(ClearChatResponse)
+    }
+    
+    // Memberwise initializer for creating messages programmatically
+    init(type: WebSocketMessageType, requestId: String?, timestamp: Date, data: Data) {
+        self.type = type
+        self.requestId = requestId
+        self.timestamp = timestamp
+        self.data = data
     }
     
     // Custom decoding to handle server message format

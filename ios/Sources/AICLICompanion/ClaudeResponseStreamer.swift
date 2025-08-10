@@ -102,7 +102,7 @@ class ClaudeResponseStreamer: ObservableObject {
         }
         
         // Mark message as complete
-        currentMessage?.streamingState = .complete
+        currentMessage?.streamingState = .completed
         
         // Emit completion notification
         NotificationCenter.default.post(
@@ -124,7 +124,7 @@ class ClaudeResponseStreamer: ObservableObject {
         if isStreaming {
             print("❌ Cancelling streaming session")
             isStreaming = false
-            currentMessage?.streamingState = .cancelled
+            currentMessage?.streamingState = .failed
             currentSessionId = nil
         }
     }
@@ -268,11 +268,3 @@ extension Notification.Name {
 
 // MARK: - Streaming State
 
-extension Message {
-    enum StreamingState: Codable {
-        case none
-        case streaming
-        case complete
-        case cancelled
-    }
-}

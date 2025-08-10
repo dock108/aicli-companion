@@ -309,12 +309,6 @@ public class AICLIService: ObservableObject {
 
 // MARK: - Supporting Types
 
-enum ConnectionStatus {
-    case disconnected
-    case connecting
-    case connected
-    case error(AICLICompanionError)
-}
 
 struct AICLIRequest: Codable {
     let prompt: String

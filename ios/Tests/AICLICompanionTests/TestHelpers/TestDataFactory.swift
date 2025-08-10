@@ -108,6 +108,42 @@ struct TestDataFactory {
         )
     }
     
+    // MARK: - Generic Message Creation
+    
+    static func createTestMessage(
+        content: String = "Test message",
+        sender: MessageSender = .user,
+        type: MessageType = .text,
+        timestamp: Date = Date(),
+        id: UUID = UUID(),
+        metadata: AICLIMessageMetadata? = nil
+    ) -> Message {
+        Message(
+            id: id,
+            content: content,
+            sender: sender,
+            timestamp: timestamp,
+            type: type,
+            metadata: metadata
+        )
+    }
+    
+    static func createTestMetadata(
+        sessionId: String = "test-session-123",
+        duration: TimeInterval = 1.5,
+        cost: Double? = 0.001
+    ) -> AICLIMessageMetadata {
+        AICLIMessageMetadata(
+            sessionId: sessionId,
+            duration: duration,
+            cost: cost,
+            tools: nil,
+            queuedAt: nil,
+            deliveredAt: nil,
+            queuePriority: nil
+        )
+    }
+    
     // MARK: - Message Metadata
     
     static func createMessageMetadata(

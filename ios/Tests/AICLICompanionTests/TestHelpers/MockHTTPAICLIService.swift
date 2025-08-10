@@ -4,12 +4,10 @@ import Combine
 
 /// Mock implementation of HTTPAICLIService for testing
 @available(iOS 16.0, macOS 13.0, *)
-class MockHTTPAICLIService: ObservableObject {
+class MockHTTPAICLIService: HTTPAICLIService {
     
-    // MARK: - Published Properties (mirroring real service)
-    @Published var isConnected = false
-    @Published var connectionStatus: ConnectionStatus = .disconnected
-    @Published var currentSession: String?
+    // MARK: - Inherited Published Properties from HTTPAICLIService
+    // isConnected, connectionStatus, currentSession are inherited
     
     // MARK: - Mock Control Properties
     var shouldFailConnection = false
@@ -25,7 +23,7 @@ class MockHTTPAICLIService: ObservableObject {
     
     // MARK: - Connection Management
     
-    func connect(
+    override func connect(
         to address: String,
         port: Int,
         authToken: String?,
@@ -48,7 +46,7 @@ class MockHTTPAICLIService: ObservableObject {
         }
     }
     
-    func disconnect() {
+    override func disconnect() {
         isConnected = false
         connectionStatus = .disconnected
         currentSession = nil
@@ -143,18 +141,3 @@ class MockHTTPAICLIService: ObservableObject {
 }
 
 // MARK: - ConnectionStatus Mock Support
-
-extension ConnectionStatus: Equatable {
-    public static func == (lhs: ConnectionStatus, rhs: ConnectionStatus) -> Bool {
-        switch (lhs, rhs) {
-        case (.disconnected, .disconnected),
-             (.connecting, .connecting),
-             (.connected, .connected):
-            return true
-        case (.error(let lhsError), .error(let rhsError)):
-            return lhsError.localizedDescription == rhsError.localizedDescription
-        default:
-            return false
-        }
-    }
-}

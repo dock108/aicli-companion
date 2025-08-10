@@ -5,6 +5,8 @@ import UserNotifications
 import UIKit
 #endif
 
+// MARK: - Connection Status
+
 @available(iOS 16.0, macOS 13.0, *)
 public class HTTPAICLIService: ObservableObject {
     static let shared = HTTPAICLIService()

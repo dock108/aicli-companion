@@ -149,6 +149,11 @@ public class HTTPAICLIService: ObservableObject {
     // MARK: - Push Notifications Setup
 
     private func setupPushNotifications() {
+        // Skip notification setup in test environment
+        if NSClassFromString("XCTestCase") != nil {
+            return
+        }
+        
         // Request notification permission
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
             if granted {

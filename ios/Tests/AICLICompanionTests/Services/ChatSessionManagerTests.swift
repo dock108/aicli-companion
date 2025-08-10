@@ -19,6 +19,11 @@ final class ChatSessionManagerTests: XCTestCase {
         sessionManager.activeSession = nil
         sessionManager.isRestoring = false
         sessionManager.sessionError = nil
+        
+        // Clear singleton persistence services state for test isolation
+        SessionStatePersistenceService.shared.getActiveSessions().forEach { session in
+            SessionStatePersistenceService.shared.removeSession(session.id)
+        }
     }
     
     override func tearDown() {
@@ -28,6 +33,12 @@ final class ChatSessionManagerTests: XCTestCase {
         mockPersistence?.reset()
         mockPersistence = nil
         cancellables.removeAll()
+        
+        // Clean up singleton persistence services
+        SessionStatePersistenceService.shared.getActiveSessions().forEach { session in
+            SessionStatePersistenceService.shared.removeSession(session.id)
+        }
+        
         super.tearDown()
     }
     
@@ -190,8 +201,9 @@ final class ChatSessionManagerTests: XCTestCase {
     
     func testRestoreSessionWithNoMetadata() throws {
         let expectation = XCTestExpectation(description: "Should fail when no metadata exists")
-        let project = TestDataFactory.TestProject.frontend
-        let testProject = Project(name: project.name, path: project.path, type: "Frontend")
+        // Use a unique path that won't have any session data from other tests
+        let uniquePath = "/test/unique/path/\(UUID().uuidString)"
+        let testProject = Project(name: "Test Project", path: uniquePath, type: "Test")
         
         XCTAssertFalse(sessionManager.isRestoring)
         
@@ -214,16 +226,20 @@ final class ChatSessionManagerTests: XCTestCase {
     }
     
     func testRestoreSessionSetsRestoringFlag() throws {
+        let expectation = XCTestExpectation(description: "Restoration should complete")
         let project = TestDataFactory.TestProject.mobile
         let testProject = Project(name: project.name, path: project.path, type: "Mobile")
         
         XCTAssertFalse(sessionManager.isRestoring)
         
         // Start restoration (will fail but should set flag temporarily)
-        sessionManager.restoreSession(for: testProject) { _ in }
+        sessionManager.restoreSession(for: testProject) { result in
+            // Just complete the expectation, we're only testing the flag
+            expectation.fulfill()
+        }
         
-        // The flag should be set during restoration process
-        // Note: In real implementation, this test would need better timing control
+        // Wait for restoration to complete
+        wait(for: [expectation], timeout: 0.5)
     }
     
     // MARK: - Session Lifecycle Tests

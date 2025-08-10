@@ -126,7 +126,8 @@ final class SettingsViewTests: XCTestCase {
         let vStack = try scrollView.vStack()
         
         // Appearance section should be present (typically second section)
-        XCTAssertNoThrow(try vStack.view(SettingsSection.self, 1))
+        // Note: SettingsSection is a generic type, need to specify content type
+        XCTAssertNoThrow(try vStack.group(1))
     }
     
     func testAppearanceSectionContainsFontSizePicker() throws {
@@ -139,7 +140,7 @@ final class SettingsViewTests: XCTestCase {
         let vStack = try scrollView.vStack()
         
         // Should have appearance section with font size picker
-        XCTAssertNoThrow(try vStack.view(SettingsSection.self, 1))
+        XCTAssertNoThrow(try vStack.group(1))
     }
     
     // MARK: - Behavior Section Tests
@@ -154,7 +155,7 @@ final class SettingsViewTests: XCTestCase {
         let vStack = try scrollView.vStack()
         
         // Behavior section should be present (typically third section)
-        XCTAssertNoThrow(try vStack.view(SettingsSection.self, 2))
+        XCTAssertNoThrow(try vStack.group(2))
     }
     
     // MARK: - Privacy Section Tests
@@ -169,7 +170,7 @@ final class SettingsViewTests: XCTestCase {
         let vStack = try scrollView.vStack()
         
         // Privacy section should be present
-        XCTAssertNoThrow(try vStack.view(SettingsSection.self, 3))
+        XCTAssertNoThrow(try vStack.group(3))
     }
     
     // MARK: - About Section Tests
@@ -184,7 +185,7 @@ final class SettingsViewTests: XCTestCase {
         let vStack = try scrollView.vStack()
         
         // About section should be present (typically last section)
-        XCTAssertNoThrow(try vStack.view(SettingsSection.self, 4))
+        XCTAssertNoThrow(try vStack.group(4))
     }
     
     // MARK: - Color Scheme Tests

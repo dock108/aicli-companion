@@ -169,6 +169,7 @@ struct ProjectSelectionView: View {
         
         let url = serverURL.appendingPathComponent("api/projects")
         var request = URLRequest(url: url)
+        request.timeoutInterval = 10.0 // Add timeout to prevent hanging
         
         print("Loading projects from: \(url.absoluteString)")
         
@@ -182,7 +183,24 @@ struct ProjectSelectionView: View {
                 isLoading = false
                 
                 if let error = error {
-                    errorMessage = "Network error: \(error.localizedDescription)"
+                    // Handle specific network errors more gracefully
+                    let nsError = error as NSError
+                    if nsError.domain == NSURLErrorDomain {
+                        switch nsError.code {
+                        case NSURLErrorNotConnectedToInternet:
+                            errorMessage = "No internet connection available"
+                        case NSURLErrorTimedOut:
+                            errorMessage = "Request timed out. Please try again."
+                        case NSURLErrorCannotFindHost, NSURLErrorCannotConnectToHost:
+                            errorMessage = "Cannot connect to server. Please check your connection."
+                        case NSURLErrorNetworkConnectionLost:
+                            errorMessage = "Network connection was lost. Please try again."
+                        default:
+                            errorMessage = "Network error: \(error.localizedDescription)"
+                        }
+                    } else {
+                        errorMessage = "Network error: \(error.localizedDescription)"
+                    }
                     return
                 }
                 

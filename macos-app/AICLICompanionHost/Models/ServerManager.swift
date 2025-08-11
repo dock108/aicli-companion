@@ -35,21 +35,46 @@ class ServerManager: ObservableObject {
     var connectionString: String {
         guard isRunning else { return "" }
 
-        // Use public URL if available (when tunneling is active)
-        let baseURL = publicURL ?? "http://\(localIP):\(port)"
-
-        if let token = authToken, SettingsManager.shared.requireAuthentication {
-            // For public URLs, append token as query parameter
-            if publicURL != nil {
-                return "\(baseURL)?token=\(token)"
-            } else {
-                // For local connections, use the local format
-                return "\(localIP):\(port)?token=\(token)"
-            }
+        if let publicURL = publicURL {
+            return buildPublicConnectionString(from: publicURL)
         } else {
-            // Return public URL if available, otherwise local
-            return publicURL ?? "\(localIP):\(port)"
+            return buildLocalConnectionString()
         }
+    }
+
+    private func buildPublicConnectionString(from publicURL: String) -> String {
+        let wsURL = convertToWebSocketURL(publicURL)
+        return addAuthTokenToURL(wsURL)
+    }
+
+    private func buildLocalConnectionString() -> String {
+        let baseURL = "ws://\(localIP):\(port)/ws"
+        return addAuthTokenToURL(baseURL)
+    }
+
+    private func convertToWebSocketURL(_ url: String) -> String {
+        var wsURL = url
+        if url.hasPrefix("https://") {
+            wsURL = url.replacingOccurrences(of: "https://", with: "wss://")
+        } else if url.hasPrefix("http://") {
+            wsURL = url.replacingOccurrences(of: "http://", with: "ws://")
+        }
+
+        // Add WebSocket path if not present
+        if !wsURL.contains("/ws") {
+            wsURL = wsURL.trimmingCharacters(in: .init(charactersIn: "/")) + "/ws"
+        }
+
+        return wsURL
+    }
+
+    private func addAuthTokenToURL(_ baseURL: String) -> String {
+        guard let token = authToken, SettingsManager.shared.requireAuthentication else {
+            return baseURL
+        }
+
+        let separator = baseURL.contains("?") ? "&" : "?"
+        return "\(baseURL)\(separator)token=\(token)"
     }
 
     var serverFullURL: String {
@@ -74,6 +99,12 @@ class ServerManager: ObservableObject {
 
         isProcessing = true
         defer { isProcessing = false }
+
+        // Ensure auth token is generated BEFORE starting server if auth is required
+        if SettingsManager.shared.requireAuthentication && authToken == nil {
+            generateAuthToken()
+            addLog(.info, "🔑 Pre-generated auth token for server startup")
+        }
 
         // Always kill any existing process on our port first
         addLog(.debug, "Checking for existing process on port \(port)...")
@@ -270,7 +301,6 @@ class ServerManager: ObservableObject {
 
             if let httpResponse = response as? HTTPURLResponse,
                httpResponse.statusCode == 200 {
-
                 if let health = try? JSONDecoder().decode(HealthResponse.self, from: data) {
                     return health.status == "ok"
                 }

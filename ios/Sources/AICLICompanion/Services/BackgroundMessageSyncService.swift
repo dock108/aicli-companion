@@ -233,6 +233,7 @@ class BackgroundMessageSyncService: ObservableObject {
 // MARK: - Supporting Types
 
 /// Simple async semaphore for controlling concurrency
+@available(iOS 13.0, macOS 10.15, *)
 actor AsyncSemaphore {
     private var count: Int
     private var waiters: [CheckedContinuation<Void, Never>] = []
@@ -271,6 +272,7 @@ extension Notification.Name {
 
 // MARK: - Message Persistence Extension
 
+@available(iOS 16.0, macOS 13.0, *)
 extension MessagePersistenceService {
     /// Save messages that were synced in background
     func saveBackgroundSyncedMessages(_ messages: [Message], for sessionId: String) async -> Bool {

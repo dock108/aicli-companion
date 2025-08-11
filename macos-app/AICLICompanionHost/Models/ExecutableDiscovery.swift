@@ -8,7 +8,6 @@
 import Foundation
 
 extension ServerManager {
-
     // MARK: - Executable Discovery
 
     func findNodeExecutable() async -> String {
@@ -75,7 +74,7 @@ extension ServerManager {
 
         do {
             let versions = try FileManager.default.contentsOfDirectory(atPath: nvmPath)
-            if let latestVersion = versions.sorted().last {
+            if let latestVersion = versions.max() {
                 let nvmExecutablePath = "\(nvmPath)/\(latestVersion)/bin/\(executable)"
                 if FileManager.default.fileExists(atPath: nvmExecutablePath) {
                     addLog(.debug, "Auto-detected NVM \(executable) at: \(nvmExecutablePath)")

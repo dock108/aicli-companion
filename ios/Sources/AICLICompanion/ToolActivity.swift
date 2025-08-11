@@ -310,7 +310,13 @@ struct ToolActivitySheet: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: {
+                    #if os(iOS)
+                    return .navigationBarLeading
+                    #else
+                    return .automatic
+                    #endif
+                }()) {
                     Button("Done") {
                         dismiss()
                     }

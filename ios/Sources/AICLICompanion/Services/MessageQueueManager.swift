@@ -172,6 +172,15 @@ class MessageQueueManager: ObservableObject {
             // Ignore regex errors
         }
     }
+    
+    /// Clear all queues (used for testing)
+    func clearAllQueues() {
+        queueLock.lock()
+        defer { queueLock.unlock() }
+        
+        messageQueue.removeAll()
+        updateQueueStatus()
+    }
 }
 
 // MARK: - Message Extension for Queue Support

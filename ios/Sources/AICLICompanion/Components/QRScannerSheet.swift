@@ -44,9 +44,40 @@ struct QRScannerSheet: View {
             // Camera Preview or Permission View
             if hasCameraPermission {
                 QRScannerView(onCodeScanned: { code in
-                    if let url = URL(string: code) {
+                    print("📷 Scanned QR code: \(code)")
+                    
+                    // Try to create URL, with fallback for encoded strings
+                    var url: URL?
+                    
+                    // First try direct URL creation
+                    url = URL(string: code)
+                    
+                    // If that fails, try trimming whitespace and newlines
+                    if url == nil {
+                        let trimmedCode = code.trimmingCharacters(in: .whitespacesAndNewlines)
+                        url = URL(string: trimmedCode)
+                        if url != nil {
+                            print("⚠️ URL created after trimming whitespace")
+                        }
+                    }
+                    
+                    // If still no URL, try percent encoding
+                    if url == nil {
+                        if let encoded = code.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
+                            url = URL(string: encoded)
+                            if url != nil {
+                                print("⚠️ URL created after percent encoding")
+                            }
+                        }
+                    }
+                    
+                    if let url = url {
+                        print("✅ Created URL from QR: \(url.absoluteString)")
                         onResult(.success(url))
                     } else {
+                        print("❌ Failed to create URL from QR code: \(code)")
+                        print("   First 50 chars: \(String(code.prefix(50)))")
+                        print("   Last 50 chars: \(String(code.suffix(50)))")
                         onResult(.failure(ScanError.invalidQRCode))
                     }
                 })

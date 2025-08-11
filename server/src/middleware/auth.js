@@ -43,6 +43,11 @@ export function authMiddleware(expectedToken) {
       return next();
     }
 
+    // Skip auth for QR code setup endpoint
+    if (req.path === '/auth/setup' || req.path === '/auth/status') {
+      return next();
+    }
+
     const authHeader = req.headers.authorization;
     const rawToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : req.query.token;
 

@@ -138,6 +138,26 @@ enum StreamingState: String, Codable, CaseIterable {
     case failed
 }
 
+enum ConnectionStatus: Equatable {
+    case disconnected
+    case connecting
+    case connected
+    case error(AICLICompanionError)
+    
+    static func == (lhs: ConnectionStatus, rhs: ConnectionStatus) -> Bool {
+        switch (lhs, rhs) {
+        case (.disconnected, .disconnected),
+             (.connecting, .connecting),
+             (.connected, .connected):
+            return true
+        case (.error(let lhsError), .error(let rhsError)):
+            return lhsError == rhsError
+        default:
+            return false
+        }
+    }
+}
+
 struct AICLIMessageMetadata: Codable {
     let sessionId: String
     let duration: TimeInterval
@@ -300,14 +320,21 @@ struct ServerConnection: Codable {
         
         // Handle IPv6 addresses by wrapping them in brackets
         let formattedAddress: String
-        if address.contains(":") && !address.hasPrefix("[") {
+        if address.contains(":") && !address.hasPrefix("[") && !address.contains(".") {
             // This is likely an IPv6 address that needs brackets
+            // (contains colons, no brackets, and no dots which would indicate a domain)
             formattedAddress = "[\(address)]"
         } else {
             formattedAddress = address
         }
         
-        return URL(string: "\(scheme)://\(formattedAddress):\(port)")
+        // Don't include port if it's the default for the scheme
+        let defaultPort = isSecure ? 443 : 80
+        if port == defaultPort {
+            return URL(string: "\(scheme)://\(formattedAddress)")
+        } else {
+            return URL(string: "\(scheme)://\(formattedAddress):\(port)")
+        }
     }
 
     var wsURL: URL? {
@@ -315,14 +342,21 @@ struct ServerConnection: Codable {
         
         // Handle IPv6 addresses by wrapping them in brackets
         let formattedAddress: String
-        if address.contains(":") && !address.hasPrefix("[") {
+        if address.contains(":") && !address.hasPrefix("[") && !address.contains(".") {
             // This is likely an IPv6 address that needs brackets
+            // (contains colons, no brackets, and no dots which would indicate a domain)
             formattedAddress = "[\(address)]"
         } else {
             formattedAddress = address
         }
         
-        return URL(string: "\(scheme)://\(formattedAddress):\(port)/ws")
+        // Don't include port if it's the default for the scheme
+        let defaultPort = isSecure ? 443 : 80
+        if port == defaultPort {
+            return URL(string: "\(scheme)://\(formattedAddress)/ws")
+        } else {
+            return URL(string: "\(scheme)://\(formattedAddress):\(port)/ws")
+        }
     }
 }
 
@@ -382,6 +416,14 @@ struct WebSocketMessage: Codable {
         case deviceRegistered(DeviceRegisteredResponse)
         case getMessageHistoryResponse(GetMessageHistoryResponse)
         case clearChatResponse(ClearChatResponse)
+    }
+    
+    // Memberwise initializer for creating messages programmatically
+    init(type: WebSocketMessageType, requestId: String?, timestamp: Date, data: Data) {
+        self.type = type
+        self.requestId = requestId
+        self.timestamp = timestamp
+        self.data = data
     }
     
     // Custom decoding to handle server message format
@@ -989,7 +1031,7 @@ struct AnyCodable: Codable {
     }
 }
 
-enum AICLICompanionError: LocalizedError {
+enum AICLICompanionError: LocalizedError, Equatable {
     case connectionFailed(String)
     case authenticationFailed
     case serverNotFound
@@ -1035,6 +1077,35 @@ enum AICLICompanionError: LocalizedError {
             return "Too many requests. Please try again later."
         case .timeout:
             return "Request timed out"
+        }
+    }
+    
+    // MARK: - Equatable Implementation
+    static func == (lhs: AICLICompanionError, rhs: AICLICompanionError) -> Bool {
+        switch (lhs, rhs) {
+        case (.connectionFailed(let lhsMessage), .connectionFailed(let rhsMessage)):
+            return lhsMessage == rhsMessage
+        case (.authenticationFailed, .authenticationFailed),
+             (.serverNotFound, .serverNotFound),
+             (.invalidResponse, .invalidResponse),
+             (.invalidURL, .invalidURL),
+             (.noData, .noData),
+             (.permissionDenied, .permissionDenied),
+             (.rateLimited, .rateLimited),
+             (.timeout, .timeout):
+            return true
+        case (.httpError(let lhsCode), .httpError(let rhsCode)):
+            return lhsCode == rhsCode
+        case (.networkError(let lhsError), .networkError(let rhsError)):
+            return lhsError.localizedDescription == rhsError.localizedDescription
+        case (.jsonParsingError(let lhsError), .jsonParsingError(let rhsError)):
+            return lhsError.localizedDescription == rhsError.localizedDescription
+        case (.webSocketError(let lhsMessage), .webSocketError(let rhsMessage)):
+            return lhsMessage == rhsMessage
+        case (.sessionNotFound(let lhsSession), .sessionNotFound(let rhsSession)):
+            return lhsSession == rhsSession
+        default:
+            return false
         }
     }
 }

@@ -5,6 +5,8 @@ import UserNotifications
 import UIKit
 #endif
 
+// MARK: - Connection Status
+
 @available(iOS 16.0, macOS 13.0, *)
 public class HTTPAICLIService: ObservableObject {
     static let shared = HTTPAICLIService()
@@ -16,6 +18,7 @@ public class HTTPAICLIService: ObservableObject {
     private var baseURL: URL?
     private var urlSession: URLSession
     private var deviceToken: String?
+    private var authToken: String?
     private var cancellables = Set<AnyCancellable>()
 
     private let encoder = JSONEncoder()
@@ -47,12 +50,23 @@ public class HTTPAICLIService: ObservableObject {
 
     func connect(to address: String, port: Int, authToken: String?, completion: @escaping (Result<Void, AICLICompanionError>) -> Void) {
         let scheme = port == 443 || address.contains("https") ? "https" : "http"
-        guard let url = URL(string: "\(scheme)://\(address):\(port)") else {
+        
+        // For default ports (443 for https, 80 for http), don't include port in URL
+        // This is especially important for ngrok URLs like domain.ngrok-free.app
+        let urlString: String
+        if (scheme == "https" && port == 443) || (scheme == "http" && port == 80) {
+            urlString = "\(scheme)://\(address)"
+        } else {
+            urlString = "\(scheme)://\(address):\(port)"
+        }
+        
+        guard let url = URL(string: urlString) else {
             completion(.failure(.invalidURL))
             return
         }
 
         baseURL = url
+        self.authToken = authToken // Store the auth token for later use
         
         // Test connection by hitting the health endpoint
         testConnection { [weak self] result in
@@ -107,6 +121,11 @@ public class HTTPAICLIService: ObservableObject {
         var request = URLRequest(url: healthURL)
         request.httpMethod = "GET"
         request.addValue("application/json", forHTTPHeaderField: "Accept")
+        
+        // Add authorization header if we have a token
+        if let token = authToken {
+            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
 
         urlSession.dataTask(with: request) { _, response, error in
             if let error = error {
@@ -130,6 +149,11 @@ public class HTTPAICLIService: ObservableObject {
     // MARK: - Push Notifications Setup
 
     private func setupPushNotifications() {
+        // Skip notification setup in test environment
+        if NSClassFromString("XCTestCase") != nil {
+            return
+        }
+        
         // Request notification permission
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
             if granted {
@@ -181,6 +205,11 @@ public class HTTPAICLIService: ObservableObject {
         var request = URLRequest(url: registerURL)
         request.httpMethod = "POST"
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        // Add authorization header if we have a token
+        if let token = authToken {
+            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
 
         let payload = [
             "deviceToken": deviceToken,
@@ -227,37 +256,14 @@ public class HTTPAICLIService: ObservableObject {
             return
         }
 
-        let chatURL = baseURL.appendingPathComponent("api/chat")
-        var request = URLRequest(url: chatURL)
-        request.httpMethod = "POST"
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 120 // Extended timeout for Claude processing
-
-        var payload: [String: Any] = [
-            "message": message
-        ]
-
-        if let projectPath = projectPath {
-            payload["projectPath"] = projectPath
-        }
-
-        if let sessionId = sessionId {
-            payload["sessionId"] = sessionId
-        }
-
-        if let deviceToken = deviceToken {
-            payload["deviceToken"] = deviceToken
-        }
-
-        do {
-            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
-        } catch {
-            completion(.failure(.jsonParsingError(error)))
+        let request = createChatRequest(baseURL: baseURL, message: message, projectPath: projectPath, sessionId: sessionId)
+        
+        guard let httpRequest = request else {
+            completion(.failure(.jsonParsingError(NSError(domain: "HTTPAICLIService", code: -1, userInfo: nil))))
             return
         }
 
-        print("📤 Sending HTTP message to: \(chatURL)")
-        print("   Payload: \(payload)")
+        print("📤 Sending HTTP message to: \(httpRequest.url?.absoluteString ?? "")")
 
         // Create background task for iOS to continue request when app is backgrounded
         #if os(iOS)
@@ -269,7 +275,7 @@ public class HTTPAICLIService: ObservableObject {
         }
         #endif
         
-        let task = urlSession.dataTask(with: request) { data, response, error in
+        let task = urlSession.dataTask(with: httpRequest) { data, response, error in
             #if os(iOS)
             defer {
                 if backgroundTaskID != .invalid {
@@ -278,50 +284,141 @@ public class HTTPAICLIService: ObservableObject {
             }
             #endif
             
-            if let error = error {
-                print("❌ Network error: \(error)")
-                // Check if it's a timeout error
-                let nsError = error as NSError
-                if nsError.code == NSURLErrorTimedOut {
-                    // More user-friendly timeout message
-                    completion(.failure(.networkError(NSError(domain: "HTTPAICLIService", code: -1001, userInfo: [NSLocalizedDescriptionKey: "The request timed out. Please check your connection and try again."]))))
-                } else {
-                    completion(.failure(.networkError(error)))
-                }
-                return
-            }
-
-            guard let httpResponse = response as? HTTPURLResponse else {
-                completion(.failure(.invalidResponse))
-                return
-            }
-
-            print("📥 HTTP Response status: \(httpResponse.statusCode)")
-
-            guard let data = data else {
-                completion(.failure(.noData))
-                return
-            }
-
-            // Parse the response
-            do {
-                let chatResponse = try self.decoder.decode(ClaudeChatResponse.self, from: data)
-                print("✅ Chat response received: \(chatResponse.content?.prefix(100) ?? "acknowledgment")...")
-                
-                // Update session ID if provided
-                if let newSessionId = chatResponse.sessionId {
-                    DispatchQueue.main.async {
-                        self.currentSession = newSessionId
-                    }
-                }
-                
-                completion(.success(chatResponse))
-            } catch {
-                print("❌ JSON parsing error: \(error)")
-                completion(.failure(.jsonParsingError(error)))
-            }
+            self.handleChatResponse(data: data, response: response, error: error, completion: completion)
         }
         task.resume()
+    }
+    
+    // MARK: - Helper Methods
+    
+    private func createChatRequest(baseURL: URL, message: String, projectPath: String?, sessionId: String?) -> URLRequest? {
+        let chatURL = baseURL.appendingPathComponent("api/chat")
+        var request = URLRequest(url: chatURL)
+        request.httpMethod = "POST"
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 120 // Extended timeout for Claude processing
+        
+        // Add authorization header if we have a token
+        if let token = authToken {
+            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        var payload: [String: Any] = ["message": message]
+        
+        if let projectPath = projectPath {
+            payload["projectPath"] = projectPath
+        }
+        
+        if let sessionId = sessionId {
+            payload["sessionId"] = sessionId
+        }
+        
+        if let deviceToken = deviceToken {
+            payload["deviceToken"] = deviceToken
+        }
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+            print("   Payload: \(payload)")
+            return request
+        } catch {
+            print("❌ Failed to serialize request payload: \(error)")
+            return nil
+        }
+    }
+    
+    private func handleChatResponse(
+        data: Data?,
+        response: URLResponse?,
+        error: Error?,
+        completion: @escaping (Result<ClaudeChatResponse, AICLICompanionError>) -> Void
+    ) {
+        if let error = error {
+            handleNetworkError(error, completion: completion)
+            return
+        }
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            completion(.failure(.invalidResponse))
+            return
+        }
+
+        print("📥 HTTP Response status: \(httpResponse.statusCode)")
+
+        guard let data = data else {
+            completion(.failure(.noData))
+            return
+        }
+        
+        // Handle error status codes
+        if httpResponse.statusCode == 401 {
+            handleAuthenticationError(data: data, completion: completion)
+            return
+        }
+        
+        guard 200...299 ~= httpResponse.statusCode else {
+            handleServerError(data: data, statusCode: httpResponse.statusCode, completion: completion)
+            return
+        }
+
+        // Parse the successful response
+        parseSuccessResponse(data: data, completion: completion)
+    }
+    
+    private func handleNetworkError(_ error: Error, completion: @escaping (Result<ClaudeChatResponse, AICLICompanionError>) -> Void) {
+        print("❌ Network error: \(error)")
+        let nsError = error as NSError
+        if nsError.code == NSURLErrorTimedOut {
+            let timeoutError = NSError(
+                domain: "HTTPAICLIService",
+                code: -1001,
+                userInfo: [NSLocalizedDescriptionKey: "The request timed out. Please check your connection and try again."]
+            )
+            completion(.failure(.networkError(timeoutError)))
+        } else {
+            completion(.failure(.networkError(error)))
+        }
+    }
+    
+    private func handleAuthenticationError(data: Data, completion: @escaping (Result<ClaudeChatResponse, AICLICompanionError>) -> Void) {
+        if let errorDict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let errorMessage = errorDict["message"] as? String {
+            print("❌ Authentication error: \(errorMessage)")
+            completion(.failure(.connectionFailed("Authentication failed: \(errorMessage)")))
+        } else {
+            completion(.failure(.connectionFailed("Authentication failed. Please check your credentials.")))
+        }
+    }
+    
+    private func handleServerError(data: Data, statusCode: Int, completion: @escaping (Result<ClaudeChatResponse, AICLICompanionError>) -> Void) {
+        if let errorDict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let errorMessage = errorDict["message"] as? String ?? errorDict["error"] as? String {
+            completion(.failure(.connectionFailed("Server error: \(errorMessage)")))
+        } else {
+            completion(.failure(.httpError(statusCode)))
+        }
+    }
+    
+    private func parseSuccessResponse(data: Data, completion: @escaping (Result<ClaudeChatResponse, AICLICompanionError>) -> Void) {
+        do {
+            let chatResponse = try self.decoder.decode(ClaudeChatResponse.self, from: data)
+            print("✅ Chat response received: \(chatResponse.content?.prefix(100) ?? "acknowledgment")...")
+            
+            // Update session ID if provided
+            if let newSessionId = chatResponse.sessionId {
+                DispatchQueue.main.async {
+                    self.currentSession = newSessionId
+                }
+            }
+            
+            completion(.success(chatResponse))
+        } catch {
+            print("❌ JSON parsing error: \(error)")
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("   Raw response: \(responseString)")
+            }
+            completion(.failure(.jsonParsingError(error)))
+        }
     }
 
     // MARK: - Session Status
@@ -337,6 +434,11 @@ public class HTTPAICLIService: ObservableObject {
         request.httpMethod = "GET"
         request.addValue("application/json", forHTTPHeaderField: "Accept")
         request.timeoutInterval = 10 // Quick status check
+        
+        // Add authorization header if we have a token
+        if let token = authToken {
+            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
         
         print("📡 Checking session status: \(statusURL)")
         
@@ -378,6 +480,11 @@ public class HTTPAICLIService: ObservableObject {
         var request = URLRequest(url: projectsURL)
         request.httpMethod = "GET"
         request.addValue("application/json", forHTTPHeaderField: "Accept")
+        
+        // Add authorization header if we have a token
+        if let token = authToken {
+            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
 
         urlSession.dataTask(with: request) { data, _, error in
             if let error = error {

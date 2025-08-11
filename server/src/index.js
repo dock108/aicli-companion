@@ -6,7 +6,7 @@ import { createServer as createHttpsServer } from 'https';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
-import { setupRoutes } from './routes/index.js';
+import { setupRoutes } from './routes/api-routes.js';
 import { setupProjectRoutes } from './routes/projects.js';
 import { setupAICLIStatusRoutes } from './routes/aicli-status.js';
 import sessionRoutes from './routes/sessions.js';
@@ -14,6 +14,7 @@ import telemetryRoutes from './routes/telemetry-api.js';
 import pushNotificationRoutes from './routes/push-notifications.js';
 import chatRoutes from './routes/chat.js';
 import devicesRoutes from './routes/devices.js';
+import authRoutes from './routes/auth.js';
 import { errorHandler } from './middleware/error.js';
 import { AICLIService } from './services/aicli.js';
 import { ServerConfig } from './config/server-config.js';
@@ -87,6 +88,12 @@ class AICLICompanionServer {
   }
 
   setupRoutes() {
+    // Store config in app.locals for routes to access
+    this.app.locals.authRequired = this.config.authRequired;
+    this.app.locals.authToken = this.authToken;
+    this.app.locals.port = this.config.port;
+    this.app.locals.enableTLS = this.config.enableTLS;
+
     // Health check (no auth required)
     this.app.get('/health', (req, res) => {
       res.json({
@@ -96,6 +103,9 @@ class AICLICompanionServer {
         timestamp: new Date().toISOString(),
       });
     });
+
+    // Auth routes (QR code generation, etc.)
+    this.app.use('/api/auth', authRoutes);
 
     // API routes
     setupRoutes(this.app, this.aicliService);
@@ -123,9 +133,11 @@ class AICLICompanionServer {
         endpoints: {
           health: '/health',
           api: '/api',
+          auth: '/api/auth',
           chat: '/api/chat',
           devices: '/api/devices',
           projects: '/api/projects',
+          qrCode: '/api/auth/setup',
         },
       });
     });
@@ -159,7 +171,7 @@ class AICLICompanionServer {
         keyId: process.env.APNS_KEY_ID || '2Y226B9433',
         teamId: process.env.APNS_TEAM_ID || 'E3G5D247ZN',
         bundleId: process.env.APNS_BUNDLE_ID || 'com.aiclicompanion.ios',
-        production: process.env.NODE_ENV === 'production',
+        production: process.env.APNS_PRODUCTION === 'true', // Explicitly check APNS_PRODUCTION, default to false
       });
 
       // Set up TLS if enabled

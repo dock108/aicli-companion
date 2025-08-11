@@ -2,6 +2,7 @@ import CloudKit
 import Combine
 import SwiftUI
 
+@available(iOS 13.0, macOS 10.15, *)
 @MainActor
 class CloudKitSyncManager: ObservableObject {
     static let shared = CloudKitSyncManager()

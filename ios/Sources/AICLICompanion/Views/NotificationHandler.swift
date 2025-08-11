@@ -86,6 +86,7 @@ struct NotificationHandler: ViewModifier {
 
 // MARK: - View Extension
 
+@available(iOS 13.0, macOS 10.15, *)
 extension View {
     func handleNotifications() -> some View {
         self.modifier(NotificationHandler())
@@ -142,6 +143,7 @@ struct ProjectBadgeModifier: ViewModifier {
     }
 }
 
+@available(iOS 16.0, macOS 13.0, *)
 extension View {
     func projectBadge(for projectId: String) -> some View {
         self.modifier(ProjectBadgeModifier(projectId: projectId))

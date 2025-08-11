@@ -93,7 +93,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
                 title: "AICLI Companion Started",
                 body: "Server auto-started successfully on port \(ServerManager.shared.port)"
             )
-
         } catch {
             let errorMessage = "Auto-start failed: \(error.localizedDescription)"
             ServerManager.shared.addLog(.error, "❌ \(errorMessage)")

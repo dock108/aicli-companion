@@ -15,6 +15,7 @@ struct ProjectContext {
     let detectedFiles: [String]
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 enum ProjectType: String, CaseIterable {
     case swift = "Swift"
     case javascript = "JavaScript"

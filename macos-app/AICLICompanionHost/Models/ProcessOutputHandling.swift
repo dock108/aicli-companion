@@ -8,7 +8,6 @@
 import Foundation
 
 extension ServerManager {
-
     // MARK: - Process Output Handling
 
     func setupProcessOutputHandling(for process: Process) {
@@ -47,30 +46,63 @@ extension ServerManager {
     func handleServerOutput(_ output: String) {
         let lines = output.components(separatedBy: .newlines)
         for line in lines where !line.isEmpty {
-            // Check for tunnel URL in output - look for various patterns
-            if line.contains("https://") && (line.contains("ngrok") || line.contains("Tunnel")) {
-                if let url = extractTunnelURL(from: line) {
-                    publicURL = url
-                    addLog(.info, "🌐 Tunnel established: \(url)")
-                }
-            }
+            processOutputLine(line)
+        }
+    }
 
-            // Also check for explicit tunnel URL announcements
-            if line.contains("Public URL:") || line.contains("Forwarding") {
-                if let url = extractTunnelURL(from: line) {
-                    publicURL = url
-                    addLog(.info, "🌐 Tunnel URL detected: \(url)")
-                }
-            }
+    private func processOutputLine(_ line: String) {
+        processAuthTokenFromLine(line)
+        processTunnelURLFromLine(line)
+        logServerOutputLine(line)
+    }
 
-            // Log server output
-            if line.contains("error") || line.contains("Error") {
-                addLog(.error, line)
-            } else if line.contains("warning") || line.contains("Warning") {
-                addLog(.warning, line)
-            } else {
-                addLog(.info, line)
+    private func processAuthTokenFromLine(_ line: String) {
+        if line.contains("🔑 Generated auth token:") {
+            if let token = extractTokenFromGeneratedLine(line) {
+                authToken = token
+                addLog(.info, "🔐 Captured generated auth token")
             }
+        } else if line.contains("📱 Mobile app connection:") {
+            updateAuthTokenIfNeeded(from: line, source: "connection URL")
+        } else if line.contains("iOS Connection URL:") ||
+                  (line.contains("https://") && line.contains(".ngrok") && line.contains("token=")) {
+            updateAuthTokenIfNeeded(from: line, source: "iOS connection URL")
+        }
+    }
+
+    private func updateAuthTokenIfNeeded(from line: String, source: String) {
+        guard authToken == nil, let token = extractAuthToken(from: line) else { return }
+        authToken = token
+        addLog(.info, "🔐 Captured auth token from \(source)")
+    }
+
+    private func processTunnelURLFromLine(_ line: String) {
+        let hasTunnelPattern = line.contains("https://") && (line.contains("ngrok") || line.contains("Tunnel"))
+        let hasExplicitPattern = line.contains("Public URL:") || line.contains("Forwarding")
+
+        if hasTunnelPattern || hasExplicitPattern {
+            if let url = extractTunnelURL(from: line) {
+                publicURL = url
+                let message = hasTunnelPattern ? "🌐 Tunnel established: \(url)" : "🌐 Tunnel URL detected: \(url)"
+                addLog(.info, message)
+                logConnectionStringUpdate()
+            }
+        }
+    }
+
+    private func logConnectionStringUpdate() {
+        Task { @MainActor in
+            addLog(.debug, "Updated connection string: \(connectionString)")
+        }
+    }
+
+    private func logServerOutputLine(_ line: String) {
+        if line.contains("error") || line.contains("Error") {
+            addLog(.error, line)
+        } else if line.contains("warning") || line.contains("Warning") {
+            addLog(.warning, line)
+        } else {
+            addLog(.info, line)
         }
     }
 
@@ -105,6 +137,50 @@ extension ServerManager {
         if let regex = try? NSRegularExpression(pattern: pattern),
            let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) {
             return String(line[Range(match.range, in: line)!])
+        }
+
+        return nil
+    }
+
+    private func extractAuthToken(from line: String) -> String? {
+        // Look for token in URL query parameter: ?token=<token>
+        // The token format is typically a long hex string or similar
+        let pattern = #"[?&]token=([a-zA-Z0-9_\-=+/]+)"#
+
+        if let regex = try? NSRegularExpression(pattern: pattern),
+           let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) {
+            // Extract the capture group (the token value)
+            if match.numberOfRanges > 1 {
+                let tokenRange = match.range(at: 1)
+                if let range = Range(tokenRange, in: line) {
+                    let token = String(line[range])
+                    // Only return if it looks like a real token (not masked)
+                    if !token.contains("****") && token.count > 10 {
+                        return token
+                    }
+                }
+            }
+        }
+
+        return nil
+    }
+
+    private func extractTokenFromGeneratedLine(_ line: String) -> String? {
+        // Look for pattern: "🔑 Generated auth token: <token>...****"
+        // We want to extract the first part of the token before it's masked
+        let pattern = #"Generated auth token:\s*([a-fA-F0-9]{8,})"#
+
+        if let regex = try? NSRegularExpression(pattern: pattern),
+           let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) {
+            if match.numberOfRanges > 1 {
+                let tokenRange = match.range(at: 1)
+                if let range = Range(tokenRange, in: line) {
+                    let partialToken = String(line[range])
+                    // This is only a partial token, we need the full one
+                    // Store it temporarily and look for the full token in subsequent lines
+                    return nil  // Don't use partial token
+                }
+            }
         }
 
         return nil

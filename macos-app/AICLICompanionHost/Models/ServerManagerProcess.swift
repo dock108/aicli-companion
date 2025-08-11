@@ -8,7 +8,6 @@
 import Foundation
 
 extension ServerManager {
-
     // MARK: - Server Process Management
 
     func startServerProcess() async throws {
@@ -70,9 +69,17 @@ extension ServerManager {
             if SettingsManager.shared.enableTunnel {
                 Task {
                     await self.waitForTunnelURL()
+                    // Small delay to ensure publicURL is fully set
+                    try? await Task.sleep(for: .milliseconds(500))
+                    // Log connection string after tunnel is ready
+                    await MainActor.run {
+                        addLog(.info, "📱 Mobile app connection: \(self.connectionString)")
+                    }
                 }
+            } else {
+                // Log connection string for local connection
+                addLog(.info, "📱 Mobile app connection: \(connectionString)")
             }
-
         } catch {
             isRunning = false
             serverProcess = nil

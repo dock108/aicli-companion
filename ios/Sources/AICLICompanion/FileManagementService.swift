@@ -3,6 +3,7 @@ import SwiftUI
 
 // MARK: - File Models
 
+@available(iOS 13.0, macOS 10.15, *)
 struct FileItem: Identifiable, Hashable {
     let id = UUID()
     let name: String

@@ -668,7 +668,11 @@ private func exportFile(url: URL) {
     #elseif os(macOS)
     // On macOS, show save panel
     let savePanel = NSSavePanel()
-    savePanel.allowedContentTypes = [.plainText]
+    if #available(macOS 11.0, *) {
+        savePanel.allowedContentTypes = [.plainText]
+    } else {
+        savePanel.allowedFileTypes = ["txt", "log"]
+    }
     savePanel.nameFieldStringValue = url.lastPathComponent
     savePanel.begin { result in
         if result == .OK, let destination = savePanel.url {

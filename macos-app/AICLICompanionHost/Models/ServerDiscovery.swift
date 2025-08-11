@@ -8,7 +8,6 @@
 import Foundation
 
 extension ServerManager {
-
     // MARK: - Server Discovery
 
     func findServerDirectory() throws -> String {

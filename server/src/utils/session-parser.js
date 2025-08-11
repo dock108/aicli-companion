@@ -38,6 +38,17 @@ export class SessionIdParser {
 
     const trimmedId = sessionId.trim();
 
+    // Check for empty string after trimming
+    if (!trimmedId) {
+      return {
+        isValid: false,
+        format: null,
+        sessionId: null,
+        projectName: null,
+        error: 'Invalid or missing session ID',
+      };
+    }
+
     // Try UUID format first (pure UUID without underscores)
     if (UUID_REGEX.test(trimmedId)) {
       return {
@@ -50,7 +61,8 @@ export class SessionIdParser {
     }
 
     // Check if it contains underscores (potential composite format)
-    if (trimmedId.includes('_')) {
+    // But single underscore alone should be treated as simple
+    if (trimmedId.includes('_') && trimmedId !== '_') {
       const sessionParts = trimmedId.split('_');
 
       // If we have at least 2 parts, treat as composite format

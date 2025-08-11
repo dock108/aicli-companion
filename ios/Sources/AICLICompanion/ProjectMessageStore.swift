@@ -79,9 +79,16 @@ struct SessionContinuationInfo {
     let sessionDuration: TimeInterval
 
     var formattedLastMessageDate: String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .full
-        return formatter.localizedString(for: lastMessageDate, relativeTo: Date())
+        if #available(macOS 10.15, iOS 13.0, *) {
+            let formatter = RelativeDateTimeFormatter()
+            formatter.unitsStyle = .full
+            return formatter.localizedString(for: lastMessageDate, relativeTo: Date())
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .short
+            formatter.timeStyle = .short
+            return formatter.string(from: lastMessageDate)
+        }
     }
 
     var formattedDuration: String {

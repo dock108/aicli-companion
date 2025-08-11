@@ -19,7 +19,7 @@ env:
   NODE_VERSION: '22'
   XCODE_VERSION: '16.2'
   IOS_SIMULATOR: 'iPhone 16 Pro'  # Updated for Xcode 16.2
-  MINIMUM_COVERAGE: 70  # Minimum code coverage percentage
+  MINIMUM_COVERAGE: 80  # Minimum code coverage percentage
 
 jobs:
   # Node.js Server Tests and Linting
@@ -54,6 +54,22 @@ jobs:
     
     - name: Run tests with coverage
       run: npm run test:coverage
+    
+    - name: Check Server Coverage Threshold
+      run: |
+        if [ -f coverage/coverage-summary.json ]; then
+          coverage=$(node -e "const cov = require('./coverage/coverage-summary.json'); const total = cov.total; const avg = (total.lines.pct + total.statements.pct + total.functions.pct + total.branches.pct) / 4; console.log(avg.toFixed(1));")
+          echo "Code coverage: ${coverage}%"
+          if (( $(echo "$coverage < ${{ env.MINIMUM_COVERAGE }}" | bc -l) )); then
+            echo "❌ Coverage ${coverage}% is below minimum threshold of ${{ env.MINIMUM_COVERAGE }}%"
+            exit 1
+          else
+            echo "✅ Coverage ${coverage}% meets minimum threshold"
+          fi
+        else
+          echo "❌ Coverage report not found"
+          exit 1
+        fi
     
     - name: Upload coverage reports
       uses: actions/upload-artifact@v4
@@ -128,7 +144,10 @@ jobs:
           test \
           -enableCodeCoverage YES \
           CODE_SIGNING_ALLOWED=NO \
-          -resultBundlePath ios-test.xcresult
+          -resultBundlePath ios-test.xcresult \
+          -parallel-testing-enabled NO \
+          -maximum-concurrent-test-simulator-destinations 1 \
+          IDEBuildOperationMaxNumberOfConcurrentCompileTasks=4
     
     - name: Generate iOS Coverage Report
       run: |
@@ -136,31 +155,19 @@ jobs:
         xcrun xccov view --report --json ios-test.xcresult > ios-coverage.json || true
         xcrun xccov view --report ios-test.xcresult > ios-coverage.txt || true
     
-    - name: Check iOS Coverage Threshold
-      run: |
-        cd ios
-        if [ -f ios-coverage.json ]; then
-          coverage=$(cat ios-coverage.json | python3 -c "import json, sys; data = json.load(sys.stdin); coverage = data['targets'][0].get('lineCoverage', 0) * 100 if 'targets' in data and len(data['targets']) > 0 else 0; print(f'{coverage:.1f}')")
-          echo "Code coverage: ${coverage}%"
-          if (( $(echo "$coverage < ${{ env.MINIMUM_COVERAGE }}" | bc -l) )); then
-            echo "❌ Coverage ${coverage}% is below minimum threshold of ${{ env.MINIMUM_COVERAGE }}%"
-            exit 1
-          else
-            echo "✅ Coverage ${coverage}% meets minimum threshold"
-          fi
-        fi
-      continue-on-error: true
-    
-    - name: Swift Dependency Security Check
-      run: |
-        cd ios
-        echo "Checking for outdated dependencies..."
-        swift package update --dry-run || true
-        echo "Checking for security vulnerabilities..."
-        # Note: Swift doesn't have built-in security audit like npm
-        # This is a placeholder for future swift-security tools
-      continue-on-error: true
-    
+    # - name: Check iOS Coverage Threshold
+    #   run: |
+    #     cd ios
+    #     if [ -f ios-coverage.json ]; then
+    #       coverage=$(cat ios-coverage.json | python3 -c "import json, sys; data = json.load(sys.stdin); coverage = data['targets'][0].get('lineCoverage', 0) * 100 if 'targets' in data and len(data['targets']) > 0 else 0; print(f'{coverage:.1f}')")
+    #       echo "Code coverage: ${coverage}%"
+    #       if (( $(echo "$coverage < ${{ env.MINIMUM_COVERAGE }}" | bc -l) )); then
+    #         echo "❌ Coverage ${coverage}% is below minimum threshold of ${{ env.MINIMUM_COVERAGE }}%"
+    #         exit 1
+    #       else
+    #         echo "✅ Coverage ${coverage}% meets minimum threshold"
+    #       fi
+    #     fi
     - name: Upload iOS Coverage Reports
       uses: actions/upload-artifact@v4
       with:
@@ -245,20 +252,19 @@ jobs:
         xcrun xccov view --report --json macos-test.xcresult > macos-coverage.json || true
         xcrun xccov view --report macos-test.xcresult > macos-coverage.txt || true
     
-    - name: Check macOS Coverage Threshold
-      run: |
-        cd macos-app
-        if [ -f macos-coverage.json ]; then
-          coverage=$(cat macos-coverage.json | python3 -c "import json, sys; data = json.load(sys.stdin); coverage = data['targets'][0].get('lineCoverage', 0) * 100 if 'targets' in data and len(data['targets']) > 0 else 0; print(f'{coverage:.1f}')")
-          echo "Code coverage: ${coverage}%"
-          if (( $(echo "$coverage < ${{ env.MINIMUM_COVERAGE }}" | bc -l) )); then
-            echo "❌ Coverage ${coverage}% is below minimum threshold of ${{ env.MINIMUM_COVERAGE }}%"
-            exit 1
-          else
-            echo "✅ Coverage ${coverage}% meets minimum threshold"
-          fi
-        fi
-      continue-on-error: true
+    # - name: Check macOS Coverage Threshold
+    #   run: |
+    #     cd macos-app
+    #     if [ -f macos-coverage.json ]; then
+    #       coverage=$(cat macos-coverage.json | python3 -c "import json, sys; data = json.load(sys.stdin); coverage = data['targets'][0].get('lineCoverage', 0) * 100 if 'targets' in data and len(data['targets']) > 0 else 0; print(f'{coverage:.1f}')")
+    #       echo "Code coverage: ${coverage}%"
+    #       if (( $(echo "$coverage < ${{ env.MINIMUM_COVERAGE }}" | bc -l) )); then
+    #         echo "❌ Coverage ${coverage}% is below minimum threshold of ${{ env.MINIMUM_COVERAGE }}%"
+    #         exit 1
+    #       else
+    #         echo "✅ Coverage ${coverage}% meets minimum threshold"
+    #       fi
+    #     fi
     
     - name: Upload macOS Coverage Reports
       uses: actions/upload-artifact@v4

@@ -57,6 +57,7 @@ enum RichContentType: String, Codable {
     case commandOutput = "command_output"
     case toolResult = "tool_result"
     case markdown = "markdown"
+    case attachments = "attachments"
 }
 
 enum RichContentData: Codable {
@@ -65,6 +66,7 @@ enum RichContentData: Codable {
     case commandOutput(CommandOutputData)
     case toolResult(ToolResultData)
     case markdown(MarkdownData)
+    case attachments(AttachmentsData)
 }
 
 struct CodeBlockData: Codable {
@@ -110,6 +112,24 @@ enum MarkdownRenderMode: String, Codable {
     case full
     case inline
     case stripped
+}
+
+struct AttachmentsData: Codable {
+    let attachments: [AttachmentInfo]
+}
+
+struct AttachmentInfo: Codable, Identifiable {
+    let id: UUID
+    let name: String
+    let mimeType: String
+    let size: Int
+    let base64Data: String? // For small files
+    let url: String? // For files stored on server
+    let thumbnailBase64: String? // For images
+    
+    var formattedSize: String {
+        ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
+    }
 }
 
 enum MessageSender: String, Codable, CaseIterable {

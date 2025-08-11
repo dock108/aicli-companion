@@ -47,65 +47,96 @@ struct MessageBubble: View {
     
     // MARK: - User Bubble (Right-aligned pill)
     private var userBubble: some View {
-        Text(message.content)
-            .font(Typography.font(.body))
-            .foregroundColor(.white)
-            .multilineTextAlignment(.leading)
-            .fixedSize(horizontal: false, vertical: true)
-            .textSelection(.enabled)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(
-                        LinearGradient(
-                            colors: Colors.accentPrimary(for: colorScheme),
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            )
-            .contextMenu {
-                Button(action: {
-                    clipboardManager.copyToClipboard(message.content)
-                }) {
-                    Label("Copy", systemImage: "doc.on.doc")
-                }
-                
-                Button(action: {
-                    shareMessage()
-                }) {
-                    Label("Share", systemImage: "square.and.arrow.up")
-                }
+        VStack(alignment: .trailing, spacing: 8) {
+            // Attachments (if any)
+            if let attachments = getAttachments() {
+                MessageAttachmentList(
+                    attachments: attachments,
+                    onTap: { attachment in
+                        handleAttachmentTap(attachment)
+                    }
+                )
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
             }
+            
+            // Message text (if any)
+            if !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text(message.content)
+                    .font(Typography.font(.body))
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20)
+                            .fill(
+                                LinearGradient(
+                                    colors: Colors.accentPrimary(for: colorScheme),
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    )
+            }
+        }
+        .contextMenu {
+            Button(action: {
+                clipboardManager.copyToClipboard(message.content)
+            }) {
+                Label("Copy", systemImage: "doc.on.doc")
+            }
+            
+            Button(action: {
+                shareMessage()
+            }) {
+                Label("Share", systemImage: "square.and.arrow.up")
+            }
+        }
     }
     
     // MARK: - AI Bubble (Left card with terminal styling)
     private var aiBubble: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if hasCodeBlock {
-                // Parse and render code blocks
-                renderFormattedContent()
-            } else {
-                // Regular text content
-                Text(message.content)
-                    .font(Typography.font(.body))
-                    .foregroundColor(Colors.textPrimary(for: colorScheme))
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .textSelection(.enabled)
+        VStack(alignment: .leading, spacing: 8) {
+            // Message content
+            VStack(alignment: .leading, spacing: 0) {
+                if hasCodeBlock {
+                    // Parse and render code blocks
+                    renderFormattedContent()
+                } else {
+                    // Regular text content
+                    Text(message.content)
+                        .font(Typography.font(.body))
+                        .foregroundColor(Colors.textPrimary(for: colorScheme))
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Colors.bgCard(for: colorScheme))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Colors.strokeLight, lineWidth: 1)
+                    )
+            )
+            
+            // Attachments (if any)
+            if let attachments = getAttachments() {
+                MessageAttachmentList(
+                    attachments: attachments,
+                    onTap: { attachment in
+                        handleAttachmentTap(attachment)
+                    }
+                )
+                .padding(.horizontal, 16)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Colors.bgCard(for: colorScheme))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Colors.strokeLight, lineWidth: 1)
-                )
-        )
         .contextMenu {
             Button(action: {
                 clipboardManager.copyToClipboard(message.content)
@@ -498,6 +529,87 @@ struct MessageBubble: View {
         pasteboard.setString(message.content, forType: .string)
         #endif
     }
+    
+    // MARK: - Attachment Methods
+    
+    private func getAttachments() -> [AttachmentData]? {
+        guard let richContent = message.richContent,
+              case .attachments(let attachmentsData) = richContent.data else {
+            return nil
+        }
+        
+        // Convert AttachmentInfo to AttachmentData
+        return attachmentsData.attachments.compactMap { attachmentInfo in
+            guard let base64Data = attachmentInfo.base64Data,
+                  let data = Data(base64Encoded: base64Data) else {
+                return nil
+            }
+            
+            return AttachmentData(
+                id: attachmentInfo.id,
+                type: attachmentTypeFromMimeType(attachmentInfo.mimeType),
+                name: attachmentInfo.name,
+                data: data,
+                mimeType: attachmentInfo.mimeType,
+                size: attachmentInfo.size
+            )
+        }
+    }
+    
+    private func attachmentTypeFromMimeType(_ mimeType: String) -> AttachmentType {
+        if mimeType.starts(with: "image/") {
+            return .image
+        } else if mimeType.contains("code") || mimeType.contains("text/") {
+            return .code
+        } else {
+            return .document
+        }
+    }
+    
+    private func handleAttachmentTap(_ attachment: AttachmentData) {
+        if attachment.isImage {
+            showImageViewer(attachment)
+        } else {
+            shareAttachment(attachment)
+        }
+    }
+    
+    private func showImageViewer(_ attachment: AttachmentData) {
+        // TODO: Implement image viewer
+        print("🖼️ Opening image viewer for: \(attachment.name)")
+    }
+    
+    private func shareAttachment(_ attachment: AttachmentData) {
+        #if os(iOS)
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first,
+              let rootViewController = window.rootViewController else { return }
+        
+        // Create a temporary file
+        let tempDir = FileManager.default.temporaryDirectory
+        let tempFile = tempDir.appendingPathComponent(attachment.name)
+        
+        do {
+            try attachment.data.write(to: tempFile)
+            
+            let activityVC = UIActivityViewController(
+                activityItems: [tempFile],
+                applicationActivities: nil
+            )
+            
+            if let popover = activityVC.popoverPresentationController {
+                popover.sourceView = window
+                popover.sourceRect = CGRect(x: window.bounds.midX, y: window.bounds.midY, width: 0, height: 0)
+                popover.permittedArrowDirections = []
+            }
+            
+            rootViewController.present(activityVC, animated: true)
+        } catch {
+            print("❌ Failed to share attachment: \(error)")
+        }
+        #endif
+    }
+    
     
     private func extractPlainText(from markdown: String) -> String {
         var plainText = markdown

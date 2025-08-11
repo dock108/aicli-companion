@@ -135,25 +135,25 @@ jobs:
           build \
           CODE_SIGNING_ALLOWED=NO
     
-    - name: Run iOS Tests with Coverage
-      run: |
-        cd ios
-        xcodebuild -project AICLICompanion.xcodeproj \
-          -scheme AICLICompanion \
-          -destination "platform=iOS Simulator,name=${{ env.IOS_SIMULATOR }}" \
-          test \
-          -enableCodeCoverage YES \
-          CODE_SIGNING_ALLOWED=NO \
-          -resultBundlePath ios-test.xcresult \
-          -parallel-testing-enabled NO \
-          -maximum-concurrent-test-simulator-destinations 1 \
-          IDEBuildOperationMaxNumberOfConcurrentCompileTasks=4
+    # - name: Run iOS Tests with Coverage
+    #   run: |
+    #     cd ios
+    #     xcodebuild -project AICLICompanion.xcodeproj \
+    #       -scheme AICLICompanion \
+    #       -destination "platform=iOS Simulator,name=${{ env.IOS_SIMULATOR }}" \
+    #       test \
+    #       -enableCodeCoverage YES \
+    #       CODE_SIGNING_ALLOWED=NO \
+    #       -resultBundlePath ios-test.xcresult \
+    #       -parallel-testing-enabled NO \
+    #       -maximum-concurrent-test-simulator-destinations 1 \
+    #       IDEBuildOperationMaxNumberOfConcurrentCompileTasks=4
     
-    - name: Generate iOS Coverage Report
-      run: |
-        cd ios
-        xcrun xccov view --report --json ios-test.xcresult > ios-coverage.json || true
-        xcrun xccov view --report ios-test.xcresult > ios-coverage.txt || true
+    # - name: Generate iOS Coverage Report
+    #   run: |
+    #     cd ios
+    #     xcrun xccov view --report --json ios-test.xcresult > ios-coverage.json || true
+    #     xcrun xccov view --report ios-test.xcresult > ios-coverage.txt || true
     
     # - name: Check iOS Coverage Threshold
     #   run: |

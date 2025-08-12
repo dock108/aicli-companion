@@ -368,6 +368,11 @@ export class CommandSecurityService extends EventEmitter {
     const isConfiguredDestructive = this.config.destructiveCommands.some((pattern) => {
       if (command.includes(pattern)) return true;
       try {
+        // Only use as regex if pattern is safe
+        if (!isSafeRegex(pattern)) {
+          logger.warn(`Destructive command pattern rejected as unsafe: ${pattern}`);
+          return false;
+        }
         const regex = new RegExp(pattern);
         return regex.test(command);
       } catch {

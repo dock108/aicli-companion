@@ -69,12 +69,15 @@ export class SecurityConfig {
           : ''
     );
 
+    // Track if blockedCommands comes from env
+    const blockedFromEnv = process.env.AICLI_BLOCKED_COMMANDS !== undefined;
     this.blockedCommands = this.parsePatterns(
-      process.env.AICLI_BLOCKED_COMMANDS !== undefined
+      blockedFromEnv
         ? process.env.AICLI_BLOCKED_COMMANDS
         : options.blockedCommands !== undefined
           ? options.blockedCommands
-          : presetDefaults.blockedCommands || ''
+          : presetDefaults.blockedCommands || '',
+      blockedFromEnv
     );
 
     this.destructiveCommands = this.parsePatterns(
@@ -125,18 +128,28 @@ export class SecurityConfig {
       .map((dir) => path.resolve(dir.replace('~', process.env.HOME || '')));
   }
 
-  parsePatterns(patternString) {
+  parsePatterns(patternString, fromEnv = false) {
+    let patterns;
     if (!patternString) return [];
 
     // Handle both string and array inputs
     if (Array.isArray(patternString)) {
-      return patternString.filter((pattern) => pattern && pattern.length > 0);
+      patterns = patternString.filter((pattern) => pattern && pattern.length > 0);
+    } else {
+      patterns = patternString
+        .split(',')
+        .map((pattern) => pattern.trim())
+        .filter((pattern) => pattern.length > 0);
     }
-
-    return patternString
-      .split(',')
-      .map((pattern) => pattern.trim())
-      .filter((pattern) => pattern.length > 0);
+    // If from environment, filter out regex patterns (re:)
+    if (fromEnv) {
+      const filtered = patterns.filter((pattern) => !pattern.startsWith('re:'));
+      if (filtered.length !== patterns.length) {
+        logger.warn('BlockedCommands from environment: regex patterns (re:) are not allowed and have been ignored for security reasons.');
+      }
+      return filtered;
+    }
+    return patterns;
   }
 
   getPresetDefaults(preset) {

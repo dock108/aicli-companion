@@ -247,7 +247,7 @@ export class AICLIService extends EventEmitter {
     for (const attachment of attachments) {
       try {
         // Generate unique filename
-        const uniqueId = crypto.randomBytes(8).toString('hex');
+        const uniqueId = crypto.randomUUID();
         const sanitizedName = attachment.name.replace(/[^a-zA-Z0-9.-]/g, '_');
         const tempFileName = `${uniqueId}_${sanitizedName}`;
         const tempFilePath = path.join(tempDir, tempFileName);

@@ -24,9 +24,9 @@ function isSafeRegex(pattern) {
   // Limit length to 100 chars (arbitrary, adjust as needed)
   if (pattern.length > 100) return false;
   // Disallow nested quantifiers (e.g., (a+)+ or (a*)*)
-  if (/\([^\)]*[*+?][^\)]*\)[*+?]/.test(pattern)) return false;
+  if (/\([^)]*[*+?][^)]*\)[*+?]/.test(pattern)) return false;
   // Disallow lookbehinds (which can be slow in some engines)
-  if (/\(\?<\=|\(\?<!/.test(pattern)) return false;
+  if (/\(\?<=|\(\?<!/.test(pattern)) return false;
   // Disallow backreferences (e.g., \1, \2)
   if (/\\\d/.test(pattern)) return false;
   // Add more checks as needed

@@ -28,10 +28,10 @@ describe('CommandSecurityService', () => {
     });
     
     it('should block dangerous commands in standard preset', async () => {
-      securityService.config.preset = 'standard';
-      securityService.config.applyPreset('standard');
+      // Recreate service with standard preset
+      const standardService = new CommandSecurityService({ preset: 'standard' });
       
-      const result = await securityService.validateCommand('rm -rf /', '/tmp');
+      const result = await standardService.validateCommand('rm -rf /', '/tmp');
       assert.strictEqual(result.allowed, false);
       assert.strictEqual(result.code, 'BLOCKED_COMMAND');
     });

@@ -12,7 +12,6 @@
 import path from 'path';
 import { EventEmitter } from 'events';
 import { createLogger } from '../utils/logger.js';
-import _ from 'lodash';
 
 const logger = createLogger('CommandSecurity');
 
@@ -33,13 +32,22 @@ export class SecurityViolationError extends Error {
  */
 export class SecurityConfig {
   constructor(options = {}) {
-    // Parse environment variables
+    // Security presets - apply first as defaults
+    this.preset = process.env.AICLI_SECURITY_PRESET || options.preset || 'standard';
+    
+    // Apply preset defaults first (these can be overridden)
+    const presetDefaults = this.getPresetDefaults(this.preset);
+    
+    // Parse environment variables and options, with preset as fallback
     this.safeDirectories = this.parseDirectories(
-      process.env.AICLI_SAFE_DIRECTORIES || options.safeDirectories || ''
+      process.env.AICLI_SAFE_DIRECTORIES !== undefined ? process.env.AICLI_SAFE_DIRECTORIES :
+      options.safeDirectories !== undefined ? options.safeDirectories : ''
     );
 
     this.blockedCommands = this.parsePatterns(
-      process.env.AICLI_BLOCKED_COMMANDS || options.blockedCommands || ''
+      process.env.AICLI_BLOCKED_COMMANDS !== undefined ? process.env.AICLI_BLOCKED_COMMANDS :
+      options.blockedCommands !== undefined ? options.blockedCommands :
+      presetDefaults.blockedCommands || ''
     );
 
     this.destructiveCommands = this.parsePatterns(
@@ -50,20 +58,20 @@ export class SecurityConfig {
 
     this.requireConfirmation =
       process.env.AICLI_DESTRUCTIVE_COMMANDS_REQUIRE_CONFIRMATION === 'true' ||
-      options.requireConfirmation ||
-      false;
+      (options.requireConfirmation !== undefined ? options.requireConfirmation :
+       presetDefaults.requireConfirmation !== undefined ? presetDefaults.requireConfirmation : false);
 
     this.maxFileSize = parseInt(
       process.env.AICLI_MAX_FILE_SIZE || options.maxFileSize || '10485760' // 10MB default
     );
 
-    this.readOnlyMode = process.env.AICLI_READONLY_MODE === 'true' || options.readOnlyMode || false;
+    this.readOnlyMode = 
+      process.env.AICLI_READONLY_MODE === 'true' ||
+      (options.readOnlyMode !== undefined ? options.readOnlyMode :
+       presetDefaults.readOnlyMode !== undefined ? presetDefaults.readOnlyMode : false);
 
-    this.enableAudit = process.env.AICLI_ENABLE_AUDIT === 'true' || options.enableAudit !== false; // Default true
-
-    // Security presets
-    this.preset = process.env.AICLI_SECURITY_PRESET || options.preset || 'standard';
-    this.applyPreset(this.preset);
+    this.enableAudit = process.env.AICLI_ENABLE_AUDIT === 'true' || 
+      (options.enableAudit !== undefined ? options.enableAudit : true); // Default true
   }
 
   parseDirectories(dirString) {
@@ -97,7 +105,7 @@ export class SecurityConfig {
       .filter((pattern) => pattern.length > 0);
   }
 
-  applyPreset(preset) {
+  getPresetDefaults(preset) {
     const presets = {
       unrestricted: {
         // Current behavior - minimal restrictions
@@ -125,20 +133,15 @@ export class SecurityConfig {
         requireConfirmation: true,
         readOnlyMode: true,
       },
+      custom: {
+        // No defaults for custom preset
+        blockedCommands: [],
+        requireConfirmation: false,
+        readOnlyMode: false,
+      }
     };
 
-    if (preset !== 'custom' && presets[preset]) {
-      const settings = presets[preset];
-      if (settings.blockedCommands) {
-        this.blockedCommands = [...this.blockedCommands, ...settings.blockedCommands];
-      }
-      if (settings.requireConfirmation !== undefined) {
-        this.requireConfirmation = settings.requireConfirmation;
-      }
-      if (settings.readOnlyMode !== undefined) {
-        this.readOnlyMode = settings.readOnlyMode;
-      }
-    }
+    return presets[preset] || presets.custom;
   }
 }
 
@@ -164,10 +167,10 @@ export class CommandSecurityService extends EventEmitter {
    * Validate a command before execution
    * @param {string} command - The command to validate
    * @param {string} workingDirectory - The working directory
-   * @param {Object} _options - Additional options
+   * @param {Object} options - Additional options
    * @returns {Promise<{allowed: boolean, reason?: string, requiresConfirmation?: boolean}>}
    */
-  async validateCommand(command, workingDirectory, _options = {}) {
+  async validateCommand(command, workingDirectory, options = {}) {
     const validation = {
       command,
       workingDirectory,
@@ -224,8 +227,8 @@ export class CommandSecurityService extends EventEmitter {
         }
       }
 
-      // Audit log
-      if (this.config.enableAudit) {
+      // Audit log (skip if in test mode)
+      if (this.config.enableAudit && !options.test) {
         this.logAudit(validation);
       }
 
@@ -239,7 +242,7 @@ export class CommandSecurityService extends EventEmitter {
       validation.reason = `Validation error: ${error.message}`;
       validation.code = 'VALIDATION_ERROR';
 
-      if (this.config.enableAudit) {
+      if (this.config.enableAudit && !options.test) {
         this.logAudit(validation);
       }
 
@@ -275,14 +278,24 @@ export class CommandSecurityService extends EventEmitter {
     }
 
     return this.config.blockedCommands.some((blocked) => {
-      // Exact match or pattern match
+      // Exact match
       if (blocked === command) return true;
-      if (command.includes(blocked)) return true;
+      
+      // Check if it's a complete command (not a substring match for specific dangerous commands)
+      // For example, "rm -rf /" should not match "rm -rf /home/user" 
+      if (blocked.endsWith('/') || blocked.endsWith('/*')) {
+        // For path-specific blocks, ensure exact match or with trailing content
+        if (command === blocked || command.startsWith(blocked + ' ')) {
+          return true;
+        }
+      } else if (command.startsWith(blocked + ' ') || command === blocked) {
+        // For other commands, match if it's the exact command or command with args
+        return true;
+      }
 
-      // Try as regex
+      // Try as regex (don't escape - blockedCommands can contain regex patterns)
       try {
-        const safeBlocked = _.escapeRegExp(blocked);
-        const regex = new RegExp(safeBlocked);
+        const regex = new RegExp('^' + blocked + '$');
         return regex.test(command);
       } catch {
         return false;
@@ -331,7 +344,8 @@ export class CommandSecurityService extends EventEmitter {
     // Common patterns for file paths in commands
     const patterns = [
       /(?:^|\s)([~/][^\s]*)/g, // Absolute paths
-      /(?:^|\s)\.\.\/([^\s]*)/g, // Parent directory paths
+      /(?:^|\s)(\.\.\/[^\s]*)/g, // Parent directory paths (include ../)
+      /(?:^|\s)(\.\/[^\s]*)/g, // Current directory paths (include ./)
       />\s*([^\s]+)/g, // Output redirection
       /<\s*([^\s]+)/g, // Input redirection
       /--file[=\s]+([^\s]+)/g, // --file arguments
@@ -575,7 +589,9 @@ export class CommandSecurityService extends EventEmitter {
    * Update security configuration
    */
   updateConfig(newConfig) {
-    this.config = new SecurityConfig({ ...this.config, ...newConfig });
+    // Merge existing config with new config
+    const currentConfig = this.getConfig();
+    this.config = new SecurityConfig({ ...currentConfig, ...newConfig });
 
     logger.info('Security configuration updated', {
       preset: this.config.preset,

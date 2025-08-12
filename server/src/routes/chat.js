@@ -33,13 +33,23 @@ router.post('/', async (req, res) => {
   if (attachments && Array.isArray(attachments)) {
     const MAX_ATTACHMENT_SIZE = parseInt(process.env.MAX_ATTACHMENT_SIZE || '10485760'); // 10MB default
     const ALLOWED_MIME_TYPES = [
-      'image/jpeg', 'image/png', 'image/gif',
-      'application/pdf', 'text/plain', 'text/markdown',
-      'application/json', 'text/javascript', 'text/x-python',
-      'text/x-swift', 'text/x-java-source', 'text/x-c++src',
-      'text/x-csrc', 'text/x-chdr', 'application/octet-stream'
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'application/pdf',
+      'text/plain',
+      'text/markdown',
+      'application/json',
+      'text/javascript',
+      'text/x-python',
+      'text/x-swift',
+      'text/x-java-source',
+      'text/x-c++src',
+      'text/x-csrc',
+      'text/x-chdr',
+      'application/octet-stream',
     ];
-    
+
     for (const attachment of attachments) {
       if (!attachment.data || !attachment.name || !attachment.mimeType) {
         return res.status(400).json({
@@ -47,7 +57,7 @@ router.post('/', async (req, res) => {
           error: 'Each attachment must have data, name, and mimeType',
         });
       }
-      
+
       // Validate size (base64 is ~33% larger than original)
       const estimatedSize = (attachment.data.length * 3) / 4;
       if (estimatedSize > MAX_ATTACHMENT_SIZE) {
@@ -56,13 +66,13 @@ router.post('/', async (req, res) => {
           error: `Attachment ${attachment.name} exceeds maximum size of ${MAX_ATTACHMENT_SIZE} bytes`,
         });
       }
-      
+
       // Validate MIME type
       if (!ALLOWED_MIME_TYPES.includes(attachment.mimeType)) {
         logger.warn('Unsupported MIME type for attachment', {
           name: attachment.name,
           mimeType: attachment.mimeType,
-          requestId
+          requestId,
         });
       }
     }
@@ -224,10 +234,10 @@ router.post('/', async (req, res) => {
         requestId,
         isLongRunningCompletion: true, // All APNS deliveries are treated as completions
         originalMessage: message, // Include original user message for context
-        attachmentInfo: attachments?.map(att => ({
+        attachmentInfo: attachments?.map((att) => ({
           name: att.name,
           mimeType: att.mimeType,
-          size: att.size || (att.data.length * 3) / 4
+          size: att.size || (att.data.length * 3) / 4,
         })), // Include attachment metadata without the data
       });
 

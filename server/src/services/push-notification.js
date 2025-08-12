@@ -282,16 +282,21 @@ class PushNotificationService {
       notification.priority = 10; // High priority for immediate delivery
 
       // Customize notification based on context
+      const hasAttachments = data.attachmentInfo && data.attachmentInfo.length > 0;
+      const attachmentText = hasAttachments
+        ? ` (${data.attachmentInfo.length} attachment${data.attachmentInfo.length > 1 ? 's' : ''})`
+        : '';
+
       if (data.isLongRunningCompletion) {
         notification.alert = {
-          title: '🎯 Task Completed',
+          title: `🎯 Task Completed${attachmentText}`,
           subtitle: data.projectName,
           body: this.truncateMessage(data.message, 150),
         };
         notification.sound = 'success.aiff'; // Different sound for completions
       } else {
         notification.alert = {
-          title: 'Claude Response Ready',
+          title: `Claude Response Ready${attachmentText}`,
           subtitle: data.projectName,
           body: this.truncateMessage(data.message, 150),
         };
@@ -315,6 +320,8 @@ class PushNotificationService {
         deepLink: `claude-companion://session/${data.sessionId}`,
         // Always APNS delivery method
         deliveryMethod: 'apns_primary',
+        // Include attachment metadata if present
+        attachmentInfo: data.attachmentInfo || null,
       };
 
       // Set thread ID for conversation grouping

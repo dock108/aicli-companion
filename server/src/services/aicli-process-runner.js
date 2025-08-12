@@ -300,7 +300,7 @@ export class AICLIProcessRunner extends EventEmitter {
    * Execute AICLI CLI command for a session
    * This method handles both regular and long-running commands
    */
-  async executeAICLICommand(session, prompt) {
+  async executeAICLICommand(session, prompt, attachmentPaths = []) {
     const { sessionId, workingDirectory, requestId } = session;
 
     // Create logger with session context
@@ -320,6 +320,17 @@ export class AICLIProcessRunner extends EventEmitter {
     } else {
       // For fresh chats (no sessionId), let Claude CLI create its own session ID
       sessionLogger.info('Starting new conversation (no session ID)');
+    }
+
+    // Add attachment file paths if provided
+    if (attachmentPaths && attachmentPaths.length > 0) {
+      // Claude CLI accepts files as additional arguments after the prompt
+      sessionLogger.info('Adding attachment file paths to command', {
+        count: attachmentPaths.length,
+      });
+      for (const filePath of attachmentPaths) {
+        args.push(filePath);
+      }
     }
 
     // Add permission configuration

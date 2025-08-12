@@ -235,7 +235,7 @@ export class AICLIService extends EventEmitter {
 
     const tempDir = path.join(os.tmpdir(), 'claude-attachments');
     await fs.mkdir(tempDir, { recursive: true });
-    
+
     const filePaths = [];
     const tempFiles = [];
 
@@ -246,14 +246,14 @@ export class AICLIService extends EventEmitter {
         const sanitizedName = attachment.name.replace(/[^a-zA-Z0-9.-]/g, '_');
         const tempFileName = `${uniqueId}_${sanitizedName}`;
         const tempFilePath = path.join(tempDir, tempFileName);
-        
+
         // Decode base64 and write to file
         const buffer = Buffer.from(attachment.data, 'base64');
         await fs.writeFile(tempFilePath, buffer);
-        
+
         filePaths.push(tempFilePath);
         tempFiles.push(tempFilePath);
-        
+
         console.log(`📎 Created temp file for attachment: ${tempFileName}`);
       } catch (error) {
         console.error(`Failed to process attachment ${attachment.name}:`, error);
@@ -306,7 +306,7 @@ export class AICLIService extends EventEmitter {
       // Build enhanced prompt with attachment references
       let enhancedPrompt = sanitizedPrompt;
       if (attachmentData.filePaths.length > 0) {
-        const fileList = attachmentData.filePaths.map(fp => path.basename(fp)).join(', ');
+        const fileList = attachmentData.filePaths.map((fp) => path.basename(fp)).join(', ');
         enhancedPrompt = `${sanitizedPrompt}\n\nAttached files: ${fileList}`;
         console.log(`📎 Enhanced prompt with ${attachmentData.filePaths.length} file reference(s)`);
       }
@@ -531,7 +531,13 @@ export class AICLIService extends EventEmitter {
 
   async sendStreamingPrompt(
     prompt,
-    { sessionId, requestId = null, workingDirectory = process.cwd(), skipPermissions = false, attachmentPaths = [] }
+    {
+      sessionId,
+      requestId = null,
+      workingDirectory = process.cwd(),
+      skipPermissions = false,
+      attachmentPaths = [],
+    }
   ) {
     // Validate inputs
     const sanitizedPrompt = InputValidator.sanitizePrompt(prompt);
@@ -564,7 +570,8 @@ export class AICLIService extends EventEmitter {
       validatedWorkingDir,
       skipPermissions,
       sessionId, // Pass through the session ID if provided, or undefined for fresh chats
-      requestId // Pass requestId for response tracking
+      requestId, // Pass requestId for response tracking
+      attachmentPaths // Pass attachment file paths
     );
   }
 
@@ -573,7 +580,8 @@ export class AICLIService extends EventEmitter {
     workingDirectory,
     _skipPermissions = false,
     sessionId = null,
-    requestId = null
+    requestId = null,
+    attachmentPaths = []
   ) {
     // For now, use the existing --print mode until we fix interactive sessions
     // Create a session object for the process runner
@@ -584,11 +592,12 @@ export class AICLIService extends EventEmitter {
       initialPrompt: null,
       isRestoredSession: false,
       requestId,
+      attachmentPaths, // Include attachment paths in session
     };
 
     try {
       // Execute with --print mode (existing working code)
-      const response = await this.executeAICLICommand(session, prompt);
+      const response = await this.executeAICLICommand(session, prompt, attachmentPaths);
 
       // Extract session ID from response
       let extractedSessionId = sessionId;
@@ -756,10 +765,10 @@ export class AICLIService extends EventEmitter {
     return this.processRunner.testAICLICommand(testType);
   }
 
-  async executeAICLICommand(session, prompt) {
+  async executeAICLICommand(session, prompt, attachmentPaths = []) {
     try {
       // Delegate to process runner - will use --resume if sessionId provided
-      return await this.processRunner.executeAICLICommand(session, prompt);
+      return await this.processRunner.executeAICLICommand(session, prompt, attachmentPaths);
     } catch (error) {
       // If session not found, Claude's session expired - retry without session ID
       if (

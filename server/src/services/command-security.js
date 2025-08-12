@@ -17,6 +17,9 @@ import safeRegex from 'safe-regex';
 
 const logger = createLogger('CommandSecurity');
 
+// Regex prefix used to mark patterns as regular expressions
+const REGEX_PREFIX = 're:';
+
 /**
  * Checks if a regex pattern is "safe" (not too long, no nested quantifiers, etc.)
  * This is a basic check; for more robust protection, use a library like safe-regex.
@@ -143,9 +146,6 @@ export class SecurityConfig {
     }
     // If from environment, filter out regex patterns (re:)
     if (fromEnv) {
-      const filtered = patterns.filter((pattern) => !pattern.startsWith('re:'));
-      if (filtered.length !== patterns.length) {
-        logger.warn(
       const filtered = patterns.filter((pattern) => !pattern.startsWith(REGEX_PREFIX));
       if (filtered.length !== patterns.length) {
         logger.warn(

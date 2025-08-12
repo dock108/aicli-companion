@@ -1,5 +1,8 @@
 import SwiftUI
 
+// MARK: - Constants
+private let AttachmentFileSizeLimit = 10 * 1024 * 1024 // 10MB in bytes
+
 @available(iOS 16.0, macOS 13.0, *)
 struct ChatInputBar: View {
     @Binding var messageText: String

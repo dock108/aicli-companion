@@ -287,16 +287,24 @@ class PushNotificationService {
         ? ` (${data.attachmentInfo.length} attachment${data.attachmentInfo.length > 1 ? 's' : ''})`
         : '';
 
+      // Include thinking indicator in title if active
+      let titlePrefix = '';
+      if (data.thinkingMetadata && data.thinkingMetadata.isThinking) {
+        const activity = data.thinkingMetadata.activity || 'Thinking';
+        const duration = data.thinkingMetadata.duration || 0;
+        titlePrefix = `${activity}... (${duration}s) `;
+      }
+
       if (data.isLongRunningCompletion) {
         notification.alert = {
-          title: `🎯 Task Completed${attachmentText}`,
+          title: `${titlePrefix}🎯 Task Completed${attachmentText}`,
           subtitle: data.projectName,
           body: this.truncateMessage(data.message, 150),
         };
         notification.sound = 'success.aiff'; // Different sound for completions
       } else {
         notification.alert = {
-          title: `Claude Response Ready${attachmentText}`,
+          title: `${titlePrefix}Claude Response Ready${attachmentText}`,
           subtitle: data.projectName,
           body: this.truncateMessage(data.message, 150),
         };
@@ -324,6 +332,8 @@ class PushNotificationService {
         attachmentInfo: data.attachmentInfo || null,
         // Include auto-response metadata if present
         autoResponse: data.autoResponse || null,
+        // Include thinking metadata if present
+        thinkingMetadata: data.thinkingMetadata || null,
       };
 
       // Set thread ID for conversation grouping
@@ -349,6 +359,72 @@ class PushNotificationService {
       }
     } catch (error) {
       console.error('❌ Error sending push notification:', error);
+    }
+  }
+
+  /**
+   * Send a push notification for thinking/progress updates
+   * @param {string} clientId - The device token or client ID
+   * @param {Object} data - Progress data
+   * @param {string} data.sessionId - The session ID
+   * @param {string} data.activity - Current activity (Thinking, Creating, etc)
+   * @param {number} data.duration - Duration in seconds
+   * @param {number} data.tokenCount - Token count
+   * @param {string} data.requestId - Request ID for tracking
+   */
+  async sendProgressNotification(clientId, data) {
+    if (!this.isConfigured) {
+      console.log('⚠️  Push notifications not configured - skipping');
+      return;
+    }
+
+    const device = this.deviceTokens.get(clientId) || { token: clientId };
+
+    try {
+      const notification = new apn.Notification();
+
+      // Configure as silent notification for progress updates
+      notification.expiry = Math.floor(Date.now() / 1000) + 300; // 5 minutes
+      notification.contentAvailable = true;
+      notification.priority = 5; // Lower priority for progress
+
+      // Silent notification - no alert
+      notification.sound = null;
+
+      notification.topic = this.bundleId || process.env.APNS_BUNDLE_ID || 'com.claude.companion';
+      notification.pushType = 'background';
+      notification.category = 'THINKING_PROGRESS';
+
+      // Format token display
+      const tokenText =
+        data.tokenCount > 1000
+          ? `${(data.tokenCount / 1000).toFixed(1)}k tokens`
+          : `${data.tokenCount} tokens`;
+
+      notification.payload = {
+        sessionId: data.sessionId,
+        activity: data.activity,
+        duration: data.duration,
+        tokenCount: data.tokenCount,
+        tokenText,
+        requestId: data.requestId,
+        timestamp: new Date().toISOString(),
+        type: 'thinkingProgress',
+        isThinking: true,
+      };
+
+      notification.threadId = data.sessionId;
+
+      // Send the notification
+      const result = await this.sendNotification(device.token, notification);
+
+      if (result.success) {
+        console.log(`✅ Progress notification sent: ${data.activity} (${data.duration}s)`);
+      } else {
+        console.error('❌ Progress notification failed:', result.error);
+      }
+    } catch (error) {
+      console.error('❌ Error sending progress notification:', error);
     }
   }
 

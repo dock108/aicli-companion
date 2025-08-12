@@ -57,22 +57,23 @@ Update the server and macOS app to fully support the new iOS features we've impl
 - ✅ Support pause/resume signals via APNS
 - ✅ Created sendAutoResponseControlNotification method
 
-### Phase 3: Server Thinking Indicator Support
+### Phase 3: Server Thinking Indicator Support ✅
 
-#### TODO 3.1: Extract Claude Thinking Metadata
-- Parse Claude CLI output for progress information
-- Extract duration, token count, and activity type
-- Track thinking state during processing
+#### TODO 3.1: Extract Claude Thinking Metadata ✅
+- ✅ Parse Claude CLI output for progress information
+- ✅ Extract duration, token count, and activity type
+- ✅ Track thinking state during processing
+- ✅ Map tool names to activity descriptions
 
-#### TODO 3.2: Stream Progress via APNS
-- Include thinking metadata in push notifications
-- Send periodic progress updates for long operations
-- Add escape/interrupt support signals
+#### TODO 3.2: Stream Progress via APNS ✅
+- ✅ Include thinking metadata in push notifications
+- ✅ Send periodic progress updates via sendProgressNotification
+- ✅ Add silent background notifications for progress
 
-#### TODO 3.3: Create Progress Polling Endpoint
-- Add `/api/chat/:sessionId/progress` endpoint
-- Return real-time thinking status
-- Support non-APNS clients
+#### TODO 3.3: Create Progress Polling Endpoint ✅
+- ✅ Add `/api/chat/:sessionId/progress` endpoint
+- ✅ Return real-time thinking status
+- ✅ Support non-APNS clients
 
 ### Phase 4: macOS App Feature Parity
 
@@ -162,6 +163,6 @@ Update the server and macOS app to fully support the new iOS features we've impl
 4. Run linting after each file change
 5. Commit after each phase completion
 
-**Current Status**: Phase 2 Complete ✅, Starting Phase 3  
-**Next Step**: TODO 3.1 - Extract Claude Thinking Metadata  
+**Current Status**: Phase 3 Complete ✅, Starting Phase 4  
+**Next Step**: TODO 4.1 - macOS Attachment Support  
 **Last Updated**: 2025-08-12

@@ -395,6 +395,60 @@ router.post('/auto-response/stop', async (req, res) => {
 });
 
 /**
+ * GET /api/chat/:sessionId/progress - Get thinking progress for a session
+ */
+router.get('/:sessionId/progress', async (req, res) => {
+  const { sessionId } = req.params;
+  const requestId = req.headers['x-request-id'] || `REQ_${Date.now()}`;
+
+  logger.info('Fetching thinking progress', { sessionId, requestId });
+
+  try {
+    // Get AICLI service from app instance
+    const aicliService = req.app.get('aicliService');
+
+    // Check if session exists and get progress
+    const sessionBuffer = aicliService.sessionManager.getSessionBuffer(sessionId);
+
+    if (!sessionBuffer) {
+      return res.status(404).json({
+        success: false,
+        error: 'Session not found',
+        sessionId,
+      });
+    }
+
+    // Extract thinking metadata from session
+    const thinkingMetadata = sessionBuffer.thinkingMetadata || {
+      isThinking: false,
+      activity: null,
+      duration: 0,
+      tokenCount: 0,
+    };
+
+    res.json({
+      success: true,
+      sessionId,
+      isThinking: thinkingMetadata.isThinking,
+      activity: thinkingMetadata.activity,
+      duration: thinkingMetadata.duration,
+      tokenCount: thinkingMetadata.tokenCount,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error('Failed to fetch thinking progress', {
+      sessionId,
+      error: error.message,
+    });
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch progress',
+    });
+  }
+});
+
+/**
  * GET /api/chat/:sessionId/messages - Get messages for a session
  */
 router.get('/:sessionId/messages', async (req, res) => {

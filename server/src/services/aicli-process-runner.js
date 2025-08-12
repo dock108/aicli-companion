@@ -4,6 +4,7 @@ import { processMonitor } from '../utils/process-monitor.js';
 import { InputValidator, MessageProcessor } from './aicli-utils.js';
 import { ClaudeStreamParser } from './stream-parser.js';
 import { createLogger } from '../utils/logger.js';
+import { commandSecurity } from './command-security.js';
 
 const logger = createLogger('AICLIProcess');
 
@@ -295,6 +296,47 @@ export class AICLIProcessRunner extends EventEmitter {
       logger.warn('Permission checks bypassed - dangerously-skip-permissions enabled');
     }
   }
+  
+  /**
+   * Intercept and validate tool use from Claude
+   * This is called when we detect Claude is trying to use a tool
+   */
+  async validateToolUse(toolName, toolInput, sessionId) {
+    // Only validate Bash commands for now
+    if (toolName !== 'Bash') {
+      return { allowed: true };
+    }
+    
+    // Extract command from tool input
+    const command = toolInput.command || toolInput;
+    
+    // Validate the command with security service
+    const validation = await commandSecurity.validateCommand(
+      command,
+      this.currentWorkingDirectory,
+      { sessionId }
+    );
+    
+    if (!validation.allowed) {
+      logger.warn('Security blocked command', {
+        sessionId,
+        command,
+        reason: validation.reason,
+        code: validation.code
+      });
+      
+      // Emit security violation
+      this.emit('securityViolation', {
+        sessionId,
+        type: 'COMMAND_BLOCKED',
+        command,
+        reason: validation.reason,
+        code: validation.code
+      });
+    }
+    
+    return validation;
+  }
 
   /**
    * Execute AICLI CLI command for a session
@@ -305,6 +347,25 @@ export class AICLIProcessRunner extends EventEmitter {
 
     // Create logger with session context
     const sessionLogger = logger.child({ sessionId });
+    
+    // Security validation for working directory
+    const dirValidation = await commandSecurity.validateDirectory(workingDirectory);
+    if (!dirValidation.allowed) {
+      sessionLogger.warn('Security violation: Working directory not allowed', {
+        workingDirectory,
+        reason: dirValidation.reason
+      });
+      
+      // Emit security violation event
+      this.emit('securityViolation', {
+        sessionId,
+        type: 'DIRECTORY_VIOLATION',
+        workingDirectory,
+        reason: dirValidation.reason
+      });
+      
+      throw new Error(`Security violation: ${dirValidation.reason}`);
+    }
 
     // Build AICLI CLI arguments - use stream-json to avoid buffer limits
     // Include --print flag as required by AICLI CLI for stdin input
@@ -405,6 +466,10 @@ export class AICLIProcessRunner extends EventEmitter {
       promptLength: prompt?.length || 0,
       workingDirectory,
     });
+    
+    // Store working directory for command validation
+    this.currentWorkingDirectory = workingDirectory;
+    this.currentSessionId = sessionId;
 
     return new Promise((promiseResolve, reject) => {
       let aicliProcess;

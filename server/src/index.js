@@ -15,6 +15,7 @@ import pushNotificationRoutes from './routes/push-notifications.js';
 import chatRoutes from './routes/chat.js';
 import devicesRoutes from './routes/devices.js';
 import authRoutes from './routes/auth.js';
+import securityRoutes from './routes/security.js';
 import { errorHandler } from './middleware/error.js';
 import { AICLIService } from './services/aicli.js';
 import { ServerConfig } from './config/server-config.js';
@@ -106,6 +107,9 @@ class AICLICompanionServer {
 
     // Auth routes (QR code generation, etc.)
     this.app.use('/api/auth', authRoutes);
+    
+    // Security routes
+    this.app.use('/api/security', securityRoutes);
 
     // API routes
     setupRoutes(this.app, this.aicliService);
@@ -134,6 +138,7 @@ class AICLICompanionServer {
           health: '/health',
           api: '/api',
           auth: '/api/auth',
+          security: '/api/security',
           chat: '/api/chat',
           devices: '/api/devices',
           projects: '/api/projects',

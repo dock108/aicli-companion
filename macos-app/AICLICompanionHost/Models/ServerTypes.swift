@@ -70,6 +70,16 @@ struct Session: Identifiable {
     let deviceName: String
     let connectedAt: Date
     let signalStrength: Double
+
+    // New feature tracking
+    var hasAttachments: Bool = false
+    var attachmentCount: Int = 0
+    var autoResponseActive: Bool = false
+    var autoResponseIteration: Int = 0
+    var isThinking: Bool = false
+    var thinkingActivity: String?
+    var thinkingDuration: Int = 0
+    var tokenCount: Int = 0
 }
 
 // MARK: - Log Entry

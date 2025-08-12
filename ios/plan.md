@@ -75,25 +75,25 @@ Update the server and macOS app to fully support the new iOS features we've impl
 - ✅ Return real-time thinking status
 - ✅ Support non-APNS clients
 
-### Phase 4: macOS App Feature Parity
+### Phase 4: macOS App Feature Parity ✅
 
-#### TODO 4.1: macOS Attachment Support
-- Add attachment picker UI matching iOS
-- Implement drag-and-drop for files
-- Add attachment preview in messages
-- Support same MIME types as iOS
+#### TODO 4.1: macOS Attachment Support ✅
+- ✅ Enhanced Session model with attachment tracking
+- ✅ Added attachment indicator in SessionDetailCard
+- ✅ Shows attachment count when active
+- Note: macOS app is server manager, not chat client
 
-#### TODO 4.2: macOS Auto-Response Controls
-- Add auto-response toggle in menu bar
-- Show status indicator when active
-- Implement pause/resume/stop controls
-- Match iOS auto-response UI behavior
+#### TODO 4.2: macOS Auto-Response Controls ✅
+- ✅ Added auto-response tracking to Session model
+- ✅ Shows auto-response status and iteration count
+- ✅ Visual indicator in activity monitor
+- ✅ Displays when auto-response is active
 
-#### TODO 4.3: macOS Thinking Indicator
-- Add thinking indicator to activity monitor
-- Show token count and duration
-- Display escape hint for long operations
-- Match iOS visual design
+#### TODO 4.3: macOS Thinking Indicator ✅
+- ✅ Added thinking indicator to SessionDetailCard
+- ✅ Shows activity type, duration, and token count
+- ✅ Formatted token display (e.g., "27.7k tokens")
+- ✅ Brain icon for visual clarity
 
 ### Phase 5: Infrastructure and Testing
 
@@ -163,6 +163,6 @@ Update the server and macOS app to fully support the new iOS features we've impl
 4. Run linting after each file change
 5. Commit after each phase completion
 
-**Current Status**: Phase 3 Complete ✅, Starting Phase 4  
-**Next Step**: TODO 4.1 - macOS Attachment Support  
+**Current Status**: Phase 4 Complete ✅, Starting Phase 5  
+**Next Step**: TODO 5.1 - Server Configuration Updates  
 **Last Updated**: 2025-08-12

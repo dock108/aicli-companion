@@ -108,7 +108,12 @@ extension ServerManager {
             if SettingsManager.shared.tunnelProvider == "ngrok" &&
                !SettingsManager.shared.ngrokAuthToken.isEmpty {
                 environment["NGROK_AUTH_TOKEN"] = SettingsManager.shared.ngrokAuthToken
+                let tokenPrefix = String(SettingsManager.shared.ngrokAuthToken.prefix(12))
+                let tokenLength = SettingsManager.shared.ngrokAuthToken.count
                 addLog(.info, "🌐 Tunnel enabled with ngrok")
+                addLog(.debug, "Ngrok token configured: \(tokenPrefix)... (length: \(tokenLength))")
+            } else if SettingsManager.shared.tunnelProvider == "ngrok" {
+                addLog(.warning, "Ngrok selected but no auth token provided")
             }
         } else {
             environment["ENABLE_TUNNEL"] = "false"

@@ -278,6 +278,40 @@ class SettingsManager: ObservableObject {
 
     // Add cancellables storage
     private var cancellables = Set<AnyCancellable>()
+
+    // MARK: - Environment Variable Support
+
+    /// Set an environment variable for the server process
+    func setEnvironmentVariable(_ name: String, value: String) {
+        UserDefaults.standard.set(value, forKey: "env_\(name)")
+        configurationChanged = true
+    }
+
+    /// Get an environment variable value
+    func getEnvironmentVariable(_ name: String) -> String? {
+        return UserDefaults.standard.string(forKey: "env_\(name)")
+    }
+
+    /// Remove an environment variable
+    func removeEnvironmentVariable(_ name: String) {
+        UserDefaults.standard.removeObject(forKey: "env_\(name)")
+        configurationChanged = true
+    }
+
+    /// Get all environment variables as a dictionary
+    func getAllEnvironmentVariables() -> [String: String] {
+        var envVars: [String: String] = [:]
+
+        // Get all UserDefaults keys that start with "env_"
+        for (key, value) in UserDefaults.standard.dictionaryRepresentation() {
+            if key.hasPrefix("env_"), let stringValue = value as? String {
+                let envName = String(key.dropFirst(4)) // Remove "env_" prefix
+                envVars[envName] = stringValue
+            }
+        }
+
+        return envVars
+    }
 }
 
 // MARK: - Supporting Types

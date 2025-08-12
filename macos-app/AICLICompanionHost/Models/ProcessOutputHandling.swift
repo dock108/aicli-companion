@@ -175,7 +175,7 @@ extension ServerManager {
             if match.numberOfRanges > 1 {
                 let tokenRange = match.range(at: 1)
                 if let range = Range(tokenRange, in: line) {
-                    let partialToken = String(line[range])
+                    _ = String(line[range])
                     // This is only a partial token, we need the full one
                     // Store it temporarily and look for the full token in subsequent lines
                     return nil  // Don't use partial token

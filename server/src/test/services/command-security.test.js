@@ -127,6 +127,46 @@ describe('CommandSecurityService', () => {
     });
   });
 
+  describe('Blocked Command Detection', () => {
+    it('should handle literal patterns safely', () => {
+      securityService.config.blockedCommands = ['test.file*'];
+
+      // Should not match due to literal interpretation
+      assert.strictEqual(securityService.isBlockedCommand('test.fileX'), false);
+      assert.strictEqual(securityService.isBlockedCommand('testXfile'), false);
+
+      // Should match exact command
+      assert.strictEqual(securityService.isBlockedCommand('test.file*'), true);
+    });
+
+    it('should handle regex patterns when prefixed', () => {
+      securityService.config.blockedCommands = ['re:test\\.file.*'];
+
+      // Should match due to regex interpretation
+      assert.strictEqual(securityService.isBlockedCommand('test.file.txt'), true);
+      assert.strictEqual(securityService.isBlockedCommand('test.file123'), true);
+
+      // Should not match
+      assert.strictEqual(securityService.isBlockedCommand('testXfile.txt'), false);
+    });
+
+    it('should match command with arguments', () => {
+      securityService.config.blockedCommands = ['rm'];
+
+      assert.strictEqual(securityService.isBlockedCommand('rm file.txt'), true);
+      assert.strictEqual(securityService.isBlockedCommand('rm'), true);
+      assert.strictEqual(securityService.isBlockedCommand('rmdir'), false);
+    });
+
+    it('should handle path-specific blocks correctly', () => {
+      securityService.config.blockedCommands = ['rm -rf /'];
+
+      assert.strictEqual(securityService.isBlockedCommand('rm -rf /'), true);
+      assert.strictEqual(securityService.isBlockedCommand('rm -rf / --force'), true);
+      assert.strictEqual(securityService.isBlockedCommand('rm -rf /home/user'), false);
+    });
+  });
+
   describe('Audit Logging', () => {
     beforeEach(() => {
       securityService.config.enableAudit = true;

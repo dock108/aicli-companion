@@ -25,18 +25,44 @@ const REGEX_PREFIX = 're:';
  * This is a basic check; for more robust protection, use a library like safe-regex.
  */
 function isSafeRegex(pattern) {
+  // Basic input validation
+  if (typeof pattern !== 'string') return false;
+  if (pattern.length === 0) return false;
+
   // Use the safe-regex library for robust regex safety checking
   if (!safeRegex(pattern)) return false;
-  // Optionally, keep additional custom checks if desired:
+
+  // Additional security checks:
   // Limit length to 100 chars (arbitrary, adjust as needed)
   if (pattern.length > 100) return false;
+
   // Disallow nested quantifiers (e.g., (a+)+ or (a*)*)
   if (/\([^)]*[*+?][^)]*\)[*+?]/.test(pattern)) return false;
+
   // Disallow lookbehinds (which can be slow in some engines)
   if (/\(\?<=|\(\?<!/.test(pattern)) return false;
+
   // Disallow backreferences (e.g., \1, \2)
   if (/\\\d/.test(pattern)) return false;
-  // Add more checks as needed
+
+  // Disallow catastrophic backtracking patterns
+  if (/\*[*+?]|\+[*+?]|\?[*+?]/.test(pattern)) return false;
+
+  // Disallow excessive nesting depth
+  const parenDepth = (pattern.match(/\(/g) || []).length;
+  if (parenDepth > 10) return false;
+
+  // Test compilation safety with timeout
+  try {
+    const testRegex = new RegExp(pattern);
+    // Quick test to ensure it doesn't hang
+    const testStart = Date.now();
+    testRegex.test('test');
+    if (Date.now() - testStart > 10) return false; // Took too long
+  } catch {
+    return false;
+  }
+
   return true;
 }
 
@@ -355,9 +381,20 @@ export class CommandSecurityService extends EventEmitter {
             logger.warn(`Blocked command regex pattern rejected as unsafe: ${pattern}`);
             return false;
           }
-          regex = new RegExp(pattern);
+          try {
+            // Additional validation: ensure pattern is a valid regex
+            regex = new RegExp(pattern);
+            // Test the regex with an empty string to catch any immediate issues
+            regex.test('');
+          } catch (error) {
+            logger.warn(
+              `Blocked command regex pattern failed to compile: ${pattern}`,
+              error.message
+            );
+            return false;
+          }
         } else {
-          // Escape as literal
+          // Escape as literal - this is safe as escapeRegExp sanitizes the input
           regex = new RegExp(`^${escapeRegExp(blocked)}$`);
         }
         return regex.test(command);
@@ -391,8 +428,19 @@ export class CommandSecurityService extends EventEmitter {
           logger.warn(`Destructive command pattern rejected as unsafe: ${pattern}`);
           return false;
         }
-        const regex = new RegExp(pattern);
-        return regex.test(command);
+        try {
+          // Additional validation: ensure pattern is a valid regex
+          const regex = new RegExp(pattern);
+          // Test the regex with an empty string to catch any immediate issues
+          regex.test('');
+          return regex.test(command);
+        } catch (error) {
+          logger.warn(
+            `Destructive command regex pattern failed to compile: ${pattern}`,
+            error.message
+          );
+          return false;
+        }
       } catch {
         return false;
       }

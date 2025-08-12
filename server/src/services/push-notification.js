@@ -597,16 +597,74 @@ class PushNotificationService {
   }
 
   /**
+   * Strip markdown formatting from text for cleaner notification display
+   * @param {string} text - The text to clean
+   * @returns {string} - Clean text without markdown
+   */
+  stripMarkdown(text) {
+    if (!text) return '';
+
+    let cleanText = text;
+
+    // Remove code blocks first (both backtick and indented)
+    cleanText = cleanText.replace(/```[\s\S]*?```/g, '[code block]');
+    cleanText = cleanText.replace(/`([^`]+)`/g, '$1');
+
+    // Remove images
+    cleanText = cleanText.replace(/!\[([^\]]*)\]\([^)]+\)/g, '[image: $1]');
+
+    // Remove links but keep text
+    cleanText = cleanText.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+
+    // Remove headers
+    cleanText = cleanText.replace(/^#{1,6}\s+(.+)$/gm, '$1');
+
+    // Remove bold/italic markers
+    cleanText = cleanText.replace(/(\*\*|__)(.*?)\1/g, '$2');
+    cleanText = cleanText.replace(/(\*|_)(.*?)\1/g, '$2');
+
+    // Remove blockquotes
+    cleanText = cleanText.replace(/^>\s+(.+)$/gm, '$1');
+
+    // Remove horizontal rules
+    cleanText = cleanText.replace(/^[-*_]{3,}$/gm, '');
+
+    // Remove list markers
+    cleanText = cleanText.replace(/^[\s]*[-*+]\s+(.+)$/gm, '$1');
+    cleanText = cleanText.replace(/^[\s]*\d+\.\s+(.+)$/gm, '$1');
+
+    // Clean up extra whitespace
+    cleanText = cleanText.replace(/\n{3,}/g, '\n\n');
+    cleanText = cleanText.trim();
+
+    return cleanText;
+  }
+
+  /**
    * Truncate a message for notification display
    * @param {string} message - The message to truncate
    * @param {number} maxLength - Maximum length
    * @returns {string} - Truncated message
    */
   truncateMessage(message, maxLength = 150) {
-    if (!message || message.length <= maxLength) {
-      return message || '';
+    if (!message) return '';
+
+    // First strip markdown formatting
+    const cleanMessage = this.stripMarkdown(message);
+
+    if (cleanMessage.length <= maxLength) {
+      return cleanMessage;
     }
-    return `${message.substring(0, maxLength)}...`;
+
+    // Try to truncate at a word boundary
+    const truncated = cleanMessage.substring(0, maxLength);
+    const lastSpace = truncated.lastIndexOf(' ');
+
+    if (lastSpace > maxLength * 0.8) {
+      return `${truncated.substring(0, lastSpace)}...`;
+    }
+
+    return `${truncated}...`;
   }
 
   /**

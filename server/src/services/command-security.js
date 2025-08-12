@@ -336,14 +336,14 @@ export class CommandSecurityService extends EventEmitter {
       // Security check first: reject unsafe patterns
       if (typeof blocked === 'string') {
         // Remove any regex prefix if present (legacy support)
-        let pattern = blocked.startsWith(REGEX_PREFIX) ? blocked.slice(3) : blocked;
-        
+        const pattern = blocked.startsWith(REGEX_PREFIX) ? blocked.slice(3) : blocked;
+
         // For regex patterns, reject them entirely for security
         if (blocked.startsWith(REGEX_PREFIX)) {
           logger.warn(`Blocked command regex pattern rejected for security: ${pattern}`);
           return false; // Reject all regex patterns
         }
-        
+
         // Use exact command matching logic (secure)
         // Exact match first (most secure)
         if (pattern === command) return true;
@@ -360,7 +360,7 @@ export class CommandSecurityService extends EventEmitter {
           return true;
         }
       }
-      
+
       return false;
     });
   }

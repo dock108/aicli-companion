@@ -182,7 +182,7 @@ struct ReconnectionCard: View {
                 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Reconnecting...")
-                        .font(Typography.font(.headline))
+                        .font(Typography.font(.heading3))
                         .foregroundColor(Colors.textPrimary(for: colorScheme))
                     
                     Text("Attempt \(reliabilityManager.reconnectAttempt) • \(timeRemaining)")
@@ -239,7 +239,7 @@ struct ConnectionHistoryCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
             Text("Recent Events")
-                .font(Typography.font(.headline))
+                .font(Typography.font(.heading3))
                 .foregroundColor(Colors.textPrimary(for: colorScheme))
             
             if reliabilityManager.connectionHistory.isEmpty {

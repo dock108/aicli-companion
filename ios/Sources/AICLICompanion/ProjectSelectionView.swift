@@ -68,10 +68,7 @@ struct ProjectSelectionView: View {
         VStack(spacing: 0) {
             // Header
             NavigationTopBar(title: "Select Project") {
-                Button("Disconnect") {
-                    disconnectFromServer()
-                }
-                .foregroundColor(Colors.accentPrimaryEnd)
+                SettingsView()
             }
             
             if isLoading {
@@ -103,8 +100,19 @@ struct ProjectSelectionView: View {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
                     
-                    SecondaryButton("Retry") {
-                        loadProjects()
+                    // Show different buttons based on error type
+                    if errorMessage.contains("not configured") || errorMessage.contains("No server") {
+                        PrimaryButton("Setup Connection") {
+                            // Trigger navigation back to ConnectionView
+                            settings.clearConnection()
+                            if let onDisconnect = onDisconnect {
+                                onDisconnect()
+                            }
+                        }
+                    } else {
+                        SecondaryButton("Retry") {
+                            loadProjects()
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

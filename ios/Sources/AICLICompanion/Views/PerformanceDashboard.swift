@@ -62,7 +62,7 @@ struct MessageProcessingCard: View {
         VStack(alignment: .leading, spacing: Spacing.md) {
             HStack {
                 Label("Message Processing", systemImage: "speedometer")
-                    .font(Typography.font(.headline))
+                    .font(Typography.font(.heading3))
                     .foregroundColor(Colors.textPrimary(for: colorScheme))
                 
                 Spacer()
@@ -122,7 +122,7 @@ struct ConnectionStabilityCard: View {
         VStack(alignment: .leading, spacing: Spacing.md) {
             HStack {
                 Label("Connection Stability", systemImage: "wifi")
-                    .font(Typography.font(.headline))
+                    .font(Typography.font(.heading3))
                     .foregroundColor(Colors.textPrimary(for: colorScheme))
                 
                 Spacer()
@@ -195,7 +195,7 @@ struct SessionStatsCard: View {
         VStack(alignment: .leading, spacing: Spacing.md) {
             HStack {
                 Label("Current Session", systemImage: "timer")
-                    .font(Typography.font(.headline))
+                    .font(Typography.font(.heading3))
                     .foregroundColor(Colors.textPrimary(for: colorScheme))
                 
                 Spacer()
@@ -278,7 +278,7 @@ struct MetricRow: View {
             Spacer()
             
             Text(value)
-                .font(Typography.font(.headline))
+                .font(Typography.font(.heading3))
                 .foregroundColor(color)
         }
         .padding(.vertical, 4)

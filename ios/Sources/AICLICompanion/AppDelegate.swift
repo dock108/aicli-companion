@@ -1,4 +1,5 @@
 #if os(iOS)
+import Foundation
 import UIKit
 import UserNotifications
 
@@ -21,7 +22,7 @@ public class AppDelegate: NSObject, UIApplicationDelegate {
         PerformanceMonitor.shared.startSession()
         
         // Setup enhanced push notifications
-        EnhancedPushNotificationService.shared.setupNotificationCategories()
+        PushNotificationService.shared.setupNotificationCategories()
         
         return true
     }
@@ -76,7 +77,7 @@ public class AppDelegate: NSObject, UIApplicationDelegate {
         print("📨 App state: \(application.applicationState.rawValue) (0=active, 1=inactive, 2=background)")
         
         // IMPORTANT: Skip processing if app is in foreground (active)
-        // The willPresent delegate in EnhancedPushNotificationService handles foreground notifications
+        // The willPresent delegate in PushNotificationService handles foreground notifications
         if application.applicationState == .active {
             print("📱 App is active/foreground - skipping (handled by willPresent)")
             completionHandler(.noData)
@@ -146,7 +147,7 @@ public class AppDelegate: NSObject, UIApplicationDelegate {
         let notificationBody = userInfo["body"] as? String ?? "You have a new message in \(projectName)"
         
         // Schedule local notification for legacy notifications
-        EnhancedPushNotificationService.shared.scheduleProjectNotification(
+        PushNotificationService.shared.scheduleProjectNotification(
             title: notificationTitle,
             body: notificationBody,
             projectId: projectId,

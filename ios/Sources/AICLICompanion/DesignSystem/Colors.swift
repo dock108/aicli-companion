@@ -96,22 +96,6 @@ public struct Colors {
         }
         return baseColors
     }
-
-    // MARK: - Adaptive Colors (deprecated - use specific methods above)
-    @available(*, deprecated, message: "Use bgBase(for:) instead")
-    public static func adaptiveBackground(colorScheme: ColorScheme) -> Color {
-        bgBase(for: colorScheme)
-    }
-
-    @available(*, deprecated, message: "Use textPrimary(for:) instead")
-    public static func adaptivePrimaryText(colorScheme: ColorScheme) -> Color {
-        textPrimary(for: colorScheme)
-    }
-
-    @available(*, deprecated, message: "Use textSecondary(for:) instead")
-    public static func adaptiveSecondaryText(colorScheme: ColorScheme) -> Color {
-        textSecondary(for: colorScheme)
-    }
 }
 
 // MARK: - Color Extension for Hex Support

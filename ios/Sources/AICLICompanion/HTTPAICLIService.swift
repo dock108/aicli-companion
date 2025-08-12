@@ -249,6 +249,7 @@ public class HTTPAICLIService: ObservableObject {
         message: String,
         projectPath: String?,
         sessionId: String? = nil,
+        attachments: [AttachmentData]? = nil,
         completion: @escaping (Result<ClaudeChatResponse, AICLICompanionError>) -> Void
     ) {
         guard let baseURL = baseURL else {
@@ -256,7 +257,7 @@ public class HTTPAICLIService: ObservableObject {
             return
         }
 
-        let request = createChatRequest(baseURL: baseURL, message: message, projectPath: projectPath, sessionId: sessionId)
+        let request = createChatRequest(baseURL: baseURL, message: message, projectPath: projectPath, sessionId: sessionId, attachments: attachments)
         
         guard let httpRequest = request else {
             completion(.failure(.jsonParsingError(NSError(domain: "HTTPAICLIService", code: -1, userInfo: nil))))
@@ -291,7 +292,7 @@ public class HTTPAICLIService: ObservableObject {
     
     // MARK: - Helper Methods
     
-    private func createChatRequest(baseURL: URL, message: String, projectPath: String?, sessionId: String?) -> URLRequest? {
+    private func createChatRequest(baseURL: URL, message: String, projectPath: String?, sessionId: String?, attachments: [AttachmentData]? = nil) -> URLRequest? {
         let chatURL = baseURL.appendingPathComponent("api/chat")
         var request = URLRequest(url: chatURL)
         request.httpMethod = "POST"
@@ -315,6 +316,19 @@ public class HTTPAICLIService: ObservableObject {
         
         if let deviceToken = deviceToken {
             payload["deviceToken"] = deviceToken
+        }
+        
+        // Add attachments as base64 encoded data
+        if let attachments = attachments, !attachments.isEmpty {
+            let attachmentPayloads = attachments.map { attachment in
+                return [
+                    "name": attachment.name,
+                    "data": attachment.data.base64EncodedString(),
+                    "mimeType": attachment.mimeType,
+                    "size": attachment.size
+                ] as [String: Any]
+            }
+            payload["attachments"] = attachmentPayloads
         }
 
         do {

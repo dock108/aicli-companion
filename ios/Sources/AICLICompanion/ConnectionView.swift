@@ -21,6 +21,7 @@ struct ConnectionView: View {
     @State private var showHelp = false
     @State private var heroScale: CGFloat = 0.9
     @State private var heroOpacity: Double = 0
+    @State private var showingSettings = false
     
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject var settings: SettingsManager
@@ -93,6 +94,21 @@ struct ConnectionView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Colors.bgBase(for: colorScheme))
+        .overlay(alignment: .topTrailing) {
+            // Settings button
+            Button(action: {
+                showingSettings = true
+            }) {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 20))
+                    .foregroundColor(Colors.textSecondary(for: colorScheme))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(PlainButtonStyle())
+            .padding(.top, 60)
+            .padding(.trailing, 16)
+        }
         .onAppear {
             animateHero()
         }
@@ -145,6 +161,11 @@ struct ConnectionView: View {
         }
         .sheet(isPresented: $showHelp) {
             HelpSheet()
+        }
+        .sheet(isPresented: $showingSettings) {
+            NavigationStack {
+                SettingsView()
+            }
         }
         .alert("Connection Error", isPresented: Binding(
             get: { connectionState == .error },

@@ -24,6 +24,7 @@ struct ChatView: View {
     @State private var lastScrollPosition: CGFloat = 0
     @State private var scrollViewHeight: CGFloat = 0
     @State private var contentHeight: CGFloat = 0
+    @State private var unreadMessageCount: Int = 0
     
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
@@ -78,6 +79,9 @@ struct ChatView: View {
                     oldestQueuedTimestamp: queueManager.oldestQueuedTimestamp
                 )
                 
+                // Auto-response controls
+                AutoResponseControls()
+                
                 // Message list
                 ChatMessageList(
                     messages: viewModel.messages,
@@ -100,10 +104,19 @@ struct ChatView: View {
                     isIPad: isIPad,
                     horizontalSizeClass: horizontalSizeClass,
                     colorScheme: colorScheme,
-                    onSendMessage: sendMessage
+                    onSendMessage: { attachments in
+                        sendMessage(with: attachments)
+                    }
                 )
                 .offset(y: inputBarOffset)
             }
+            
+            // Scroll to bottom FAB
+            ScrollToBottomButton(
+                isVisible: !isNearBottom && !viewModel.messages.isEmpty,
+                unreadCount: unreadMessageCount,
+                onTap: scrollToBottom
+            )
         }
         .copyConfirmationOverlay()
         .onAppear {
@@ -129,6 +142,9 @@ struct ChatView: View {
                 viewModel.currentProject = selectedProject
                 handleProjectChange()
             }
+        }
+        .onChange(of: viewModel.messages.count) { oldCount, newCount in
+            handleMessageCountChange(oldCount: oldCount, newCount: newCount)
         }
         .alert("Permission Required", isPresented: $showingPermissionAlert) {
             if let request = permissionRequest {
@@ -244,7 +260,7 @@ struct ChatView: View {
     }
     
     // MARK: - Actions
-    private func sendMessage() {
+    private func sendMessage(with attachments: [AttachmentData] = []) {
         guard let project = selectedProject else { return }
         
         let text = messageText
@@ -264,7 +280,7 @@ struct ChatView: View {
         // Send message directly - let Claude handle session creation
         // For fresh chats: currentSessionId will be nil
         // For continued chats: currentSessionId will have Claude's session ID
-        viewModel.sendMessage(text, for: project)
+        viewModel.sendMessage(text, for: project, attachments: attachments)
     }
     
     private func clearCurrentSession() {
@@ -417,7 +433,43 @@ struct ChatView: View {
     private func checkIfNearBottom(_ position: CGFloat) {
         let threshold: CGFloat = 100
         let maxScrollPosition = max(0, contentHeight - scrollViewHeight)
+        let wasNearBottom = isNearBottom
         isNearBottom = (maxScrollPosition - position) <= threshold
+        
+        // Reset unread count when user scrolls to bottom
+        if isNearBottom && !wasNearBottom {
+            unreadMessageCount = 0
+        }
+    }
+    
+    private func scrollToBottom() {
+        // Trigger scroll to bottom via a notification that ChatMessageList can listen to
+        NotificationCenter.default.post(
+            name: .scrollToBottom,
+            object: nil
+        )
+        
+        // Reset unread count
+        unreadMessageCount = 0
+        
+        // Update near bottom status
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            isNearBottom = true
+        }
+    }
+    
+    private func handleMessageCountChange(oldCount: Int, newCount: Int) {
+        // Only track new messages from assistant when user is not near bottom
+        if newCount > oldCount, !isNearBottom {
+            let newMessages = Array(viewModel.messages.suffix(newCount - oldCount))
+            let assistantMessages = newMessages.filter { $0.sender == .assistant }
+            unreadMessageCount += assistantMessages.count
+        }
+        
+        // Reset count when switching projects or loading initial messages
+        if oldCount == 0 {
+            unreadMessageCount = 0
+        }
     }
     
     // MARK: - Message Refresh

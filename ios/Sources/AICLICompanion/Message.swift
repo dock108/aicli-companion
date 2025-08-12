@@ -24,7 +24,7 @@ struct Message: Identifiable, Codable {
         case id, content, sender, timestamp, type, metadata, streamingState, requestId, richContent
     }
 
-    init(id: UUID = UUID(), content: String, sender: MessageSender, timestamp: Date = Date(), type: MessageType = .text, metadata: AICLIMessageMetadata? = nil, streamingState: StreamingState? = nil, requestId: String? = nil, richContent: RichContent? = nil) {
+    init(id: UUID = UUID(), content: String, sender: MessageSender, timestamp: Date = Date(), type: MessageType = .text, metadata: AICLIMessageMetadata? = nil, streamingState: StreamingState? = nil, requestId: String? = nil, richContent: RichContent? = nil, attachments: [AttachmentData]? = nil) {
         self.id = id
         self.content = content
         self.sender = sender
@@ -33,7 +33,27 @@ struct Message: Identifiable, Codable {
         self.metadata = metadata
         self.streamingState = streamingState
         self.requestId = requestId
-        self.richContent = richContent
+        
+        // If attachments are provided, create rich content for them
+        if let attachments = attachments, !attachments.isEmpty {
+            let attachmentsData = AttachmentsData(attachments: attachments.map { attachment in
+                AttachmentInfo(
+                    id: UUID(),
+                    name: attachment.name,
+                    mimeType: attachment.mimeType,
+                    size: attachment.size,
+                    base64Data: attachment.data.base64EncodedString(),
+                    url: nil,
+                    thumbnailBase64: nil
+                )
+            })
+            self.richContent = RichContent(
+                contentType: .attachments,
+                data: .attachments(attachmentsData)
+            )
+        } else {
+            self.richContent = richContent
+        }
         
         // Initialize CloudKit properties
         self.cloudKitRecordID = nil
@@ -57,6 +77,7 @@ enum RichContentType: String, Codable {
     case commandOutput = "command_output"
     case toolResult = "tool_result"
     case markdown = "markdown"
+    case attachments = "attachments"
 }
 
 enum RichContentData: Codable {
@@ -65,6 +86,7 @@ enum RichContentData: Codable {
     case commandOutput(CommandOutputData)
     case toolResult(ToolResultData)
     case markdown(MarkdownData)
+    case attachments(AttachmentsData)
 }
 
 struct CodeBlockData: Codable {
@@ -110,6 +132,24 @@ enum MarkdownRenderMode: String, Codable {
     case full
     case inline
     case stripped
+}
+
+struct AttachmentsData: Codable {
+    let attachments: [AttachmentInfo]
+}
+
+struct AttachmentInfo: Codable, Identifiable {
+    let id: UUID
+    let name: String
+    let mimeType: String
+    let size: Int
+    let base64Data: String? // For small files
+    let url: String? // For files stored on server
+    let thumbnailBase64: String? // For images
+    
+    var formattedSize: String {
+        ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
+    }
 }
 
 enum MessageSender: String, Codable, CaseIterable {
@@ -1117,12 +1157,31 @@ struct ProgressInfo {
     let progress: Double?
     let message: String
     let timestamp: Date
+    let startTime: Date
+    let tokenCount: Int
+    
+    var elapsedTime: TimeInterval {
+        Date().timeIntervalSince(startTime)
+    }
     
     init(from progressResponse: ProgressResponse) {
         self.stage = progressResponse.stage
         self.progress = progressResponse.progress
         self.message = progressResponse.message
         self.timestamp = progressResponse.timestamp
+        // Use timestamp as start time if not specified
+        self.startTime = progressResponse.timestamp
+        // Token count is not in ProgressResponse, default to 0
+        self.tokenCount = 0
+    }
+    
+    init(stage: String, progress: Double? = nil, message: String, startTime: Date = Date(), tokenCount: Int = 0) {
+        self.stage = stage
+        self.progress = progress
+        self.message = message
+        self.timestamp = Date()
+        self.startTime = startTime
+        self.tokenCount = tokenCount
     }
 }
 

@@ -32,6 +32,7 @@ class ChatViewModel: ObservableObject {
     private let responseStreamer = ClaudeResponseStreamer()
     private var isWaitingForClaudeResponse = false
     private var lastRequestId: String?
+    private let autoResponseManager = AutoResponseManager.shared
     
     // MARK: - Initialization
     init(aicliService: HTTPAICLIService, settings: SettingsManager) {
@@ -47,21 +48,31 @@ class ChatViewModel: ObservableObject {
     }
     
     // MARK: - Message Management
-    func sendMessage(_ text: String, for project: Project) {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+    func sendMessage(_ text: String, for project: Project, attachments: [AttachmentData] = []) {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty else { return }
         
         // Update current project reference if needed
         if currentProject?.path != project.path {
             currentProject = project
             // Notify push notification service about the active project
-            EnhancedPushNotificationService.shared.setActiveProject(project, sessionId: currentSessionId)
+            PushNotificationService.shared.setActiveProject(project, sessionId: currentSessionId)
         }
         
-        // Add user message
+        // Prepare message content with attachments
+        var messageContent = text
+        
+        // If there are attachments, format them for display
+        if !attachments.isEmpty {
+            let attachmentList = attachments.map { "📎 \($0.name)" }.joined(separator: ", ")
+            messageContent = text.isEmpty ? attachmentList : "\(text)\n\n\(attachmentList)"
+        }
+        
+        // Add user message with attachments indicator
         let userMessage = Message(
-            content: text,
+            content: messageContent,
             sender: .user,
-            type: .text
+            type: .text,
+            attachments: attachments
         )
         messages.append(userMessage)
         
@@ -85,10 +96,10 @@ class ChatViewModel: ObservableObject {
             type: "user_command"
         )
         
-        sendAICLICommand(text, for: project, messageStartTime: messageStartTime)
+        sendAICLICommand(text, for: project, attachments: attachments, messageStartTime: messageStartTime)
     }
     
-    private func sendAICLICommand(_ command: String, for project: Project, messageStartTime: Date) {
+    private func sendAICLICommand(_ command: String, for project: Project, attachments: [AttachmentData] = [], messageStartTime: Date) {
         // Debug logging for connection state
         print("📤 ChatViewModel: Preparing to send message")
         print("   aicliService instance: \(ObjectIdentifier(aicliService))")
@@ -140,7 +151,8 @@ class ChatViewModel: ObservableObject {
         aicliService.sendMessage(
             message: command,
             projectPath: project.path,
-            sessionId: sessionIdToUse
+            sessionId: sessionIdToUse,
+            attachments: attachments
         ) { [weak self] result in
             Task { @MainActor in
                 guard let self = self else { return }
@@ -248,7 +260,7 @@ class ChatViewModel: ObservableObject {
         }
         
         // Notify push notification service about the active project/session change
-        EnhancedPushNotificationService.shared.setActiveProject(currentProject, sessionId: currentSessionId)
+        PushNotificationService.shared.setActiveProject(currentProject, sessionId: currentSessionId)
     }
     
     
@@ -291,7 +303,7 @@ class ChatViewModel: ObservableObject {
         currentSessionId = sessionId
         
         // Notify push notification service about the active project
-        EnhancedPushNotificationService.shared.setActiveProject(project, sessionId: sessionId)
+        PushNotificationService.shared.setActiveProject(project, sessionId: sessionId)
         
         let restoredMessages = persistenceService.loadMessages(for: project.path, sessionId: sessionId)
         if !restoredMessages.isEmpty {
@@ -463,126 +475,168 @@ class ChatViewModel: ObservableObject {
         messageTimeout?.invalidate()
         isWaitingForClaudeResponse = false
         
-        if case .claudeResponse(let response) = message.data {
-            print("🔄 ChatViewModel: Received Claude response via callback - Success: \(response.success)")
-            
-            // Verify requestId matches to ensure response is for this chat
-            if let messageRequestId = message.requestId, let expectedRequestId = lastRequestId {
-                if messageRequestId != expectedRequestId {
-                    print("⚠️ ChatViewModel: Received response with mismatched requestId")
-                    print("   Expected: \(expectedRequestId)")
-                    print("   Received: \(messageRequestId)")
-                    // This response is not for our request, ignore it
-                    return
+        guard case .claudeResponse(let response) = message.data else { return }
+        
+        print("🔄 ChatViewModel: Received Claude response via callback - Success: \(response.success)")
+        
+        // Verify requestId matches
+        if !verifyRequestId(message.requestId) { return }
+        
+        isLoading = false
+        progressInfo = nil
+        
+        // Handle session ID
+        handleSessionIdFromResponse(response.sessionId)
+        
+        // Track performance
+        trackResponsePerformance(message.requestId, success: response.success)
+        
+        // Handle response content
+        if response.success {
+            handleSuccessfulResponse(response)
+        } else {
+            handleErrorResponse(response.error)
+        }
+    }
+    
+    private func verifyRequestId(_ messageRequestId: String?) -> Bool {
+        guard let messageRequestId = messageRequestId, let expectedRequestId = lastRequestId else {
+            return true // No requestId to verify
+        }
+        
+        if messageRequestId != expectedRequestId {
+            print("⚠️ ChatViewModel: Received response with mismatched requestId")
+            print("   Expected: \(expectedRequestId)")
+            print("   Received: \(messageRequestId)")
+            return false
+        }
+        
+        print("✅ ChatViewModel: Response requestId matches expected: \(messageRequestId)")
+        return true
+    }
+    
+    private func handleSessionIdFromResponse(_ sessionId: String?) {
+        guard let sessionId = sessionId, !sessionId.isEmpty else {
+            print("⚠️ ChatViewModel: No session ID received from server - messages may not persist")
+            let warningMessage = Message(
+                content: "⚠️ Server response missing session data - this conversation may not be saved",
+                sender: .system,
+                type: .text
+            )
+            messages.append(warningMessage)
+            return
+        }
+        
+        guard sessionId != currentSessionId else { return }
+        
+        print("🔄 ChatViewModel: Updating session ID from Claude response: \(sessionId) (was: \(currentSessionId ?? "nil"))")
+        currentSessionId = sessionId
+        print("🔄 ChatViewModel: Session ID successfully set to: \(currentSessionId ?? "nil")")
+        
+        createSessionIfNeeded(sessionId: sessionId)
+        updateSessionPersistence(sessionId: sessionId)
+    }
+    
+    private func createSessionIfNeeded(sessionId: String) {
+        guard let project = getProjectFromSession(), activeSession == nil else { return }
+        
+        ChatSessionManager.shared.createSessionFromClaudeResponse(
+            sessionId: sessionId,
+            for: project
+        ) { result in
+            switch result {
+            case .success(let session):
+                Task { @MainActor in
+                    self.setActiveSession(session)
                 }
-                print("✅ ChatViewModel: Response requestId matches expected: \(messageRequestId)")
-            }
-            
-            isLoading = false
-            progressInfo = nil
-            
-            // Extract and store Claude's session ID
-            if let sessionId = response.sessionId, !sessionId.isEmpty {
-                if sessionId != currentSessionId {
-                    print("🔄 ChatViewModel: Updating session ID from Claude response: \(sessionId) (was: \(currentSessionId ?? "nil"))")
-                    currentSessionId = sessionId
-                    print("🔄 ChatViewModel: Session ID successfully set to: \(currentSessionId ?? "nil")")
-                    
-                    // Create session object for the UI if we have a current project and no active session
-                    if let project = getProjectFromSession(), activeSession == nil {
-                        ChatSessionManager.shared.createSessionFromClaudeResponse(
-                            sessionId: sessionId,
-                            for: project
-                        ) { result in
-                            switch result {
-                            case .success(let session):
-                                Task { @MainActor in
-                                    self.setActiveSession(session)
-                                }
-                            case .failure(let error):
-                                print("❌ Failed to create session from Claude response: \(error)")
-                            }
-                        }
-                    }
-                    
-                    // Update persistence with Claude's session ID
-                    if let project = getProjectFromSession() {
-                        // First check if we need to save pending messages
-                        if BackgroundSessionCoordinator.shared.hasPendingMessages(for: project.path) {
-                            // Don't update metadata here - BackgroundSessionCoordinator will handle it
-                            print("📋 Session ID received, pending messages will be processed by BackgroundSessionCoordinator")
-                        } else if persistenceService.getSessionMetadata(for: project.path) != nil {
-                            // Only update if metadata already exists
-                            persistenceService.updateSessionMetadata(for: project.path, aicliSessionId: sessionId)
-                        } else {
-                            // No metadata yet - save current messages to create it
-                            saveMessages(for: project)
-                        }
-                    }
-                }
-            } else {
-                // No session ID available - add warning message
-                print("⚠️ ChatViewModel: No session ID received from server - messages may not persist")
-                let warningMessage = Message(
-                    content: "⚠️ Server response missing session data - this conversation may not be saved",
-                    sender: .system,
-                    type: .text
-                )
-                messages.append(warningMessage)
-            }
-            
-            // Complete performance tracking
-            if let requestId = message.requestId {
-                performanceMonitor.completeMessageTracking(
-                    messageId: requestId,
-                    startTime: Date(), // This should be retrieved from the request
-                    type: "claude_response",
-                    success: response.success
-                )
-            }
-            
-            // Handle the response content
-            if response.success {
-                let assistantMessage = Message(
-                    content: response.content,
-                    sender: .assistant,
-                    type: .text,
-                    metadata: AICLIMessageMetadata(
-                        sessionId: response.sessionId ?? "",
-                        duration: 0,
-                        cost: nil,
-                        tools: nil
-                    )
-                )
-                messages.append(assistantMessage)
-                print("✅ ChatViewModel: Added Claude response message to chat")
-                
-                // Sync assistant message to CloudKit
-                if let project = currentProject {
-                    Task {
-                        do {
-                            try await cloudKitManager.saveMessage(assistantMessage, projectPath: project.path)
-                            print("✅ Assistant message synced to CloudKit")
-                        } catch {
-                            print("⚠️ Failed to sync assistant message to CloudKit: \(error)")
-                        }
-                    }
-                }
-                
-                // Also save the complete conversation now that we have a session ID
-                if let project = getProjectFromSession() {
-                    saveMessages(for: project)
-                }
-            } else {
-                let errorMessage = Message(
-                    content: response.error ?? "Unknown error occurred",
-                    sender: .assistant,
-                    type: .text
-                )
-                messages.append(errorMessage)
-                print("❌ ChatViewModel: Added error message to chat: \(response.error ?? "Unknown error")")
+            case .failure(let error):
+                print("❌ Failed to create session from Claude response: \(error)")
             }
         }
+    }
+    
+    private func updateSessionPersistence(sessionId: String) {
+        guard let project = getProjectFromSession() else { return }
+        
+        if BackgroundSessionCoordinator.shared.hasPendingMessages(for: project.path) {
+            print("📋 Session ID received, pending messages will be processed by BackgroundSessionCoordinator")
+        } else if persistenceService.getSessionMetadata(for: project.path) != nil {
+            persistenceService.updateSessionMetadata(for: project.path, aicliSessionId: sessionId)
+        } else {
+            saveMessages(for: project)
+        }
+    }
+    
+    private func trackResponsePerformance(_ requestId: String?, success: Bool) {
+        guard let requestId = requestId else { return }
+        
+        performanceMonitor.completeMessageTracking(
+            messageId: requestId,
+            startTime: Date(),
+            type: "claude_response",
+            success: success
+        )
+    }
+    
+    private func handleSuccessfulResponse(_ response: ClaudeCommandResponse) {
+        let assistantMessage = Message(
+            content: response.content,
+            sender: .assistant,
+            type: .text,
+            metadata: AICLIMessageMetadata(
+                sessionId: response.sessionId ?? "",
+                duration: 0,
+                cost: nil,
+                tools: nil
+            )
+        )
+        messages.append(assistantMessage)
+        print("✅ ChatViewModel: Added Claude response message to chat")
+        
+        // Check for auto-response
+        if let autoResponse = autoResponseManager.processMessage(assistantMessage) {
+            triggerAutoResponse(autoResponse)
+        }
+        
+        // Sync to CloudKit
+        syncMessageToCloudKit(assistantMessage)
+        
+        // Save conversation
+        if let project = getProjectFromSession() {
+            saveMessages(for: project)
+        }
+    }
+    
+    private func triggerAutoResponse(_ autoResponse: String) {
+        print("🤖 Auto-response triggered: \(autoResponse)")
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + autoResponseManager.config.delayBetweenResponses) { [weak self] in
+            guard let self = self, let project = self.currentProject else { return }
+            self.sendMessage(autoResponse, for: project)
+        }
+    }
+    
+    private func syncMessageToCloudKit(_ message: Message) {
+        guard let project = currentProject else { return }
+        
+        Task {
+            do {
+                try await cloudKitManager.saveMessage(message, projectPath: project.path)
+                print("✅ Assistant message synced to CloudKit")
+            } catch {
+                print("⚠️ Failed to sync assistant message to CloudKit: \(error)")
+            }
+        }
+    }
+    
+    private func handleErrorResponse(_ error: String?) {
+        let errorMessage = Message(
+            content: error ?? "Unknown error occurred",
+            sender: .assistant,
+            type: .text
+        )
+        messages.append(errorMessage)
+        print("❌ ChatViewModel: Added error message to chat: \(error ?? "Unknown error")")
     }
     
     private func handleCommandError(_ error: AICLICompanionError) {

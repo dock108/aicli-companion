@@ -421,6 +421,12 @@ class ConversationPersistenceService: ObservableObject {
                     content += "Tool: \(toolData.toolName) (\(toolData.success ? "Success" : "Failed"))\n```\n\(toolData.output)\n```\n\n"
                 case .markdown(let markdownData):
                     content += "\(markdownData.markdown)\n\n"
+                case .attachments(let attachmentData):
+                    content += "Attachments:\n"
+                    for attachment in attachmentData.attachments {
+                        content += "- \(attachment.name) (\(attachment.mimeType), \(attachment.size) bytes)\n"
+                    }
+                    content += "\n"
                 }
             }
 
@@ -524,6 +530,11 @@ class ConversationPersistenceService: ObservableObject {
                     content += "```\n\(commandData.output)\n```\n\n"
                 case .markdown(let markdownData):
                     content += "\(markdownData.markdown)\n\n"
+                case .attachments(let attachmentData):
+                    content += "**Attachments:**\n\n"
+                    for attachment in attachmentData.attachments {
+                        content += "📎 **\(attachment.name)** (\(attachment.mimeType), \(ByteCountFormatter.string(fromByteCount: Int64(attachment.size), countStyle: .file)))\n\n"
+                    }
                 }
             }
 
@@ -644,6 +655,15 @@ class ConversationPersistenceService: ObservableObject {
                     html += "<pre><code>\(commandData.output)</code></pre>"
                 case .markdown(let markdownData):
                     html += "<div class=\"markdown\">\(markdownData.markdown)</div>"
+                case .attachments(let attachmentData):
+                    html += "<div class=\"attachments\">"
+                    html += "<h4>📎 Attachments</h4>"
+                    html += "<ul>"
+                    for attachment in attachmentData.attachments {
+                        html += "<li><strong>\(attachment.name)</strong> (\(attachment.mimeType), \(ByteCountFormatter.string(fromByteCount: Int64(attachment.size), countStyle: .file)))</li>"
+                    }
+                    html += "</ul>"
+                    html += "</div>"
                 }
 
                 html += "</div>"

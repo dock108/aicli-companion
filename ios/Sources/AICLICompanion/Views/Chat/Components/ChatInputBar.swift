@@ -7,61 +7,128 @@ struct ChatInputBar: View {
     let isIPad: Bool
     let horizontalSizeClass: UserInterfaceSizeClass?
     let colorScheme: ColorScheme
-    let onSendMessage: () -> Void
+    let onSendMessage: ([AttachmentData]) -> Void
     
     @FocusState private var isInputFocused: Bool
+    @State private var attachments: [AttachmentData] = []
+    @State private var showingAttachmentPicker = false
+    
+    private var hasContent: Bool {
+        !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty
+    }
     
     var body: some View {
         VStack(spacing: 0) {
+            // Attachment preview (if any)
+            AttachmentPreview(
+                attachments: attachments,
+                onRemove: removeAttachment
+            )
+            .padding(.horizontal, isIPad && horizontalSizeClass == .regular ? 40 : 16)
+            .padding(.top, attachments.isEmpty ? 0 : 8)
+            
+            if !attachments.isEmpty {
+                Divider()
+                    .background(Colors.strokeLight)
+            }
+            
             Divider()
                 .background(Colors.strokeLight)
             
-            HStack(alignment: .bottom, spacing: 12) {
-                // Text input
-                TextField("Type a message...", text: $messageText, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(Typography.font(.body))
-                    .foregroundColor(Colors.textPrimary(for: colorScheme))
-                    .accentColor(Colors.accentPrimary(for: colorScheme).first ?? Colors.accentPrimaryStart)
-                    .lineLimit(1...6)
-                    .focused($isInputFocused)
-                    .disabled(isLoading)
-                    .onSubmit {
-                        if !messageText.isEmpty {
-                            onSendMessage()
-                        }
+            VStack(spacing: 8) {
+                HStack(alignment: .bottom, spacing: 12) {
+                    // Attachment button
+                    Button(action: {
+                        showingAttachmentPicker = true
+                    }) {
+                        Image(systemName: "plus.circle")
+                            .font(.system(size: 28))
+                            .foregroundColor(Colors.textSecondary(for: colorScheme))
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Colors.bgCard(for: colorScheme))
-                            .overlay(
+                    .disabled(isLoading)
+                    
+                    // Text input container
+                    VStack(spacing: 0) {
+                        TextField("Type a message...", text: $messageText, axis: .vertical)
+                            .textFieldStyle(.plain)
+                            .font(Typography.font(.body))
+                            .foregroundColor(Colors.textPrimary(for: colorScheme))
+                            .accentColor(Colors.accentPrimary(for: colorScheme).first ?? Colors.accentPrimaryStart)
+                            .lineLimit(1...6)
+                            .focused($isInputFocused)
+                            .disabled(isLoading)
+                            .onSubmit {
+                                if hasContent {
+                                    sendMessage()
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .background(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Colors.strokeLight, lineWidth: 1)
+                                    .fill(Colors.bgCard(for: colorScheme))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Colors.strokeLight, lineWidth: 1)
+                                    )
                             )
-                    )
-                
-                // Send button
-                Button(action: onSendMessage) {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 32))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: messageText.isEmpty
-                                    ? [Colors.textSecondary(for: colorScheme)]
-                                    : Colors.accentPrimary(for: colorScheme),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
+                    }
+                    
+                    // Send button
+                    Button(action: sendMessage) {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 32))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: hasContent
+                                        ? Colors.accentPrimary(for: colorScheme)
+                                        : [Colors.textSecondary(for: colorScheme)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
                             )
-                        )
+                    }
+                    .disabled(!hasContent || isLoading)
+                    .animation(.easeInOut(duration: 0.2), value: hasContent)
                 }
-                .disabled(messageText.isEmpty || isLoading)
-                .animation(.easeInOut(duration: 0.2), value: messageText.isEmpty)
             }
             .padding(.horizontal, isIPad && horizontalSizeClass == .regular ? 40 : 16)
             .padding(.vertical, 16)
             .background(.ultraThinMaterial)
         }
+        .sheet(isPresented: $showingAttachmentPicker) {
+            AttachmentPicker(
+                isPresented: $showingAttachmentPicker,
+                onAttachmentSelected: addAttachment
+            )
+        }
+    }
+    
+    // MARK: - Actions
+    
+    private func sendMessage() {
+        // Pass attachments to parent view
+        onSendMessage(attachments)
+        
+        // Clear attachments after sending
+        attachments.removeAll()
+    }
+    
+    private func addAttachment(_ attachment: AttachmentData) {
+        // Limit to 5 attachments
+        guard attachments.count < 5 else { return }
+        
+        // Check file size (limit to 10MB per file)
+        guard attachment.size <= AttachmentFileSizeLimit else {
+            // TODO: Show error alert
+            print("❌ File too large: \(attachment.formattedSize)")
+            return
+        }
+        
+        attachments.append(attachment)
+    }
+    
+    private func removeAttachment(_ attachment: AttachmentData) {
+        attachments.removeAll { $0.id == attachment.id }
     }
 }

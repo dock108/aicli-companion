@@ -79,41 +79,6 @@ public struct Typography {
         case .code: return 20
         }
     }
-
-    // MARK: - Legacy Support
-    public enum TextStyle {
-        case title
-        case headline
-        case body
-        case bodyLarge
-        case callout
-        case caption
-        case footnote
-    }
-
-    @available(*, deprecated, message: "Use font(_:) with FontStyle instead")
-    public static func font(_ style: TextStyle, size: CGFloat? = nil, weight: Font.Weight = .regular) -> Font {
-        let baseFont: Font
-
-        switch style {
-        case .title:
-            baseFont = .system(size: size ?? 28, weight: weight, design: .rounded)
-        case .headline:
-            baseFont = .system(size: size ?? 17, weight: .semibold, design: .rounded)
-        case .body:
-            baseFont = .system(size: size ?? 17, weight: weight, design: .rounded)
-        case .bodyLarge:
-            baseFont = .system(size: size ?? 19, weight: weight, design: .rounded)
-        case .callout:
-            baseFont = .system(size: size ?? 16, weight: weight, design: .rounded)
-        case .caption:
-            baseFont = .system(size: size ?? 12, weight: weight, design: .rounded)
-        case .footnote:
-            baseFont = .system(size: size ?? 13, weight: weight, design: .rounded)
-        }
-
-        return baseFont
-    }
 }
 
 // MARK: - Text Style Modifiers

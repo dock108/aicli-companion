@@ -94,9 +94,10 @@ Remember: Always test your code!`;
 
   describe('truncateMessage', () => {
     it('should strip markdown before truncating', () => {
-      const input = '**This is bold** and `this is code` and it continues for a very long time with lots of text that needs to be truncated because it is too long for a notification';
+      const input =
+        '**This is bold** and `this is code` and it continues for a very long time with lots of text that needs to be truncated because it is too long for a notification';
       const result = service.truncateMessage(input, 50);
-      
+
       // Should not contain markdown formatting
       assert.ok(!result.includes('**'));
       assert.ok(!result.includes('`'));
@@ -107,14 +108,14 @@ Remember: Always test your code!`;
     it('should truncate at word boundary when possible', () => {
       const input = 'This is a long message that needs to be truncated at a sensible word boundary';
       const result = service.truncateMessage(input, 40);
-      
+
       // Should end with ... and not cut off in middle of word
       assert.ok(result.endsWith('...'));
       assert.ok(result.length <= 43); // 40 + '...'
-      
+
       // Should not end with partial word
       const lastWord = result.replace('...', '').trim().split(' ').pop();
-      assert.ok(input.includes(lastWord + ' ') || input.endsWith(lastWord));
+      assert.ok(input.includes(`${lastWord} `) || input.endsWith(lastWord));
     });
 
     it('should handle messages shorter than max length', () => {
@@ -139,7 +140,7 @@ function longFunctionName() {
 \`\`\`
 
 And more text after the code block that continues for quite a while`;
-      
+
       const result = service.truncateMessage(input, 100);
       assert.ok(result.includes('[code block]'));
       assert.ok(!result.includes('```'));

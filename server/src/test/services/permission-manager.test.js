@@ -365,7 +365,7 @@ describe('PermissionManager', () => {
     it('should limit history size automatically', () => {
       // Clear existing history first
       manager.clearHistory();
-      
+
       // Add exactly 1001 entries to trigger one trim
       for (let i = 0; i < 1001; i++) {
         manager.logApproval({

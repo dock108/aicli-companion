@@ -13,6 +13,7 @@ import path from 'path';
 import { EventEmitter } from 'events';
 import { createLogger } from '../utils/logger.js';
 import escapeRegExp from 'lodash.escaperegexp';
+import safeRegex from 'safe-regex';
 
 const logger = createLogger('CommandSecurity');
 
@@ -21,6 +22,9 @@ const logger = createLogger('CommandSecurity');
  * This is a basic check; for more robust protection, use a library like safe-regex.
  */
 function isSafeRegex(pattern) {
+  // Use the safe-regex library for robust regex safety checking
+  if (!safeRegex(pattern)) return false;
+  // Optionally, keep additional custom checks if desired:
   // Limit length to 100 chars (arbitrary, adjust as needed)
   if (pattern.length > 100) return false;
   // Disallow nested quantifiers (e.g., (a+)+ or (a*)*)

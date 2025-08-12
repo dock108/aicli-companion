@@ -221,47 +221,38 @@ struct AttachmentPicker: View {
     #endif
     
     private func mimeType(for url: URL) -> String {
-        let pathExtension = url.pathExtension.lowercased()
-        
-        switch pathExtension {
-        case "jpg", "jpeg":
-            return "image/jpeg"
-        case "png":
-            return "image/png"
-        case "gif":
-            return "image/gif"
-        case "pdf":
-            return "application/pdf"
-        case "txt":
-            return "text/plain"
-        case "md":
-            return "text/markdown"
-        case "json":
-            return "application/json"
-        case "xml":
-            return "application/xml"
-        case "html":
-            return "text/html"
-        case "css":
-            return "text/css"
-        case "js":
-            return "text/javascript"
-        case "py":
-            return "text/x-python"
-        case "swift":
-            return "text/x-swift"
-        case "java":
-            return "text/x-java-source"
-        case "cpp", "c++":
-            return "text/x-c++src"
-        case "c":
-            return "text/x-csrc"
-        case "h":
-            return "text/x-chdr"
-        default:
-            return "application/octet-stream"
-        }
+        return MimeTypeUtils.mimeType(for: url)
     }
+
+/// Utility for MIME type lookup based on file extension
+private struct MimeTypeUtils {
+    private static let mimeTypes: [String: String] = [
+        "jpg": "image/jpeg",
+        "jpeg": "image/jpeg",
+        "png": "image/png",
+        "gif": "image/gif",
+        "pdf": "application/pdf",
+        "txt": "text/plain",
+        "md": "text/markdown",
+        "json": "application/json",
+        "xml": "application/xml",
+        "html": "text/html",
+        "css": "text/css",
+        "js": "text/javascript",
+        "py": "text/x-python",
+        "swift": "text/x-swift",
+        "java": "text/x-java-source",
+        "cpp": "text/x-c++src",
+        "c++": "text/x-c++src",
+        "c": "text/x-csrc",
+        "h": "text/x-chdr"
+    ]
+
+    static func mimeType(for url: URL) -> String {
+        let ext = url.pathExtension.lowercased()
+        return mimeTypes[ext] ?? "application/octet-stream"
+    }
+}
 }
 
 /// Individual attachment option view

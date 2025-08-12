@@ -146,7 +146,10 @@ export class SecurityConfig {
       const filtered = patterns.filter((pattern) => !pattern.startsWith('re:'));
       if (filtered.length !== patterns.length) {
         logger.warn(
-          'BlockedCommands from environment: regex patterns (re:) are not allowed and have been ignored for security reasons.'
+      const filtered = patterns.filter((pattern) => !pattern.startsWith(REGEX_PREFIX));
+      if (filtered.length !== patterns.length) {
+        logger.warn(
+          `BlockedCommands from environment: regex patterns (${REGEX_PREFIX}) are not allowed and have been ignored for security reasons.`
         );
       }
       return filtered;

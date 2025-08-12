@@ -2,8 +2,8 @@ import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import { PermissionManager } from '../../services/permission-manager.js';
 
-// Mock push notification service
-const mockPushService = {
+// Mock push notification service (unused but kept for reference)
+const _mockPushService = {
   sendToAll: async () => Promise.resolve(),
 };
 
@@ -42,7 +42,7 @@ describe('PermissionManager', () => {
       const promise = manager.requestPermission(operation, context);
 
       // Wait a bit for the request to be created
-      await new Promise(resolve => setTimeout(resolve, 5));
+      await new Promise((resolve) => setTimeout(resolve, 5));
 
       // Check pending request was created
       const pending = manager.getPendingRequests();
@@ -407,8 +407,8 @@ describe('PermissionManager', () => {
       };
 
       // Use a mock push service
-      const originalNotifyApps = manager.constructor.prototype.notifyApps;
-      manager.notifyApps = async function(req) {
+      const _originalNotifyApps = manager.constructor.prototype.notifyApps;
+      manager.notifyApps = async function (req) {
         this.emit('notificationSent', req);
         return Promise.resolve();
       };
@@ -528,7 +528,7 @@ describe('PermissionManager', () => {
       const requestPromise = manager.requestPermission(operation);
 
       // Wait a bit for request to be created, then approve
-      await new Promise(resolve => setTimeout(resolve, 5));
+      await new Promise((resolve) => setTimeout(resolve, 5));
       const pending = manager.getPendingRequests();
       if (pending.length > 0) {
         manager.approveRequest(pending[0].id, 'test-user');
@@ -556,7 +556,7 @@ describe('PermissionManager', () => {
       const requestPromise = manager.requestPermission(operation);
 
       // Wait a bit for request to be created, then deny
-      await new Promise(resolve => setTimeout(resolve, 5));
+      await new Promise((resolve) => setTimeout(resolve, 5));
       const pending = manager.getPendingRequests();
       if (pending.length > 0) {
         manager.denyRequest(pending[0].id, 'Looks suspicious', 'security-admin');

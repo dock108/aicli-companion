@@ -2,7 +2,6 @@ import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import { ActivityMonitor } from '../../services/activity-monitor.js';
 import fs from 'fs/promises';
-import path from 'path';
 
 describe('ActivityMonitor', () => {
   let monitor;
@@ -531,12 +530,7 @@ describe('ActivityMonitor', () => {
     });
 
     it('should get top items by frequency', () => {
-      const items = [
-        { command: 'ls' },
-        { command: 'ls' },
-        { command: 'pwd' },
-        { command: 'ls' },
-      ];
+      const items = [{ command: 'ls' }, { command: 'ls' }, { command: 'pwd' }, { command: 'ls' }];
 
       const top = monitor.getTopItems(items, 'command', 2);
 

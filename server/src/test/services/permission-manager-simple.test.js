@@ -247,7 +247,7 @@ describe('PermissionManager - Core Functionality', () => {
     it('should auto-trim large history', () => {
       // Clear existing history first
       manager.clearHistory();
-      
+
       // Add exactly 1001 entries to trigger one trim
       for (let i = 0; i < 1001; i++) {
         manager.logApproval({

@@ -96,7 +96,10 @@ export class TunnelService {
         logger.error('   2. Verify the token is copied correctly (no extra spaces)');
         logger.error('   3. Ensure the token starts with your account ID');
         logger.error('   4. Try generating a new token if this one is old');
-      } else if (error.message?.includes('authtoken') || error.message?.includes('authentication')) {
+      } else if (
+        error.message?.includes('authtoken') ||
+        error.message?.includes('authentication')
+      ) {
         logger.error('💡 Ngrok requires an auth token for this operation');
         logger.error('   1. Sign up at https://ngrok.com');
         logger.error('   2. Get your auth token from the dashboard');
@@ -104,7 +107,7 @@ export class TunnelService {
       } else if (error.message?.includes('port')) {
         logger.error(`💡 Make sure the server is running on port ${port}`);
       }
-      
+
       // Log additional debugging info for auth token issues
       if (authToken) {
         logger.debug(`Auth token length: ${authToken.length}`);

@@ -28,52 +28,34 @@ struct SecuritySettingsView: View {
 
     var body: some View {
         Form {
-            // Restart notification bar at top
             if needsRestart && serverManager.isRunning {
-                Section {
-                    RestartNotificationBar(isRestarting: $isRestarting, restartAction: restartServer)
-                }
+                Section { RestartNotificationBar(isRestarting: $isRestarting, restartAction: restartServer) }
             }
-
-            Section {
+            Section("Authentication") {
                 Toggle("Require Authentication", isOn: $settingsManager.requireAuthentication)
                     .help("Clients must provide an authentication token to connect")
                     .onChange(of: settingsManager.requireAuthentication) { _, newValue in
                         Task { @MainActor in
-                            // If enabling auth and we're exposed to internet, ensure we have a token
                             if newValue && settingsManager.enableTunnel && serverManager.authToken == nil {
                                 serverManager.generateAuthToken()
                             }
-                            // Mark that restart is needed if server is running
-                            if serverManager.isRunning {
-                                needsRestart = true
-                            }
+                            if serverManager.isRunning { needsRestart = true }
                         }
                     }
-
                 if settingsManager.requireAuthentication {
-                    AuthenticationTokenView(
-                        authToken: serverManager.authToken,
-                        showingTokenAlert: $showingTokenAlert
-                    )
+                    AuthenticationTokenView(authToken: serverManager.authToken,
+                                          showingTokenAlert: $showingTokenAlert)
                 }
-            } header: {
-                Text("Authentication")
             }
-
-            Section {
+            Section("macOS Security") {
                 Toggle("Enable Touch ID", isOn: $settingsManager.enableTouchID)
                     .help("Use Touch ID to authenticate admin actions")
-
                 Text("The authentication token is securely stored in the macOS Keychain")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } header: {
-                Text("macOS Security")
+                    .font(.caption).foregroundStyle(.secondary)
             }
 
-            // Command Controls Section
-            Section {
+            Section("Command Controls",
+                   footer: Text("Configure which commands Claude can execute and set security restrictions")) {
                 Picker("Security Preset", selection: $securityPreset) {
                     Text("Unrestricted").tag("unrestricted")
                     Text("Standard").tag("standard")
@@ -85,17 +67,13 @@ struct SecuritySettingsView: View {
                     applySecurityPreset(newValue)
                     needsRestart = true
                 }
-
                 Toggle("Read-Only Mode", isOn: $readOnlyMode)
                     .help("Block all write operations")
                     .onChange(of: readOnlyMode) { _, _ in
-                        settingsManager.setEnvironmentVariable(
-                            "AICLI_READONLY_MODE",
-                            value: readOnlyMode ? "true" : "false"
-                        )
+                        settingsManager.setEnvironmentVariable("AICLI_READONLY_MODE",
+                                                              value: readOnlyMode ? "true" : "false")
                         needsRestart = true
                     }
-
                 Toggle("Require Confirmation for Destructive Commands", isOn: $requireConfirmation)
                     .help("Ask for confirmation before running potentially destructive commands")
                     .onChange(of: requireConfirmation) { _, _ in
@@ -103,41 +81,29 @@ struct SecuritySettingsView: View {
                                                               value: requireConfirmation ? "true" : "false")
                         needsRestart = true
                     }
-
                 Toggle("Enable Security Audit", isOn: $enableAudit)
                     .help("Log all security validations for review")
                     .onChange(of: enableAudit) { _, _ in
-                        settingsManager.setEnvironmentVariable(
-                            "AICLI_ENABLE_AUDIT",
-                            value: enableAudit ? "true" : "false"
-                        )
+                        settingsManager.setEnvironmentVariable("AICLI_ENABLE_AUDIT",
+                                                              value: enableAudit ? "true" : "false")
                         needsRestart = true
                     }
-            } header: {
-                Text("Command Controls")
-            } footer: {
-                Text("Configure which commands Claude can execute and set security restrictions")
             }
 
-            // Safe Directories Section
-            Section {
+            Section("Safe Directories",
+                   footer: Text("Claude can only operate within these directories when restrictions are enabled")) {
                 ForEach(safeDirectories, id: \.self) { directory in
                     HStack {
-                        Image(systemName: "folder")
-                            .foregroundColor(.accentColor)
-                        Text(directory)
-                            .font(.system(.body, design: .monospaced))
+                        Image(systemName: "folder").foregroundColor(.accentColor)
+                        Text(directory).font(.system(.body, design: .monospaced))
                         Spacer()
-                        Button(action: {
+                        Button {
                             removeSafeDirectory(directory)
-                        }, label: {
-                            Image(systemName: "minus.circle")
-                                .foregroundColor(.red)
-                        })
-                        .buttonStyle(.plain)
+                        } label: {
+                            Image(systemName: "minus.circle").foregroundColor(.red)
+                        }.buttonStyle(.plain)
                     }
                 }
-
                 HStack {
                     TextField("Add directory path...", text: $newDirectory)
                         .textFieldStyle(.roundedBorder)
@@ -146,34 +112,22 @@ struct SecuritySettingsView: View {
                             addSafeDirectory(newDirectory)
                             newDirectory = ""
                         }
-                    }
-                    .disabled(newDirectory.isEmpty)
+                    }.disabled(newDirectory.isEmpty)
                 }
-            } header: {
-                Text("Safe Directories")
-            } footer: {
-                Text("Claude can only operate within these directories when restrictions are enabled")
             }
-
-            // Blocked Commands Section
-            Section {
+            Section("Blocked Commands", footer: Text("Commands matching these patterns will be blocked")) {
                 ForEach(blockedCommands, id: \.self) { command in
                     HStack {
-                        Image(systemName: "exclamationmark.triangle")
-                            .foregroundColor(.orange)
-                        Text(command)
-                            .font(.system(.body, design: .monospaced))
+                        Image(systemName: "exclamationmark.triangle").foregroundColor(.orange)
+                        Text(command).font(.system(.body, design: .monospaced))
                         Spacer()
-                        Button(action: {
+                        Button {
                             removeBlockedCommand(command)
-                        }, label: {
-                            Image(systemName: "minus.circle")
-                                .foregroundColor(.red)
-                        })
-                        .buttonStyle(.plain)
+                        } label: {
+                            Image(systemName: "minus.circle").foregroundColor(.red)
+                        }.buttonStyle(.plain)
                     }
                 }
-
                 HStack {
                     TextField("Add command pattern...", text: $newCommand)
                         .textFieldStyle(.roundedBorder)
@@ -182,89 +136,52 @@ struct SecuritySettingsView: View {
                             addBlockedCommand(newCommand)
                             newCommand = ""
                         }
-                    }
-                    .disabled(newCommand.isEmpty)
+                    }.disabled(newCommand.isEmpty)
                 }
-            } header: {
-                Text("Blocked Commands")
-            } footer: {
-                Text("Commands matching these patterns will be blocked")
             }
 
-            // Internet Access settings moved to TunnelSettingsView
-            TunnelSettingsView(
-                needsRestart: $needsRestart,
-                showingNgrokSetup: $showingNgrokSetup,
-                checkingNgrok: $checkingNgrok
-            )
+            TunnelSettingsView(needsRestart: $needsRestart,
+                              showingNgrokSetup: $showingNgrokSetup,
+                              checkingNgrok: $checkingNgrok)
         }
         .formStyle(.grouped)
         .safeAreaInset(edge: .bottom) {
-            // Configuration Change Indicator
             if settingsManager.needsRestart {
                 RestartIndicatorView(isRestarting: $isRestarting, restartAction: restartServer)
             }
         }
         .alert("Generate New Token?", isPresented: $showingTokenAlert) {
             Button("Cancel", role: .cancel) { }
-            Button("Generate", role: .destructive) {
-                serverManager.generateAuthToken()
-            }
+            Button("Generate", role: .destructive) { serverManager.generateAuthToken() }
         } message: {
-            Text("""
-                This will invalidate the current token. \
-                All connected clients will need to reconnect with the new token.
-                """)
+            Text("This will invalidate the current token. " +
+                 "All connected clients will need to reconnect with the new token.")
         }
         .sheet(isPresented: $showingNgrokSetup) {
-            NgrokSetupView(
-                ngrokAuthToken: $settingsManager.ngrokAuthToken,
-                isPresented: $showingNgrokSetup,
-                needsRestart: $needsRestart
-            )
+            NgrokSetupView(ngrokAuthToken: $settingsManager.ngrokAuthToken,
+                          isPresented: $showingNgrokSetup,
+                          needsRestart: $needsRestart)
         }
-        .onAppear {
-            loadSecuritySettings()
-        }
+        .onAppear { loadSecuritySettings() }
     }
 
-    // MARK: - Command Control Methods
-
-    func applySecurityPreset(_ preset: String) {
+    private func applySecurityPreset(_ preset: String) {
         settingsManager.setEnvironmentVariable("AICLI_SECURITY_PRESET", value: preset)
-
         switch preset {
         case "unrestricted":
-            blockedCommands = []
-            requireConfirmation = false
-            readOnlyMode = false
-
+            (blockedCommands, requireConfirmation, readOnlyMode) = ([], false, false)
         case "standard":
-            blockedCommands = [
-                "rm -rf /",
-                "rm -rf /*",
-                "format",
-                "diskutil eraseDisk",
-                "dd if=/dev/zero of=/dev/",
-                "mkfs"
-            ]
-            requireConfirmation = true
-            readOnlyMode = false
-
+            blockedCommands = ["rm -rf /", "rm -rf /*", "format", "diskutil eraseDisk",
+                              "dd if=/dev/zero of=/dev/", "mkfs"]
+            (requireConfirmation, readOnlyMode) = (true, false)
         case "restricted":
-            blockedCommands = ["*"]
-            requireConfirmation = true
-            readOnlyMode = true
-
-        default:
-            // Custom - keep current settings
-            break
+            (blockedCommands, requireConfirmation, readOnlyMode) = (["*"], true, true)
+        default: break
         }
-
         updateEnvironmentVariables()
     }
 
-    func addSafeDirectory(_ directory: String) {
+    private func addSafeDirectory(_ directory: String) {
         let path = directory.replacingOccurrences(of: "~", with: FileManager.default.homeDirectoryForCurrentUser.path)
         if !safeDirectories.contains(path) {
             safeDirectories.append(path)
@@ -273,13 +190,13 @@ struct SecuritySettingsView: View {
         }
     }
 
-    func removeSafeDirectory(_ directory: String) {
+    private func removeSafeDirectory(_ directory: String) {
         safeDirectories.removeAll { $0 == directory }
         updateEnvironmentVariables()
         needsRestart = true
     }
 
-    func addBlockedCommand(_ command: String) {
+    private func addBlockedCommand(_ command: String) {
         if !blockedCommands.contains(command) {
             blockedCommands.append(command)
             updateEnvironmentVariables()
@@ -287,61 +204,46 @@ struct SecuritySettingsView: View {
         }
     }
 
-    func removeBlockedCommand(_ command: String) {
+    private func removeBlockedCommand(_ command: String) {
         blockedCommands.removeAll { $0 == command }
         updateEnvironmentVariables()
         needsRestart = true
     }
 
-    func updateEnvironmentVariables() {
-        // Update safe directories
-        let dirsString = safeDirectories.joined(separator: ",")
-        settingsManager.setEnvironmentVariable("AICLI_SAFE_DIRECTORIES", value: dirsString)
-
-        // Update blocked commands
-        let commandsString = blockedCommands.joined(separator: ",")
-        settingsManager.setEnvironmentVariable("AICLI_BLOCKED_COMMANDS", value: commandsString)
+    private func updateEnvironmentVariables() {
+        settingsManager.setEnvironmentVariable("AICLI_SAFE_DIRECTORIES",
+                                              value: safeDirectories.joined(separator: ","))
+        settingsManager.setEnvironmentVariable("AICLI_BLOCKED_COMMANDS",
+                                              value: blockedCommands.joined(separator: ","))
     }
 
-    func loadSecuritySettings() {
-        // Load from environment variables
-        if let preset = settingsManager.getEnvironmentVariable("AICLI_SECURITY_PRESET") {
-            securityPreset = preset
-        }
-
+    private func loadSecuritySettings() {
+        securityPreset = settingsManager.getEnvironmentVariable("AICLI_SECURITY_PRESET") ?? "standard"
         if let dirs = settingsManager.getEnvironmentVariable("AICLI_SAFE_DIRECTORIES") {
             safeDirectories = dirs.split(separator: ",").map(String.init)
         }
-
         if let commands = settingsManager.getEnvironmentVariable("AICLI_BLOCKED_COMMANDS") {
             blockedCommands = commands.split(separator: ",").map(String.init)
         }
-
         readOnlyMode = settingsManager.getEnvironmentVariable("AICLI_READONLY_MODE") == "true"
         requireConfirmation = settingsManager
             .getEnvironmentVariable("AICLI_DESTRUCTIVE_COMMANDS_REQUIRE_CONFIRMATION") == "true"
-        enableAudit = settingsManager.getEnvironmentVariable("AICLI_ENABLE_AUDIT") != "false" // Default true
+        enableAudit = settingsManager.getEnvironmentVariable("AICLI_ENABLE_AUDIT") != "false"
     }
 
-    // MARK: - Restart Method
-
-    func restartServer() {
+    private func restartServer() {
         isRestarting = true
         Task {
             do {
                 try await serverManager.restartServerWithCurrentConfig()
-                await MainActor.run {
-                    needsRestart = false
-                }
+                await MainActor.run { needsRestart = false }
             } catch {
                 await MainActor.run {
                     serverManager.addLog(.error, "Failed to restart server: \(error.localizedDescription)")
                 }
                 print("Failed to restart server: \(error)")
             }
-            await MainActor.run {
-                isRestarting = false
-            }
+            await MainActor.run { isRestarting = false }
         }
     }
 }

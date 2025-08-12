@@ -17,6 +17,23 @@ import escapeRegExp from 'lodash.escaperegexp';
 const logger = createLogger('CommandSecurity');
 
 /**
+ * Checks if a regex pattern is "safe" (not too long, no nested quantifiers, etc.)
+ * This is a basic check; for more robust protection, use a library like safe-regex.
+ */
+function isSafeRegex(pattern) {
+  // Limit length to 100 chars (arbitrary, adjust as needed)
+  if (pattern.length > 100) return false;
+  // Disallow nested quantifiers (e.g., (a+)+ or (a*)*)
+  if (/\([^\)]*[*+?][^\)]*\)[*+?]/.test(pattern)) return false;
+  // Disallow lookbehinds (which can be slow in some engines)
+  if (/\(\?<\=|\(\?<!/.test(pattern)) return false;
+  // Disallow backreferences (e.g., \1, \2)
+  if (/\\\d/.test(pattern)) return false;
+  // Add more checks as needed
+  return true;
+}
+
+/**
  * Security violation error
  */
 export class SecurityViolationError extends Error {
@@ -311,7 +328,12 @@ export class CommandSecurityService extends EventEmitter {
         let regex;
         if (typeof blocked === 'string' && blocked.startsWith('re:')) {
           // Explicit regex pattern (strip 're:' prefix)
-          regex = new RegExp(blocked.slice(3));
+          const pattern = blocked.slice(3);
+          if (!isSafeRegex(pattern)) {
+            logger.warn(`Blocked command regex pattern rejected as unsafe: ${pattern}`);
+            return false;
+          }
+          regex = new RegExp(pattern);
         } else {
           // Escape as literal
           regex = new RegExp(`^${escapeRegExp(blocked)}$`);

@@ -32,6 +32,7 @@ class ChatViewModel: ObservableObject {
     private let responseStreamer = ClaudeResponseStreamer()
     private var isWaitingForClaudeResponse = false
     private var lastRequestId: String?
+    private let autoResponseManager = AutoResponseManager.shared
     
     // MARK: - Initialization
     init(aicliService: HTTPAICLIService, settings: SettingsManager) {
@@ -47,21 +48,31 @@ class ChatViewModel: ObservableObject {
     }
     
     // MARK: - Message Management
-    func sendMessage(_ text: String, for project: Project) {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+    func sendMessage(_ text: String, for project: Project, attachments: [AttachmentData] = []) {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty else { return }
         
         // Update current project reference if needed
         if currentProject?.path != project.path {
             currentProject = project
             // Notify push notification service about the active project
-            EnhancedPushNotificationService.shared.setActiveProject(project, sessionId: currentSessionId)
+            PushNotificationService.shared.setActiveProject(project, sessionId: currentSessionId)
         }
         
-        // Add user message
+        // Prepare message content with attachments
+        var messageContent = text
+        
+        // If there are attachments, format them for display
+        if !attachments.isEmpty {
+            let attachmentList = attachments.map { "📎 \($0.name)" }.joined(separator: ", ")
+            messageContent = text.isEmpty ? attachmentList : "\(text)\n\n\(attachmentList)"
+        }
+        
+        // Add user message with attachments indicator
         let userMessage = Message(
-            content: text,
+            content: messageContent,
             sender: .user,
-            type: .text
+            type: .text,
+            attachments: attachments
         )
         messages.append(userMessage)
         
@@ -85,10 +96,10 @@ class ChatViewModel: ObservableObject {
             type: "user_command"
         )
         
-        sendAICLICommand(text, for: project, messageStartTime: messageStartTime)
+        sendAICLICommand(text, for: project, attachments: attachments, messageStartTime: messageStartTime)
     }
     
-    private func sendAICLICommand(_ command: String, for project: Project, messageStartTime: Date) {
+    private func sendAICLICommand(_ command: String, for project: Project, attachments: [AttachmentData] = [], messageStartTime: Date) {
         // Debug logging for connection state
         print("📤 ChatViewModel: Preparing to send message")
         print("   aicliService instance: \(ObjectIdentifier(aicliService))")
@@ -140,7 +151,8 @@ class ChatViewModel: ObservableObject {
         aicliService.sendMessage(
             message: command,
             projectPath: project.path,
-            sessionId: sessionIdToUse
+            sessionId: sessionIdToUse,
+            attachments: attachments
         ) { [weak self] result in
             Task { @MainActor in
                 guard let self = self else { return }
@@ -248,7 +260,7 @@ class ChatViewModel: ObservableObject {
         }
         
         // Notify push notification service about the active project/session change
-        EnhancedPushNotificationService.shared.setActiveProject(currentProject, sessionId: currentSessionId)
+        PushNotificationService.shared.setActiveProject(currentProject, sessionId: currentSessionId)
     }
     
     
@@ -291,7 +303,7 @@ class ChatViewModel: ObservableObject {
         currentSessionId = sessionId
         
         // Notify push notification service about the active project
-        EnhancedPushNotificationService.shared.setActiveProject(project, sessionId: sessionId)
+        PushNotificationService.shared.setActiveProject(project, sessionId: sessionId)
         
         let restoredMessages = persistenceService.loadMessages(for: project.path, sessionId: sessionId)
         if !restoredMessages.isEmpty {
@@ -556,6 +568,17 @@ class ChatViewModel: ObservableObject {
                 )
                 messages.append(assistantMessage)
                 print("✅ ChatViewModel: Added Claude response message to chat")
+                
+                // Check if auto-response should trigger
+                if let autoResponse = autoResponseManager.processMessage(assistantMessage) {
+                    print("🤖 Auto-response triggered: \(autoResponse)")
+                    
+                    // Send auto-response after a brief delay
+                    DispatchQueue.main.asyncAfter(deadline: .now() + autoResponseManager.config.delayBetweenResponses) { [weak self] in
+                        guard let self = self, let project = self.currentProject else { return }
+                        self.sendMessage(autoResponse, for: project)
+                    }
+                }
                 
                 // Sync assistant message to CloudKit
                 if let project = currentProject {

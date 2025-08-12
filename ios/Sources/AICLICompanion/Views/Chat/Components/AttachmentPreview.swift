@@ -1,4 +1,7 @@
 import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
 
 /// Preview component for attachments before sending
 @available(iOS 16.0, macOS 13.0, *)
@@ -105,9 +108,11 @@ struct AttachmentThumbnail: View {
     private func loadThumbnail() {
         guard attachment.isImage else { return }
         
+        #if os(iOS)
         if let uiImage = UIImage(data: attachment.data) {
             thumbnailImage = Image(uiImage: uiImage)
         }
+        #endif
     }
     
     private func iconForAttachment(_ attachment: AttachmentData) -> String {
@@ -238,9 +243,11 @@ struct MessageAttachmentRow: View {
     private func loadThumbnail() {
         guard attachment.isImage else { return }
         
+        #if os(iOS)
         if let uiImage = UIImage(data: attachment.data) {
             thumbnailImage = Image(uiImage: uiImage)
         }
+        #endif
     }
     
     private func iconForAttachment(_ attachment: AttachmentData) -> String {

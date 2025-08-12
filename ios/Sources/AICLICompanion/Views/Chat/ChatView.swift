@@ -79,6 +79,9 @@ struct ChatView: View {
                     oldestQueuedTimestamp: queueManager.oldestQueuedTimestamp
                 )
                 
+                // Auto-response controls
+                AutoResponseControls()
+                
                 // Message list
                 ChatMessageList(
                     messages: viewModel.messages,
@@ -101,7 +104,9 @@ struct ChatView: View {
                     isIPad: isIPad,
                     horizontalSizeClass: horizontalSizeClass,
                     colorScheme: colorScheme,
-                    onSendMessage: sendMessage
+                    onSendMessage: { attachments in
+                        sendMessage(with: attachments)
+                    }
                 )
                 .offset(y: inputBarOffset)
             }
@@ -255,7 +260,7 @@ struct ChatView: View {
     }
     
     // MARK: - Actions
-    private func sendMessage() {
+    private func sendMessage(with attachments: [AttachmentData] = []) {
         guard let project = selectedProject else { return }
         
         let text = messageText
@@ -275,7 +280,7 @@ struct ChatView: View {
         // Send message directly - let Claude handle session creation
         // For fresh chats: currentSessionId will be nil
         // For continued chats: currentSessionId will have Claude's session ID
-        viewModel.sendMessage(text, for: project)
+        viewModel.sendMessage(text, for: project, attachments: attachments)
     }
     
     private func clearCurrentSession() {

@@ -7,7 +7,7 @@ struct ChatInputBar: View {
     let isIPad: Bool
     let horizontalSizeClass: UserInterfaceSizeClass?
     let colorScheme: ColorScheme
-    let onSendMessage: () -> Void
+    let onSendMessage: ([AttachmentData]) -> Void
     
     @FocusState private var isInputFocused: Bool
     @State private var attachments: [AttachmentData] = []
@@ -107,8 +107,8 @@ struct ChatInputBar: View {
     // MARK: - Actions
     
     private func sendMessage() {
-        // TODO: Include attachments in message sending logic
-        onSendMessage()
+        // Pass attachments to parent view
+        onSendMessage(attachments)
         
         // Clear attachments after sending
         attachments.removeAll()

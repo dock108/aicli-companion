@@ -65,7 +65,7 @@ struct NotificationHandler: ViewModifier {
         }
         
         // Clear badge for this project
-        EnhancedPushNotificationService.shared.clearProjectNotifications(projectId)
+        PushNotificationService.shared.clearProjectNotifications(projectId)
     }
     
     private func handleOpenChatSession(_ notification: Notification) {
@@ -97,7 +97,7 @@ extension View {
 
 @available(iOS 16.0, macOS 13.0, *)
 struct BadgeCountView: View {
-    @StateObject private var notificationService = EnhancedPushNotificationService.shared
+    @StateObject private var notificationService = PushNotificationService.shared
     
     var body: some View {
         Group {
@@ -121,7 +121,7 @@ struct BadgeCountView: View {
 @available(iOS 16.0, macOS 13.0, *)
 struct ProjectBadgeModifier: ViewModifier {
     let projectId: String
-    @StateObject private var notificationService = EnhancedPushNotificationService.shared
+    @StateObject private var notificationService = PushNotificationService.shared
     
     func body(content: Content) -> some View {
         content

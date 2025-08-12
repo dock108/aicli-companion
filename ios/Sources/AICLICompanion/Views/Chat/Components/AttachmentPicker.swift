@@ -1,6 +1,9 @@
 import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
+#if os(iOS)
+import UIKit
+#endif
 
 /// Comprehensive attachment picker for photos, documents, camera, and files
 @available(iOS 16.0, macOS 13.0, *)
@@ -28,7 +31,7 @@ struct AttachmentPicker: View {
                 Spacer()
                 
                 Text("Add Attachment")
-                    .font(Typography.font(.headline))
+                    .font(Typography.font(.heading3))
                     .foregroundColor(Colors.textPrimary(for: colorScheme))
                 
                 Spacer()
@@ -103,10 +106,15 @@ struct AttachmentPicker: View {
             handlePhotoSelection(newItem)
         }
         .sheet(isPresented: $showingDocumentPicker) {
+            #if os(iOS)
             DocumentPicker(
                 allowedTypes: [.item], // All document types
                 onDocumentPicked: handleDocumentSelection
             )
+            #else
+            Text("Document picker not available on this platform")
+                .padding()
+            #endif
         }
         #if os(iOS)
         .fullScreenCover(isPresented: $showingCamera) {
@@ -122,7 +130,6 @@ struct AttachmentPicker: View {
             .cPlusPlusSource,
             .cSource,
             .javaScript,
-            .python,
             .json,
             .xml,
             .yaml,
@@ -367,7 +374,7 @@ struct CameraPicker: UIViewControllerRepresentable {
             self.onImageCaptured = onImageCaptured
         }
         
-        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
             if let image = info[.originalImage] as? UIImage {
                 onImageCaptured(.success(image))
             }
@@ -381,7 +388,8 @@ struct CameraPicker: UIViewControllerRepresentable {
 }
 #endif
 
-@available(iOS 16.0, macOS 13.0, *)
+#if os(iOS)
+@available(iOS 16.0, *)
 struct DocumentPicker: UIViewControllerRepresentable {
     let allowedTypes: [UTType]
     let onDocumentPicked: (Result<URL, Error>) -> Void
@@ -420,6 +428,7 @@ struct DocumentPicker: UIViewControllerRepresentable {
         }
     }
 }
+#endif
 
 // MARK: - Preview
 

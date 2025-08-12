@@ -62,7 +62,7 @@ public class AutoResponseManager: ObservableObject {
     // MARK: - Public Methods
     
     /// Activate auto-response mode
-    public func activate(in chatViewModel: ChatViewModel? = nil) {
+    public func activate() {
         guard canActivate else { return }
         
         isActive = true
@@ -79,10 +79,9 @@ public class AutoResponseManager: ObservableObject {
         history.append(entry)
         
         if config.showNotifications {
-            showNotification(title: "Auto Mode Active", 
+            showNotification(title: "Auto Mode Active",
                            body: "Claude will continue working automatically")
         }
-        
         print("🤖 Auto-response mode ACTIVATED")
     }
     
@@ -104,10 +103,9 @@ public class AutoResponseManager: ObservableObject {
         history.append(entry)
         
         if config.showNotifications {
-            showNotification(title: "Auto Mode Stopped", 
+            showNotification(title: "Auto Mode Stopped",
                            body: reason.description)
         }
-        
         print("🛑 Auto-response mode DEACTIVATED: \(reason.description)")
     }
     
@@ -143,7 +141,7 @@ public class AutoResponseManager: ObservableObject {
     }
     
     /// Process incoming message for auto-response
-    public func processMessage(_ message: Message) -> String? {
+    func processMessage(_ message: Message) -> String? {
         guard isActive && !isPaused else { return nil }
         
         // Check for stop phrases

@@ -268,7 +268,7 @@ struct MessageBubble: View {
         case 1: return Typography.font(.heading1)
         case 2: return Typography.font(.heading2)
         case 3: return Typography.font(.heading3)
-        default: return Typography.font(.headline)
+        default: return Typography.font(.heading3)
         }
     }
     

@@ -40,8 +40,15 @@ struct ChatMessageList: View {
                         }
                         
                         if isLoading {
-                            ChatLoadingView(progressInfo: progressInfo, colorScheme: colorScheme)
-                                .id("loading-indicator")
+                            // Use ThinkingIndicator for more sophisticated display
+                            ThinkingIndicator(
+                                isVisible: true,
+                                duration: progressInfo?.elapsedTime ?? 0,
+                                tokenCount: progressInfo?.tokenCount ?? 0,
+                                activity: progressInfo?.stage ?? "Thinking"
+                            )
+                            .padding(.horizontal, 4)
+                            .id("loading-indicator")
                         }
                     }
                     .padding(.horizontal, isIPad && horizontalSizeClass == .regular ? 40 : 16)

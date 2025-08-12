@@ -4,10 +4,10 @@ import UserNotifications
 import UIKit
 #endif
 
-/// Enhanced push notification service with actions and grouping
+/// Push notification service with actions and grouping
 @available(iOS 16.0, macOS 13.0, *)
-public class EnhancedPushNotificationService: NSObject, ObservableObject {
-    public static let shared = EnhancedPushNotificationService()
+public class PushNotificationService: NSObject, ObservableObject {
+    public static let shared = PushNotificationService()
     
     // MARK: - Published Properties
     
@@ -230,7 +230,7 @@ public class EnhancedPushNotificationService: NSObject, ObservableObject {
 // MARK: - UNUserNotificationCenterDelegate
 
 @available(iOS 16.0, macOS 13.0, *)
-extension EnhancedPushNotificationService: UNUserNotificationCenterDelegate {
+extension PushNotificationService: UNUserNotificationCenterDelegate {
     /// Handle notification while app is in foreground
     public func userNotificationCenter(
         _ center: UNUserNotificationCenter,
@@ -533,6 +533,8 @@ extension EnhancedPushNotificationService: UNUserNotificationCenterDelegate {
 extension Notification.Name {
     static let openProject = Notification.Name("com.aiclicompanion.openProject")
     static let markProjectRead = Notification.Name("com.aiclicompanion.markProjectRead")
+    static let claudeResponseReceived = Notification.Name("com.aiclicompanion.claudeResponseReceived")
+    static let openChatSession = Notification.Name("com.aiclicompanion.openChatSession")
 }
 
 // MARK: - Push Notification Payload Helper

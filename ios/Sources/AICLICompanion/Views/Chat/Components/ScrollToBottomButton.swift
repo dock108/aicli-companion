@@ -24,7 +24,7 @@ struct ScrollToBottomButton: View {
                         if unreadCount > 0 {
                             Text("\(unreadCount)")
                                 .font(Typography.font(.caption))
-                                .foregroundColor(Colors.textOnAccent)
+                                .foregroundColor(.white)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background(Colors.accentPrimaryEnd)
@@ -61,14 +61,7 @@ struct ScrollToBottomButton: View {
     }
 }
 
-/// Custom button style with scale animation
-struct ScaleButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
-            .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
-    }
-}
+// ScaleButtonStyle is already defined in AnimationConstants.swift
 
 // MARK: - Notification Names
 

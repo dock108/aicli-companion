@@ -128,25 +128,21 @@ describe('CommandSecurityService', () => {
   });
 
   describe('Blocked Command Detection', () => {
-    it('should handle literal patterns safely', () => {
+    it('should reject patterns with regex metacharacters for security', () => {
       securityService.config.blockedCommands = ['test.file*'];
 
-      // Should not match due to literal interpretation
+      // Should not match due to pattern being rejected for security (contains *)
       assert.strictEqual(securityService.isBlockedCommand('test.fileX'), false);
       assert.strictEqual(securityService.isBlockedCommand('testXfile'), false);
-
-      // Should match exact command
-      assert.strictEqual(securityService.isBlockedCommand('test.file*'), true);
+      assert.strictEqual(securityService.isBlockedCommand('test.file*'), true); // Exact match still works
     });
 
-    it('should handle regex patterns when prefixed', () => {
+    it('should reject regex patterns for security', () => {
       securityService.config.blockedCommands = ['re:test\\.file.*'];
 
-      // Should match due to regex interpretation
-      assert.strictEqual(securityService.isBlockedCommand('test.file.txt'), true);
-      assert.strictEqual(securityService.isBlockedCommand('test.file123'), true);
-
-      // Should not match
+      // Should not match - regex patterns are rejected for security
+      assert.strictEqual(securityService.isBlockedCommand('test.file.txt'), false);
+      assert.strictEqual(securityService.isBlockedCommand('test.file123'), false);
       assert.strictEqual(securityService.isBlockedCommand('testXfile.txt'), false);
     });
 

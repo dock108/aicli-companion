@@ -12,8 +12,6 @@
 import path from 'path';
 import { EventEmitter } from 'events';
 import { createLogger } from '../utils/logger.js';
-import escapeRegExp from 'lodash.escaperegexp';
-import safeRegex from 'safe-regex';
 
 const logger = createLogger('CommandSecurity');
 
@@ -21,47 +19,26 @@ const logger = createLogger('CommandSecurity');
 const REGEX_PREFIX = 're:';
 
 /**
- * Checks if a regex pattern is "safe" (not too long, no nested quantifiers, etc.)
- * This is a basic check; for more robust protection, use a library like safe-regex.
+ * Validates if a pattern is safe for string matching.
+ * For security, only simple string patterns are allowed (no regex metacharacters).
  */
-function isSafeRegex(pattern) {
+function isSafePattern(pattern) {
   // Basic input validation
   if (typeof pattern !== 'string') return false;
   if (pattern.length === 0) return false;
 
-  // Use the safe-regex library for robust regex safety checking
-  if (!safeRegex(pattern)) return false;
+  // For security reasons, we only allow simple string patterns
+  // No regex patterns are allowed from user input
+  // This completely eliminates regex injection attacks
 
-  // Additional security checks:
-  // Limit length to 100 chars (arbitrary, adjust as needed)
-  if (pattern.length > 100) return false;
-
-  // Disallow nested quantifiers (e.g., (a+)+ or (a*)*)
-  if (/\([^)]*[*+?][^)]*\)[*+?]/.test(pattern)) return false;
-
-  // Disallow lookbehinds (which can be slow in some engines)
-  if (/\(\?<=|\(\?<!/.test(pattern)) return false;
-
-  // Disallow backreferences (e.g., \1, \2)
-  if (/\\\d/.test(pattern)) return false;
-
-  // Disallow catastrophic backtracking patterns
-  if (/\*[*+?]|\+[*+?]|\?[*+?]/.test(pattern)) return false;
-
-  // Disallow excessive nesting depth
-  const parenDepth = (pattern.match(/\(/g) || []).length;
-  if (parenDepth > 10) return false;
-
-  // Test compilation safety with timeout
-  try {
-    const testRegex = new RegExp(pattern);
-    // Quick test to ensure it doesn't hang
-    const testStart = Date.now();
-    testRegex.test('test');
-    if (Date.now() - testStart > 10) return false; // Took too long
-  } catch {
+  // Disallow regex metacharacters entirely
+  const regexMetaChars = /[.*+?^${}()|[\]\\]/;
+  if (regexMetaChars.test(pattern)) {
     return false;
   }
+
+  // Limit length to prevent DoS
+  if (pattern.length > 100) return false;
 
   return true;
 }
@@ -356,51 +333,35 @@ export class CommandSecurityService extends EventEmitter {
     }
 
     return this.config.blockedCommands.some((blocked) => {
-      // Exact match
-      if (blocked === command) return true;
+      // Security check first: reject unsafe patterns
+      if (typeof blocked === 'string') {
+        // Remove any regex prefix if present (legacy support)
+        let pattern = blocked.startsWith(REGEX_PREFIX) ? blocked.slice(3) : blocked;
+        
+        // For regex patterns, reject them entirely for security
+        if (blocked.startsWith(REGEX_PREFIX)) {
+          logger.warn(`Blocked command regex pattern rejected for security: ${pattern}`);
+          return false; // Reject all regex patterns
+        }
+        
+        // Use exact command matching logic (secure)
+        // Exact match first (most secure)
+        if (pattern === command) return true;
 
-      // Check if it's a complete command (not a substring match for specific dangerous commands)
-      // For example, "rm -rf /" should not match "rm -rf /home/user"
-      if (blocked.endsWith('/') || blocked.endsWith('/*')) {
-        // For path-specific blocks, ensure exact match or with trailing content
-        if (command === blocked || command.startsWith(`${blocked} `)) {
+        // Check if it's a complete command (not a substring match for specific dangerous commands)
+        // For example, "rm -rf /" should not match "rm -rf /home/user"
+        if (pattern.endsWith('/') || pattern.endsWith('/*')) {
+          // For path-specific blocks, ensure exact match or with trailing content
+          if (command === pattern || command.startsWith(`${pattern} `)) {
+            return true;
+          }
+        } else if (command.startsWith(`${pattern} `) || command === pattern) {
+          // For other commands, match if it's the exact command or command with args
           return true;
         }
-      } else if (command.startsWith(`${blocked} `) || command === blocked) {
-        // For other commands, match if it's the exact command or command with args
-        return true;
       }
-
-      // Try as regex only if explicitly marked as regex (e.g., re:pattern)
-      try {
-        let regex;
-        if (typeof blocked === 'string' && blocked.startsWith('re:')) {
-          // Explicit regex pattern (strip 're:' prefix)
-          const pattern = blocked.slice(3);
-          if (!isSafeRegex(pattern)) {
-            logger.warn(`Blocked command regex pattern rejected as unsafe: ${pattern}`);
-            return false;
-          }
-          try {
-            // Additional validation: ensure pattern is a valid regex
-            regex = new RegExp(pattern);
-            // Test the regex with an empty string to catch any immediate issues
-            regex.test('');
-          } catch (error) {
-            logger.warn(
-              `Blocked command regex pattern failed to compile: ${pattern}`,
-              error.message
-            );
-            return false;
-          }
-        } else {
-          // Escape as literal - this is safe as escapeRegExp sanitizes the input
-          regex = new RegExp(`^${escapeRegExp(blocked)}$`);
-        }
-        return regex.test(command);
-      } catch {
-        return false;
-      }
+      
+      return false;
     });
   }
 
@@ -419,28 +380,20 @@ export class CommandSecurityService extends EventEmitter {
       /:(){ :|:& };:/, // Fork bomb
     ];
 
-    // Check configured patterns
+    // Check configured patterns using simple string matching
     const isConfiguredDestructive = this.config.destructiveCommands.some((pattern) => {
-      if (command.includes(pattern)) return true;
       try {
-        // Only use as regex if pattern is safe
-        if (!isSafeRegex(pattern)) {
-          logger.warn(`Destructive command pattern rejected as unsafe: ${pattern}`);
-          return false;
+        if (typeof pattern === 'string') {
+          // Validate the pattern is safe (no regex metacharacters)
+          if (!isSafePattern(pattern)) {
+            logger.warn(`Destructive command pattern rejected as unsafe: ${pattern}`);
+            return false;
+          }
+
+          // Use simple string containment check (case-insensitive)
+          return command.toLowerCase().includes(pattern.toLowerCase());
         }
-        try {
-          // Additional validation: ensure pattern is a valid regex
-          const regex = new RegExp(pattern);
-          // Test the regex with an empty string to catch any immediate issues
-          regex.test('');
-          return regex.test(command);
-        } catch (error) {
-          logger.warn(
-            `Destructive command regex pattern failed to compile: ${pattern}`,
-            error.message
-          );
-          return false;
-        }
+        return false;
       } catch {
         return false;
       }

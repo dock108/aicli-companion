@@ -50,7 +50,8 @@
     "qrcode": "^1.5.4",
     "uuid": "^9.0.1",
     "ws": "^8.18.3",
-    "lodash": "^4.17.21"
+    "lodash": "^4.17.21",
+    "lodash.escaperegexp": "^4.1.2"
   },
   "devDependencies": {
     "c8": "^10.1.3",

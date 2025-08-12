@@ -12,6 +12,7 @@
 import path from 'path';
 import { EventEmitter } from 'events';
 import { createLogger } from '../utils/logger.js';
+import escapeRegExp from 'lodash.escaperegexp';
 
 const logger = createLogger('CommandSecurity');
 
@@ -305,9 +306,16 @@ export class CommandSecurityService extends EventEmitter {
         return true;
       }
 
-      // Try as regex (don't escape - blockedCommands can contain regex patterns)
+      // Try as regex only if explicitly marked as regex (e.g., re:pattern)
       try {
-        const regex = new RegExp(`^${blocked}$`);
+        let regex;
+        if (typeof blocked === 'string' && blocked.startsWith('re:')) {
+          // Explicit regex pattern (strip 're:' prefix)
+          regex = new RegExp(blocked.slice(3));
+        } else {
+          // Escape as literal
+          regex = new RegExp(`^${escapeRegExp(blocked)}$`);
+        }
         return regex.test(command);
       } catch {
         return false;

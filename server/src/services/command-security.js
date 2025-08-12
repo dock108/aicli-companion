@@ -12,6 +12,7 @@
 import path from 'path';
 import { EventEmitter } from 'events';
 import { createLogger } from '../utils/logger.js';
+import _ from 'lodash';
 
 const logger = createLogger('CommandSecurity');
 
@@ -280,7 +281,8 @@ export class CommandSecurityService extends EventEmitter {
 
       // Try as regex
       try {
-        const regex = new RegExp(blocked);
+        const safeBlocked = _.escapeRegExp(blocked);
+        const regex = new RegExp(safeBlocked);
         return regex.test(command);
       } catch {
         return false;

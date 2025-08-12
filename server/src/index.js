@@ -107,7 +107,7 @@ class AICLICompanionServer {
 
     // Auth routes (QR code generation, etc.)
     this.app.use('/api/auth', authRoutes);
-    
+
     // Security routes
     this.app.use('/api/security', securityRoutes);
 

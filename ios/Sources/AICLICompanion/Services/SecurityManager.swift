@@ -129,7 +129,7 @@ public class SecurityManager: ObservableObject {
             let response = try JSONDecoder().decode(SecurityAPIResponse.self, from: data)
             
             if !response.success {
-                throw NSError(domain: "SecurityManager", code: 0, 
+                throw NSError(domain: "SecurityManager", code: 0,
                             userInfo: [NSLocalizedDescriptionKey: response.error ?? "Update failed"])
             }
         } catch {

@@ -34,20 +34,25 @@ export class SecurityConfig {
   constructor(options = {}) {
     // Security presets - apply first as defaults
     this.preset = process.env.AICLI_SECURITY_PRESET || options.preset || 'standard';
-    
+
     // Apply preset defaults first (these can be overridden)
     const presetDefaults = this.getPresetDefaults(this.preset);
-    
+
     // Parse environment variables and options, with preset as fallback
     this.safeDirectories = this.parseDirectories(
-      process.env.AICLI_SAFE_DIRECTORIES !== undefined ? process.env.AICLI_SAFE_DIRECTORIES :
-      options.safeDirectories !== undefined ? options.safeDirectories : ''
+      process.env.AICLI_SAFE_DIRECTORIES !== undefined
+        ? process.env.AICLI_SAFE_DIRECTORIES
+        : options.safeDirectories !== undefined
+          ? options.safeDirectories
+          : ''
     );
 
     this.blockedCommands = this.parsePatterns(
-      process.env.AICLI_BLOCKED_COMMANDS !== undefined ? process.env.AICLI_BLOCKED_COMMANDS :
-      options.blockedCommands !== undefined ? options.blockedCommands :
-      presetDefaults.blockedCommands || ''
+      process.env.AICLI_BLOCKED_COMMANDS !== undefined
+        ? process.env.AICLI_BLOCKED_COMMANDS
+        : options.blockedCommands !== undefined
+          ? options.blockedCommands
+          : presetDefaults.blockedCommands || ''
     );
 
     this.destructiveCommands = this.parsePatterns(
@@ -58,19 +63,26 @@ export class SecurityConfig {
 
     this.requireConfirmation =
       process.env.AICLI_DESTRUCTIVE_COMMANDS_REQUIRE_CONFIRMATION === 'true' ||
-      (options.requireConfirmation !== undefined ? options.requireConfirmation :
-       presetDefaults.requireConfirmation !== undefined ? presetDefaults.requireConfirmation : false);
+      (options.requireConfirmation !== undefined
+        ? options.requireConfirmation
+        : presetDefaults.requireConfirmation !== undefined
+          ? presetDefaults.requireConfirmation
+          : false);
 
     this.maxFileSize = parseInt(
       process.env.AICLI_MAX_FILE_SIZE || options.maxFileSize || '10485760' // 10MB default
     );
 
-    this.readOnlyMode = 
+    this.readOnlyMode =
       process.env.AICLI_READONLY_MODE === 'true' ||
-      (options.readOnlyMode !== undefined ? options.readOnlyMode :
-       presetDefaults.readOnlyMode !== undefined ? presetDefaults.readOnlyMode : false);
+      (options.readOnlyMode !== undefined
+        ? options.readOnlyMode
+        : presetDefaults.readOnlyMode !== undefined
+          ? presetDefaults.readOnlyMode
+          : false);
 
-    this.enableAudit = process.env.AICLI_ENABLE_AUDIT === 'true' || 
+    this.enableAudit =
+      process.env.AICLI_ENABLE_AUDIT === 'true' ||
       (options.enableAudit !== undefined ? options.enableAudit : true); // Default true
   }
 
@@ -138,7 +150,7 @@ export class SecurityConfig {
         blockedCommands: [],
         requireConfirmation: false,
         readOnlyMode: false,
-      }
+      },
     };
 
     return presets[preset] || presets.custom;
@@ -280,22 +292,22 @@ export class CommandSecurityService extends EventEmitter {
     return this.config.blockedCommands.some((blocked) => {
       // Exact match
       if (blocked === command) return true;
-      
+
       // Check if it's a complete command (not a substring match for specific dangerous commands)
-      // For example, "rm -rf /" should not match "rm -rf /home/user" 
+      // For example, "rm -rf /" should not match "rm -rf /home/user"
       if (blocked.endsWith('/') || blocked.endsWith('/*')) {
         // For path-specific blocks, ensure exact match or with trailing content
-        if (command === blocked || command.startsWith(blocked + ' ')) {
+        if (command === blocked || command.startsWith(`${blocked} `)) {
           return true;
         }
-      } else if (command.startsWith(blocked + ' ') || command === blocked) {
+      } else if (command.startsWith(`${blocked} `) || command === blocked) {
         // For other commands, match if it's the exact command or command with args
         return true;
       }
 
       // Try as regex (don't escape - blockedCommands can contain regex patterns)
       try {
-        const regex = new RegExp('^' + blocked + '$');
+        const regex = new RegExp(`^${blocked}$`);
         return regex.test(command);
       } catch {
         return false;

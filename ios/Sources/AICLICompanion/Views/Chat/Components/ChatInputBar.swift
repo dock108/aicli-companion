@@ -1,7 +1,7 @@
 import SwiftUI
 
 // MARK: - Constants
-private let AttachmentFileSizeLimit = 10 * 1024 * 1024 // 10MB in bytes
+private let attachmentFileSizeLimit = 10 * 1024 * 1024 // 10MB in bytes
 
 @available(iOS 16.0, macOS 13.0, *)
 struct ChatInputBar: View {
@@ -122,7 +122,7 @@ struct ChatInputBar: View {
         guard attachments.count < 5 else { return }
         
         // Check file size (limit to 10MB per file)
-        guard attachment.size <= AttachmentFileSizeLimit else {
+        guard attachment.size <= attachmentFileSizeLimit else {
             // TODO: Show error alert
             print("❌ File too large: \(attachment.formattedSize)")
             return

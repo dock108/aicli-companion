@@ -80,7 +80,7 @@ export class AICLIService extends EventEmitter {
     this.aicliCommand = this.processRunner.aicliCommand;
     this.defaultWorkingDirectory = process.cwd();
     this.safeRootDirectory = null; // Will be set from server config
-    
+
     // Forward security violations from process runner
     this.processRunner.on('securityViolation', (data) => {
       this.emit('securityViolation', data);

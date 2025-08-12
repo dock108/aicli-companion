@@ -3,10 +3,10 @@ import Foundation
 // MARK: - Security Preset
 @available(iOS 16.0, macOS 13.0, *)
 public enum SecurityPreset: String, CaseIterable, Codable {
-    case unrestricted = "unrestricted"
-    case standard = "standard"
-    case restricted = "restricted"
-    case custom = "custom"
+    case unrestricted
+    case standard
+    case restricted
+    case custom
     
     var displayName: String {
         switch self {
@@ -174,10 +174,10 @@ public struct PermissionRequest: Identifiable, Codable {
     var reason: String?
     
     enum PermissionStatus: String, Codable {
-        case pending = "pending"
-        case approved = "approved"
-        case denied = "denied"
-        case timeout = "timeout"
+        case pending
+        case approved
+        case denied
+        case timeout
     }
 }
 

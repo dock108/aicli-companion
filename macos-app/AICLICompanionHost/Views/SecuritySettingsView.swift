@@ -15,7 +15,7 @@ struct SecuritySettingsView: View {
     @State private var isRestarting = false
     @State private var showingNgrokSetup = false
     @State private var checkingNgrok = false
-    
+
     // Command Controls State
     @State private var securityPreset: String = "standard"
     @State private var safeDirectories: [String] = []
@@ -85,26 +85,32 @@ struct SecuritySettingsView: View {
                     applySecurityPreset(newValue)
                     needsRestart = true
                 }
-                
+
                 Toggle("Read-Only Mode", isOn: $readOnlyMode)
                     .help("Block all write operations")
                     .onChange(of: readOnlyMode) { _, _ in
-                        settingsManager.setEnvironmentVariable("AICLI_READONLY_MODE", value: readOnlyMode ? "true" : "false")
+                        settingsManager.setEnvironmentVariable(
+                            "AICLI_READONLY_MODE",
+                            value: readOnlyMode ? "true" : "false"
+                        )
                         needsRestart = true
                     }
-                
+
                 Toggle("Require Confirmation for Destructive Commands", isOn: $requireConfirmation)
                     .help("Ask for confirmation before running potentially destructive commands")
                     .onChange(of: requireConfirmation) { _, _ in
-                        settingsManager.setEnvironmentVariable("AICLI_DESTRUCTIVE_COMMANDS_REQUIRE_CONFIRMATION", 
+                        settingsManager.setEnvironmentVariable("AICLI_DESTRUCTIVE_COMMANDS_REQUIRE_CONFIRMATION",
                                                               value: requireConfirmation ? "true" : "false")
                         needsRestart = true
                     }
-                
+
                 Toggle("Enable Security Audit", isOn: $enableAudit)
                     .help("Log all security validations for review")
                     .onChange(of: enableAudit) { _, _ in
-                        settingsManager.setEnvironmentVariable("AICLI_ENABLE_AUDIT", value: enableAudit ? "true" : "false")
+                        settingsManager.setEnvironmentVariable(
+                            "AICLI_ENABLE_AUDIT",
+                            value: enableAudit ? "true" : "false"
+                        )
                         needsRestart = true
                     }
             } header: {
@@ -112,7 +118,7 @@ struct SecuritySettingsView: View {
             } footer: {
                 Text("Configure which commands Claude can execute and set security restrictions")
             }
-            
+
             // Safe Directories Section
             Section {
                 ForEach(safeDirectories, id: \.self) { directory in
@@ -124,14 +130,14 @@ struct SecuritySettingsView: View {
                         Spacer()
                         Button(action: {
                             removeSafeDirectory(directory)
-                        }) {
+                        }, label: {
                             Image(systemName: "minus.circle")
                                 .foregroundColor(.red)
-                        }
+                        })
                         .buttonStyle(.plain)
                     }
                 }
-                
+
                 HStack {
                     TextField("Add directory path...", text: $newDirectory)
                         .textFieldStyle(.roundedBorder)
@@ -148,7 +154,7 @@ struct SecuritySettingsView: View {
             } footer: {
                 Text("Claude can only operate within these directories when restrictions are enabled")
             }
-            
+
             // Blocked Commands Section
             Section {
                 ForEach(blockedCommands, id: \.self) { command in
@@ -160,14 +166,14 @@ struct SecuritySettingsView: View {
                         Spacer()
                         Button(action: {
                             removeBlockedCommand(command)
-                        }) {
+                        }, label: {
                             Image(systemName: "minus.circle")
                                 .foregroundColor(.red)
-                        }
+                        })
                         .buttonStyle(.plain)
                     }
                 }
-                
+
                 HStack {
                     TextField("Add command pattern...", text: $newCommand)
                         .textFieldStyle(.roundedBorder)
@@ -184,7 +190,7 @@ struct SecuritySettingsView: View {
             } footer: {
                 Text("Commands matching these patterns will be blocked")
             }
-            
+
             // Internet Access settings moved to TunnelSettingsView
             TunnelSettingsView(
                 needsRestart: $needsRestart,
@@ -241,18 +247,18 @@ struct SecuritySettingsView: View {
             }
         }
     }
-    
+
     // MARK: - Command Control Methods
-    
+
     private func applySecurityPreset(_ preset: String) {
         settingsManager.setEnvironmentVariable("AICLI_SECURITY_PRESET", value: preset)
-        
+
         switch preset {
         case "unrestricted":
             blockedCommands = []
             requireConfirmation = false
             readOnlyMode = false
-            
+
         case "standard":
             blockedCommands = [
                 "rm -rf /",
@@ -264,20 +270,20 @@ struct SecuritySettingsView: View {
             ]
             requireConfirmation = true
             readOnlyMode = false
-            
+
         case "restricted":
             blockedCommands = ["*"]
             requireConfirmation = true
             readOnlyMode = true
-            
+
         default:
             // Custom - keep current settings
             break
         }
-        
+
         updateEnvironmentVariables()
     }
-    
+
     private func addSafeDirectory(_ directory: String) {
         let path = directory.replacingOccurrences(of: "~", with: FileManager.default.homeDirectoryForCurrentUser.path)
         if !safeDirectories.contains(path) {
@@ -286,13 +292,13 @@ struct SecuritySettingsView: View {
             needsRestart = true
         }
     }
-    
+
     private func removeSafeDirectory(_ directory: String) {
         safeDirectories.removeAll { $0 == directory }
         updateEnvironmentVariables()
         needsRestart = true
     }
-    
+
     private func addBlockedCommand(_ command: String) {
         if !blockedCommands.contains(command) {
             blockedCommands.append(command)
@@ -300,39 +306,40 @@ struct SecuritySettingsView: View {
             needsRestart = true
         }
     }
-    
+
     private func removeBlockedCommand(_ command: String) {
         blockedCommands.removeAll { $0 == command }
         updateEnvironmentVariables()
         needsRestart = true
     }
-    
+
     private func updateEnvironmentVariables() {
         // Update safe directories
         let dirsString = safeDirectories.joined(separator: ",")
         settingsManager.setEnvironmentVariable("AICLI_SAFE_DIRECTORIES", value: dirsString)
-        
+
         // Update blocked commands
         let commandsString = blockedCommands.joined(separator: ",")
         settingsManager.setEnvironmentVariable("AICLI_BLOCKED_COMMANDS", value: commandsString)
     }
-    
+
     private func loadSecuritySettings() {
         // Load from environment variables
         if let preset = settingsManager.getEnvironmentVariable("AICLI_SECURITY_PRESET") {
             securityPreset = preset
         }
-        
+
         if let dirs = settingsManager.getEnvironmentVariable("AICLI_SAFE_DIRECTORIES") {
             safeDirectories = dirs.split(separator: ",").map(String.init)
         }
-        
+
         if let commands = settingsManager.getEnvironmentVariable("AICLI_BLOCKED_COMMANDS") {
             blockedCommands = commands.split(separator: ",").map(String.init)
         }
-        
+
         readOnlyMode = settingsManager.getEnvironmentVariable("AICLI_READONLY_MODE") == "true"
-        requireConfirmation = settingsManager.getEnvironmentVariable("AICLI_DESTRUCTIVE_COMMANDS_REQUIRE_CONFIRMATION") == "true"
+        requireConfirmation = settingsManager
+            .getEnvironmentVariable("AICLI_DESTRUCTIVE_COMMANDS_REQUIRE_CONFIRMATION") == "true"
         enableAudit = settingsManager.getEnvironmentVariable("AICLI_ENABLE_AUDIT") != "false" // Default true
     }
 }

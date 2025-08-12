@@ -237,7 +237,9 @@ struct SessionDetailCard: View {
         }
 
         if tokens > 0 {
-            let tokenText = tokens > 1000 ? "\((Double(tokens) / 1000.0).formatted(.number.precision(.fractionLength(1))))k" : "\(tokens)"
+            let tokenText = tokens > 1000
+                ? "\((Double(tokens) / 1000.0).formatted(.number.precision(.fractionLength(1))))k"
+                : "\(tokens)"
             parts.append("\(tokenText) tokens")
         }
 

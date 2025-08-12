@@ -111,7 +111,6 @@ export class TunnelService {
       // Log additional debugging info for auth token issues
       if (authToken) {
         logger.debug(`Auth token length: ${authToken.length}`);
-        logger.debug(`Auth token format: ${authToken.substring(0, 12)}...`);
       }
 
       this.isActive = false;

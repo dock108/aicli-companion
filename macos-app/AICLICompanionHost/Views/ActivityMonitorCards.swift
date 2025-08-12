@@ -187,6 +187,36 @@ struct SessionDetailCard: View {
                 SessionInfoRow(label: "Session ID", value: session.sessionId)
                 SessionInfoRow(label: "Signal", value: String(format: "%.1f%%", session.signalStrength * 100))
                 SessionInfoRow(label: "Connected", value: formatLastActivity(session.connectedAt))
+
+                // Attachment indicator
+                if session.hasAttachments {
+                    SessionInfoRow(
+                        label: "Attachments",
+                        value: "\(session.attachmentCount) file(s)",
+                        icon: "paperclip",
+                        color: .blue
+                    )
+                }
+
+                // Auto-response indicator
+                if session.autoResponseActive {
+                    SessionInfoRow(
+                        label: "Auto-Response",
+                        value: "Active (Iteration \(session.autoResponseIteration))",
+                        icon: "play.circle.fill",
+                        color: .green
+                    )
+                }
+
+                // Thinking indicator
+                if session.isThinking {
+                    SessionInfoRow(
+                        label: session.thinkingActivity ?? "Thinking",
+                        value: formatThinkingInfo(duration: session.thinkingDuration, tokens: session.tokenCount),
+                        icon: "brain",
+                        color: .purple
+                    )
+                }
             }
         }
         .padding()
@@ -197,6 +227,23 @@ struct SessionDetailCard: View {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
         return formatter.localizedString(for: date, relativeTo: Date())
+    }
+
+    private func formatThinkingInfo(duration: Int, tokens: Int) -> String {
+        var parts: [String] = []
+
+        if duration > 0 {
+            parts.append("\(duration)s")
+        }
+
+        if tokens > 0 {
+            let tokenText = tokens > 1000
+                ? "\((Double(tokens) / 1000.0).formatted(.number.precision(.fractionLength(1))))k"
+                : "\(tokens)"
+            parts.append("\(tokenText) tokens")
+        }
+
+        return parts.joined(separator: " · ")
     }
 }
 
@@ -242,9 +289,18 @@ struct NetworkStatsCard: View {
 private struct SessionInfoRow: View {
     let label: String
     let value: String
+    var icon: String?
+    var color: Color = .primary
 
     var body: some View {
         HStack {
+            if let icon = icon {
+                Image(systemName: icon)
+                    .font(.caption)
+                    .foregroundStyle(color)
+                    .frame(width: 16)
+            }
+
             Text(label)
                 .font(.caption)
                 .foregroundStyle(.secondary)

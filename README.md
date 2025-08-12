@@ -22,6 +22,9 @@ AICLI Companion enables iOS users to interact with AI assistants (currently via 
 - **Push Notifications**: Get notified when Claude completes long-running tasks
 - **Rich Content Rendering**: Beautiful rendering of code blocks, markdown, and tool outputs
 - **Offline Support**: Browse previous conversations even without connection
+- **Attachment Support**: Send images, documents, and code files to Claude (up to 10MB)
+- **Auto-Response Mode**: "Jesus Take the Wheel" mode for automated task continuation
+- **Thinking Indicator**: Real-time progress with duration and token count display
 
 ### macOS Companion
 - **Menu Bar Integration**: Always accessible from your menu bar
@@ -62,7 +65,7 @@ aicli-companion/
 - **macOS 14.0+** (for development)
 - **Xcode 15.0+**
 - **Node.js 18+**
-- **AICLI CLI** installed and configured
+- **Claude CLI** installed and configured
 - **iOS 16.0+** device or simulator
 
 ### 1. Clone and Setup
@@ -116,13 +119,22 @@ HOST=0.0.0.0
 AUTH_REQUIRED=true
 AUTH_TOKEN=your-secure-token
 
-# AICLI
+# Claude CLI
 CLAUDE_SKIP_PERMISSIONS=false
 CLAUDE_ALLOWED_TOOLS=Read,Write,Edit,Bash
 
 # Features
 ENABLE_BONJOUR=true
 ENABLE_TLS=false
+MAX_ATTACHMENT_SIZE=10485760  # 10MB in bytes
+TEMP_FILE_PATH=/tmp/claude-attachments
+
+# APNS (for push notifications)
+APNS_KEY_PATH=/path/to/key.p8
+APNS_KEY_ID=your-key-id
+APNS_TEAM_ID=your-team-id
+APNS_BUNDLE_ID=com.claude.companion
+APNS_PRODUCTION=false
 
 # Paths
 CONFIG_PATH=/path/to/projects

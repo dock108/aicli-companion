@@ -12,7 +12,15 @@ const router = express.Router();
  * POST /api/chat - Send message to Claude and get response via APNS (always async)
  */
 router.post('/', async (req, res) => {
-  const { message, projectPath, sessionId, deviceToken } = req.body;
+  const {
+    message,
+    projectPath,
+    sessionId,
+    deviceToken,
+    attachments,
+    autoResponse, // Auto-response metadata
+  } = req.body;
+  const requestId = req.headers['x-request-id'] || `REQ_${Date.now()}`;
 
   if (!message) {
     return res.status(400).json({
@@ -28,7 +36,54 @@ router.post('/', async (req, res) => {
     });
   }
 
-  const requestId = req.headers['x-request-id'] || `REQ_${Date.now()}`;
+  // Validate attachments if provided
+  if (attachments && Array.isArray(attachments)) {
+    const MAX_ATTACHMENT_SIZE = parseInt(process.env.MAX_ATTACHMENT_SIZE || '10485760'); // 10MB default
+    const ALLOWED_MIME_TYPES = [
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'application/pdf',
+      'text/plain',
+      'text/markdown',
+      'application/json',
+      'text/javascript',
+      'text/x-python',
+      'text/x-swift',
+      'text/x-java-source',
+      'text/x-c++src',
+      'text/x-csrc',
+      'text/x-chdr',
+      'application/octet-stream',
+    ];
+
+    for (const attachment of attachments) {
+      if (!attachment.data || !attachment.name || !attachment.mimeType) {
+        return res.status(400).json({
+          success: false,
+          error: 'Each attachment must have data, name, and mimeType',
+        });
+      }
+
+      // Validate size (base64 is ~33% larger than original)
+      const estimatedSize = (attachment.data.length * 3) / 4;
+      if (estimatedSize > MAX_ATTACHMENT_SIZE) {
+        return res.status(400).json({
+          success: false,
+          error: `Attachment ${attachment.name} exceeds maximum size of ${MAX_ATTACHMENT_SIZE} bytes`,
+        });
+      }
+
+      // Validate MIME type
+      if (!ALLOWED_MIME_TYPES.includes(attachment.mimeType)) {
+        logger.warn('Unsupported MIME type for attachment', {
+          name: attachment.name,
+          mimeType: attachment.mimeType,
+          requestId,
+        });
+      }
+    }
+  }
 
   logger.info('Processing chat message for APNS delivery', {
     requestId,
@@ -36,6 +91,13 @@ router.post('/', async (req, res) => {
     projectPath,
     sessionId: sessionId || 'new',
     deviceToken: `${deviceToken.substring(0, 16)}...`,
+    attachmentCount: attachments?.length || 0,
+    autoResponse: autoResponse
+      ? {
+          isActive: autoResponse.isActive,
+          iteration: autoResponse.iteration,
+        }
+      : null,
   });
 
   // Register device for push notifications
@@ -97,6 +159,8 @@ router.post('/', async (req, res) => {
         workingDirectory: projectPath || process.cwd(),
         skipPermissions: true,
         format: 'text',
+        attachments, // Pass attachments to AICLI service
+        autoResponse, // Pass auto-response metadata
       });
 
       // Log the full result structure for debugging
@@ -184,6 +248,12 @@ router.post('/', async (req, res) => {
         requestId,
         isLongRunningCompletion: true, // All APNS deliveries are treated as completions
         originalMessage: message, // Include original user message for context
+        attachmentInfo: attachments?.map((att) => ({
+          name: att.name,
+          mimeType: att.mimeType,
+          size: att.size || (att.data.length * 3) / 4,
+        })), // Include attachment metadata without the data
+        autoResponse, // Include auto-response metadata
       });
 
       logger.info('Claude response delivered via APNS', {
@@ -221,6 +291,161 @@ router.post('/', async (req, res) => {
       }
     }
   });
+});
+
+/**
+ * POST /api/chat/auto-response/pause - Pause auto-response mode for a session
+ */
+router.post('/auto-response/pause', async (req, res) => {
+  const { sessionId, deviceToken } = req.body;
+  const requestId = req.headers['x-request-id'] || `REQ_${Date.now()}`;
+
+  if (!sessionId) {
+    return res.status(400).json({
+      success: false,
+      error: 'Session ID is required',
+    });
+  }
+
+  logger.info('Pausing auto-response mode', { sessionId, requestId });
+
+  // Send pause notification if device token provided
+  if (deviceToken) {
+    await pushNotificationService.sendAutoResponseControlNotification(deviceToken, {
+      sessionId,
+      action: 'pause',
+      requestId,
+    });
+  }
+
+  res.json({
+    success: true,
+    sessionId,
+    action: 'pause',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+/**
+ * POST /api/chat/auto-response/resume - Resume auto-response mode for a session
+ */
+router.post('/auto-response/resume', async (req, res) => {
+  const { sessionId, deviceToken } = req.body;
+  const requestId = req.headers['x-request-id'] || `REQ_${Date.now()}`;
+
+  if (!sessionId) {
+    return res.status(400).json({
+      success: false,
+      error: 'Session ID is required',
+    });
+  }
+
+  logger.info('Resuming auto-response mode', { sessionId, requestId });
+
+  // Send resume notification if device token provided
+  if (deviceToken) {
+    await pushNotificationService.sendAutoResponseControlNotification(deviceToken, {
+      sessionId,
+      action: 'resume',
+      requestId,
+    });
+  }
+
+  res.json({
+    success: true,
+    sessionId,
+    action: 'resume',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+/**
+ * POST /api/chat/auto-response/stop - Stop auto-response mode for a session
+ */
+router.post('/auto-response/stop', async (req, res) => {
+  const { sessionId, deviceToken, reason } = req.body;
+  const requestId = req.headers['x-request-id'] || `REQ_${Date.now()}`;
+
+  if (!sessionId) {
+    return res.status(400).json({
+      success: false,
+      error: 'Session ID is required',
+    });
+  }
+
+  logger.info('Stopping auto-response mode', { sessionId, reason, requestId });
+
+  // Send stop notification if device token provided
+  if (deviceToken) {
+    await pushNotificationService.sendAutoResponseControlNotification(deviceToken, {
+      sessionId,
+      action: 'stop',
+      reason: reason || 'manual',
+      requestId,
+    });
+  }
+
+  res.json({
+    success: true,
+    sessionId,
+    action: 'stop',
+    reason: reason || 'manual',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+/**
+ * GET /api/chat/:sessionId/progress - Get thinking progress for a session
+ */
+router.get('/:sessionId/progress', async (req, res) => {
+  const { sessionId } = req.params;
+  const requestId = req.headers['x-request-id'] || `REQ_${Date.now()}`;
+
+  logger.info('Fetching thinking progress', { sessionId, requestId });
+
+  try {
+    // Get AICLI service from app instance
+    const aicliService = req.app.get('aicliService');
+
+    // Check if session exists and get progress
+    const sessionBuffer = aicliService.sessionManager.getSessionBuffer(sessionId);
+
+    if (!sessionBuffer) {
+      return res.status(404).json({
+        success: false,
+        error: 'Session not found',
+        sessionId,
+      });
+    }
+
+    // Extract thinking metadata from session
+    const thinkingMetadata = sessionBuffer.thinkingMetadata || {
+      isThinking: false,
+      activity: null,
+      duration: 0,
+      tokenCount: 0,
+    };
+
+    res.json({
+      success: true,
+      sessionId,
+      isThinking: thinkingMetadata.isThinking,
+      activity: thinkingMetadata.activity,
+      duration: thinkingMetadata.duration,
+      tokenCount: thinkingMetadata.tokenCount,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error('Failed to fetch thinking progress', {
+      sessionId,
+      error: error.message,
+    });
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch progress',
+    });
+  }
 });
 
 /**

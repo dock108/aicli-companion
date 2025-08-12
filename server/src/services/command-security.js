@@ -17,6 +17,9 @@ import safeRegex from 'safe-regex';
 
 const logger = createLogger('CommandSecurity');
 
+// Regex prefix used to mark patterns as regular expressions
+const REGEX_PREFIX = 're:';
+
 /**
  * Checks if a regex pattern is "safe" (not too long, no nested quantifiers, etc.)
  * This is a basic check; for more robust protection, use a library like safe-regex.
@@ -69,12 +72,15 @@ export class SecurityConfig {
           : ''
     );
 
+    // Track if blockedCommands comes from env
+    const blockedFromEnv = process.env.AICLI_BLOCKED_COMMANDS !== undefined;
     this.blockedCommands = this.parsePatterns(
-      process.env.AICLI_BLOCKED_COMMANDS !== undefined
+      blockedFromEnv
         ? process.env.AICLI_BLOCKED_COMMANDS
         : options.blockedCommands !== undefined
           ? options.blockedCommands
-          : presetDefaults.blockedCommands || ''
+          : presetDefaults.blockedCommands || '',
+      blockedFromEnv
     );
 
     this.destructiveCommands = this.parsePatterns(
@@ -125,18 +131,30 @@ export class SecurityConfig {
       .map((dir) => path.resolve(dir.replace('~', process.env.HOME || '')));
   }
 
-  parsePatterns(patternString) {
+  parsePatterns(patternString, fromEnv = false) {
+    let patterns;
     if (!patternString) return [];
 
     // Handle both string and array inputs
     if (Array.isArray(patternString)) {
-      return patternString.filter((pattern) => pattern && pattern.length > 0);
+      patterns = patternString.filter((pattern) => pattern && pattern.length > 0);
+    } else {
+      patterns = patternString
+        .split(',')
+        .map((pattern) => pattern.trim())
+        .filter((pattern) => pattern.length > 0);
     }
-
-    return patternString
-      .split(',')
-      .map((pattern) => pattern.trim())
-      .filter((pattern) => pattern.length > 0);
+    // If from environment, filter out regex patterns (re:)
+    if (fromEnv) {
+      const filtered = patterns.filter((pattern) => !pattern.startsWith(REGEX_PREFIX));
+      if (filtered.length !== patterns.length) {
+        logger.warn(
+          `BlockedCommands from environment: regex patterns (${REGEX_PREFIX}) are not allowed and have been ignored for security reasons.`
+        );
+      }
+      return filtered;
+    }
+    return patterns;
   }
 
   getPresetDefaults(preset) {
@@ -368,6 +386,11 @@ export class CommandSecurityService extends EventEmitter {
     const isConfiguredDestructive = this.config.destructiveCommands.some((pattern) => {
       if (command.includes(pattern)) return true;
       try {
+        // Only use as regex if pattern is safe
+        if (!isSafeRegex(pattern)) {
+          logger.warn(`Destructive command pattern rejected as unsafe: ${pattern}`);
+          return false;
+        }
         const regex = new RegExp(pattern);
         return regex.test(command);
       } catch {

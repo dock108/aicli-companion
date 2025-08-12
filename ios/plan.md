@@ -38,23 +38,24 @@ Update the server and macOS app to fully support the new iOS features we've impl
 - ✅ Include attachment info in Claude response notifications
 - ✅ Show attachment count in notification title
 
-### Phase 2: Server Auto-Response Support
+### Phase 2: Server Auto-Response Support ✅
 
-#### TODO 2.1: Add Auto-Response Metadata to Chat API
-- Accept auto-response flags in chat requests
-- Track auto-response state in session metadata
-- Pass auto-response info through to Claude
+#### TODO 2.1: Add Auto-Response Metadata to Chat API ✅
+- ✅ Accept auto-response flags in chat requests
+- ✅ Track auto-response state in session metadata
+- ✅ Pass auto-response info through to Claude
 
-#### TODO 2.2: Create Auto-Response Control Endpoints
-- Add `/api/chat/auto-response/pause` endpoint
-- Add `/api/chat/auto-response/resume` endpoint
-- Add `/api/chat/auto-response/stop` endpoint
-- Implement proper session-based state management
+#### TODO 2.2: Create Auto-Response Control Endpoints ✅
+- ✅ Add `/api/chat/auto-response/pause` endpoint
+- ✅ Add `/api/chat/auto-response/resume` endpoint
+- ✅ Add `/api/chat/auto-response/stop` endpoint
+- ✅ Implement proper session-based state management
 
-#### TODO 2.3: Include Auto-Response Status in APNS
-- Add auto-response metadata to push payloads
-- Include iteration count and status
-- Support pause/resume signals via APNS
+#### TODO 2.3: Include Auto-Response Status in APNS ✅
+- ✅ Add auto-response metadata to push payloads
+- ✅ Include iteration count and status
+- ✅ Support pause/resume signals via APNS
+- ✅ Created sendAutoResponseControlNotification method
 
 ### Phase 3: Server Thinking Indicator Support
 
@@ -161,6 +162,6 @@ Update the server and macOS app to fully support the new iOS features we've impl
 4. Run linting after each file change
 5. Commit after each phase completion
 
-**Current Status**: Phase 1 Complete ✅, Starting Phase 2  
-**Next Step**: TODO 2.1 - Add Auto-Response Metadata to Chat API  
+**Current Status**: Phase 2 Complete ✅, Starting Phase 3  
+**Next Step**: TODO 3.1 - Extract Claude Thinking Metadata  
 **Last Updated**: 2025-08-12

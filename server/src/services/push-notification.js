@@ -322,6 +322,8 @@ class PushNotificationService {
         deliveryMethod: 'apns_primary',
         // Include attachment metadata if present
         attachmentInfo: data.attachmentInfo || null,
+        // Include auto-response metadata if present
+        autoResponse: data.autoResponse || null,
       };
 
       // Set thread ID for conversation grouping
@@ -347,6 +349,72 @@ class PushNotificationService {
       }
     } catch (error) {
       console.error('❌ Error sending push notification:', error);
+    }
+  }
+
+  /**
+   * Send a push notification for auto-response control actions
+   * @param {string} clientId - The device token or client ID
+   * @param {Object} data - Control action data
+   * @param {string} data.sessionId - The session ID
+   * @param {string} data.action - The action (pause, resume, stop)
+   * @param {string} data.reason - Optional reason for stop action
+   * @param {string} data.requestId - Request ID for tracking
+   */
+  async sendAutoResponseControlNotification(clientId, data) {
+    if (!this.isConfigured) {
+      console.log('⚠️  Push notifications not configured - skipping');
+      return;
+    }
+
+    const device = this.deviceTokens.get(clientId) || { token: clientId };
+
+    try {
+      const notification = new apn.Notification();
+
+      // Configure the notification
+      notification.expiry = Math.floor(Date.now() / 1000) + 3600; // 1 hour
+      notification.sound = 'default';
+      notification.contentAvailable = true;
+      notification.priority = 10;
+
+      // Set alert based on action
+      const actionText = {
+        pause: '⏸️ Auto-Response Paused',
+        resume: '▶️ Auto-Response Resumed',
+        stop: '⏹️ Auto-Response Stopped',
+      };
+
+      notification.alert = {
+        title: actionText[data.action] || 'Auto-Response Update',
+        body: data.reason ? `Reason: ${data.reason}` : `Session: ${data.sessionId}`,
+      };
+
+      notification.topic = this.bundleId || process.env.APNS_BUNDLE_ID || 'com.claude.companion';
+      notification.pushType = 'alert';
+      notification.category = 'AUTO_RESPONSE_CONTROL';
+
+      notification.payload = {
+        sessionId: data.sessionId,
+        action: data.action,
+        reason: data.reason,
+        requestId: data.requestId,
+        timestamp: new Date().toISOString(),
+        type: 'autoResponseControl',
+      };
+
+      notification.threadId = data.sessionId;
+
+      // Send the notification
+      const result = await this.sendNotification(device.token, notification);
+
+      if (result.success) {
+        console.log(`✅ Auto-response control notification sent: ${data.action}`);
+      } else {
+        console.error('❌ Auto-response control notification failed:', result.error);
+      }
+    } catch (error) {
+      console.error('❌ Error sending auto-response control notification:', error);
     }
   }
 

@@ -12,7 +12,14 @@ const router = express.Router();
  * POST /api/chat - Send message to Claude and get response via APNS (always async)
  */
 router.post('/', async (req, res) => {
-  const { message, projectPath, sessionId, deviceToken, attachments } = req.body;
+  const {
+    message,
+    projectPath,
+    sessionId,
+    deviceToken,
+    attachments,
+    autoResponse, // Auto-response metadata
+  } = req.body;
   const requestId = req.headers['x-request-id'] || `REQ_${Date.now()}`;
 
   if (!message) {
@@ -85,6 +92,12 @@ router.post('/', async (req, res) => {
     sessionId: sessionId || 'new',
     deviceToken: `${deviceToken.substring(0, 16)}...`,
     attachmentCount: attachments?.length || 0,
+    autoResponse: autoResponse
+      ? {
+          isActive: autoResponse.isActive,
+          iteration: autoResponse.iteration,
+        }
+      : null,
   });
 
   // Register device for push notifications
@@ -147,6 +160,7 @@ router.post('/', async (req, res) => {
         skipPermissions: true,
         format: 'text',
         attachments, // Pass attachments to AICLI service
+        autoResponse, // Pass auto-response metadata
       });
 
       // Log the full result structure for debugging
@@ -239,6 +253,7 @@ router.post('/', async (req, res) => {
           mimeType: att.mimeType,
           size: att.size || (att.data.length * 3) / 4,
         })), // Include attachment metadata without the data
+        autoResponse, // Include auto-response metadata
       });
 
       logger.info('Claude response delivered via APNS', {
@@ -275,6 +290,107 @@ router.post('/', async (req, res) => {
         });
       }
     }
+  });
+});
+
+/**
+ * POST /api/chat/auto-response/pause - Pause auto-response mode for a session
+ */
+router.post('/auto-response/pause', async (req, res) => {
+  const { sessionId, deviceToken } = req.body;
+  const requestId = req.headers['x-request-id'] || `REQ_${Date.now()}`;
+
+  if (!sessionId) {
+    return res.status(400).json({
+      success: false,
+      error: 'Session ID is required',
+    });
+  }
+
+  logger.info('Pausing auto-response mode', { sessionId, requestId });
+
+  // Send pause notification if device token provided
+  if (deviceToken) {
+    await pushNotificationService.sendAutoResponseControlNotification(deviceToken, {
+      sessionId,
+      action: 'pause',
+      requestId,
+    });
+  }
+
+  res.json({
+    success: true,
+    sessionId,
+    action: 'pause',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+/**
+ * POST /api/chat/auto-response/resume - Resume auto-response mode for a session
+ */
+router.post('/auto-response/resume', async (req, res) => {
+  const { sessionId, deviceToken } = req.body;
+  const requestId = req.headers['x-request-id'] || `REQ_${Date.now()}`;
+
+  if (!sessionId) {
+    return res.status(400).json({
+      success: false,
+      error: 'Session ID is required',
+    });
+  }
+
+  logger.info('Resuming auto-response mode', { sessionId, requestId });
+
+  // Send resume notification if device token provided
+  if (deviceToken) {
+    await pushNotificationService.sendAutoResponseControlNotification(deviceToken, {
+      sessionId,
+      action: 'resume',
+      requestId,
+    });
+  }
+
+  res.json({
+    success: true,
+    sessionId,
+    action: 'resume',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+/**
+ * POST /api/chat/auto-response/stop - Stop auto-response mode for a session
+ */
+router.post('/auto-response/stop', async (req, res) => {
+  const { sessionId, deviceToken, reason } = req.body;
+  const requestId = req.headers['x-request-id'] || `REQ_${Date.now()}`;
+
+  if (!sessionId) {
+    return res.status(400).json({
+      success: false,
+      error: 'Session ID is required',
+    });
+  }
+
+  logger.info('Stopping auto-response mode', { sessionId, reason, requestId });
+
+  // Send stop notification if device token provided
+  if (deviceToken) {
+    await pushNotificationService.sendAutoResponseControlNotification(deviceToken, {
+      sessionId,
+      action: 'stop',
+      reason: reason || 'manual',
+      requestId,
+    });
+  }
+
+  res.json({
+    success: true,
+    sessionId,
+    action: 'stop',
+    reason: reason || 'manual',
+    timestamp: new Date().toISOString(),
   });
 });
 

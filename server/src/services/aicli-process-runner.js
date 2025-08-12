@@ -5,6 +5,8 @@ import { InputValidator, MessageProcessor } from './aicli-utils.js';
 import { ClaudeStreamParser } from './stream-parser.js';
 import { createLogger } from '../utils/logger.js';
 import { commandSecurity } from './command-security.js';
+import { permissionManager } from './permission-manager.js';
+import { activityMonitor } from './activity-monitor.js';
 
 const logger = createLogger('AICLIProcess');
 
@@ -317,6 +319,9 @@ export class AICLIProcessRunner extends EventEmitter {
       { sessionId }
     );
     
+    // Track the command in activity monitor
+    activityMonitor.trackCommand(command, validation, sessionId);
+    
     if (!validation.allowed) {
       logger.warn('Security blocked command', {
         sessionId,
@@ -324,6 +329,13 @@ export class AICLIProcessRunner extends EventEmitter {
         reason: validation.reason,
         code: validation.code
       });
+      
+      // Track security violation
+      activityMonitor.trackSecurityViolation({
+        type: 'COMMAND_BLOCKED',
+        details: { command, reason: validation.reason },
+        severity: 'high'
+      }, sessionId);
       
       // Emit security violation
       this.emit('securityViolation', {
@@ -333,6 +345,31 @@ export class AICLIProcessRunner extends EventEmitter {
         reason: validation.reason,
         code: validation.code
       });
+    } else if (validation.requiresConfirmation) {
+      // Request permission for destructive command
+      logger.info('Requesting permission for destructive command', { command, sessionId });
+      
+      const permission = await permissionManager.requestPermission(
+        `Execute command: ${command}`,
+        { 
+          command, 
+          workingDirectory: this.currentWorkingDirectory,
+          sessionId 
+        }
+      );
+      
+      if (!permission.approved) {
+        validation.allowed = false;
+        validation.reason = permission.reason || 'Permission denied';
+        
+        // Track denial
+        activityMonitor.trackActivity({
+          type: 'permission_denied',
+          command,
+          reason: validation.reason,
+          sessionId
+        });
+      }
     }
     
     return validation;

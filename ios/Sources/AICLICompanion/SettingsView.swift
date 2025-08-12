@@ -28,6 +28,7 @@ struct SettingsView: View {
     
     enum SettingsTab: String, CaseIterable {
         case connection = "Connection"
+        case security = "Security"
         case autoResponse = "Auto Mode"
         case appearance = "Appearance"
         case behavior = "Behavior"
@@ -39,6 +40,7 @@ struct SettingsView: View {
         var icon: String {
             switch self {
             case .connection: return "network"
+            case .security: return "shield"
             case .autoResponse: return "play.circle"
             case .appearance: return "paintbrush"
             case .behavior: return "gearshape"
@@ -142,6 +144,8 @@ struct SettingsView: View {
         switch tab {
         case .connection:
             connectionSection
+        case .security:
+            SecuritySettingsView()
         case .autoResponse:
             autoResponseSection
         case .appearance:

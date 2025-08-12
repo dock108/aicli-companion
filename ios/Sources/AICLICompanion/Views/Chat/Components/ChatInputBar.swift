@@ -119,7 +119,7 @@ struct ChatInputBar: View {
         guard attachments.count < 5 else { return }
         
         // Check file size (limit to 10MB per file)
-        guard attachment.size <= 10_000_000 else {
+        guard attachment.size <= AttachmentFileSizeLimit else {
             // TODO: Show error alert
             print("❌ File too large: \(attachment.formattedSize)")
             return

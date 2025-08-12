@@ -298,7 +298,7 @@ export class AICLIProcessRunner extends EventEmitter {
       logger.warn('Permission checks bypassed - dangerously-skip-permissions enabled');
     }
   }
-  
+
   /**
    * Intercept and validate tool use from Claude
    * This is called when we detect Claude is trying to use a tool
@@ -308,70 +308,70 @@ export class AICLIProcessRunner extends EventEmitter {
     if (toolName !== 'Bash') {
       return { allowed: true };
     }
-    
+
     // Extract command from tool input
     const command = toolInput.command || toolInput;
-    
+
     // Validate the command with security service
     const validation = await commandSecurity.validateCommand(
       command,
       this.currentWorkingDirectory,
       { sessionId }
     );
-    
+
     // Track the command in activity monitor
     activityMonitor.trackCommand(command, validation, sessionId);
-    
+
     if (!validation.allowed) {
       logger.warn('Security blocked command', {
         sessionId,
         command,
         reason: validation.reason,
-        code: validation.code
+        code: validation.code,
       });
-      
+
       // Track security violation
-      activityMonitor.trackSecurityViolation({
-        type: 'COMMAND_BLOCKED',
-        details: { command, reason: validation.reason },
-        severity: 'high'
-      }, sessionId);
-      
+      activityMonitor.trackSecurityViolation(
+        {
+          type: 'COMMAND_BLOCKED',
+          details: { command, reason: validation.reason },
+          severity: 'high',
+        },
+        sessionId
+      );
+
       // Emit security violation
       this.emit('securityViolation', {
         sessionId,
         type: 'COMMAND_BLOCKED',
         command,
         reason: validation.reason,
-        code: validation.code
+        code: validation.code,
       });
     } else if (validation.requiresConfirmation) {
       // Request permission for destructive command
       logger.info('Requesting permission for destructive command', { command, sessionId });
-      
-      const permission = await permissionManager.requestPermission(
-        `Execute command: ${command}`,
-        { 
-          command, 
-          workingDirectory: this.currentWorkingDirectory,
-          sessionId 
-        }
-      );
-      
+
+      const permission = await permissionManager.requestPermission(`Execute command: ${command}`, {
+        command,
+        workingDirectory: this.currentWorkingDirectory,
+        sessionId,
+      });
+
       if (!permission.approved) {
         validation.allowed = false;
         validation.reason = permission.reason || 'Permission denied';
-        
+
         // Track denial
         activityMonitor.trackActivity({
           type: 'permission_denied',
           command,
           reason: validation.reason,
-          sessionId
+          sessionId,
         });
       }
     }
-    
+
     return validation;
   }
 
@@ -384,23 +384,23 @@ export class AICLIProcessRunner extends EventEmitter {
 
     // Create logger with session context
     const sessionLogger = logger.child({ sessionId });
-    
+
     // Security validation for working directory
     const dirValidation = await commandSecurity.validateDirectory(workingDirectory);
     if (!dirValidation.allowed) {
       sessionLogger.warn('Security violation: Working directory not allowed', {
         workingDirectory,
-        reason: dirValidation.reason
+        reason: dirValidation.reason,
       });
-      
+
       // Emit security violation event
       this.emit('securityViolation', {
         sessionId,
         type: 'DIRECTORY_VIOLATION',
         workingDirectory,
-        reason: dirValidation.reason
+        reason: dirValidation.reason,
       });
-      
+
       throw new Error(`Security violation: ${dirValidation.reason}`);
     }
 
@@ -503,7 +503,7 @@ export class AICLIProcessRunner extends EventEmitter {
       promptLength: prompt?.length || 0,
       workingDirectory,
     });
-    
+
     // Store working directory for command validation
     this.currentWorkingDirectory = workingDirectory;
     this.currentSessionId = sessionId;

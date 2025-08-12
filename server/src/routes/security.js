@@ -1,6 +1,6 @@
 /**
  * Security API Routes
- * 
+ *
  * Provides endpoints for:
  * - Viewing current security configuration
  * - Updating security settings
@@ -22,16 +22,16 @@ const logger = createLogger('SecurityAPI');
 router.get('/settings', (req, res) => {
   try {
     const config = commandSecurity.getConfig();
-    
+
     res.json({
       success: true,
-      config
+      config,
     });
   } catch (error) {
     logger.error('Failed to get security settings', { error: error.message });
     res.status(500).json({
       success: false,
-      error: 'Failed to retrieve security settings'
+      error: 'Failed to retrieve security settings',
     });
   }
 });
@@ -51,9 +51,9 @@ router.put('/settings', (req, res) => {
       requireConfirmation,
       maxFileSize,
       readOnlyMode,
-      enableAudit
+      enableAudit,
     } = req.body;
-    
+
     // Build update object with only provided fields
     const updates = {};
     if (preset !== undefined) updates.preset = preset;
@@ -64,22 +64,22 @@ router.put('/settings', (req, res) => {
     if (maxFileSize !== undefined) updates.maxFileSize = maxFileSize;
     if (readOnlyMode !== undefined) updates.readOnlyMode = readOnlyMode;
     if (enableAudit !== undefined) updates.enableAudit = enableAudit;
-    
+
     // Update configuration
     commandSecurity.updateConfig(updates);
-    
+
     logger.info('Security configuration updated', { updates });
-    
+
     res.json({
       success: true,
       message: 'Security configuration updated',
-      config: commandSecurity.getConfig()
+      config: commandSecurity.getConfig(),
     });
   } catch (error) {
     logger.error('Failed to update security settings', { error: error.message });
     res.status(500).json({
       success: false,
-      error: 'Failed to update security settings'
+      error: 'Failed to update security settings',
     });
   }
 });
@@ -95,25 +95,25 @@ router.put('/settings', (req, res) => {
 router.get('/audit', (req, res) => {
   try {
     const { limit = 100, sessionId, allowed } = req.query;
-    
+
     const options = {
       limit: parseInt(limit),
       sessionId,
-      allowed: allowed === 'true' ? true : allowed === 'false' ? false : undefined
+      allowed: allowed === 'true' ? true : allowed === 'false' ? false : undefined,
     };
-    
+
     const auditLog = commandSecurity.getAuditLog(options);
-    
+
     res.json({
       success: true,
       count: auditLog.length,
-      entries: auditLog
+      entries: auditLog,
     });
   } catch (error) {
     logger.error('Failed to get audit log', { error: error.message });
     res.status(500).json({
       success: false,
-      error: 'Failed to retrieve audit log'
+      error: 'Failed to retrieve audit log',
     });
   }
 });
@@ -126,19 +126,19 @@ router.get('/audit', (req, res) => {
 router.delete('/audit', (req, res) => {
   try {
     const count = commandSecurity.clearAuditLog();
-    
+
     logger.info('Audit log cleared', { entriesRemoved: count });
-    
+
     res.json({
       success: true,
       message: 'Audit log cleared',
-      entriesRemoved: count
+      entriesRemoved: count,
     });
   } catch (error) {
     logger.error('Failed to clear audit log', { error: error.message });
     res.status(500).json({
       success: false,
-      error: 'Failed to clear audit log'
+      error: 'Failed to clear audit log',
     });
   }
 });
@@ -153,27 +153,27 @@ router.delete('/audit', (req, res) => {
 router.post('/test', async (req, res) => {
   try {
     const { command, workingDirectory = process.cwd() } = req.body;
-    
+
     if (!command) {
       return res.status(400).json({
         success: false,
-        error: 'Command is required'
+        error: 'Command is required',
       });
     }
-    
+
     const result = await commandSecurity.testCommand(command, workingDirectory);
-    
+
     res.json({
       success: true,
       command,
       workingDirectory,
-      ...result
+      ...result,
     });
   } catch (error) {
     logger.error('Failed to test command', { error: error.message });
     res.status(500).json({
       success: false,
-      error: 'Failed to test command'
+      error: 'Failed to test command',
     });
   }
 });
@@ -185,17 +185,17 @@ router.post('/test', async (req, res) => {
 router.get('/permissions', (req, res) => {
   try {
     const pending = commandSecurity.getPendingPermissions();
-    
+
     res.json({
       success: true,
       count: pending.length,
-      permissions: pending
+      permissions: pending,
     });
   } catch (error) {
     logger.error('Failed to get pending permissions', { error: error.message });
     res.status(500).json({
       success: false,
-      error: 'Failed to retrieve pending permissions'
+      error: 'Failed to retrieve pending permissions',
     });
   }
 });
@@ -207,21 +207,21 @@ router.get('/permissions', (req, res) => {
 router.post('/permissions/:id/approve', (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const request = commandSecurity.approvePermission(id);
-    
+
     logger.info('Permission approved', { requestId: id });
-    
+
     res.json({
       success: true,
       message: 'Permission approved',
-      request
+      request,
     });
   } catch (error) {
     logger.error('Failed to approve permission', { error: error.message });
     res.status(404).json({
       success: false,
-      error: error.message
+      error: error.message,
     });
   }
 });
@@ -234,21 +234,21 @@ router.post('/permissions/:id/deny', (req, res) => {
   try {
     const { id } = req.params;
     const { reason } = req.body;
-    
+
     const request = commandSecurity.denyPermission(id, reason);
-    
+
     logger.info('Permission denied', { requestId: id, reason });
-    
+
     res.json({
       success: true,
       message: 'Permission denied',
-      request
+      request,
     });
   } catch (error) {
     logger.error('Failed to deny permission', { error: error.message });
     res.status(404).json({
       success: false,
-      error: error.message
+      error: error.message,
     });
   }
 });
@@ -267,8 +267,8 @@ router.get('/presets', (req, res) => {
         settings: {
           blockedCommands: [],
           requireConfirmation: false,
-          readOnlyMode: false
-        }
+          readOnlyMode: false,
+        },
       },
       {
         name: 'standard',
@@ -276,8 +276,8 @@ router.get('/presets', (req, res) => {
         settings: {
           blockedCommands: ['rm -rf /', 'format', 'diskutil eraseDisk'],
           requireConfirmation: true,
-          readOnlyMode: false
-        }
+          readOnlyMode: false,
+        },
       },
       {
         name: 'restricted',
@@ -285,15 +285,15 @@ router.get('/presets', (req, res) => {
         settings: {
           blockedCommands: ['*'],
           requireConfirmation: true,
-          readOnlyMode: true
-        }
+          readOnlyMode: true,
+        },
       },
       {
         name: 'custom',
         description: 'User-defined security settings',
-        settings: {}
-      }
-    ]
+        settings: {},
+      },
+    ],
   });
 });
 

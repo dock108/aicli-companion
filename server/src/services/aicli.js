@@ -1,6 +1,10 @@
 import { spawn, exec } from 'child_process';
 import { promisify } from 'util';
 import { EventEmitter } from 'events';
+import fs from 'fs/promises';
+import path from 'path';
+import os from 'os';
+import crypto from 'crypto';
 import { processMonitor } from '../utils/process-monitor.js';
 import { InputValidator, MessageProcessor, AICLIConfig } from './aicli-utils.js';
 import { AICLIMessageHandler } from './aicli-message-handler.js';
@@ -219,6 +223,58 @@ export class AICLIService extends EventEmitter {
     return true; // Assume available for now
   }
 
+  /**
+   * Process attachments by creating temporary files
+   * @param {Array} attachments - Array of attachment objects with base64 data
+   * @returns {Object} - Object with filePaths array and cleanup function
+   */
+  async processAttachments(attachments) {
+    if (!attachments || attachments.length === 0) {
+      return { filePaths: [], cleanup: () => {} };
+    }
+
+    const tempDir = path.join(os.tmpdir(), 'claude-attachments');
+    await fs.mkdir(tempDir, { recursive: true });
+    
+    const filePaths = [];
+    const tempFiles = [];
+
+    for (const attachment of attachments) {
+      try {
+        // Generate unique filename
+        const uniqueId = crypto.randomBytes(8).toString('hex');
+        const sanitizedName = attachment.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const tempFileName = `${uniqueId}_${sanitizedName}`;
+        const tempFilePath = path.join(tempDir, tempFileName);
+        
+        // Decode base64 and write to file
+        const buffer = Buffer.from(attachment.data, 'base64');
+        await fs.writeFile(tempFilePath, buffer);
+        
+        filePaths.push(tempFilePath);
+        tempFiles.push(tempFilePath);
+        
+        console.log(`📎 Created temp file for attachment: ${tempFileName}`);
+      } catch (error) {
+        console.error(`Failed to process attachment ${attachment.name}:`, error);
+      }
+    }
+
+    // Return cleanup function
+    const cleanup = async () => {
+      for (const file of tempFiles) {
+        try {
+          await fs.unlink(file);
+          console.log(`🧹 Cleaned up temp file: ${path.basename(file)}`);
+        } catch (error) {
+          console.warn(`Failed to clean up temp file ${file}:`, error);
+        }
+      }
+    };
+
+    return { filePaths, cleanup };
+  }
+
   async sendPrompt(prompt, options = {}) {
     const {
       sessionId = null,
@@ -227,9 +283,17 @@ export class AICLIService extends EventEmitter {
       workingDirectory = process.cwd(),
       streaming = false,
       skipPermissions = false,
+      attachments = null,
     } = options;
 
+    // Process attachments first
+    let attachmentData = { filePaths: [], cleanup: () => {} };
     try {
+      if (attachments && attachments.length > 0) {
+        console.log(`📎 Processing ${attachments.length} attachment(s)`);
+        attachmentData = await this.processAttachments(attachments);
+      }
+
       // Validate and sanitize inputs
       const sanitizedPrompt = InputValidator.sanitizePrompt(prompt);
       const validatedFormat = InputValidator.validateFormat(format);
@@ -239,23 +303,39 @@ export class AICLIService extends EventEmitter {
       );
       const sanitizedSessionId = InputValidator.sanitizeSessionId(sessionId);
 
+      // Build enhanced prompt with attachment references
+      let enhancedPrompt = sanitizedPrompt;
+      if (attachmentData.filePaths.length > 0) {
+        const fileList = attachmentData.filePaths.map(fp => path.basename(fp)).join(', ');
+        enhancedPrompt = `${sanitizedPrompt}\n\nAttached files: ${fileList}`;
+        console.log(`📎 Enhanced prompt with ${attachmentData.filePaths.length} file reference(s)`);
+      }
+
+      let result;
       if (streaming) {
-        return await this.sendStreamingPrompt(sanitizedPrompt, {
+        result = await this.sendStreamingPrompt(enhancedPrompt, {
           sessionId: sanitizedSessionId,
           requestId, // Pass requestId through
           workingDirectory: validatedWorkingDir,
           skipPermissions,
+          attachmentPaths: attachmentData.filePaths, // Pass file paths
         });
       } else {
-        return await this.sendOneTimePrompt(sanitizedPrompt, {
+        result = await this.sendOneTimePrompt(enhancedPrompt, {
           format: validatedFormat,
           workingDirectory: validatedWorkingDir,
           skipPermissions,
+          attachmentPaths: attachmentData.filePaths, // Pass file paths
         });
       }
+
+      return result;
     } catch (error) {
       console.error('Error sending prompt to AICLI Code:', error);
       throw new Error(`AICLI Code execution failed: ${error.message}`);
+    } finally {
+      // Always cleanup temp files
+      await attachmentData.cleanup();
     }
   }
 
@@ -451,7 +531,7 @@ export class AICLIService extends EventEmitter {
 
   async sendStreamingPrompt(
     prompt,
-    { sessionId, requestId = null, workingDirectory = process.cwd(), skipPermissions = false }
+    { sessionId, requestId = null, workingDirectory = process.cwd(), skipPermissions = false, attachmentPaths = [] }
   ) {
     // Validate inputs
     const sanitizedPrompt = InputValidator.sanitizePrompt(prompt);

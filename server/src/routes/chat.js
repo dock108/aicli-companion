@@ -12,7 +12,8 @@ const router = express.Router();
  * POST /api/chat - Send message to Claude and get response via APNS (always async)
  */
 router.post('/', async (req, res) => {
-  const { message, projectPath, sessionId, deviceToken } = req.body;
+  const { message, projectPath, sessionId, deviceToken, attachments } = req.body;
+  const requestId = req.headers['x-request-id'] || `REQ_${Date.now()}`;
 
   if (!message) {
     return res.status(400).json({
@@ -28,7 +29,44 @@ router.post('/', async (req, res) => {
     });
   }
 
-  const requestId = req.headers['x-request-id'] || `REQ_${Date.now()}`;
+  // Validate attachments if provided
+  if (attachments && Array.isArray(attachments)) {
+    const MAX_ATTACHMENT_SIZE = parseInt(process.env.MAX_ATTACHMENT_SIZE || '10485760'); // 10MB default
+    const ALLOWED_MIME_TYPES = [
+      'image/jpeg', 'image/png', 'image/gif',
+      'application/pdf', 'text/plain', 'text/markdown',
+      'application/json', 'text/javascript', 'text/x-python',
+      'text/x-swift', 'text/x-java-source', 'text/x-c++src',
+      'text/x-csrc', 'text/x-chdr', 'application/octet-stream'
+    ];
+    
+    for (const attachment of attachments) {
+      if (!attachment.data || !attachment.name || !attachment.mimeType) {
+        return res.status(400).json({
+          success: false,
+          error: 'Each attachment must have data, name, and mimeType',
+        });
+      }
+      
+      // Validate size (base64 is ~33% larger than original)
+      const estimatedSize = (attachment.data.length * 3) / 4;
+      if (estimatedSize > MAX_ATTACHMENT_SIZE) {
+        return res.status(400).json({
+          success: false,
+          error: `Attachment ${attachment.name} exceeds maximum size of ${MAX_ATTACHMENT_SIZE} bytes`,
+        });
+      }
+      
+      // Validate MIME type
+      if (!ALLOWED_MIME_TYPES.includes(attachment.mimeType)) {
+        logger.warn('Unsupported MIME type for attachment', {
+          name: attachment.name,
+          mimeType: attachment.mimeType,
+          requestId
+        });
+      }
+    }
+  }
 
   logger.info('Processing chat message for APNS delivery', {
     requestId,
@@ -36,6 +74,7 @@ router.post('/', async (req, res) => {
     projectPath,
     sessionId: sessionId || 'new',
     deviceToken: `${deviceToken.substring(0, 16)}...`,
+    attachmentCount: attachments?.length || 0,
   });
 
   // Register device for push notifications
@@ -97,6 +136,7 @@ router.post('/', async (req, res) => {
         workingDirectory: projectPath || process.cwd(),
         skipPermissions: true,
         format: 'text',
+        attachments, // Pass attachments to AICLI service
       });
 
       // Log the full result structure for debugging
@@ -184,6 +224,11 @@ router.post('/', async (req, res) => {
         requestId,
         isLongRunningCompletion: true, // All APNS deliveries are treated as completions
         originalMessage: message, // Include original user message for context
+        attachmentInfo: attachments?.map(att => ({
+          name: att.name,
+          mimeType: att.mimeType,
+          size: att.size || (att.data.length * 3) / 4
+        })), // Include attachment metadata without the data
       });
 
       logger.info('Claude response delivered via APNS', {

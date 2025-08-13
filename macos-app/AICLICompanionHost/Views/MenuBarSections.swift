@@ -125,7 +125,7 @@ struct FooterSection: View {
     var body: some View {
         HStack(spacing: 12) {
             Button("Activity Monitor") {
-                openWindow(id: "logs")
+                openWindow(id: "activity-monitor")
             }
             .buttonStyle(.borderless)
             .font(.caption)
@@ -133,7 +133,12 @@ struct FooterSection: View {
             Spacer()
 
             Button("Settings") {
-                openWindow(id: "settings")
+                // Open Settings window using Settings scene
+                if #available(macOS 14, *) {
+                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                } else {
+                    NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+                }
             }
             .buttonStyle(.borderless)
             .font(.caption)

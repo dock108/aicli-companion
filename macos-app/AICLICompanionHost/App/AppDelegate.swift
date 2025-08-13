@@ -20,8 +20,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
         // Set activation policy based on user preference
         updateDockIconVisibility()
 
-        // Request notification permissions
-        requestNotificationPermissions()
+        // Don't request notification permissions automatically - let user enable in Settings
+        // requestNotificationPermissions()
 
         // Request developer tools permissions for process management
         requestDeveloperToolsPermissions()

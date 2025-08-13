@@ -27,6 +27,8 @@ This document tracks issues, observations, and improvements discovered during us
 ### Priority: Medium
 <!-- Issues that affect user experience but have workarounds -->
 
+- **iPad: Two settings icons visible** - There are two settings icons showing on iPad. The higher one doesn't appear to be visible on iPhone anywhere.
+
 ### Priority: Low
 <!-- Minor issues or nice-to-have improvements -->
 

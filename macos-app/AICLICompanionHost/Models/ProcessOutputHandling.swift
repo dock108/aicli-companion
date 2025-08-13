@@ -78,12 +78,12 @@ extension ServerManager {
 
     private func processTunnelURLFromLine(_ line: String) {
         let hasTunnelPattern = line.contains("https://") && (
-            line.contains("ngrok") || 
-            line.contains("Tunnel") || 
+            line.contains("ngrok") ||
+            line.contains("Tunnel") ||
             line.contains("trycloudflare.com")
         )
-        let hasExplicitPattern = line.contains("Public URL:") || 
-                                line.contains("Forwarding") || 
+        let hasExplicitPattern = line.contains("Public URL:") ||
+                                line.contains("Forwarding") ||
                                 line.contains("Visit it at:") ||
                                 line.contains("Access your tunnel at")
 
@@ -141,15 +141,15 @@ extension ServerManager {
     private func extractTunnelURL(from line: String) -> String? {
         // Look for ngrok URL pattern
         let ngrokPattern = #"https://[a-zA-Z0-9-]+\.ngrok[a-zA-Z0-9-]*\.[a-zA-Z]{2,}"#
-        
+
         if let regex = try? NSRegularExpression(pattern: ngrokPattern),
            let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) {
             return String(line[Range(match.range, in: line)!])
         }
-        
+
         // Look for Cloudflare URL pattern
         let cloudflarePattern = #"https://[a-zA-Z0-9-]+\.trycloudflare\.com"#
-        
+
         if let regex = try? NSRegularExpression(pattern: cloudflarePattern),
            let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) {
             return String(line[Range(match.range, in: line)!])

@@ -173,7 +173,7 @@ struct SecuritySettingsView: View {
             (blockedCommands, requireConfirmation, readOnlyMode) = ([], false, false)
         case "standard":
             blockedCommands = ["rm -rf /", "rm -rf /*", "format", "diskutil eraseDisk",
-                              "dd if=/dev/zero of=/dev/", "mkfs"]
+                               "dd if=/dev/zero of=/dev/", "mkfs"]
             (requireConfirmation, readOnlyMode) = (true, false)
         case "restricted":
             (blockedCommands, requireConfirmation, readOnlyMode) = (["*"], true, true)

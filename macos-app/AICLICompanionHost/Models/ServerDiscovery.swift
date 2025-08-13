@@ -14,6 +14,7 @@ extension ServerManager {
         // Check for custom server directory first
         if !SettingsManager.shared.serverDirectory.isEmpty,
            FileManager.default.fileExists(atPath: SettingsManager.shared.serverDirectory) {
+            addLog(.info, "Using custom server directory: \(SettingsManager.shared.serverDirectory)")
             return SettingsManager.shared.serverDirectory
         }
         guard let resourcePath = Bundle.main.resourcePath else {
@@ -26,6 +27,8 @@ extension ServerManager {
         // Check for bundled server
         if !FileManager.default.fileExists(atPath: serverDir) {
             serverDir = try findDevelopmentServer(resourcePath: resourcePath)
+        } else {
+            addLog(.info, "Using bundled server at: \(serverDir)")
         }
 
         return serverDir

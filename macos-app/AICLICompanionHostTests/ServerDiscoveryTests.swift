@@ -56,12 +56,16 @@ final class ServerDiscoveryTests: XCTestCase {
             
             // Check logs for appropriate messages
             if !result.contains("/Resources/server") {
-                // Using development or fallback path
+                // Using development, custom, or fallback path
                 XCTAssertTrue(serverManager.logs.contains { log in
-                    log.level == .warning && (
+                    (log.level == .warning && (
                         log.message.contains("Using development server") ||
                         log.message.contains("Using project server")
-                    )
+                    )) ||
+                    (log.level == .info && (
+                        log.message.contains("Using custom server directory") ||
+                        log.message.contains("Using bundled server")
+                    ))
                 })
             }
         } catch {

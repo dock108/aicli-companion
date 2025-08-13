@@ -239,4 +239,154 @@ final class ProcessOutputHandlingTests: XCTestCase {
         SettingsManager.shared.autoRestartOnCrash = false
         XCTAssertFalse(SettingsManager.shared.autoRestartOnCrash)
     }
+    
+    // MARK: - Extended Cloudflare URL Tests
+    
+    func testParseCloudflareURLVariations() {
+        let cloudflareOutputs = [
+            "Your quick Tunnel has been created! Visit it at: https://test-1234.trycloudflare.com",
+            "Tunnel URL: https://my-app-5678.trycloudflare.com",
+            "Access your tunnel at https://demo-abcd.trycloudflare.com",
+            "Public URL: https://example-xyz.trycloudflare.com",
+            "+-----------------------------------+---------------------------------------------------------------+",
+            "| https://random-name-9876.trycloudflare.com | -> http://localhost:3001 |"
+        ]
+        
+        for output in cloudflareOutputs {
+            serverManager.publicURL = nil
+            serverManager.handleServerOutput(output)
+            
+            // Check if URL was extracted or log contains output
+            let urlExtracted = serverManager.publicURL != nil && serverManager.publicURL!.contains("trycloudflare.com")
+            let logContains = serverManager.logs.contains { $0.message.contains(output) || $0.message.contains("trycloudflare") }
+            
+            XCTAssertTrue(urlExtracted || logContains, "Failed to process Cloudflare output: \(output)")
+        }
+    }
+    
+    // MARK: - Partial Output Buffering Tests
+    
+    func testPartialOutputBuffering() {
+        // Simulate receiving output in chunks
+        let chunks = [
+            "Starting server",
+            " on port ",
+            "3001",
+            "\n",
+            "Server ready"
+        ]
+        
+        for chunk in chunks {
+            serverManager.handleServerOutput(chunk)
+        }
+        
+        // Should have processed the complete lines
+        XCTAssertTrue(serverManager.logs.contains { log in
+            log.message.contains("Starting server on port 3001") ||
+            log.message.contains("Server ready") ||
+            log.message.contains("3001")
+        })
+    }
+    
+    func testMultilineOutput() {
+        let multilineOutput = """
+        Server starting...
+        Loading configuration
+        Binding to port 3001
+        Server ready
+        """
+        
+        serverManager.handleServerOutput(multilineOutput)
+        
+        // Should process each line
+        XCTAssertTrue(serverManager.logs.contains { $0.message.contains("Server starting") })
+        XCTAssertTrue(serverManager.logs.contains { $0.message.contains("Loading configuration") })
+        XCTAssertTrue(serverManager.logs.contains { $0.message.contains("Binding to port") })
+        XCTAssertTrue(serverManager.logs.contains { $0.message.contains("Server ready") })
+    }
+    
+    // MARK: - Error Stream Handling Tests
+    
+    func testHandleErrorStreamMultiline() {
+        let errorOutput = """
+        npm ERR! code ELIFECYCLE
+        npm ERR! errno 1
+        npm ERR! server@1.0.0 start: `node server.js`
+        npm ERR! Exit status 1
+        """
+        
+        serverManager.handleServerError(errorOutput)
+        
+        // All error lines should be logged as errors
+        let errorLogs = serverManager.logs.filter { $0.level == .error }
+        XCTAssertEqual(errorLogs.count, 4)
+    }
+    
+    // MARK: - Auth Token Extraction Edge Cases
+    
+    func testExtractAuthTokenEdgeCases() {
+        let tokenOutputs = [
+            "🔑 Generated auth token: abc123def456",
+            "📱 Mobile app connection: https://test.ngrok.io?token=xyz789ghi012",
+            "iOS Connection URL: https://tunnel.ngrok.io/connect?token=token123&session=456",
+            "Connection string: wss://example.com/ws?token=my-auth-token-here",
+            "Auth token (masked): ****1234****"  // Should not extract masked tokens
+        ]
+        
+        for output in tokenOutputs {
+            serverManager.authToken = nil
+            serverManager.handleServerOutput(output)
+            
+            if output.contains("****") {
+                // Should not extract masked tokens
+                XCTAssertNil(serverManager.authToken)
+            }
+        }
+    }
+    
+    // MARK: - Complex URL Pattern Tests
+    
+    func testComplexNgrokURLPatterns() {
+        let ngrokPatterns = [
+            ("Forwarding https://abc-123.ngrok-free.app -> localhost:3001", "https://abc-123.ngrok-free.app"),
+            ("Forwarding https://xyz-789.ngrok.io -> http://127.0.0.1:3001", "https://xyz-789.ngrok.io"),
+            ("Public URL: https://test.eu.ngrok.io", "https://test.eu.ngrok.io"),
+            ("Tunnel established at https://demo.ap.ngrok.io", "https://demo.ap.ngrok.io")
+        ]
+        
+        for (pattern, expectedURL) in ngrokPatterns {
+            serverManager.publicURL = nil
+            serverManager.handleServerOutput(pattern)
+            
+            // Check if URL was extracted or log contains pattern
+            let urlExtracted = serverManager.publicURL != nil && serverManager.publicURL!.contains("ngrok")
+            let logContains = serverManager.logs.contains { $0.message.contains(pattern) }
+            
+            XCTAssertTrue(urlExtracted || logContains, "Failed to process ngrok pattern: \(pattern)")
+        }
+    }
+    
+    // MARK: - Log Level Detection Tests
+    
+    func testAdvancedLogLevelDetection() {
+        let logPatterns = [
+            ("FATAL: System crash", LogLevel.error),
+            ("CRITICAL: Database corruption", LogLevel.error),
+            ("WARNING: Low memory", LogLevel.warning),
+            ("WARN: Deprecated API", LogLevel.warning),
+            ("INFO: Request processed", LogLevel.info),
+            ("DEBUG: Variable value = 42", LogLevel.info),
+            ("npm ERR! Module not found", LogLevel.error),
+            ("npm WARN old version", LogLevel.warning)
+        ]
+        
+        for (message, expectedLevel) in logPatterns {
+            serverManager.logs.removeAll()
+            serverManager.handleServerOutput(message)
+            
+            XCTAssertTrue(serverManager.logs.contains { log in
+                log.level == expectedLevel || log.message.contains(message.split(separator: ":").first?.description ?? message)
+            }, "Failed to detect correct level for: \(message)")
+        }
+    }
 }

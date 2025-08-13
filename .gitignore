@@ -18,12 +18,14 @@ server/keys/
 macos-app/AICLICompanionHost/Resources/server/
 
 # =================================
-# iOS / Xcode
+# iOS / Xcode / macOS App
 # =================================
 
 # Build generated
 build/
 DerivedData/
+build-test/
+macos-app/build-test/
 
 # Various settings
 *.pbxuser

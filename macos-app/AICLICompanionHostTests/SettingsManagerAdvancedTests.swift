@@ -275,7 +275,9 @@ final class SettingsManagerAdvancedTests: XCTestCase {
         
         let exportedData = settingsManager.exportSettings()
         XCTAssertNotNil(exportedData)
-        XCTAssertFalse(exportedData!.isEmpty)
+        if let exportedData = exportedData {
+            XCTAssertFalse(exportedData.isEmpty)
+        }
     }
     
     func testImportValidSettings() {

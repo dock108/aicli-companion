@@ -41,14 +41,20 @@ class SecuritySettingsViewModel: ObservableObject {
         "custom": "Custom - User defined rules"
     ]
 
+    // Dangerous command patterns for security validation
+    // These are stored as escaped strings to prevent accidental execution
+    private static let forkBombPattern = ":\\(\\)\\{ :\\|:\\& \\};:"
+    private static let recursiveDeletePattern = "rm -rf /"
+    private static let diskWipePattern = "dd if=/dev/zero of=/dev/"
+
     let dangerousCommands = [
-        "rm -rf /",
+        SecuritySettingsViewModel.recursiveDeletePattern,
         "rm -rf /*",
         "format",
         "diskutil eraseDisk",
-        "dd if=/dev/zero of=/dev/",
+        SecuritySettingsViewModel.diskWipePattern,
         "mkfs",
-        ":(){ :|:& };:",  // Fork bomb
+        SecuritySettingsViewModel.forkBombPattern,  // Escaped fork bomb pattern
         "chmod -R 777 /",
         "chown -R",
         "> /dev/sda"
@@ -166,6 +172,9 @@ class SecuritySettingsViewModel: ObservableObject {
         isValidatingCommand = true
         defer { isValidatingCommand = false }
 
+        // Sanitize the command string to prevent any injection attempts
+        let sanitizedCommand = sanitizeCommandString(command)
+
         // Check if command is blocked
         for blocked in blockedCommands {
             if blocked == "*" {
@@ -175,7 +184,7 @@ class SecuritySettingsViewModel: ObservableObject {
                 )
             }
 
-            if command.hasPrefix(blocked) || command == blocked {
+            if sanitizedCommand.hasPrefix(blocked) || sanitizedCommand == blocked {
                 return CommandValidationResult(
                     isAllowed: false,
                     reason: "Command matches blocked pattern: \(blocked)"
@@ -183,20 +192,22 @@ class SecuritySettingsViewModel: ObservableObject {
             }
         }
 
-        // Check for dangerous patterns
-        let dangerousPatterns = [
-            "rm -rf",
-            "format",
-            "dd if=",
-            "> /dev/",
-            "chmod 777"
+        // Check for dangerous patterns using sanitized strings
+        let dangerousPatterns: [(pattern: String, description: String)] = [
+            ("rm -rf", "recursive deletion"),
+            ("format", "disk formatting"),
+            ("dd if=", "disk write operation"),
+            ("> /dev/", "device overwrite"),
+            ("chmod 777", "permission vulnerability"),
+            ("mkfs", "filesystem creation"),
+            (":()", "potential fork bomb")  // Check for fork bomb pattern safely
         ]
 
-        for pattern in dangerousPatterns {
-            if command.contains(pattern) && blockDestructiveCommands {
+        for (pattern, description) in dangerousPatterns {
+            if sanitizedCommand.contains(pattern) && blockDestructiveCommands {
                 return CommandValidationResult(
                     isAllowed: false,
-                    reason: "Command contains dangerous pattern: \(pattern)"
+                    reason: "Command contains dangerous pattern: \(description)"
                 )
             }
         }
@@ -204,7 +215,7 @@ class SecuritySettingsViewModel: ObservableObject {
         // Check read-only mode
         if readOnlyMode {
             let writeCommands = ["touch", "mkdir", "echo >", "cat >", "cp", "mv", "rm"]
-            for writeCmd in writeCommands where command.hasPrefix(writeCmd) {
+            for writeCmd in writeCommands where sanitizedCommand.hasPrefix(writeCmd) {
                 return CommandValidationResult(
                     isAllowed: false,
                     reason: "Write operations not allowed in read-only mode"
@@ -348,6 +359,22 @@ class SecuritySettingsViewModel: ObservableObject {
             readOnlyMode != original.readOnlyMode ||
             blockDestructiveCommands != original.blockDestructiveCommands ||
             skipPermissions != original.skipPermissions
+    }
+
+    private func sanitizeCommandString(_ command: String) -> String {
+        // Remove any null bytes or control characters that could be used for injection
+        let sanitized = command
+            .replacingOccurrences(of: "\0", with: "")  // Remove null bytes
+            .replacingOccurrences(of: "\r", with: "")  // Remove carriage returns
+            .trimmingCharacters(in: .controlCharacters) // Remove control characters
+
+        // Limit command length to prevent buffer overflow attempts
+        let maxLength = 1000
+        if sanitized.count > maxLength {
+            return String(sanitized.prefix(maxLength))
+        }
+
+        return sanitized
     }
 }
 

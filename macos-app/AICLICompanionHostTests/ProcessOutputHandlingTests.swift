@@ -257,7 +257,7 @@ final class ProcessOutputHandlingTests: XCTestCase {
             serverManager.handleServerOutput(output)
             
             // Check if URL was extracted or log contains output
-            let urlExtracted = serverManager.publicURL != nil && serverManager.publicURL!.contains("trycloudflare.com")
+            let urlExtracted = serverManager.publicURL?.contains("trycloudflare.com") ?? false
             let logContains = serverManager.logs.contains { $0.message.contains(output) || $0.message.contains("trycloudflare") }
             
             XCTAssertTrue(urlExtracted || logContains, "Failed to process Cloudflare output: \(output)")
@@ -359,7 +359,7 @@ final class ProcessOutputHandlingTests: XCTestCase {
             serverManager.handleServerOutput(pattern)
             
             // Check if URL was extracted or log contains pattern
-            let urlExtracted = serverManager.publicURL != nil && serverManager.publicURL!.contains("ngrok")
+            let urlExtracted = serverManager.publicURL?.contains("ngrok") ?? false
             let logContains = serverManager.logs.contains { $0.message.contains(pattern) }
             
             XCTAssertTrue(urlExtracted || logContains, "Failed to process ngrok pattern: \(pattern)")

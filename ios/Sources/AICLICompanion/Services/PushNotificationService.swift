@@ -256,50 +256,55 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
         if let claudeMessage = userInfo["message"] as? String,
            let sessionId = userInfo["sessionId"] as? String,
            let projectPath = userInfo["projectPath"] as? String {
-            print("🤖 === CLAUDE RESPONSE IN FOREGROUND ===")
+            print("🤖 === CLAUDE RESPONSE RECEIVED ===")
             print("🤖 Session ID: \(sessionId)")
             print("🤖 Project Path: \(projectPath)")
-            print("🤖 Current Active Session: \(currentActiveSessionId ?? "none")")
-            print("🤖 Current Active Project: \(currentActiveProject?.path ?? "none")")
+            print("🤖 Message preview: \(String(claudeMessage.prefix(100)))...")
             
-            // Use simple check to decide if notification should be shown
+            // Always save message to local storage (simple local-first pattern)
+            Task {
+                await saveClaudeMessage(
+                    message: claudeMessage,
+                    sessionId: sessionId,
+                    projectPath: projectPath,
+                    userInfo: userInfo
+                )
+            }
+            
+            // Simple notification suppression check
             let shouldShow = shouldShowNotification(for: sessionId, projectPath: projectPath)
             
             if !shouldShow {
-                print("🤖 Response is for CURRENT thread - processing silently")
-                print("🤖 Message preview: \(String(claudeMessage.prefix(100)))...")
+                print("🤖 Suppressing notification - user viewing same project/session")
                 
-                // Process Claude response immediately for foreground delivery
-                Task {
-                    await processClaudeResponseInForeground(
-                        message: claudeMessage,
-                        sessionId: sessionId,
-                        projectPath: projectPath,
-                        originalMessage: userInfo["originalMessage"] as? String,
-                        requestId: userInfo["requestId"] as? String,
-                        userInfo: userInfo
+                // Notify UI directly for current thread
+                Task { @MainActor in
+                    let projectName = projectPath.split(separator: "/").last.map(String.init) ?? "Project"
+                    let project = Project(name: projectName, path: projectPath, type: "directory")
+                    
+                    let message = Message(
+                        content: claudeMessage,
+                        sender: .assistant,
+                        type: .markdown,
+                        metadata: AICLIMessageMetadata(sessionId: sessionId, duration: 0)
+                    )
+                    
+                    NotificationCenter.default.post(
+                        name: .claudeResponseReceived,
+                        object: nil,
+                        userInfo: [
+                            "message": message,
+                            "sessionId": sessionId,
+                            "projectPath": projectPath,
+                            "project": project
+                        ]
                     )
                 }
                 
-                // Don't show banner for current thread - process silently
-                // IMPORTANT: Return empty options to prevent didReceiveRemoteNotification from being called
+                // Don't show banner
                 completionHandler([])
             } else {
-                print("🔔 Response is for DIFFERENT thread - showing banner")
-                print("🔔 Project: \(projectPath.split(separator: "/").last ?? "Unknown")")
-                
-                // Save to persistence for later viewing
-                Task {
-                    await saveClaudeResponseForBackground(
-                        message: claudeMessage,
-                        sessionId: sessionId,
-                        projectPath: projectPath,
-                        originalMessage: userInfo["originalMessage"] as? String,
-                        requestId: userInfo["requestId"] as? String,
-                        userInfo: userInfo
-                    )
-                }
-                
+                print("🔔 Showing notification banner - different project")
                 // Show banner for responses from other projects
                 completionHandler([.banner, .sound, .badge])
             }
@@ -310,15 +315,14 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
         }
     }
     
-    private func processClaudeResponseInForeground(
+    /// Simple method to save Claude message to local storage
+    private func saveClaudeMessage(
         message: String,
         sessionId: String,
         projectPath: String,
-        originalMessage: String?,
-        requestId: String?,
         userInfo: [AnyHashable: Any]
     ) async {
-        print("🔄 === PROCESSING CLAUDE RESPONSE IN FOREGROUND ===")
+        print("💾 === SAVING CLAUDE MESSAGE TO LOCAL STORAGE ===")
         
         // Create Message object from Claude response
         let claudeMessage = Message(
@@ -329,156 +333,28 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
                 sessionId: sessionId,
                 duration: 0,
                 additionalInfo: [
-                    "deliveredVia": "apns_foreground",
-                    "requestId": requestId ?? "",
-                    "originalMessage": originalMessage ?? "",
-                    "processedAt": Date()
+                    "deliveredVia": "apns",
+                    "requestId": userInfo["requestId"] as? String ?? "",
+                    "originalMessage": userInfo["originalMessage"] as? String ?? ""
                 ]
             )
         )
         
-        // Extract project name from path
+        // Extract project name and create project object
         let projectName = projectPath.split(separator: "/").last.map(String.init) ?? "Project"
+        let project = Project(name: projectName, path: projectPath, type: "directory")
         
-        // Create project object
-        let project = Project(
-            name: projectName,
-            path: projectPath,
-            type: "directory"
-        )
-        
-        // Simple notification post - no retry needed (best practices)
-        await MainActor.run {
-            NotificationCenter.default.post(
-                name: .claudeResponseReceived,
-                object: nil,
-                userInfo: [
-                    "message": claudeMessage,
-                    "sessionId": sessionId,
-                    "projectPath": projectPath,
-                    "project": project,
-                    "timestamp": Date()
-                ]
-            )
-            
-            // Clear badge since we've processed this notification
-            #if os(iOS)
-            UIApplication.shared.applicationIconBadgeNumber = 0
-            #endif
-        }
-        
-        print("✅ Foreground Claude response posted to ChatViewModel")
-    }
-    
-    private func saveClaudeResponseForBackground(
-        message: String,
-        sessionId: String,
-        projectPath: String,
-        originalMessage: String?,
-        requestId: String?,
-        userInfo: [AnyHashable: Any]
-    ) async {
-        print("💾 === SAVING CLAUDE RESPONSE FOR BACKGROUND PROJECT ===")
-        print("💾 Session ID: \(sessionId)")
-        print("💾 Project Path: \(projectPath)")
-        
-        // Create Message object from Claude response
-        let claudeMessage = Message(
-            content: message,
-            sender: .assistant,
-            type: .markdown,
-            metadata: AICLIMessageMetadata(
-                sessionId: sessionId,
-                duration: 0,
-                additionalInfo: [
-                    "deliveredVia": "apns_background_project",
-                    "requestId": requestId ?? "",
-                    "originalMessage": originalMessage ?? "",
-                    "processedAt": Date()
-                ]
-            )
-        )
-        
-        // Extract project name from path
-        let projectName = projectPath.split(separator: "/").last.map(String.init) ?? "Project"
-        
-        // Create project object
-        let project = Project(
-            name: projectName,
-            path: projectPath,
-            type: "directory"
-        )
-        
-        // First, migrate any temporary sessions for this project to real session ID
-        migrateTemporarySessionToReal(project: project, realSessionId: sessionId)
-        
-        // Save Claude's response message to persistence
-        let messages = [claudeMessage]
-        MessagePersistenceService.shared.saveMessages(
-            for: projectPath,
-            messages: messages,
+        // Save to local storage using append (local-first pattern)
+        MessagePersistenceService.shared.appendMessage(
+            claudeMessage,
+            to: projectPath,
             sessionId: sessionId,
             project: project
         )
         
-        print("💾 Saved background project response to persistence")
-        
-        // Local-first pattern: Message already saved to local storage
-        // Migration ensures user messages are preserved with correct session ID
-        
-        print("💾 Background project response processing completed")
+        print("💾 Claude message saved to local storage")
     }
     
-    /// Migrate temporary sessions to real session ID for background project responses
-    private func migrateTemporarySessionToReal(project: Project, realSessionId: String) {
-        print("🔄 PushNotificationService: Migrating temporary session to real session ID: \(realSessionId)")
-        
-        // Find temporary session files for this project
-        let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let sessionsDirectory = documentsDirectory.appendingPathComponent("AICLICompanionSessions")
-        let projectDir = sessionsDirectory.appendingPathComponent(sanitizeFilename(project.path))
-        
-        do {
-            let files = try FileManager.default.contentsOfDirectory(at: projectDir, includingPropertiesForKeys: nil)
-            let tempFiles = files.filter { $0.lastPathComponent.hasPrefix("temp-") && $0.lastPathComponent.hasSuffix("_messages.json") }
-            
-            for tempFile in tempFiles {
-                print("🔄 Found temporary session file: \(tempFile.lastPathComponent)")
-                
-                // Load temporary messages
-                if let data = try? Data(contentsOf: tempFile) {
-                    let decoder = JSONDecoder()
-                    decoder.dateDecodingStrategy = .iso8601
-                    
-                    if let persistedMessages = try? decoder.decode([PersistedMessage].self, from: data) {
-                        let messages = persistedMessages.map { $0.toMessage() }
-                        print("🔄 Migrating \(messages.count) messages from temporary session")
-                        
-                        // Save messages with real session ID
-                        MessagePersistenceService.shared.saveMessages(
-                            for: project.path,
-                            messages: messages,
-                            sessionId: realSessionId,
-                            project: project
-                        )
-                        
-                        // Delete temporary file
-                        try? FileManager.default.removeItem(at: tempFile)
-                        print("✅ Migrated temporary session to real session ID: \(realSessionId)")
-                    }
-                }
-            }
-        } catch {
-            print("⚠️ Error during session migration: \(error)")
-        }
-    }
-    
-    private func sanitizeFilename(_ filename: String) -> String {
-        return filename
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: ":", with: "_")
-            .replacingOccurrences(of: " ", with: "_")
-    }
     
     /// Handle notification actions
     public func userNotificationCenter(

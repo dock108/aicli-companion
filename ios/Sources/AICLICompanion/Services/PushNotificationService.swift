@@ -420,8 +420,8 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
         
         print("💾 Saved background project response to persistence")
         
-        // Update session tracking
-        BackgroundSessionCoordinator.shared.processSavedMessagesWithSessionId(sessionId, for: project)
+        // Local-first pattern: Message already saved to local storage
+        // No additional session coordination needed
         
         print("💾 Background project response processing completed")
     }
@@ -458,45 +458,43 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
     }
     
     private func handleViewAction(userInfo: [AnyHashable: Any]) {
-        guard let projectId = userInfo["projectId"] as? String,
-              let projectName = userInfo["projectName"] as? String else {
+        // Handle both old format (projectId) and new format (projectPath)
+        let projectPath = userInfo["projectPath"] as? String ?? userInfo["projectId"] as? String
+        let projectName = userInfo["projectName"] as? String ?? projectPath?.split(separator: "/").last.map(String.init) ?? "Project"
+        
+        guard let projectPath = projectPath else {
+            print("⚠️ No project path in notification")
             return
         }
         
-        print("👁 View action for project: \(projectName)")
+        print("👁 View action for project: \(projectName) at path: \(projectPath)")
         
         // Clear notifications for this project
-        clearProjectNotifications(projectId)
+        clearProjectNotifications(projectPath)
         
-        // Sync messages before opening project
+        // Navigate directly - no sync needed in stateless architecture
         if let sessionId = userInfo["sessionId"] as? String {
-            Task {
-                print("🔄 Syncing messages before opening project")
-                let syncSuccess = await BackgroundMessageSyncService.shared.syncMessagesForSession(
-                    sessionId,
-                    projectId: projectId,
-                    projectName: projectName
+            Task { @MainActor in
+                // Create project object
+                let project = Project(
+                    name: projectName,
+                    path: projectPath,
+                    type: "directory"
                 )
                 
-                if syncSuccess {
-                    print("✅ Messages synced successfully, opening project")
-                } else {
-                    print("⚠️ Message sync failed, opening project anyway")
-                }
+                // Post notification to navigate to project
+                NotificationCenter.default.post(
+                    name: .openProject,
+                    object: nil,
+                    userInfo: [
+                        "project": project,
+                        "projectPath": projectPath,
+                        "projectName": projectName,
+                        "sessionId": sessionId
+                    ]
+                )
                 
-                // Post notification to open the project after sync attempt
-                await MainActor.run {
-                    NotificationCenter.default.post(
-                        name: .openProject,
-                        object: nil,
-                        userInfo: [
-                            "projectId": projectId,
-                            "projectName": projectName,
-                            "sessionId": sessionId,
-                            "messagesSynced": syncSuccess
-                        ]
-                    )
-                }
+                print("✅ Posted navigation to project: \(projectName) with session: \(sessionId)")
             }
         } else {
             // No session ID, open project directly
@@ -504,7 +502,7 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
                 name: .openProject,
                 object: nil,
                 userInfo: [
-                    "projectId": projectId,
+                    "projectPath": projectPath,
                     "projectName": projectName,
                     "sessionId": userInfo["sessionId"] as? String
                 ]

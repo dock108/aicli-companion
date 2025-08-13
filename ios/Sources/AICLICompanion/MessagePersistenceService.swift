@@ -92,27 +92,99 @@ class MessagePersistenceService: ObservableObject {
     
     // MARK: - Public Methods
     
+    /// WhatsApp/iMessage pattern: Simple append single message to conversation
+    func appendMessage(_ message: Message, to projectId: String, sessionId: String, project: Project) {
+        let projectDir = sessionsDirectory.appendingPathComponent(sanitizeFilename(projectId))
+        try? fileManager.createDirectory(at: projectDir, withIntermediateDirectories: true)
+        
+        let messagesFile = projectDir.appendingPathComponent("\(sessionId)_messages.json")
+        
+        // Load existing messages (or empty array if none)
+        var allMessages: [Message] = []
+        if fileManager.fileExists(atPath: messagesFile.path) {
+            do {
+                let existingData = try Data(contentsOf: messagesFile)
+                let existingPersisted = try decoder.decode([PersistedMessage].self, from: existingData)
+                allMessages = existingPersisted.map { $0.toMessage() }
+            } catch {
+                print("⚠️ MessagePersistence: Failed to load existing messages: \(error)")
+                allMessages = []
+            }
+        }
+        
+        // Simple append (check for duplicate by ID)
+        if !allMessages.contains(where: { $0.id == message.id }) {
+            allMessages.append(message)
+            allMessages.sort { $0.timestamp < $1.timestamp }
+            
+            // Save updated conversation
+            let persistedMessages = allMessages.map { PersistedMessage(from: $0) }
+            if let data = try? encoder.encode(persistedMessages) {
+                try? data.write(to: messagesFile)
+                print("📝 MessagePersistence: Appended message, total: \(allMessages.count)")
+            }
+            
+            // Update metadata
+            updateMetadata(for: projectId, sessionId: sessionId, project: project, messageCount: allMessages.count, lastMessage: message)
+        } else {
+            print("📝 MessagePersistence: Message already exists, skipping append")
+        }
+    }
+    
     func saveMessages(for projectId: String, messages: [Message], sessionId: String, project: Project) {
         let projectDir = sessionsDirectory.appendingPathComponent(sanitizeFilename(projectId))
         try? fileManager.createDirectory(at: projectDir, withIntermediateDirectories: true)
         
-        // Convert messages to persisted format
-        let persistedMessages = messages.map { PersistedMessage(from: $0) }
-        
-        // Save messages
         let messagesFile = projectDir.appendingPathComponent("\(sessionId)_messages.json")
-        if let data = try? encoder.encode(persistedMessages) {
-            try? data.write(to: messagesFile)
+        
+        // CRITICAL FIX: Load existing messages first to preserve conversation history
+        var allMessages: [Message] = []
+        
+        if fileManager.fileExists(atPath: messagesFile.path) {
+            // Load existing messages from disk
+            do {
+                let existingData = try Data(contentsOf: messagesFile)
+                let existingPersisted = try decoder.decode([PersistedMessage].self, from: existingData)
+                let existingMessages = existingPersisted.map { $0.toMessage() }
+                
+                print("🗂️ MessagePersistence: Loaded \(existingMessages.count) existing messages for merge")
+                allMessages = existingMessages
+            } catch {
+                print("⚠️ MessagePersistence: Failed to load existing messages, starting fresh: \(error)")
+                allMessages = []
+            }
         }
         
-        // Update metadata
+        // Merge new messages with existing ones, avoiding duplicates
+        let existingIds = Set(allMessages.map { $0.id })
+        let newMessages = messages.filter { !existingIds.contains($0.id) }
+        
+        if !newMessages.isEmpty {
+            allMessages.append(contentsOf: newMessages)
+            // Sort by timestamp to maintain chronological order
+            allMessages.sort { $0.timestamp < $1.timestamp }
+            print("🗂️ MessagePersistence: Added \(newMessages.count) new messages, total: \(allMessages.count)")
+        } else {
+            print("🗂️ MessagePersistence: No new messages to add (all \(messages.count) were duplicates)")
+        }
+        
+        // Convert all messages to persisted format
+        let persistedMessages = allMessages.map { PersistedMessage(from: $0) }
+        
+        // Save complete conversation (not just new messages)
+        if let data = try? encoder.encode(persistedMessages) {
+            try? data.write(to: messagesFile)
+            print("🗂️ MessagePersistence: Saved complete conversation (\(allMessages.count) messages) to disk")
+        }
+        
+        // Update metadata with complete conversation info
         let metadata = PersistedSessionMetadata(
             sessionId: sessionId,
             projectId: projectId,
             projectName: project.name,
             projectPath: project.path,
-            lastMessageDate: messages.last?.timestamp ?? Date(),
-            messageCount: messages.count,
+            lastMessageDate: allMessages.last?.timestamp ?? Date(),
+            messageCount: allMessages.count, // Use complete message count, not just new ones
             aicliSessionId: sessionId,
             createdAt: savedSessions[projectId]?.createdAt ?? Date()
         )
@@ -222,6 +294,28 @@ class MessagePersistenceService: ObservableObject {
         let projectDir = sessionsDirectory.appendingPathComponent(sanitizeFilename(projectId))
         try? fileManager.removeItem(at: projectDir)
         savedSessions.removeValue(forKey: projectId)
+    }
+    
+    /// Helper method to update metadata after message operations
+    private func updateMetadata(for projectId: String, sessionId: String, project: Project, messageCount: Int, lastMessage: Message) {
+        let metadata = PersistedSessionMetadata(
+            sessionId: sessionId,
+            projectId: projectId,
+            projectName: project.name,
+            projectPath: project.path,
+            lastMessageDate: lastMessage.timestamp,
+            messageCount: messageCount,
+            aicliSessionId: sessionId,
+            createdAt: savedSessions[projectId]?.createdAt ?? Date()
+        )
+        
+        let projectDir = sessionsDirectory.appendingPathComponent(sanitizeFilename(projectId))
+        let metadataFile = projectDir.appendingPathComponent("metadata.json")
+        
+        if let data = try? encoder.encode(metadata) {
+            try? data.write(to: metadataFile)
+            savedSessions[projectId] = metadata
+        }
     }
     
     func updateSessionMetadata(for projectId: String, aicliSessionId: String) {

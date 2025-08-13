@@ -8,9 +8,8 @@ public class AppDelegate: NSObject, UIApplicationDelegate {
     public func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         // App launch setup
         
-        // Initialize BackgroundSessionCoordinator early to capture session IDs
-        _ = BackgroundSessionCoordinator.shared
-        print("🎯 BackgroundSessionCoordinator initialized and listening for session IDs")
+        // Local-first pattern: No background session coordination needed
+        print("🎯 AppDelegate initialized with local-first message storage")
         
         // Perform session cleanup on app launch
         performSessionCleanup()
@@ -36,8 +35,8 @@ public class AppDelegate: NSObject, UIApplicationDelegate {
         // Clean up stale session deduplication entries
         SessionDeduplicationManager.shared.cleanupExpiredSessions()
         
-        // Clean up old pending messages in BackgroundSessionCoordinator
-        BackgroundSessionCoordinator.shared.cleanupOldPendingMessages()
+        // Local-first pattern: Message persistence handled by MessagePersistenceService
+        // No pending message cleanup needed
         
         // Log active sessions
         let activeSessions = SessionStatePersistenceService.shared.getActiveSessions()
@@ -224,8 +223,8 @@ public class AppDelegate: NSObject, UIApplicationDelegate {
                 // Continue anyway - local first approach
             }
             
-            // Update session tracking
-            BackgroundSessionCoordinator.shared.processSavedMessagesWithSessionId(sessionId, for: project)
+            // Local-first pattern: Message already saved to persistence
+            // No additional session coordination needed
             
             // Notify UI if app is active
             await MainActor.run {

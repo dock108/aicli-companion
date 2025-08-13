@@ -98,12 +98,16 @@ struct ChatView: View {
                 )
                 #if os(iOS)
                 .refreshable {
-                    // Simple server poll on pull-to-refresh (best practices)
-                    print("🔄 User triggered pull-to-refresh")
-                    viewModel.pollServerForMessages()
+                    // WhatsApp/iMessage pattern: Just reload local conversation
+                    print("🔄 User triggered pull-to-refresh - reloading conversation")
+                    
+                    // Reload messages from local database (instant)
+                    if let project = selectedProject, let sessionId = viewModel.currentSessionId {
+                        viewModel.loadMessages(for: project, sessionId: sessionId)
+                    }
                     
                     // Small delay for visual feedback
-                    try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+                    try? await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
                 }
                 #endif
                 
@@ -205,33 +209,45 @@ struct ChatView: View {
                     
                     print("🔷 ChatView: Loaded \(self.viewModel.messages.count) messages for restored session")
                     
-                    // Poll server for any new messages (best practices approach)
-                    self.viewModel.pollServerForMessages()
+                    // WhatsApp/iMessage pattern: Messages loaded from local database only
+                    // Push notifications will deliver any new messages automatically
                     
-                    // Sync messages from CloudKit
+                    // Sync messages from CloudKit in background (optional)
                     Task {
                         await self.viewModel.syncMessages(for: project)
                     }
                     
-                    // Simple server poll for any new messages
-                    self.viewModel.pollServerForMessages()
+                    // WhatsApp/iMessage pattern: Messages already loaded from local database
+                    // Push notifications deliver new messages automatically
                     
                 case .failure(let error):
-                    // No existing session, user can start one when ready
-                    print("ℹ️ No existing session (\(error.localizedDescription)), waiting for user to start")
+                    // No existing session, but check if we have saved messages for this project
+                    print("ℹ️ No existing session (\(error.localizedDescription)), checking for saved conversations")
                     
                     // Clear any stale session data
                     self.viewModel.setActiveSession(nil)
                     self.viewModel.currentSessionId = nil
-                    self.viewModel.messages.removeAll()
                     
-                    // Check for pending messages that might have been saved without a session ID
-                    if let pendingMessages = BackgroundSessionCoordinator.shared.retrievePendingMessages(for: project.path) {
-                        print("🔄 ChatView: Found \(pendingMessages.count) pending messages for project")
-                        self.viewModel.messages = pendingMessages
+                    // WhatsApp/iMessage pattern: Check if we have any saved conversations for this project
+                    let persistenceService = MessagePersistenceService.shared
+                    if let metadata = persistenceService.getSessionMetadata(for: project.path),
+                       let sessionId = metadata.aicliSessionId {
+                        print("🔄 ChatView: Found saved conversation with session \(sessionId), loading messages")
+                        
+                        // Load the saved conversation
+                        self.viewModel.loadMessages(for: project, sessionId: sessionId)
+                        
+                        // Set the session ID for future messages
+                        self.viewModel.currentSessionId = sessionId
+                        
+                        print("✅ ChatView: Loaded \(self.viewModel.messages.count) messages from saved conversation")
+                    } else {
+                        // Truly no conversation exists yet
+                        print("ℹ️ ChatView: No saved conversation found for \(project.name)")
+                        self.viewModel.messages.removeAll()
                     }
                     
-                    // Still sync from CloudKit even without a session
+                    // Sync from CloudKit in background (optional)
                     Task {
                         await self.viewModel.syncMessages(for: project)
                     }
@@ -487,11 +503,11 @@ struct ChatView: View {
     
     
     private func refreshMessagesOnActivation() {
-        // Simple server poll when app becomes active (best practices)
-        print("🔄 ChatView: App became active - polling server")
-        viewModel.pollServerForMessages()
+        // WhatsApp/iMessage pattern: No server polling needed when app becomes active
+        // Push notifications deliver new messages automatically
+        print("🔄 ChatView: App became active - conversation already loaded from local database")
         
-        // Also sync from CloudKit when becoming active
+        // Sync from CloudKit when becoming active (optional background sync)
         if let project = selectedProject {
             Task {
                 await viewModel.syncMessages(for: project)

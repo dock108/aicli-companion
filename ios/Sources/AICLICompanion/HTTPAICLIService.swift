@@ -435,7 +435,106 @@ public class HTTPAICLIService: ObservableObject {
         }
     }
 
-    // MARK: - Session Status
+    // MARK: - Session Management
+    
+    /// Fetch all messages for a session from the server
+    func fetchMessages(sessionId: String, completion: @escaping (Result<[Message], AICLICompanionError>) -> Void) {
+        guard let baseURL = baseURL else {
+            completion(.failure(.invalidURL))
+            return
+        }
+        
+        let messagesURL = baseURL.appendingPathComponent("api/chat/\(sessionId)/messages")
+        var request = URLRequest(url: messagesURL)
+        request.httpMethod = "GET"
+        request.addValue("application/json", forHTTPHeaderField: "Accept")
+        request.timeoutInterval = 15 // Allow more time for message fetching
+        
+        // Add authorization header if we have a token
+        if let token = authToken {
+            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        print("📥 Fetching messages from server: \(messagesURL)")
+        
+        let task = urlSession.dataTask(with: request) { data, response, error in
+            if let error = error {
+                print("❌ Failed to fetch messages: \(error)")
+                completion(.failure(.networkError(error)))
+                return
+            }
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                completion(.failure(.invalidResponse))
+                return
+            }
+            
+            guard let data = data else {
+                completion(.failure(.noData))
+                return
+            }
+            
+            do {
+                let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+                guard let messagesArray = json?["messages"] as? [[String: Any]] else {
+                    print("⚠️ No messages in response")
+                    completion(.success([]))
+                    return
+                }
+                
+                // Convert server messages to Message objects
+                let dateFormatter = ISO8601DateFormatter()
+                let messages = messagesArray.compactMap { msgDict -> Message? in
+                    guard let content = msgDict["content"] as? String,
+                          let senderStr = msgDict["sender"] as? String else {
+                        return nil
+                    }
+                    
+                    let sender: MessageSender = senderStr == "user" ? .user : .assistant
+                    let typeStr = msgDict["type"] as? String ?? "text"
+                    let messageType: MessageType = typeStr == "markdown" ? .markdown : .text
+                    let timestamp = msgDict["timestamp"] as? String
+                    let requestId = msgDict["requestId"] as? String
+                    
+                    // Create metadata for the message
+                    let metadata = AICLIMessageMetadata(
+                        sessionId: sessionId,
+                        duration: 0,
+                        additionalInfo: [
+                            "requestId": requestId ?? "",
+                            "deliveredVia": msgDict["deliveredVia"] as? String ?? "server",
+                            "timestamp": timestamp ?? ""
+                        ]
+                    )
+                    
+                    // Parse the timestamp if available
+                    let messageDate: Date = {
+                        if let timestamp = timestamp {
+                            return dateFormatter.date(from: timestamp) ?? Date()
+                        }
+                        return Date()
+                    }()
+                    
+                    return Message(
+                        content: content,
+                        sender: sender,
+                        timestamp: messageDate,
+                        type: messageType,
+                        metadata: metadata,
+                        requestId: requestId
+                    )
+                }
+                
+                print("✅ Fetched \(messages.count) messages from server")
+                completion(.success(messages))
+                
+            } catch {
+                print("❌ Failed to parse messages response: \(error)")
+                completion(.failure(.jsonParsingError(error)))
+            }
+        }
+        task.resume()
+    }
     
     func checkSessionStatus(sessionId: String, completion: @escaping (Result<Bool, AICLICompanionError>) -> Void) {
         guard let baseURL = baseURL else {

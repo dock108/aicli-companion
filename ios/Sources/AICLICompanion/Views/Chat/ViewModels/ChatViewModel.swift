@@ -74,9 +74,16 @@ class ChatViewModel: ObservableObject {
             type: .text,
             attachments: attachments
         )
+        
+        // WhatsApp/iMessage pattern: Add to conversation immediately
         messages.append(userMessage)
         
-        // Sync to CloudKit in background
+        // Save to local database immediately (local-first)
+        if let sessionId = currentSessionId {
+            persistenceService.appendMessage(userMessage, to: project.path, sessionId: sessionId, project: project)
+        }
+        
+        // Sync to CloudKit in background (optional)
         Task {
             do {
                 try await cloudKitManager.saveMessage(userMessage, projectPath: project.path)
@@ -199,10 +206,8 @@ class ChatViewModel: ObservableObject {
                     setActiveSession(session)
                 }
                 
-                // Process any pending messages that were waiting for this session ID
-                if let project = getProjectFromSession() {
-                    BackgroundSessionCoordinator.shared.processSavedMessagesWithSessionId(sessionId, for: project)
-                }
+                // Session ID established - no additional processing needed
+                // Local-first pattern: All messages already stored locally
             }
         }
         
@@ -286,14 +291,11 @@ class ChatViewModel: ObservableObject {
             print("💾 Saved \(messages.count) messages for project \(project.name) with session ID: \(sessionId)")
         } else {
             // No session ID yet - this happens when user leaves before Claude responds
-            print("⚠️ No session ID available yet for project \(project.name) - storing messages as pending")
+            print("⚠️ No session ID available yet for project \(project.name)")
+            print("📝 Local-first pattern: Messages will be associated when session ID arrives via APNS")
             
-            // Store messages in background coordinator to be saved when session ID arrives
-            BackgroundSessionCoordinator.shared.storePendingMessages(
-                for: project,
-                messages: messages,
-                requestId: lastRequestId  // Track which request will bring the session ID
-            )
+            // Local-first pattern: Messages are already in UI and will be saved when session ID arrives
+            // No need for complex pending message coordination
         }
     }
     
@@ -305,31 +307,14 @@ class ChatViewModel: ObservableObject {
         // Notify push notification service about the active project
         PushNotificationService.shared.setActiveProject(project, sessionId: sessionId)
         
-        let restoredMessages = persistenceService.loadMessages(for: project.path, sessionId: sessionId)
-        if !restoredMessages.isEmpty {
-            // Check if we're switching to a different conversation
-            let isSameSession = currentSessionId == sessionId && !messages.isEmpty
-            
-            if isSameSession {
-                // Same session - merge any new messages incrementally
-                _ = mergePersistedMessages(restoredMessages)
-            } else {
-                // Different session - safe to replace messages array
-                messages = restoredMessages
-                print("📖 Loaded \(messages.count) messages for project \(project.name)")
-            }
-        } else {
-            // No persisted messages found - this could mean:
-            // 1. A brand new session (no messages yet)
-            // 2. Session exists on server but no conversation history was saved locally
-            print("📝 No persisted messages found for session \(sessionId)")
-            
-            // Only clear messages if switching to a different session
-            let isSameSession = currentSessionId == sessionId
-            if !isSameSession {
-                messages = []
-            }
-        }
+        // WhatsApp/iMessage pattern: Load local conversation only
+        print("📖 Loading conversation from local database...")
+        let localMessages = persistenceService.loadMessages(for: project.path, sessionId: sessionId)
+        self.messages = localMessages
+        print("✅ Loaded \(self.messages.count) messages for \(project.name) (local-only)")
+        
+        // No server sync needed - push notifications handle new messages
+        // Local database is the source of truth for the conversation
     }
     
     private func addWelcomeMessage(for project: Project) {
@@ -356,24 +341,9 @@ class ChatViewModel: ObservableObject {
             }
             .store(in: &cancellables)
         
-        // Simple server polling when app becomes active (best practices approach)
-        #if os(iOS)
-        // Listen for app becoming active
-        NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
-            .sink { [weak self] _ in
-                print("📱 App became active - polling server for messages")
-                self?.pollServerForMessages()
-            }
-            .store(in: &cancellables)
-        
-        // Listen for app entering foreground
-        NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)
-            .sink { [weak self] _ in
-                print("📱 App entering foreground - polling server for messages")
-                self?.pollServerForMessages()
-            }
-            .store(in: &cancellables)
-        #endif
+        // WhatsApp/iMessage pattern: No server polling needed
+        // Push notifications deliver new messages automatically
+        // App lifecycle events don't need to trigger server requests
     }
     
     private func handleClaudeResponseNotification(_ notification: Notification) {
@@ -434,43 +404,37 @@ class ChatViewModel: ObservableObject {
                 }
             }
             
-            // Add message to conversation
-            print("📝 Adding NEW Claude message to conversation...")
+            // WhatsApp/iMessage pattern: Add message to conversation
+            print("📝 Adding Claude response to conversation...")
             messages.append(message)
-            print("✅ ChatViewModel: Added APNS Claude response to chat")
-            print("📊 Total messages now: \(messages.count)")
+            print("✅ Added Claude response to chat (\(messages.count) total messages)")
             
-            // CRITICAL: Clear loading state now that Claude response arrived
-            print("🛑 Clearing loading state after Claude response...")
+            // Save to local database immediately
+            if let project = currentProject, let sessionId = currentSessionId {
+                persistenceService.appendMessage(message, to: project.path, sessionId: sessionId, project: project)
+            }
+            
+            // Clear loading state - response received
             isWaitingForClaudeResponse = false
             isLoading = false
             messageTimeout?.invalidate()
             messageTimeout = nil
-            print("✅ Loading state cleared: isLoading=\(isLoading), isWaiting=\(isWaitingForClaudeResponse)")
             
-            // Clear badge count since we've processed the notification
+            // Clear badge count
             #if os(iOS)
             UIApplication.shared.applicationIconBadgeNumber = 0
             #endif
-            print("🔵 Cleared badge count after processing Claude response")
             
-            // Sync assistant message to CloudKit for cross-device sync
+            // Sync to CloudKit in background (optional)
             if let project = currentProject {
                 Task {
                     do {
                         try await cloudKitManager.saveMessage(message, projectPath: project.path)
-                        print("✅ APNS assistant message synced to CloudKit")
+                        print("✅ Claude message synced to CloudKit")
                     } catch {
-                        print("⚠️ Failed to sync APNS assistant message to CloudKit: \(error)")
+                        print("⚠️ Failed to sync Claude message to CloudKit: \(error)")
                     }
                 }
-            }
-            
-            // Save the updated conversation
-            if let project = getProjectFromSession() {
-                print("💾 Saving conversation with \(messages.count) messages...")
-                saveMessages(for: project)
-                print("💾 Conversation saved successfully")
             }
             
             print("🎯 === CLAUDE RESPONSE PROCESSING COMPLETED ===")
@@ -570,9 +534,8 @@ class ChatViewModel: ObservableObject {
     private func updateSessionPersistence(sessionId: String) {
         guard let project = getProjectFromSession() else { return }
         
-        if BackgroundSessionCoordinator.shared.hasPendingMessages(for: project.path) {
-            print("📋 Session ID received, pending messages will be processed by BackgroundSessionCoordinator")
-        } else if persistenceService.getSessionMetadata(for: project.path) != nil {
+        // Local-first pattern: Check if we have existing session metadata
+        if persistenceService.getSessionMetadata(for: project.path) != nil {
             persistenceService.updateSessionMetadata(for: project.path, aicliSessionId: sessionId)
         } else {
             saveMessages(for: project)
@@ -900,16 +863,7 @@ class ChatViewModel: ObservableObject {
         print("✅ Added \(addedCount) new messages from server")
         print("📊 Total messages now: \(messages.count)")
         
-        // Save the merged messages
-        if let project = getCurrentProject() {
-            saveMessages(for: project)
-        }
-    }
-    
-    private func getCurrentProject() -> Project? {
-        // TODO: [QUESTION] How to get current project from ChatViewModel?
-        // May need to pass project to view model or store it
-        return nil
+        // Messages are already saved via append operations - no bulk save needed
     }
     
     // MARK: - Activity Helpers
@@ -961,68 +915,8 @@ class ChatViewModel: ObservableObject {
         }
     }
     
-    // MARK: - Message Deduplication
-    
-    /// Safely merge persisted messages with current messages, preventing duplicates
-    func mergePersistedMessages(_ persistedMessages: [Message]) -> Int {
-        guard !persistedMessages.isEmpty else {
-            print("🔄 No persisted messages to merge")
-            return 0
-        }
-        
-        print("🔄 ChatViewModel: Merging \(persistedMessages.count) persisted messages with \(messages.count) current messages")
-        
-        // Create a set of existing message IDs for fast lookup
-        let existingMessageIds = Set(messages.map { $0.id })
-        
-        // Also check content as backup in case IDs don't match
-        let existingContent = Set(messages.map { $0.content.trimmingCharacters(in: .whitespacesAndNewlines) })
-        
-        var newMessages: [Message] = []
-        var duplicateCount = 0
-        
-        for persistedMessage in persistedMessages {
-            let trimmedContent = persistedMessage.content.trimmingCharacters(in: .whitespacesAndNewlines)
-            
-            // Skip if we already have this message (by ID or content)
-            if existingMessageIds.contains(persistedMessage.id) {
-                duplicateCount += 1
-                print("   🔸 Skipping duplicate message (ID match): \(persistedMessage.id)")
-                continue
-            }
-            
-            if existingContent.contains(trimmedContent) {
-                duplicateCount += 1
-                print("   🔸 Skipping duplicate message (content match): \(trimmedContent.prefix(50))...")
-                continue
-            }
-            
-            newMessages.append(persistedMessage)
-        }
-        
-        if !newMessages.isEmpty {
-            // Sort new messages by timestamp before inserting
-            let sortedNewMessages = newMessages.sorted { $0.timestamp < $1.timestamp }
-            
-            // Insert new messages in chronological order to maintain sort without full array recreation
-            for newMessage in sortedNewMessages {
-                // Find correct insertion point to maintain chronological order
-                if let insertIndex = messages.firstIndex(where: { $0.timestamp > newMessage.timestamp }) {
-                    messages.insert(newMessage, at: insertIndex)
-                } else {
-                    // Message is newest, append to end
-                    messages.append(newMessage)
-                }
-            }
-            
-            print("✅ ChatViewModel: Incrementally added \(newMessages.count) new messages (skipped \(duplicateCount) duplicates)")
-            print("📊 Total messages now: \(messages.count)")
-        } else {
-            print("📝 No new messages to add (all \(duplicateCount) were duplicates)")
-        }
-        
-        return newMessages.count
-    }
+    // MARK: - WhatsApp/iMessage Pattern: Simple Local Operations
+    // No complex merging needed - messages are appended via APNS or user actions
     
     // MARK: - CloudKit Sync Methods
     
@@ -1103,44 +997,7 @@ class ChatViewModel: ObservableObject {
         }
     }
     
-    // MARK: - Simple Server Polling (Plan Phase 2)
-    
-    /// Simple server polling for messages - called when app becomes active
-    func pollServerForMessages() {
-        guard let sessionId = currentSessionId else {
-            print("ℹ️ No active session - skipping server poll")
-            return
-        }
-        
-        print("🔄 Polling server for latest messages (session: \(sessionId))")
-        
-        // Use existing checkSessionStatus method for lightweight check
-        HTTPAICLIService.shared.checkSessionStatus(sessionId: sessionId) { result in
-            Task { @MainActor in
-                switch result {
-                case .success(let hasNewMessages):
-                    if hasNewMessages {
-                        print("✅ Server indicates new messages available")
-                        // Reload messages from persistence - server should have updated them
-                        if let project = self.currentProject {
-                            let serverMessages = self.persistenceService.loadMessages(
-                                for: project.path,
-                                sessionId: sessionId
-                            )
-                            // Simple replace - server is source of truth
-                            if serverMessages.count > self.messages.count {
-                                self.messages = serverMessages
-                                print("✅ Loaded \(serverMessages.count) messages from server")
-                            }
-                        }
-                    } else {
-                        print("ℹ️ No new messages on server")
-                    }
-                case .failure(let error):
-                    print("⚠️ Server poll failed: \(error)")
-                    // Silent failure - user can still interact normally
-                }
-            }
-        }
-    }
+    // MARK: - WhatsApp/iMessage Pattern: No Server Polling Needed
+    // Push notifications deliver new messages automatically
+    // Local database is the source of truth for conversations
 }

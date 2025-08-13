@@ -18,7 +18,7 @@ AICLI Companion enables iOS users to interact with AI assistants (currently via 
 - **Modern Chat Interface**: Clean, intuitive design following iOS Human Interface Guidelines
 - **Real-time Streaming**: See Claude's responses character-by-character as they're generated
 - **Project Management**: Organize conversations by project with full context preservation
-- **Message Persistence**: Never lose a conversation - all messages are synced with the server
+- **Local-First Storage**: Never lose a conversation - all messages stored locally with optional CloudKit sync
 - **Push Notifications**: Get notified when Claude completes long-running tasks
 - **Rich Content Rendering**: Beautiful rendering of code blocks, markdown, and tool outputs
 - **Offline Support**: Browse previous conversations even without connection
@@ -35,14 +35,16 @@ AICLI Companion enables iOS users to interact with AI assistants (currently via 
 
 ### Server
 - **Claude CLI Integration**: Seamless bridge to Claude via Claude CLI
-- **HTTP + APNS**: Asynchronous message delivery via Apple Push Notifications
+- **Message Router**: Routes messages between iOS app and Claude CLI without storing conversations
+- **HTTP + APNS**: HTTP requests trigger Claude, responses delivered via Apple Push Notifications
 - **Session Management**: Active session tracking with timeout management
 - **Security First**: Token authentication, TLS support, configurable permissions
 - **Service Discovery**: Automatic discovery via Bonjour/mDNS
-- **RESTful API**: Clean API for chat, sessions, and project management
+- **RESTful API**: Clean API for chat routing and project management
 
 ## 🏗️ Architecture
 
+### Project Structure
 ```
 aicli-companion/
 ├── ios/                    # iOS app (SwiftUI)
@@ -57,6 +59,29 @@ aicli-companion/
 │   └── test/              # Server tests
 └── docs/                  # Documentation
 ```
+
+### Message Flow (Local-First Pattern)
+
+```
+[User types message] → [Save to local database] → [Send HTTP request]
+                                ↓
+[Display in UI immediately]     ↓
+                                ↓
+                    [Server routes to Claude CLI]
+                                ↓
+                    [Claude processes & responds]
+                                ↓
+                    [Server sends APNS notification]
+                                ↓
+[Receive APNS] → [Save Claude response locally] → [Update UI]
+```
+
+**Key Principles:**
+- **Local-First**: All messages stored locally immediately for zero data loss
+- **Server as Router**: Server routes messages but doesn't store conversation history
+- **APNS Delivery**: Push notifications deliver Claude responses to local storage
+- **Offline Capable**: Browse and continue conversations even without connection
+- **Cross-Device Sync**: Optional CloudKit sync for conversation history across devices
 
 ## 🚀 Quick Start
 
@@ -185,7 +210,8 @@ npm run lint
 - **Authentication**: Token-based authentication for all connections
 - **Encryption**: Optional TLS support for production deployments
 - **Permissions**: Configurable AICLI tool permissions
-- **Local First**: All data stays on your devices
+- **Local-First Storage**: All conversation data stays on your devices with optional CloudKit sync
+- **Zero Message Loss**: Robust local persistence ensures no conversations are ever lost
 - **No Telemetry**: Zero tracking or analytics
 
 ## 🤝 Contributing

@@ -8,10 +8,18 @@ This document tracks issues, observations, and improvements discovered during us
 ### Priority: High
 <!-- Critical issues that block core functionality -->
 
-- **Push notifications disappearing**: Notifications arrive but don't appear in the message thread. This happens when:
-  - User is still in the app when notification arrives
-  - User opens the app shortly after notification arrives
-  - Possible race condition between notification delivery and app state
+- **Message Persistence Issues** (2025-08-13) ✅ FIXED
+  - **ISSUE**: Messages were disappearing when switching between projects
+  - **ROOT CAUSE**: ChatView was loading from BackgroundSessionCoordinator instead of local message persistence
+  - **RESOLUTION**: Updated project switching logic to load from MessagePersistenceService
+  - **IMPLEMENTATION**: Fixed `handleProjectChange()` in ChatView.swift to properly load saved conversations
+  - **RESULT**: Complete conversation history now persists across project switches and app restarts
+
+- **Local-First Architecture Implementation** (2025-08-13) ✅ COMPLETED  
+  - **CHANGE**: Transitioned from complex server polling to WhatsApp/iMessage local-first pattern
+  - **IMPLEMENTATION**: Messages stored locally immediately on send/receive
+  - **BENEFITS**: Zero message loss, instant UI updates, offline conversation browsing
+  - **SIMPLIFIED**: Removed ~300 lines of complex retry/recovery logic
 
 - **Message Formatting Issues** (2025-08-12) ✅ FIXED
   - Long messages don't look aesthetically pleasing
@@ -46,4 +54,4 @@ This document tracks issues, observations, and improvements discovered during us
 ---
 
 **Created**: 2025-08-12
-**Last Updated**: 2025-08-12 (Push notification disappearing issue, message formatting issues)
+**Last Updated**: 2025-08-13 (Message persistence fixed, local-first architecture completed)

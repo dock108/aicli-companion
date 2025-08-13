@@ -24,7 +24,7 @@ extension Inspection: InspectionEmissary { }
 @MainActor
 class ViewTestCase: XCTestCase {
     var cancellables = Set<AnyCancellable>()
-    
+
     // Common setup for view tests
     override func setUp() async throws {
         try await super.setUp()
@@ -33,17 +33,17 @@ class ViewTestCase: XCTestCase {
         ServerManager.shared.isRunning = false
         SettingsManager.shared.resetToDefaults()
     }
-    
+
     override func tearDown() async throws {
         cancellables.removeAll()
         try await super.tearDown()
     }
-    
+
     // Helper to create a hosting controller for testing
     func hostView<V: View>(_ view: V) -> NSHostingController<V> {
         return NSHostingController(rootView: view)
     }
-    
+
     // Helper to wait for async updates
     func waitForAsync(timeout: TimeInterval = 1.0) {
         let expectation = XCTestExpectation(description: "Async update")
@@ -63,14 +63,14 @@ class MockServerManagerForViews: ObservableObject {
     @Published var connectionString = ""
     @Published var logs: [LogEntry] = []
     @Published var activeSessions: [Session] = []
-    
+
     func startServer() async throws {
         isProcessing = true
         try await Task.sleep(nanoseconds: 100_000_000)
         isRunning = true
         isProcessing = false
     }
-    
+
     func stopServer() async {
         isProcessing = true
         try? await Task.sleep(nanoseconds: 100_000_000)
@@ -84,7 +84,7 @@ class MockSettingsManagerForViews: ObservableObject {
     @Published var autoStartServer = false
     @Published var enableNotifications = true
     @Published var theme = "auto"
-    
+
     func resetToDefaults() {
         serverPort = 3001
         autoStartServer = false
@@ -106,7 +106,7 @@ extension View {
 // MARK: - Test Data Generators
 
 struct TestDataGenerator {
-    
+
     static func createTestSession(id: String = UUID().uuidString) -> Session {
         return Session(
             sessionId: id,
@@ -115,14 +115,14 @@ struct TestDataGenerator {
             signalStrength: 100.0
         )
     }
-    
+
     static func createTestLogEntry(level: LogLevel = .info) -> LogEntry {
         return LogEntry(
             level: level,
             message: "Test log message at \(Date())"
         )
     }
-    
+
     static func createTestLogs(count: Int, withErrors: Bool = false) -> [LogEntry] {
         var logs: [LogEntry] = []
         for i in 0..<count {
@@ -139,12 +139,12 @@ struct TestDataGenerator {
 // MARK: - Assertion Helpers
 
 extension XCTestCase {
-    
+
     func assertViewExists<V: View>(_ view: V, file: StaticString = #file, line: UInt = #line) {
         let mirror = Mirror(reflecting: view)
         XCTAssertNotNil(mirror, "View should exist", file: file, line: line)
     }
-    
+
     func assertPublishedValue<T: Equatable>(
         _ keyPath: KeyPath<ServerManager, T>,
         equals expected: T,
@@ -161,11 +161,11 @@ extension XCTestCase {
 #if DEBUG
 struct PreviewWrapper<Content: View>: View {
     let content: Content
-    
+
     init(@ViewBuilder content: () -> Content) {
         self.content = content()
     }
-    
+
     var body: some View {
         content
             .frame(width: 800, height: 600)

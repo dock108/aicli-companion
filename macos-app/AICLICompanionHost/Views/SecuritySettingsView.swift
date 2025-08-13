@@ -115,7 +115,8 @@ struct SecuritySettingsView: View {
                     }.disabled(newDirectory.isEmpty)
                 }
             }
-            Section(header: Text("Blocked Commands"), footer: Text("Commands matching these patterns will be blocked")) {
+            Section(header: Text("Blocked Commands"),
+                   footer: Text("Commands matching these patterns will be blocked")) {
                 ForEach(blockedCommands, id: \.self) { command in
                     HStack {
                         Image(systemName: "exclamationmark.triangle").foregroundColor(.orange)

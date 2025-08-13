@@ -409,7 +409,10 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
             type: "directory"
         )
         
-        // Save message to persistence
+        // First, migrate any temporary sessions for this project to real session ID
+        migrateTemporarySessionToReal(project: project, realSessionId: sessionId)
+        
+        // Save Claude's response message to persistence
         let messages = [claudeMessage]
         MessagePersistenceService.shared.saveMessages(
             for: projectPath,
@@ -421,9 +424,60 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
         print("💾 Saved background project response to persistence")
         
         // Local-first pattern: Message already saved to local storage
-        // No additional session coordination needed
+        // Migration ensures user messages are preserved with correct session ID
         
         print("💾 Background project response processing completed")
+    }
+    
+    /// Migrate temporary sessions to real session ID for background project responses
+    private func migrateTemporarySessionToReal(project: Project, realSessionId: String) {
+        print("🔄 PushNotificationService: Migrating temporary session to real session ID: \(realSessionId)")
+        
+        // Find temporary session files for this project
+        let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let sessionsDirectory = documentsDirectory.appendingPathComponent("AICLICompanionSessions")
+        let projectDir = sessionsDirectory.appendingPathComponent(sanitizeFilename(project.path))
+        
+        do {
+            let files = try FileManager.default.contentsOfDirectory(at: projectDir, includingPropertiesForKeys: nil)
+            let tempFiles = files.filter { $0.lastPathComponent.hasPrefix("temp-") && $0.lastPathComponent.hasSuffix("_messages.json") }
+            
+            for tempFile in tempFiles {
+                print("🔄 Found temporary session file: \(tempFile.lastPathComponent)")
+                
+                // Load temporary messages
+                if let data = try? Data(contentsOf: tempFile) {
+                    let decoder = JSONDecoder()
+                    decoder.dateDecodingStrategy = .iso8601
+                    
+                    if let persistedMessages = try? decoder.decode([PersistedMessage].self, from: data) {
+                        let messages = persistedMessages.map { $0.toMessage() }
+                        print("🔄 Migrating \(messages.count) messages from temporary session")
+                        
+                        // Save messages with real session ID
+                        MessagePersistenceService.shared.saveMessages(
+                            for: project.path,
+                            messages: messages,
+                            sessionId: realSessionId,
+                            project: project
+                        )
+                        
+                        // Delete temporary file
+                        try? FileManager.default.removeItem(at: tempFile)
+                        print("✅ Migrated temporary session to real session ID: \(realSessionId)")
+                    }
+                }
+            }
+        } catch {
+            print("⚠️ Error during session migration: \(error)")
+        }
+    }
+    
+    private func sanitizeFilename(_ filename: String) -> String {
+        return filename
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: ":", with: "_")
+            .replacingOccurrences(of: " ", with: "_")
     }
     
     /// Handle notification actions
@@ -504,7 +558,7 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
                 userInfo: [
                     "projectPath": projectPath,
                     "projectName": projectName,
-                    "sessionId": userInfo["sessionId"] as? String
+                    "sessionId": userInfo["sessionId"] as? String ?? ""
                 ]
             )
         }

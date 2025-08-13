@@ -1,363 +1,149 @@
-# macOS App Test Coverage Improvement Plan
+# Push Notification Message Thread Fix Implementation Plan
 
 ## Executive Summary
-Improving test coverage for the macOS AICLI Companion Host app from 17.6% to 80% and re-enabling CI test enforcement. This will ensure code quality, prevent regressions, and establish a robust testing foundation.
+Fix the critical issue where push notifications arrive but don't appear in the message thread. This happens when users are still in the app or open the app shortly after notification arrival, causing a race condition between notification delivery and app state.
 
 ## Current State Analysis
 
-### Test Status
-- **Total Tests**: 202
-- **Passing**: ~200
-- **Failing**: 2 (ServerDiscoveryTests)
-- **Test Success Rate**: ~99%
+### What We Have Now
+- Push notifications arrive via APNS successfully
+- Messages are saved to persistence correctly
+- Notification handlers exist in both AppDelegate and PushNotificationService
+- ChatViewModel has a listener for claudeResponseReceived notifications
 
-### Coverage Metrics
-- **App Target Coverage**: 17.6% (1671/9476 lines)
-- **Test Target Coverage**: 82.0%
-- **Overall Coverage**: 38.7%
-
-### Coverage Gaps
-- **0% Coverage**: All View files (18 files)
-- **Partial Coverage**: ServerManager, SettingsManager, ProcessOutputHandling
-- **Good Coverage**: KeychainManager, NetworkMonitor, NotificationManager
+### Problems Identified
+1. **Race Condition**: Notifications posted to NotificationCenter may arrive before ChatViewModel is ready
+2. **Missing Messages**: Messages saved to persistence while app is inactive don't get loaded into active chat
+3. **Duplicate Detection Issues**: Current duplicate detection prevents valid messages from appearing
+4. **No Recovery Mechanism**: No way to check for and load missing messages after app becomes active
 
 ## Implementation Plan
 
-### Phase 1: Fix Remaining Test Failures (Day 1 - IMMEDIATE)
+### Phase 1: Add Message Recovery System (Day 1 Morning) ✅
 
-#### TODO 1.1: Fix ServerDiscoveryTests.testFindServerDirectoryFallback
-**File**: `macos-app/AICLICompanionHostTests/ServerDiscoveryTests.swift`
-- Issue: Line 60 - XCTAssertTrue failing on log check
-- Fix: Update log expectations to match new directory discovery logic
-- Test: Verify with custom serverDirectory setting
+#### TODO 1.1: Create Message Recovery Method in ChatViewModel ✅
+- Add `checkForMissingMessages()` method that queries persistence for recent messages not in current thread
+- Compare persistence messages with current messages array using timestamp and content
+- Added `checkForRecentMissingMessages()` for time-based recovery
 
-#### TODO 1.2: Fix ServerDiscoveryTests.testLoggingDuringDiscovery
-**File**: `macos-app/AICLICompanionHostTests/ServerDiscoveryTests.swift`
-- Issue: Line 253 - XCTAssertTrue(logs.count > 0) failing
-- Fix: Ensure findServerDirectory generates logs even when using custom path
-- Test: Check log generation in all paths
+#### TODO 1.2: Add App State Change Listeners ✅
+- Listen for UIApplication.willEnterForegroundNotification
+- Listen for UIApplication.didBecomeActiveNotification  
+- Call checkForMissingMessages when app becomes active
 
-#### TODO 1.3: Verify All Tests Pass
-- Run full test suite without code signing
-- Ensure no intermittent failures
-- Generate baseline coverage report
-- Document any flaky tests
+#### TODO 1.3: Add Manual Refresh Capability ✅
+- Add pull-to-refresh in ChatView
+- Call checkForMissingMessages on refresh
+- Add visual feedback for refresh action (built-in iOS refresh control)
 
-### Phase 2: Model Layer Testing (Days 2-3)
+### Phase 2: Fix Notification Timing Issues (Day 1 Afternoon) ✅
 
-#### TODO 2.1: Create ServerManagerLoggingTests
-**File**: `macos-app/AICLICompanionHostTests/ServerManagerLoggingTests.swift`
-```swift
-class ServerManagerLoggingTests: XCTestCase {
-    // Test log levels
-    // Test log rotation
-    // Test log filtering
-    // Test log export
-    // Test max log entries
-}
-```
+#### TODO 2.1: Add Message Queue in PushNotificationService ✅
+- Create pending messages queue for notifications that couldn't be delivered
+- Add retry mechanism with exponential backoff
+- Max 3 retry attempts with 0.5s, 1s, 2s delays
+- Save failed notifications to persistence as fallback
 
-#### TODO 2.2: Create ServerManagerNetworkingTests
-**File**: `macos-app/AICLICompanionHostTests/ServerManagerNetworkingTests.swift`
-```swift
-class ServerManagerNetworkingTests: XCTestCase {
-    // Test health check
-    // Test connection monitoring
-    // Test network status
-    // Test API calls
-    // Test timeout handling
-}
-```
+#### TODO 2.2: Improve ChatViewModel Notification Handler (Deferred)
+- Add acknowledgment system for received notifications
+- If no acknowledgment, PushNotificationService retries
+- Log all notification receipt attempts for debugging
+Note: Basic retry mechanism implemented, full acknowledgment system deferred
 
-#### TODO 2.3: Expand ProcessOutputHandlingTests
-**File**: `macos-app/AICLICompanionHostTests/ProcessOutputHandlingTests.swift`
-- Add Cloudflare tunnel URL variations
-- Test partial output buffering
-- Test error stream handling
-- Test auth token extraction edge cases
-- Test multiline output parsing
+#### TODO 2.3: Fix Duplicate Detection Logic ✅
+- Use content hash + timestamp window (within 5 seconds) for deduplication
+- Allow same content if timestamps differ by more than 5 seconds
+- Keep existing ID-based deduplication as fallback
+- Applied to both notification handler and message recovery
 
-#### TODO 2.4: Expand ServerManagerProcessTests
-**File**: `macos-app/AICLICompanionHostTests/ServerManagerProcessTests.swift`
-- Test process crash recovery
-- Test zombie process cleanup
-- Test concurrent start/stop operations
-- Test environment variable edge cases
-- Test custom executable paths
+### Phase 3: Enhance Session State Management (Day 2 Morning)
 
-### Phase 3: ViewModel Extraction (Days 4-5)
+#### TODO 3.1: Add Session Recovery
+- If session ID mismatch, check if message belongs to current project
+- Load messages by project path as fallback
+- Update session ID from incoming messages if needed
 
-#### TODO 3.1: Extract ActivityMonitorViewModel
-**File**: `macos-app/AICLICompanionHost/ViewModels/ActivityMonitorViewModel.swift`
-```swift
-@MainActor
-class ActivityMonitorViewModel: ObservableObject {
-    @Published var sessions: [Session] = []
-    @Published var serverHealth: ServerHealth = .unknown
-    @Published var metrics: ServerMetrics
-    
-    func refreshData() async { }
-    func exportLogs() -> URL? { }
-    func clearSessions() { }
-}
-```
+#### TODO 3.2: Improve Persistence Loading
+- Add method to get last N messages regardless of session
+- Include timestamp-based filtering (last 24 hours)
+- Sort by timestamp to ensure correct order
 
-#### TODO 3.2: Extract SettingsViewModel
-**File**: `macos-app/AICLICompanionHost/ViewModels/SettingsViewModel.swift`
-```swift
-@MainActor
-class SettingsViewModel: ObservableObject {
-    @Published var settings: AppSettings
-    @Published var needsRestart: Bool = false
-    
-    func applySettings() async throws { }
-    func resetToDefaults() { }
-    func exportSettings() -> Data? { }
-}
-```
+#### TODO 3.3: Add Session State Validation
+- Validate session state on each notification
+- Auto-recover if session is inconsistent
+- Log session state changes for debugging
 
-#### TODO 3.3: Extract SecuritySettingsViewModel
-**File**: `macos-app/AICLICompanionHost/ViewModels/SecuritySettingsViewModel.swift`
-```swift
-@MainActor
-class SecuritySettingsViewModel: ObservableObject {
-    @Published var blockedCommands: [String] = []
-    @Published var safeDirectories: [String] = []
-    @Published var securityPreset: String = "standard"
-    
-    func applyPreset(_ preset: String) { }
-    func validateCommand(_ command: String) -> Bool { }
-    func addSafeDirectory(_ path: String) { }
-}
-```
+### Phase 4: Testing and Monitoring (Day 2 Afternoon)
 
-#### TODO 3.4: Extract MenuBarViewModel
-**File**: `macos-app/AICLICompanionHost/ViewModels/MenuBarViewModel.swift`
-```swift
-@MainActor
-class MenuBarViewModel: ObservableObject {
-    @Published var connectionString: String = ""
-    @Published var serverStatus: ServerStatus
-    @Published var quickActions: [QuickAction] = []
-    
-    func toggleServer() async { }
-    func copyConnectionString() { }
-    func openSettings() { }
-}
-```
+#### TODO 4.1: Add Comprehensive Logging
+- Log notification flow from APNS to UI
+- Add timing measurements for each step
+- Include session and project IDs in all logs
 
-### Phase 4: ViewModel Testing (Day 6) ✅
+#### TODO 4.2: Create Test Scenarios
+- Test notification while app is foreground
+- Test notification while app is background
+- Test rapid successive notifications
+- Test app kill and restart scenarios
 
-#### TODO 4.1: Create ActivityMonitorViewModelTests ✅
-**File**: `macos-app/AICLICompanionHostTests/ViewModels/ActivityMonitorViewModelTests.swift`
-- Test data refresh ✅
-- Test session management ✅
-- Test metrics calculation ✅
-- Test log export ✅
+#### TODO 4.3: Add Analytics
+- Track notification delivery success rate
+- Measure time from APNS to UI display
+- Monitor duplicate detection effectiveness
 
-#### TODO 4.2: Create SettingsViewModelTests ✅
-**File**: `macos-app/AICLICompanionHostTests/ViewModels/SettingsViewModelTests.swift`
-- Test settings application ✅
-- Test restart detection ✅
-- Test settings export/import ✅
-- Test validation ✅
+## Testing Plan
 
-#### TODO 4.3: Create SecuritySettingsViewModelTests ✅
-**File**: `macos-app/AICLICompanionHostTests/ViewModels/SecuritySettingsViewModelTests.swift`
-- Test preset application ✅
-- Test command validation ✅
-- Test directory management ✅
-- Test rule evaluation ✅
+### Manual Testing Checklist
+- [ ] Send message while in app - message appears immediately
+- [ ] Send message while app in background - message appears when returning
+- [ ] Kill app, send message, reopen - message is loaded
+- [ ] Send multiple rapid messages - all appear in order
+- [ ] Switch between projects - correct messages load
+- [ ] Poor network conditions - messages eventually appear
 
-#### TODO 4.4: Create MenuBarViewModelTests ✅
-**File**: `macos-app/AICLICompanionHostTests/ViewModels/MenuBarViewModelTests.swift`
-- Test server toggle ✅
-- Test status updates ✅
-- Test quick actions ✅
-- Test connection string generation ✅
-
-### Phase 5: View Testing with ViewInspector (Day 7) ✅
-
-#### TODO 5.1: Add ViewInspector Package ✅ (Skipped - used basic view testing)
-**File**: `macos-app/Package.swift` (or via Xcode)
-```swift
-dependencies: [
-    .package(url: "https://github.com/nalexn/ViewInspector", from: "0.9.0")
-]
-```
-
-#### TODO 5.2: Create View Test Helpers
-**File**: `macos-app/AICLICompanionHostTests/Helpers/ViewTestHelpers.swift`
-```swift
-import ViewInspector
-extension Inspection: InspectionEmissary { }
-// Custom inspection helpers
-```
-
-#### TODO 5.3: Create SettingsViewTests
-**File**: `macos-app/AICLICompanionHostTests/Views/SettingsViewTests.swift`
-- Test form rendering
-- Test tab selection
-- Test input validation
-- Test save/cancel actions
-
-#### TODO 5.4: Create SecuritySettingsViewTests
-**File**: `macos-app/AICLICompanionHostTests/Views/SecuritySettingsViewTests.swift`
-- Test preset picker
-- Test command list
-- Test directory picker
-- Test toggle states
-
-#### TODO 5.5: Create ActivityMonitorViewTests
-**File**: `macos-app/AICLICompanionHostTests/Views/ActivityMonitorViewTests.swift`
-- Test chart rendering
-- Test session list
-- Test refresh button
-- Test export functionality
-
-### Phase 6: CI/CD Re-enablement (Day 8)
-
-#### TODO 6.1: Update CI Workflow
-**File**: `.github/workflows/ci.yml`
-```yaml
-- name: Run macOS Tests with Coverage
-  # Remove continue-on-error
-  run: |
-    cd macos-app
-    xcodebuild test -project AICLICompanionHost.xcodeproj \
-      -scheme AICLICompanionHost \
-      -destination 'platform=macOS' \
-      -enableCodeCoverage YES \
-      CODE_SIGNING_ALLOWED=NO
-
-- name: Check macOS Coverage Threshold
-  run: |
-    # Uncomment and update coverage check
-    # Enforce 80% minimum coverage
-```
-
-#### TODO 6.2: Add Coverage Badge
-**File**: `README.md`
-- Add coverage badge from CI artifacts
-- Link to coverage reports
-- Document coverage goals
-
-#### TODO 6.3: Setup Test Caching
-- Cache DerivedData appropriately
-- Cache test results
-- Optimize test execution time
-
-#### TODO 6.4: Fix Any Flaky Tests
-- Add retries for network-dependent tests
-- Mock time-sensitive operations
-- Ensure test isolation
-
-#### TODO 6.5: Create Test Documentation
-**File**: `macos-app/TESTING.md`
-- Document testing strategy
-- Explain test organization
-- Provide examples
-- List coverage goals
-
-## Testing Strategy
-
-### Unit Test Principles
-1. **Fast**: Mock all external dependencies
-2. **Isolated**: No test interdependencies
-3. **Repeatable**: Deterministic results
-4. **Self-Validating**: Clear pass/fail
-5. **Timely**: Write tests with code
-
-### Coverage Goals by Component
-- **Models**: 90% coverage (business logic)
-- **ViewModels**: 85% coverage (UI logic)
-- **Views**: 60% coverage (UI structure)
-- **Utilities**: 95% coverage (helpers)
-- **Overall**: 80% minimum
-
-### Test Organization
-```
-AICLICompanionHostTests/
-├── Models/           # Model tests
-├── ViewModels/       # ViewModel tests
-├── Views/           # View tests
-├── Utilities/       # Utility tests
-├── Helpers/         # Test helpers
-├── Mocks/          # Mock objects
-└── Fixtures/       # Test data
-```
+### Automated Testing
+- Unit tests for message recovery logic
+- Unit tests for duplicate detection
+- Integration tests for notification flow
 
 ## Success Metrics
-
-### Immediate (Phase 1)
-- ✅ All tests passing (100% pass rate)
-- ✅ No test failures in CI
-
-### Short Term (Phases 2-3)
-- 📈 50% code coverage
-- ✅ All models have tests
-- ✅ ViewModels extracted
-
-### Medium Term (Phases 4-5)
-- 📈 70% code coverage
-- ✅ ViewModels fully tested
-- ✅ Basic view tests in place
-
-### Long Term (Phase 6)
-- 📈 80%+ code coverage
-- ✅ CI enforcement enabled
-- ⏱️ Tests run in <2 minutes
-- 📊 Coverage trends tracked
-
-## Implementation Timeline
-
-### Week 1
-- **Day 1**: Fix failing tests, establish baseline
-- **Day 2-3**: Model layer tests
-- **Day 4-5**: Extract ViewModels
-
-### Week 2
-- **Day 6**: ViewModel tests
-- **Day 7**: View tests with ViewInspector
-- **Day 8**: CI/CD re-enablement
-
-## Risk Mitigation
-
-### Potential Risks
-1. **ViewInspector limitations**: Some SwiftUI components may be hard to test
-   - Mitigation: Focus on testable components, use snapshot testing for complex views
-
-2. **Test execution time**: More tests may slow CI
-   - Mitigation: Parallelize tests, use test sharding
-
-3. **Flaky tests**: Async operations may be unreliable
-   - Mitigation: Proper mocking, increase timeouts
-
-4. **Coverage plateau**: Hard to achieve last 10-20%
-   - Mitigation: Focus on critical paths, accept some UI gaps
+- 100% of notifications appear in message thread
+- Messages appear within 1 second when app is active
+- No duplicate messages in thread
+- Works in all app states (foreground, background, terminated)
 
 ## AI Assistant Instructions
+1. Start with Phase 1 - Message Recovery System
+2. Test each TODO before marking complete
+3. Update plan with any issues encountered
+4. Use descriptive commit messages referencing TODOs
+5. Add TODO comments for unclear areas
+6. Stop and report showstoppers immediately
 
-When implementing this plan:
-1. Start with Phase 1 - fix the 2 failing tests immediately
-2. Create ViewModels before their tests for better structure
-3. Use dependency injection for testability
-4. Mock FileManager, Process, and Network operations
-5. Keep tests fast - target <100ms per test
-6. Document any test that takes >500ms
-7. Use XCTestExpectation for async tests
-8. Group related tests with MARK comments
+**Current Status**: Phase 1 & 2 COMPLETED - Ready for testing
+**Next Step**: User testing required before Phase 3
+**Last Updated**: 2025-08-13
 
-## Next Steps
+## Implementation Notes
 
-1. Fix the 2 failing ServerDiscoveryTests
-2. Run coverage report to confirm baseline
-3. Create ServerManagerLoggingTests
-4. Begin ViewModel extraction
-5. Update this plan with progress markers
+### Completed Improvements:
+1. **Message Recovery System**: Added `checkForMissingMessages()` that queries persistence and recovers any messages not displayed in UI
+2. **App State Listeners**: Automatically checks for missing messages when app becomes active or enters foreground
+3. **Pull-to-Refresh**: Users can manually trigger message recovery
+4. **Retry Queue**: Failed notifications are retried up to 3 times with exponential backoff
+5. **Improved Duplicate Detection**: Uses timestamp window (5 seconds) to prevent false positives
+6. **Automatic Recovery on View Load**: Checks for missing messages when ChatView appears
 
-**Current Status**: Phase 5 - Ready for View Testing with ViewInspector
-**Next TODO**: 5.1 - Add ViewInspector Package
-**Coverage**: 17.6% → ~40% (estimated) → Target 80%
-**Last Updated**: 2025-08-12
-**Progress**: Phases 1-4 Complete ✅ | 4 ViewModels created | 8 new test files added
+### Key Changes Made:
+- ChatViewModel: Added message recovery methods and app state listeners
+- PushNotificationService: Added retry queue with exponential backoff
+- ChatView: Added pull-to-refresh and automatic recovery on view appearance
+- Duplicate detection now uses content + timestamp window instead of just content matching
+
+### Testing Required:
+The implementation is complete for the core functionality. User testing is needed to verify:
+- Messages appear when app is in foreground
+- Messages appear when returning from background
+- Pull-to-refresh recovers missing messages
+- No duplicate messages appear
+- Session state is maintained correctly

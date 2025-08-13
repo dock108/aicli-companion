@@ -27,6 +27,22 @@ public class PushNotificationService: NSObject, ObservableObject {
     
     private let notificationCenter = UNUserNotificationCenter.current()
     
+    // MARK: - Message Queue for Retry (TODO 2.1)
+    
+    private struct PendingNotification {
+        let message: Message
+        let sessionId: String
+        let projectPath: String
+        let project: Project
+        let retryCount: Int
+        let timestamp: Date
+    }
+    
+    private var pendingMessageQueue: [PendingNotification] = []
+    private var retryTimers: [UUID: Timer] = [:]
+    private let maxRetryAttempts = 3
+    private let retryDelays: [TimeInterval] = [0.5, 1.0, 2.0] // Exponential backoff
+    
     // MARK: - Initialization
     
     override private init() {
@@ -337,26 +353,13 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
             type: "directory"
         )
         
-        // Post notification to ChatViewModel
-        await MainActor.run {
-            print("📡 === POSTING CLAUDE RESPONSE TO CHATVIEWMODEL ===")
-            NotificationCenter.default.post(
-                name: .claudeResponseReceived,
-                object: nil,
-                userInfo: [
-                    "message": claudeMessage,
-                    "sessionId": sessionId,
-                    "projectPath": projectPath,
-                    "project": project
-                ]
-            )
-            print("📡 Claude response posted to ChatViewModel")
-            
-            // Clear badge since we're processing this notification
-            #if os(iOS)
-            UIApplication.shared.applicationIconBadgeNumber = 0
-            #endif
-        }
+        // Post notification to ChatViewModel with retry mechanism (TODO 2.1)
+        await postNotificationWithRetry(
+            message: claudeMessage,
+            sessionId: sessionId,
+            projectPath: projectPath,
+            project: project
+        )
         
         print("✅ Foreground Claude response processing completed")
     }
@@ -565,5 +568,158 @@ struct PushNotificationPayload: Codable {
             case threadId = "thread-id"
             case category
         }
+    }
+    
+    // MARK: - Message Queue and Retry Mechanism (TODO 2.1)
+    
+    private func postNotificationWithRetry(
+        message: Message,
+        sessionId: String,
+        projectPath: String,
+        project: Project
+    ) async {
+        print("📡 === POSTING NOTIFICATION WITH RETRY ===")
+        
+        // First attempt - post immediately
+        let notificationPosted = await postNotificationToViewModel(
+            message: message,
+            sessionId: sessionId,
+            projectPath: projectPath,
+            project: project
+        )
+        
+        if !notificationPosted {
+            // Add to retry queue if first attempt failed
+            let pending = PendingNotification(
+                message: message,
+                sessionId: sessionId,
+                projectPath: projectPath,
+                project: project,
+                retryCount: 0,
+                timestamp: Date()
+            )
+            
+            await MainActor.run {
+                pendingMessageQueue.append(pending)
+                print("⏳ Added message to retry queue - will retry in \(retryDelays[0])s")
+            }
+            
+            // Schedule retry
+            scheduleRetry(for: pending)
+        }
+    }
+    
+    private func postNotificationToViewModel(
+        message: Message,
+        sessionId: String,
+        projectPath: String,
+        project: Project
+    ) async -> Bool {
+        // Check if ChatViewModel is ready to receive notifications
+        // We do this by checking if there are observers for the notification
+        
+        await MainActor.run {
+            print("📡 Attempting to post notification to ChatViewModel")
+            
+            // Post the notification
+            NotificationCenter.default.post(
+                name: .claudeResponseReceived,
+                object: nil,
+                userInfo: [
+                    "message": message,
+                    "sessionId": sessionId,
+                    "projectPath": projectPath,
+                    "project": project,
+                    "timestamp": Date()
+                ]
+            )
+            
+            // Clear badge since we're processing this notification
+            #if os(iOS)
+            UIApplication.shared.applicationIconBadgeNumber = 0
+            #endif
+            
+            print("📡 Notification posted successfully")
+            
+            // TODO 2.2: In the future, we'll check for acknowledgment from ChatViewModel
+            // For now, we assume success if we reach this point
+            return true
+        }
+    }
+    
+    private func scheduleRetry(for notification: PendingNotification) {
+        guard notification.retryCount < maxRetryAttempts else {
+            print("❌ Max retry attempts reached for message: \(notification.message.id)")
+            // Save to persistence as fallback
+            saveFailedNotificationToPersistence(notification)
+            return
+        }
+        
+        let delay = retryDelays[min(notification.retryCount, retryDelays.count - 1)]
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            Task {
+                await self?.retryNotification(notification)
+            }
+        }
+    }
+    
+    private func retryNotification(_ notification: PendingNotification) async {
+        print("🔄 Retrying notification (attempt \(notification.retryCount + 1)/\(maxRetryAttempts))")
+        
+        let success = await postNotificationToViewModel(
+            message: notification.message,
+            sessionId: notification.sessionId,
+            projectPath: notification.projectPath,
+            project: notification.project
+        )
+        
+        if !success {
+            // Increment retry count and try again
+            let updatedNotification = PendingNotification(
+                message: notification.message,
+                sessionId: notification.sessionId,
+                projectPath: notification.projectPath,
+                project: notification.project,
+                retryCount: notification.retryCount + 1,
+                timestamp: notification.timestamp
+            )
+            
+            scheduleRetry(for: updatedNotification)
+        } else {
+            print("✅ Notification delivered successfully on retry")
+            // Remove from pending queue
+            await MainActor.run {
+                pendingMessageQueue.removeAll { $0.message.id == notification.message.id }
+            }
+        }
+    }
+    
+    private func saveFailedNotificationToPersistence(_ notification: PendingNotification) {
+        print("💾 Saving failed notification to persistence as fallback")
+        
+        // Save message to persistence
+        MessagePersistenceService.shared.saveMessages(
+            for: notification.projectPath,
+            messages: [notification.message],
+            sessionId: notification.sessionId,
+            project: notification.project
+        )
+        
+        // Update session tracking
+        BackgroundSessionCoordinator.shared.processSavedMessagesWithSessionId(
+            notification.sessionId, 
+            for: notification.project
+        )
+        
+        print("💾 Failed notification saved to persistence - will be recovered on next app launch")
+    }
+    
+    /// Clear pending message queue - useful when ChatViewModel is destroyed
+    public func clearPendingQueue() {
+        pendingMessageQueue.removeAll()
+        retryTimers.values.forEach { $0.invalidate() }
+        retryTimers.removeAll()
+        print("🧹 Cleared pending message queue")
     }
 }

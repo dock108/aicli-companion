@@ -96,6 +96,19 @@ struct ChatView: View {
                     contentHeight: $contentHeight,
                     onScrollPositionChanged: checkIfNearBottom
                 )
+                #if os(iOS)
+                .refreshable {
+                    // TODO 1.3: Pull-to-refresh to check for missing messages
+                    print("🔄 User triggered pull-to-refresh")
+                    viewModel.checkForMissingMessages()
+                    
+                    // Also check for recent messages from persistence
+                    viewModel.checkForRecentMissingMessages(hours: 1)
+                    
+                    // Small delay for visual feedback
+                    try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+                }
+                #endif
                 
                 // Input bar
                 ChatInputBar(
@@ -194,6 +207,9 @@ struct ChatView: View {
                     self.viewModel.loadMessages(for: project, sessionId: session.sessionId)
                     
                     print("🔷 ChatView: Loaded \(self.viewModel.messages.count) messages for restored session")
+                    
+                    // Check for missing messages that might have been saved while app was inactive
+                    self.viewModel.checkForMissingMessages()
                     
                     // Sync messages from CloudKit
                     Task {

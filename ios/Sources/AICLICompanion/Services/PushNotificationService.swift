@@ -344,6 +344,9 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
         let projectName = projectPath.split(separator: "/").last.map(String.init) ?? "Project"
         let project = Project(name: projectName, path: projectPath, type: "directory")
         
+        // Check if this is a fresh chat BEFORE saving (important!)
+        let hadExistingSession = MessagePersistenceService.shared.getSessionMetadata(for: projectPath) != nil
+        
         // Save to local storage using append (local-first pattern)
         MessagePersistenceService.shared.appendMessage(
             claudeMessage,
@@ -351,9 +354,6 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
             sessionId: sessionId,
             project: project
         )
-        
-        // Check if this is a fresh chat (no prior session metadata)
-        let hadExistingSession = MessagePersistenceService.shared.getSessionMetadata(for: projectPath) != nil
         
         if !hadExistingSession {
             print("🆕 Fresh chat detected - posting session establishment notification")

@@ -236,7 +236,6 @@ jobs:
           CODE_SIGNING_ALLOWED=NO
     
     - name: Run macOS Tests with Coverage
-      continue-on-error: true
       run: |
         cd macos-app
         xcodebuild -project AICLICompanionHost.xcodeproj \
@@ -253,19 +252,19 @@ jobs:
         xcrun xccov view --report --json macos-test.xcresult > macos-coverage.json || true
         xcrun xccov view --report macos-test.xcresult > macos-coverage.txt || true
     
-    # - name: Check macOS Coverage Threshold
-    #   run: |
-    #     cd macos-app
-    #     if [ -f macos-coverage.json ]; then
-    #       coverage=$(cat macos-coverage.json | python3 -c "import json, sys; data = json.load(sys.stdin); coverage = data['targets'][0].get('lineCoverage', 0) * 100 if 'targets' in data and len(data['targets']) > 0 else 0; print(f'{coverage:.1f}')")
-    #       echo "Code coverage: ${coverage}%"
-    #       if (( $(echo "$coverage < ${{ env.MINIMUM_COVERAGE }}" | bc -l) )); then
-    #         echo "❌ Coverage ${coverage}% is below minimum threshold of ${{ env.MINIMUM_COVERAGE }}%"
-    #         exit 1
-    #       else
-    #         echo "✅ Coverage ${coverage}% meets minimum threshold"
-    #       fi
-    #     fi
+    - name: Check macOS Coverage Threshold
+      run: |
+        cd macos-app
+        if [ -f macos-coverage.json ]; then
+          coverage=$(cat macos-coverage.json | python3 -c "import json, sys; data = json.load(sys.stdin); coverage = data['targets'][0].get('lineCoverage', 0) * 100 if 'targets' in data and len(data['targets']) > 0 else 0; print(f'{coverage:.1f}')")
+          echo "Code coverage: ${coverage}%"
+          if (( $(echo "$coverage < 80" | bc -l) )); then
+            echo "❌ Coverage ${coverage}% is below minimum threshold of 80%"
+            exit 1
+          else
+            echo "✅ Coverage ${coverage}% meets minimum threshold"
+          fi
+        fi
     
     - name: Upload macOS Coverage Reports
       uses: actions/upload-artifact@v4

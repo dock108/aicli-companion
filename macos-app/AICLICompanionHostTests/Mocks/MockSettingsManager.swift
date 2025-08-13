@@ -23,53 +23,53 @@ class MockSettingsManager: ObservableObject {
     @Published var maxLogEntries: Int = 1000
     @Published var enableBonjour: Bool = true
     @Published var theme: String = "system"
-    
+
     // Security Settings
     @Published var requireAuthentication: Bool = true
     @Published var enableTouchID: Bool = true
-    
+
     // Internet Access Settings
     @Published var enableTunnel: Bool = false
     @Published var tunnelProvider: String = "ngrok"
     @Published var ngrokAuthToken: String = ""
-    
+
     // Project Settings
     @Published var defaultProjectDirectory: String = ""
-    
+
     // Advanced Settings
     @Published var serverCommand: String = "npm start"
     @Published var serverDirectory: String = ""
     @Published var nodeExecutable: String = ""
     @Published var npmExecutable: String = ""
-    
+
     // MARK: - Configuration Change Tracking
     @Published var configurationChanged: Bool = false
-    
+
     // MARK: - Test Tracking Properties
     var resetToDefaultsCalled = false
     var exportSettingsCalled = false
     var importSettingsCalled = false
     var markConfigurationAppliedCalled = false
     var validateSettingsCalled = false
-    
+
     // Store initial configuration to track changes
     private var initialConfiguration: [String: Any] = [:]
-    
+
     // MARK: - Computed Properties
     var needsRestart: Bool {
         return configurationChanged
     }
-    
+
     // MARK: - Initialization
     init() {
         captureInitialConfiguration()
     }
-    
+
     // MARK: - Public Methods
-    
+
     func resetToDefaults() {
         resetToDefaultsCalled = true
-        
+
         serverPort = 3001
         autoStartServer = false
         autoRestartOnCrash = true
@@ -91,13 +91,13 @@ class MockSettingsManager: ObservableObject {
         serverDirectory = ""
         nodeExecutable = ""
         npmExecutable = ""
-        
+
         configurationChanged = false
     }
-    
+
     func exportSettings() -> Data? {
         exportSettingsCalled = true
-        
+
         let settings: [String: Any] = [
             "serverPort": serverPort,
             "autoStartServer": autoStartServer,
@@ -121,17 +121,17 @@ class MockSettingsManager: ObservableObject {
             "nodeExecutable": nodeExecutable,
             "npmExecutable": npmExecutable
         ]
-        
+
         return try? JSONSerialization.data(withJSONObject: settings)
     }
-    
+
     func importSettings(from data: Data) -> Bool {
         importSettingsCalled = true
-        
+
         guard let settings = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return false
         }
-        
+
         // Import settings from dictionary
         if let value = settings["serverPort"] as? Int { serverPort = value }
         if let value = settings["autoStartServer"] as? Bool { autoStartServer = value }
@@ -154,48 +154,48 @@ class MockSettingsManager: ObservableObject {
         if let value = settings["serverDirectory"] as? String { serverDirectory = value }
         if let value = settings["nodeExecutable"] as? String { nodeExecutable = value }
         if let value = settings["npmExecutable"] as? String { npmExecutable = value }
-        
+
         configurationChanged = true
         return true
     }
-    
+
     func markConfigurationApplied() {
         markConfigurationAppliedCalled = true
         configurationChanged = false
         captureInitialConfiguration()
     }
-    
+
     func validateSettings() -> (isValid: Bool, errors: [String]) {
         validateSettingsCalled = true
-        
+
         var errors: [String] = []
-        
+
         // Validate port range
         if serverPort < 1024 || serverPort > 65535 {
             errors.append("Server port must be between 1024 and 65535")
         }
-        
+
         // Validate max log entries
         if maxLogEntries < 100 || maxLogEntries > 10000 {
             errors.append("Max log entries must be between 100 and 10000")
         }
-        
+
         // Validate log level
         let validLogLevels = ["debug", "info", "warning", "error"]
         if !validLogLevels.contains(logLevel) {
             errors.append("Invalid log level")
         }
-        
+
         // Validate tunnel settings
         if enableTunnel && tunnelProvider == "ngrok" && ngrokAuthToken.isEmpty {
             errors.append("ngrok auth token is required when tunnel is enabled")
         }
-        
+
         return (errors.isEmpty, errors)
     }
-    
+
     // MARK: - Private Methods
-    
+
     private func captureInitialConfiguration() {
         initialConfiguration = [
             "serverPort": serverPort,
@@ -221,7 +221,7 @@ class MockSettingsManager: ObservableObject {
             "npmExecutable": npmExecutable
         ]
     }
-    
+
     func checkForConfigurationChanges() {
         let currentConfig: [String: Any] = [
             "serverPort": serverPort,
@@ -246,7 +246,7 @@ class MockSettingsManager: ObservableObject {
             "nodeExecutable": nodeExecutable,
             "npmExecutable": npmExecutable
         ]
-        
+
         // Check if any value has changed
         configurationChanged = false
         for (key, value) in currentConfig {
@@ -258,7 +258,7 @@ class MockSettingsManager: ObservableObject {
             }
         }
     }
-    
+
     private func areEqual(_ a: Any, _ b: Any) -> Bool {
         if let aInt = a as? Int, let bInt = b as? Int {
             return aInt == bInt
@@ -271,18 +271,18 @@ class MockSettingsManager: ObservableObject {
         }
         return false
     }
-    
+
     // MARK: - Test Helpers
-    
+
     func reset() {
         resetToDefaults()
-        
+
         resetToDefaultsCalled = false
         exportSettingsCalled = false
         importSettingsCalled = false
         markConfigurationAppliedCalled = false
         validateSettingsCalled = false
-        
+
         configurationChanged = false
         captureInitialConfiguration()
     }

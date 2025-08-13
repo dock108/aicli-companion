@@ -9,9 +9,9 @@ import Foundation
 @testable import AICLICompanionHost
 
 class TestDataFactory {
-    
+
     // MARK: - LogEntry Factory
-    
+
     static func createLogEntry(
         level: LogLevel = .info,
         message: String = "Test log message",
@@ -23,7 +23,7 @@ class TestDataFactory {
             category: category
         )
     }
-    
+
     static func createLogEntries(count: Int) -> [LogEntry] {
         return (0..<count).map { index in
             let levels: [LogLevel] = [.debug, .info, .warning, .error]
@@ -34,9 +34,9 @@ class TestDataFactory {
             )
         }
     }
-    
+
     // MARK: - Session Factory
-    
+
     static func createSession(
         sessionId: String? = nil,
         deviceName: String = "Test Device",
@@ -50,7 +50,7 @@ class TestDataFactory {
             signalStrength: signalStrength
         )
     }
-    
+
     static func createSessions(count: Int) -> [Session] {
         return (0..<count).map { index in
             createSession(
@@ -60,9 +60,9 @@ class TestDataFactory {
             )
         }
     }
-    
+
     // MARK: - HealthResponse Factory
-    
+
     static func createHealthResponse(
         status: String = "ok",
         uptime: Double = 3600.0,
@@ -74,9 +74,9 @@ class TestDataFactory {
             sessions: sessions
         )
     }
-    
+
     // MARK: - ServerStatus Factory
-    
+
     static func createServerStatus(
         running: Bool = true,
         health: String = "healthy",
@@ -88,9 +88,9 @@ class TestDataFactory {
             port: port
         )
     }
-    
+
     // MARK: - SessionData Factory
-    
+
     static func createSessionData(
         sessionId: String? = nil,
         deviceId: String = "test-device-001"
@@ -100,7 +100,7 @@ class TestDataFactory {
             deviceId: deviceId
         )
     }
-    
+
     static func createSessionInfo(sessions: [SessionData]? = nil) -> SessionInfo {
         let defaultSessions = sessions ?? [
             createSessionData(sessionId: "session-1", deviceId: "device-1"),
@@ -108,9 +108,9 @@ class TestDataFactory {
         ]
         return SessionInfo(sessions: defaultSessions)
     }
-    
+
     // MARK: - ServerError Factory
-    
+
     static func createServerError(type: ServerErrorType = .processSpawnFailed) -> ServerError {
         switch type {
         case .processSpawnFailed:
@@ -141,9 +141,9 @@ class TestDataFactory {
             return .restartTimeout
         }
     }
-    
+
     // MARK: - Settings Configuration Factory
-    
+
     static func createSettingsConfiguration(
         port: Int = 3001,
         requireAuth: Bool = true,
@@ -173,15 +173,15 @@ class TestDataFactory {
             "npmExecutable": ""
         ]
     }
-    
+
     // MARK: - Auth Token Factory
-    
+
     static func createAuthToken() -> String {
         return UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
     }
-    
+
     // MARK: - URL Factory
-    
+
     static func createWebSocketURL(
         host: String = "localhost",
         port: Int = 3001,
@@ -190,14 +190,14 @@ class TestDataFactory {
     ) -> String {
         let scheme = useSSL ? "wss" : "ws"
         var url = "\(scheme)://\(host):\(port)/ws"
-        
+
         if let token = token {
             url += "?token=\(token)"
         }
-        
+
         return url
     }
-    
+
     static func createHTTPURL(
         host: String = "localhost",
         port: Int = 3001,

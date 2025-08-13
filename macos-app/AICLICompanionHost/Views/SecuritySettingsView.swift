@@ -54,7 +54,7 @@ struct SecuritySettingsView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
 
-            Section("Command Controls",
+            Section(header: Text("Command Controls"),
                    footer: Text("Configure which commands Claude can execute and set security restrictions")) {
                 Picker("Security Preset", selection: $securityPreset) {
                     Text("Unrestricted").tag("unrestricted")
@@ -90,7 +90,7 @@ struct SecuritySettingsView: View {
                     }
             }
 
-            Section("Safe Directories",
+            Section(header: Text("Safe Directories"),
                    footer: Text("Claude can only operate within these directories when restrictions are enabled")) {
                 ForEach(safeDirectories, id: \.self) { directory in
                     HStack {
@@ -115,7 +115,7 @@ struct SecuritySettingsView: View {
                     }.disabled(newDirectory.isEmpty)
                 }
             }
-            Section("Blocked Commands", footer: Text("Commands matching these patterns will be blocked")) {
+            Section(header: Text("Blocked Commands"), footer: Text("Commands matching these patterns will be blocked")) {
                 ForEach(blockedCommands, id: \.self) { command in
                     HStack {
                         Image(systemName: "exclamationmark.triangle").foregroundColor(.orange)

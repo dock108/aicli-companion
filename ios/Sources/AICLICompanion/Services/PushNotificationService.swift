@@ -352,6 +352,24 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
             project: project
         )
         
+        // Check if this is a fresh chat (no prior session metadata)
+        let hadExistingSession = MessagePersistenceService.shared.getSessionMetadata(for: projectPath) != nil
+        
+        if !hadExistingSession {
+            print("🆕 Fresh chat detected - posting session establishment notification")
+            await MainActor.run {
+                NotificationCenter.default.post(
+                    name: .freshChatSessionEstablished,
+                    object: nil,
+                    userInfo: [
+                        "sessionId": sessionId,
+                        "projectPath": projectPath,
+                        "project": project
+                    ]
+                )
+            }
+        }
+        
         print("💾 Claude message saved to local storage")
     }
     
@@ -472,6 +490,7 @@ extension Notification.Name {
     static let markProjectRead = Notification.Name("com.aiclicompanion.markProjectRead")
     static let claudeResponseReceived = Notification.Name("com.aiclicompanion.claudeResponseReceived")
     static let openChatSession = Notification.Name("com.aiclicompanion.openChatSession")
+    static let freshChatSessionEstablished = Notification.Name("com.aiclicompanion.freshChatSessionEstablished")
 }
 
 // MARK: - Push Notification Payload Helper

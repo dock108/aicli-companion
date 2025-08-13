@@ -80,15 +80,13 @@ class ChatViewModel: ObservableObject {
         
         // Save to local database immediately (local-first)
         if let sessionId = currentSessionId {
-            // We have a session ID, save normally
+            // Existing conversation - save normally
             persistenceService.appendMessage(userMessage, to: project.path, sessionId: sessionId, project: project)
             print("💾 Saved user message with existing session ID: \(sessionId)")
         } else {
-            // No session ID yet (fresh chat) - use temporary session ID that will be updated
-            let tempSessionId = "temp-\(UUID().uuidString)"
-            persistenceService.appendMessage(userMessage, to: project.path, sessionId: tempSessionId, project: project)
-            print("💾 Saved user message with temporary session ID: \(tempSessionId)")
-            print("📝 Will migrate to real session ID when Claude responds via APNS")
+            // Fresh chat - just show in UI, don't save until Claude responds with session ID
+            // Message already added to messages array above for immediate UI display
+            print("💾 Fresh chat - user message shown in UI, will save when session ID arrives via APNS")
         }
         
         // Sync to CloudKit in background (optional)
@@ -349,6 +347,13 @@ class ChatViewModel: ObservableObject {
             }
             .store(in: &cancellables)
         
+        // Listen for fresh chat session establishment
+        NotificationCenter.default.publisher(for: .freshChatSessionEstablished)
+            .sink { [weak self] notification in
+                self?.handleFreshSessionEstablished(notification)
+            }
+            .store(in: &cancellables)
+        
         // WhatsApp/iMessage pattern: No server polling needed
         // Push notifications deliver new messages automatically
         // App lifecycle events don't need to trigger server requests
@@ -399,10 +404,8 @@ class ChatViewModel: ObservableObject {
                 currentSessionId = sessionId
                 print("🔄 ChatViewModel: First message - setting session ID from Claude via APNS: \(sessionId)")
                 
-                // Migrate any temporary sessions to real session ID
+                // Session management for new conversations
                 if let project = currentProject {
-                    migrateTemporarySessionToReal(project: project, realSessionId: sessionId)
-                    
                     let session = ProjectSession(
                         sessionId: sessionId,
                         projectName: project.name,
@@ -455,6 +458,40 @@ class ChatViewModel: ObservableObject {
             print("❌ Expected project: \(currentProject?.path ?? "nil")")
             print("❌ Received project: \(project.path)")
         }
+    }
+    
+    private func handleFreshSessionEstablished(_ notification: Notification) {
+        print("🆕 === FRESH SESSION ESTABLISHED ===")
+        
+        guard let userInfo = notification.userInfo,
+              let sessionId = userInfo["sessionId"] as? String,
+              let projectPath = userInfo["projectPath"] as? String,
+              let project = userInfo["project"] as? Project else {
+            print("⚠️ ChatViewModel: Invalid fresh session notification payload")
+            return
+        }
+        
+        // Only handle if this is for the current project
+        guard projectPath == currentProject?.path else {
+            print("🔍 Fresh session for different project - ignoring")
+            return
+        }
+        
+        print("🆕 Fresh session established for current project: \(project.name)")
+        print("🆕 Session ID: \(sessionId)")
+        
+        // Save any pending user messages that were shown in UI but not persisted
+        let userMessagesToSave = messages.filter { $0.sender == .user }
+        
+        for message in userMessagesToSave {
+            persistenceService.appendMessage(message, to: projectPath, sessionId: sessionId, project: project)
+            print("💾 Saved pending user message: \(String(message.content.prefix(50)))...")
+        }
+        
+        // Update current session ID
+        currentSessionId = sessionId
+        
+        print("✅ Fresh chat session setup complete - \(userMessagesToSave.count) user messages saved")
     }
     
     private func handleCommandResponse(_ message: WebSocketMessage) {
@@ -925,57 +962,6 @@ class ChatViewModel: ObservableObject {
         }
     }
     
-    // MARK: - Session Migration for Fresh Chats
-    
-    private func migrateTemporarySessionToReal(project: Project, realSessionId: String) {
-        print("🔄 ChatViewModel: Migrating temporary session to real session ID: \(realSessionId)")
-        
-        // Find temporary session files for this project
-        let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let sessionsDirectory = documentsDirectory.appendingPathComponent("AICLICompanionSessions")
-        let projectDir = sessionsDirectory.appendingPathComponent(sanitizeFilename(project.path))
-        
-        do {
-            let files = try FileManager.default.contentsOfDirectory(at: projectDir, includingPropertiesForKeys: nil)
-            let tempFiles = files.filter { $0.lastPathComponent.hasPrefix("temp-") && $0.lastPathComponent.hasSuffix("_messages.json") }
-            
-            for tempFile in tempFiles {
-                print("🔄 Found temporary session file: \(tempFile.lastPathComponent)")
-                
-                // Load temporary messages
-                if let data = try? Data(contentsOf: tempFile) {
-                    let decoder = JSONDecoder()
-                    decoder.dateDecodingStrategy = .iso8601
-                    
-                    if let persistedMessages = try? decoder.decode([PersistedMessage].self, from: data) {
-                        let messages = persistedMessages.map { $0.toMessage() }
-                        print("🔄 Migrating \(messages.count) messages from temporary session")
-                        
-                        // Save messages with real session ID
-                        persistenceService.saveMessages(
-                            for: project.path,
-                            messages: messages,
-                            sessionId: realSessionId,
-                            project: project
-                        )
-                        
-                        // Delete temporary file
-                        try? FileManager.default.removeItem(at: tempFile)
-                        print("✅ Migrated temporary session to real session ID: \(realSessionId)")
-                    }
-                }
-            }
-        } catch {
-            print("⚠️ Error during session migration: \(error)")
-        }
-    }
-    
-    private func sanitizeFilename(_ filename: String) -> String {
-        return filename
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: ":", with: "_")
-            .replacingOccurrences(of: " ", with: "_")
-    }
     
     // MARK: - WhatsApp/iMessage Pattern: Simple Local Operations
     // No complex merging needed - messages are appended via APNS or user actions

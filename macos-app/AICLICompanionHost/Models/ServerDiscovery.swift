@@ -11,6 +11,12 @@ extension ServerManager {
     // MARK: - Server Discovery
 
     func findServerDirectory() throws -> String {
+        // Check for custom server directory first
+        if !SettingsManager.shared.serverDirectory.isEmpty,
+           FileManager.default.fileExists(atPath: SettingsManager.shared.serverDirectory) {
+            return SettingsManager.shared.serverDirectory
+        }
+        
         guard let resourcePath = Bundle.main.resourcePath else {
             addLog(.error, "Could not find app resources")
             throw ServerError.processSpawnFailed

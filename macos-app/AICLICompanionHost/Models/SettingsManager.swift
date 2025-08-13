@@ -67,6 +67,7 @@ class SettingsManager: ObservableObject {
     func resetToDefaults() {
         serverPort = 3001
         autoStartServer = false
+        autoRestartOnCrash = true
         launchAtLogin = false
         showDockIcon = false
         enableNotifications = true

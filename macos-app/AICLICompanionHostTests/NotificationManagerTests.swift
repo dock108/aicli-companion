@@ -269,17 +269,19 @@ final class NotificationManagerTests: XCTestCase {
     // MARK: - Notification Equality Tests
     
     func testNotificationEquality() throws {
+        let sameTime = Date()
+        
         let notification1 = MockNotificationManager.MockNotification(
             title: "Same",
             body: "Same Body",
-            timestamp: Date(),
+            timestamp: sameTime,
             sound: true
         )
         
         let notification2 = MockNotificationManager.MockNotification(
             title: "Same",
             body: "Same Body",
-            timestamp: Date(),
+            timestamp: sameTime,
             sound: true
         )
         
@@ -289,7 +291,7 @@ final class NotificationManagerTests: XCTestCase {
         let notification3 = MockNotificationManager.MockNotification(
             title: "Different",
             body: "Same Body",
-            timestamp: Date(),
+            timestamp: sameTime,
             sound: true
         )
         

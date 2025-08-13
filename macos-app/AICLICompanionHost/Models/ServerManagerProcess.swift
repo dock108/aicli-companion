@@ -89,7 +89,7 @@ extension ServerManager {
     }
 
     func stopServerProcess() async {
-        guard isRunning, let process = serverProcess else {
+        guard let process = serverProcess else {
             return
         }
 

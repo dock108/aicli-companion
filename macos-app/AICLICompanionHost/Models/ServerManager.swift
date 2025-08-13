@@ -15,7 +15,11 @@ class ServerManager: ObservableObject {
 
     // MARK: - Published Properties
     @Published var isRunning = false
-    @Published var port: Int = 3001
+    @Published var port: Int {
+        didSet {
+            objectWillChange.send()
+        }
+    }
     @Published var localIP = "127.0.0.1"
     @Published var authToken: String?
     @Published var activeSessions: [Session] = []
@@ -88,6 +92,7 @@ class ServerManager: ObservableObject {
 
     // MARK: - Initialization
     private init() {
+        port = SettingsManager.shared.serverPort
         setupNetworkMonitoring()
         loadSettings()
     }

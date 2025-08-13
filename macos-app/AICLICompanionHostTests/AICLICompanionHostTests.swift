@@ -16,7 +16,7 @@ final class AICLICompanionHostTests: XCTestCase {
         
         XCTAssertNotNil(manager)
         XCTAssertFalse(manager.isRunning)
-        XCTAssertEqual(manager.port, 3001)
+        XCTAssertEqual(manager.port, SettingsManager.shared.serverPort)
         // localIP is set dynamically, just check it's not empty
         XCTAssertFalse(manager.localIP.isEmpty)
     }

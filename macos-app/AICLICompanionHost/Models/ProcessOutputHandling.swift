@@ -77,8 +77,15 @@ extension ServerManager {
     }
 
     private func processTunnelURLFromLine(_ line: String) {
-        let hasTunnelPattern = line.contains("https://") && (line.contains("ngrok") || line.contains("Tunnel"))
-        let hasExplicitPattern = line.contains("Public URL:") || line.contains("Forwarding")
+        let hasTunnelPattern = line.contains("https://") && (
+            line.contains("ngrok") || 
+            line.contains("Tunnel") || 
+            line.contains("trycloudflare.com")
+        )
+        let hasExplicitPattern = line.contains("Public URL:") || 
+                                line.contains("Forwarding") || 
+                                line.contains("Visit it at:") ||
+                                line.contains("Access your tunnel at")
 
         if hasTunnelPattern || hasExplicitPattern {
             if let url = extractTunnelURL(from: line) {
@@ -97,9 +104,10 @@ extension ServerManager {
     }
 
     private func logServerOutputLine(_ line: String) {
-        if line.contains("error") || line.contains("Error") {
+        let lowercaseLine = line.lowercased()
+        if lowercaseLine.contains("error") || lowercaseLine.contains("fatal") || lowercaseLine.contains(" err!") {
             addLog(.error, line)
-        } else if line.contains("warning") || line.contains("Warning") {
+        } else if lowercaseLine.contains("warning") || lowercaseLine.contains("warn") {
             addLog(.warning, line)
         } else {
             addLog(.info, line)
@@ -132,9 +140,17 @@ extension ServerManager {
 
     private func extractTunnelURL(from line: String) -> String? {
         // Look for ngrok URL pattern
-        let pattern = #"https://[a-zA-Z0-9-]+\.ngrok[a-zA-Z0-9-]*\.[a-zA-Z]{2,}"#
-
-        if let regex = try? NSRegularExpression(pattern: pattern),
+        let ngrokPattern = #"https://[a-zA-Z0-9-]+\.ngrok[a-zA-Z0-9-]*\.[a-zA-Z]{2,}"#
+        
+        if let regex = try? NSRegularExpression(pattern: ngrokPattern),
+           let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) {
+            return String(line[Range(match.range, in: line)!])
+        }
+        
+        // Look for Cloudflare URL pattern
+        let cloudflarePattern = #"https://[a-zA-Z0-9-]+\.trycloudflare\.com"#
+        
+        if let regex = try? NSRegularExpression(pattern: cloudflarePattern),
            let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) {
             return String(line[Range(match.range, in: line)!])
         }

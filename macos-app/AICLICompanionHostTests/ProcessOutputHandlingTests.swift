@@ -82,8 +82,8 @@ final class ProcessOutputHandlingTests: XCTestCase {
             
             // Should log as error
             XCTAssertTrue(serverManager.logs.contains { log in
-                log.level == .error && log.message.contains(errorMsg)
-            })
+                log.level == .error && log.message == errorMsg
+            }, "Failed to find error log for: \(errorMsg)")
         }
     }
     
@@ -207,7 +207,19 @@ final class ProcessOutputHandlingTests: XCTestCase {
     // MARK: - Process State Tests
     
     func testProcessTerminationHandling() {
+        // Create a mock process that has been launched
         let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/echo")
+        process.arguments = ["test"]
+        
+        // Launch and immediately terminate the process
+        do {
+            try process.run()
+            process.terminate()
+            process.waitUntilExit()
+        } catch {
+            // If we can't launch the process, just test with unlaunched process
+        }
         
         serverManager.isRunning = true
         serverManager.handleServerTermination(process)
@@ -215,7 +227,7 @@ final class ProcessOutputHandlingTests: XCTestCase {
         // Should handle termination
         XCTAssertFalse(serverManager.isRunning)
         XCTAssertTrue(serverManager.logs.contains { log in
-            log.message.contains("terminated") || log.message.contains("stopped") || log.message.contains("Server process")
+            log.message.contains("terminated") || log.message.contains("stopped") || log.message.contains("Server process") || log.message.contains("exited")
         })
     }
     

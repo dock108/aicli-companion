@@ -32,34 +32,34 @@ class SettingsViewModel: ObservableObject {
     @Published var serverCommand: String
     @Published var nodeExecutable: String
     @Published var npmExecutable: String
-    
+
     @Published var needsRestart: Bool = false
     @Published var hasUnsavedChanges: Bool = false
     @Published var isValidating: Bool = false
     @Published var validationErrors: [String] = []
-    
+
     // MARK: - Properties
     private let settingsManager = SettingsManager.shared
     private let serverManager = ServerManager.shared
     private var cancellables = Set<AnyCancellable>()
     private var originalSettings: SettingsSnapshot?
-    
+
     // MARK: - Computed Properties
     var canSave: Bool {
         hasUnsavedChanges && validationErrors.isEmpty
     }
-    
+
     var isServerRunning: Bool {
         serverManager.isRunning
     }
-    
+
     var restartMessage: String {
         if needsRestart && isServerRunning {
             return "Server restart required for changes to take effect"
         }
         return ""
     }
-    
+
     // MARK: - Initialization
     init() {
         // Initialize from SettingsManager
@@ -83,11 +83,11 @@ class SettingsViewModel: ObservableObject {
         self.serverCommand = settingsManager.serverCommand
         self.nodeExecutable = settingsManager.nodeExecutable
         self.npmExecutable = settingsManager.npmExecutable
-        
+
         captureOriginalSettings()
         setupBindings()
     }
-    
+
     // MARK: - Setup
     private func setupBindings() {
         // Watch for changes
@@ -98,7 +98,7 @@ class SettingsViewModel: ObservableObject {
                 self?.validateSettings()
             }
             .store(in: &cancellables)
-        
+
         // Monitor server-critical settings for restart requirement
         $serverPort
             .combineLatest($requireAuthentication, $enableTunnel, $tunnelProvider)
@@ -107,13 +107,14 @@ class SettingsViewModel: ObservableObject {
             }
             .store(in: &cancellables)
     }
-    
+
     // MARK: - Public Methods
     func applySettings() async throws {
         guard canSave else {
-            throw NSError(domain: "SettingsViewModel", code: 1, userInfo: [NSLocalizedDescriptionKey: "Settings validation failed"])
+            throw NSError(domain: "SettingsViewModel", code: 1,
+                         userInfo: [NSLocalizedDescriptionKey: "Settings validation failed"])
         }
-        
+
         // Apply settings to SettingsManager
         settingsManager.serverPort = serverPort
         settingsManager.autoStartServer = autoStartServer
@@ -135,23 +136,23 @@ class SettingsViewModel: ObservableObject {
         settingsManager.serverCommand = serverCommand
         settingsManager.nodeExecutable = nodeExecutable
         settingsManager.npmExecutable = npmExecutable
-        
+
         // Mark configuration as applied
         settingsManager.markConfigurationApplied()
-        
+
         // Update tracking
         captureOriginalSettings()
         hasUnsavedChanges = false
-        
+
         // Restart server if needed
         if needsRestart && isServerRunning {
             await restartServer()
         }
     }
-    
+
     func resetToDefaults() {
         settingsManager.resetToDefaults()
-        
+
         // Update view model properties
         serverPort = settingsManager.serverPort
         autoStartServer = settingsManager.autoStartServer
@@ -173,15 +174,15 @@ class SettingsViewModel: ObservableObject {
         serverCommand = settingsManager.serverCommand
         nodeExecutable = ""
         npmExecutable = ""
-        
+
         captureOriginalSettings()
         hasUnsavedChanges = false
         validationErrors.removeAll()
     }
-    
+
     func revertChanges() {
         guard let original = originalSettings else { return }
-        
+
         serverPort = original.serverPort
         autoStartServer = original.autoStartServer
         autoRestartOnCrash = original.autoRestartOnCrash
@@ -202,40 +203,40 @@ class SettingsViewModel: ObservableObject {
         serverCommand = original.serverCommand
         nodeExecutable = original.nodeExecutable
         npmExecutable = original.npmExecutable
-        
+
         hasUnsavedChanges = false
         validationErrors.removeAll()
     }
-    
+
     func exportSettings() -> Data? {
         return settingsManager.exportSettings()
     }
-    
+
     func importSettings(from data: Data) throws {
         try settingsManager.importSettings(from: data)
-        
+
         // Update view model
         serverPort = settingsManager.serverPort
         autoStartServer = settingsManager.autoStartServer
         // ... update all properties
-        
+
         captureOriginalSettings()
         hasUnsavedChanges = false
     }
-    
+
     func validateNgrokToken() async -> Bool {
         guard !ngrokAuthToken.isEmpty else { return true }
-        
+
         isValidating = true
         defer { isValidating = false }
-        
+
         // Basic validation - token should be alphanumeric with some special chars
         let tokenRegex = "^[a-zA-Z0-9_-]{20,}$"
         let predicate = NSPredicate(format: "SELF MATCHES %@", tokenRegex)
-        
+
         return predicate.evaluate(with: ngrokAuthToken)
     }
-    
+
     // MARK: - Private Methods
     private func captureOriginalSettings() {
         originalSettings = SettingsSnapshot(
@@ -261,14 +262,14 @@ class SettingsViewModel: ObservableObject {
             npmExecutable: npmExecutable
         )
     }
-    
+
     private func checkForChanges() {
         guard let original = originalSettings else {
             hasUnsavedChanges = false
             return
         }
-        
-        hasUnsavedChanges = 
+
+        hasUnsavedChanges =
             serverPort != original.serverPort ||
             autoStartServer != original.autoStartServer ||
             autoRestartOnCrash != original.autoRestartOnCrash ||
@@ -290,13 +291,13 @@ class SettingsViewModel: ObservableObject {
             nodeExecutable != original.nodeExecutable ||
             npmExecutable != original.npmExecutable
     }
-    
+
     private func checkNeedsRestart() {
         guard let original = originalSettings else {
             needsRestart = false
             return
         }
-        
+
         needsRestart = isServerRunning && (
             serverPort != original.serverPort ||
             requireAuthentication != original.requireAuthentication ||
@@ -305,25 +306,25 @@ class SettingsViewModel: ObservableObject {
             ngrokAuthToken != original.ngrokAuthToken
         )
     }
-    
+
     private func validateSettings() {
         validationErrors.removeAll()
-        
+
         // Validate port
         if serverPort < 1024 || serverPort > 65535 {
             validationErrors.append("Port must be between 1024 and 65535")
         }
-        
+
         // Validate max log entries
         if maxLogEntries < 100 || maxLogEntries > 10000 {
             validationErrors.append("Max log entries must be between 100 and 10000")
         }
-        
+
         // Validate ngrok token if tunnel enabled
         if enableTunnel && tunnelProvider == "ngrok" && ngrokAuthToken.isEmpty {
             validationErrors.append("Ngrok auth token is required when using ngrok tunnel")
         }
-        
+
         // Validate project directory
         if !defaultProjectDirectory.isEmpty {
             let fileManager = FileManager.default
@@ -331,13 +332,13 @@ class SettingsViewModel: ObservableObject {
                 validationErrors.append("Default project directory does not exist")
             }
         }
-        
+
         // Validate server command
         if serverCommand.isEmpty {
             validationErrors.append("Server command cannot be empty")
         }
     }
-    
+
     private func restartServer() async {
         do {
             try await serverManager.restartServerWithCurrentConfig()

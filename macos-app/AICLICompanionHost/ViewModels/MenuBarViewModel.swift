@@ -31,12 +31,12 @@ class MenuBarViewModel: ObservableObject {
     @Published var localURL: String = ""
     @Published var showingQRCode: Bool = false
     @Published var recentLogs: [LogEntry] = []
-    
+
     // MARK: - Properties
     private let serverManager = ServerManager.shared
     private let settingsManager = SettingsManager.shared
     private var cancellables = Set<AnyCancellable>()
-    
+
     // MARK: - Computed Properties
     var statusIcon: String {
         switch serverStatus {
@@ -50,7 +50,7 @@ class MenuBarViewModel: ObservableObject {
             return "circle"
         }
     }
-    
+
     var statusColor: Color {
         switch serverStatus {
         case .running:
@@ -61,7 +61,7 @@ class MenuBarViewModel: ObservableObject {
             return .gray
         }
     }
-    
+
     var statusText: String {
         switch serverStatus {
         case .running:
@@ -74,11 +74,11 @@ class MenuBarViewModel: ObservableObject {
             return "Server Stopped"
         }
     }
-    
+
     var canToggleServer: Bool {
         !isProcessing
     }
-    
+
     var toggleServerTitle: String {
         switch serverStatus {
         case .running:
@@ -91,18 +91,18 @@ class MenuBarViewModel: ObservableObject {
             return "Stopping..."
         }
     }
-    
+
     var hasConnection: Bool {
         !connectionString.isEmpty && serverStatus == .running
     }
-    
+
     // MARK: - Initialization
     init() {
         setupBindings()
         setupQuickActions()
         updateStatus()
     }
-    
+
     // MARK: - Setup
     private func setupBindings() {
         // Bind to server manager state
@@ -113,99 +113,123 @@ class MenuBarViewModel: ObservableObject {
                 self?.updateConnectionString()
             }
             .store(in: &cancellables)
-        
+
         serverManager.$isProcessing
             .receive(on: DispatchQueue.main)
             .assign(to: &$isProcessing)
-        
+
         serverManager.$serverHealth
             .receive(on: DispatchQueue.main)
             .assign(to: &$serverHealth)
-        
+
         // connectionString is computed, not @Published - calculate from other properties
         updateConnectionString()
-        
+
         serverManager.$publicURL
             .receive(on: DispatchQueue.main)
             .assign(to: &$publicURL)
-        
+
         serverManager.$activeSessions
             .receive(on: DispatchQueue.main)
             .map { $0.count }
             .assign(to: &$sessionCount)
-        
+
         // Get recent logs
         serverManager.$logs
             .receive(on: DispatchQueue.main)
             .map { Array($0.suffix(5)) }
             .assign(to: &$recentLogs)
     }
-    
+
     private func setupQuickActions() {
         quickActions = [
-            QuickAction(
-                id: "toggle",
-                title: "Toggle Server",
-                icon: "power",
-                action: { [weak self] in
-                    Task {
-                        await self?.toggleServer()
-                    }
-                }
-            ),
-            QuickAction(
-                id: "copy",
-                title: "Copy Connection",
-                icon: "doc.on.doc",
-                isEnabled: { [weak self] in
-                    self?.hasConnection ?? false
-                },
-                action: { [weak self] in
-                    self?.copyConnectionString()
-                }
-            ),
-            QuickAction(
-                id: "qr",
-                title: "Show QR Code",
-                icon: "qrcode",
-                isEnabled: { [weak self] in
-                    self?.hasConnection ?? false
-                },
-                action: { [weak self] in
-                    self?.showQRCode()
-                }
-            ),
-            QuickAction(
-                id: "activity",
-                title: "Activity Monitor",
-                icon: "chart.line.uptrend.xyaxis",
-                action: { [weak self] in
-                    self?.openActivityMonitor()
-                }
-            ),
-            QuickAction(
-                id: "settings",
-                title: "Settings",
-                icon: "gear",
-                action: { [weak self] in
-                    self?.openSettings()
-                }
-            ),
-            QuickAction(
-                id: "logs",
-                title: "View Logs",
-                icon: "doc.text",
-                action: { [weak self] in
-                    self?.openLogs()
-                }
-            )
+            createToggleServerAction(),
+            createCopyConnectionAction(),
+            createQRCodeAction(),
+            createActivityMonitorAction(),
+            createSettingsAction(),
+            createLogsAction()
         ]
     }
-    
+
+    private func createToggleServerAction() -> QuickAction {
+        QuickAction(
+            id: "toggle",
+            title: "Toggle Server",
+            icon: "power",
+            action: { [weak self] in
+                Task {
+                    await self?.toggleServer()
+                }
+            }
+        )
+    }
+
+    private func createCopyConnectionAction() -> QuickAction {
+        QuickAction(
+            id: "copy",
+            title: "Copy Connection",
+            icon: "doc.on.doc",
+            isEnabled: { [weak self] in
+                self?.hasConnection ?? false
+            },
+            action: { [weak self] in
+                self?.copyConnectionString()
+            }
+        )
+    }
+
+    private func createQRCodeAction() -> QuickAction {
+        QuickAction(
+            id: "qr",
+            title: "Show QR Code",
+            icon: "qrcode",
+            isEnabled: { [weak self] in
+                self?.hasConnection ?? false
+            },
+            action: { [weak self] in
+                self?.showQRCode()
+            }
+        )
+    }
+
+    private func createActivityMonitorAction() -> QuickAction {
+        QuickAction(
+            id: "activity",
+            title: "Activity Monitor",
+            icon: "chart.line.uptrend.xyaxis",
+            action: { [weak self] in
+                self?.openActivityMonitor()
+            }
+        )
+    }
+
+    private func createSettingsAction() -> QuickAction {
+        QuickAction(
+            id: "settings",
+            title: "Settings",
+            icon: "gear",
+            action: { [weak self] in
+                self?.openSettings()
+            }
+        )
+    }
+
+    private func createLogsAction() -> QuickAction {
+        QuickAction(
+            id: "logs",
+            title: "View Logs",
+            icon: "doc.text",
+            action: { [weak self] in
+                self?.openLogs()
+            }
+        )
+    }
+
     // MARK: - Public Methods
     func toggleServer() async {
         guard canToggleServer else { return }
-        
+
         if serverManager.isRunning {
             serverStatus = .stopping
             await serverManager.stopServer()
@@ -222,14 +246,14 @@ class MenuBarViewModel: ObservableObject {
             }
         }
     }
-    
+
     func copyConnectionString() {
         guard !connectionString.isEmpty else { return }
-        
+
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(connectionString, forType: .string)
-        
+
         // Could show notification
         if settingsManager.enableNotifications {
             NotificationManager.shared.showNotification(
@@ -238,11 +262,11 @@ class MenuBarViewModel: ObservableObject {
             )
         }
     }
-    
+
     func showQRCode() {
         showingQRCode = true
     }
-    
+
     func openSettings() {
         // Check if running in test environment
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
@@ -250,12 +274,12 @@ class MenuBarViewModel: ObservableObject {
                 NSWorkspace.shared.open(url)
             }
         }
-        
+
         // Alternative: Open settings window
         // NSApp.sendAction(#selector(AppDelegate.showSettings), to: nil, from: nil)
         print("Open settings")
     }
-    
+
     func openActivityMonitor() {
         // Check if running in test environment
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
@@ -263,12 +287,12 @@ class MenuBarViewModel: ObservableObject {
                 NSWorkspace.shared.open(url)
             }
         }
-        
+
         // Alternative: Open activity window
         // NSApp.sendAction(#selector(AppDelegate.showActivityMonitor), to: nil, from: nil)
         print("Open activity monitor")
     }
-    
+
     func openLogs() {
         // Check if running in test environment
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
@@ -276,18 +300,18 @@ class MenuBarViewModel: ObservableObject {
                 NSWorkspace.shared.open(url)
             }
         }
-        
+
         // Alternative: Open logs window
         // NSApp.sendAction(#selector(AppDelegate.showLogs), to: nil, from: nil)
         print("Open logs")
     }
-    
+
     func restartServer() async {
         guard serverStatus == .running else { return }
-        
+
         serverStatus = .stopping
         await serverManager.stopServer()
-        
+
         serverStatus = .starting
         do {
             try await serverManager.startServer()
@@ -297,13 +321,13 @@ class MenuBarViewModel: ObservableObject {
             print("Failed to restart server: \(error)")
         }
     }
-    
+
     func refreshStatus() {
         Task {
             await serverManager.refreshStatus()
         }
     }
-    
+
     func quitApp() {
         Task {
             if serverManager.isRunning {
@@ -312,13 +336,13 @@ class MenuBarViewModel: ObservableObject {
             NSApplication.shared.terminate(nil)
         }
     }
-    
+
     // MARK: - Private Methods
     private func updateStatus() {
         serverStatus = serverManager.isRunning ? .running : .stopped
         updateConnectionString()
     }
-    
+
     private func updateConnectionString() {
         if serverManager.isRunning {
             connectionString = serverManager.connectionString

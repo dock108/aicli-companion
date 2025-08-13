@@ -1,0 +1,8 @@
+# SwiftLint configuration for AICLICompanionHost
+
+# Inherit from parent config
+parent_config: ../.swiftlint.yml
+
+# Additional rules to disable for this directory
+disabled_rules:
+  - type_body_length

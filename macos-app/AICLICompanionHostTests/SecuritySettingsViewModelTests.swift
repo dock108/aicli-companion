@@ -388,7 +388,7 @@ final class SecuritySettingsViewModelTests: XCTestCase {
     func testValidationState() {
         XCTAssertFalse(viewModel.isValidatingCommand)
 
-        let _ = viewModel.validateCommand("test_command")
+        _ = viewModel.validateCommand("test_command")
 
         // After validation completes, should be false again
         XCTAssertFalse(viewModel.isValidatingCommand)

@@ -80,7 +80,15 @@ class ChatViewModel: ObservableObject {
         
         // Save to local database immediately (local-first)
         if let sessionId = currentSessionId {
+            // We have a session ID, save normally
             persistenceService.appendMessage(userMessage, to: project.path, sessionId: sessionId, project: project)
+            print("💾 Saved user message with existing session ID: \(sessionId)")
+        } else {
+            // No session ID yet (fresh chat) - use temporary session ID that will be updated
+            let tempSessionId = "temp-\(UUID().uuidString)"
+            persistenceService.appendMessage(userMessage, to: project.path, sessionId: tempSessionId, project: project)
+            print("💾 Saved user message with temporary session ID: \(tempSessionId)")
+            print("📝 Will migrate to real session ID when Claude responds via APNS")
         }
         
         // Sync to CloudKit in background (optional)
@@ -391,8 +399,10 @@ class ChatViewModel: ObservableObject {
                 currentSessionId = sessionId
                 print("🔄 ChatViewModel: First message - setting session ID from Claude via APNS: \(sessionId)")
                 
-                // Also update any active session tracking
+                // Migrate any temporary sessions to real session ID
                 if let project = currentProject {
+                    migrateTemporarySessionToReal(project: project, realSessionId: sessionId)
+                    
                     let session = ProjectSession(
                         sessionId: sessionId,
                         projectName: project.name,
@@ -913,6 +923,58 @@ class ChatViewModel: ObservableObject {
         default:
             return "Working on it..."
         }
+    }
+    
+    // MARK: - Session Migration for Fresh Chats
+    
+    private func migrateTemporarySessionToReal(project: Project, realSessionId: String) {
+        print("🔄 ChatViewModel: Migrating temporary session to real session ID: \(realSessionId)")
+        
+        // Find temporary session files for this project
+        let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let sessionsDirectory = documentsDirectory.appendingPathComponent("AICLICompanionSessions")
+        let projectDir = sessionsDirectory.appendingPathComponent(sanitizeFilename(project.path))
+        
+        do {
+            let files = try FileManager.default.contentsOfDirectory(at: projectDir, includingPropertiesForKeys: nil)
+            let tempFiles = files.filter { $0.lastPathComponent.hasPrefix("temp-") && $0.lastPathComponent.hasSuffix("_messages.json") }
+            
+            for tempFile in tempFiles {
+                print("🔄 Found temporary session file: \(tempFile.lastPathComponent)")
+                
+                // Load temporary messages
+                if let data = try? Data(contentsOf: tempFile) {
+                    let decoder = JSONDecoder()
+                    decoder.dateDecodingStrategy = .iso8601
+                    
+                    if let persistedMessages = try? decoder.decode([PersistedMessage].self, from: data) {
+                        let messages = persistedMessages.map { $0.toMessage() }
+                        print("🔄 Migrating \(messages.count) messages from temporary session")
+                        
+                        // Save messages with real session ID
+                        persistenceService.saveMessages(
+                            for: project.path,
+                            messages: messages,
+                            sessionId: realSessionId,
+                            project: project
+                        )
+                        
+                        // Delete temporary file
+                        try? FileManager.default.removeItem(at: tempFile)
+                        print("✅ Migrated temporary session to real session ID: \(realSessionId)")
+                    }
+                }
+            }
+        } catch {
+            print("⚠️ Error during session migration: \(error)")
+        }
+    }
+    
+    private func sanitizeFilename(_ filename: String) -> String {
+        return filename
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: ":", with: "_")
+            .replacingOccurrences(of: " ", with: "_")
     }
     
     // MARK: - WhatsApp/iMessage Pattern: Simple Local Operations

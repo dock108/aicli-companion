@@ -98,12 +98,9 @@ struct ChatView: View {
                 )
                 #if os(iOS)
                 .refreshable {
-                    // TODO 1.3: Pull-to-refresh to check for missing messages
+                    // Simple server poll on pull-to-refresh (best practices)
                     print("🔄 User triggered pull-to-refresh")
-                    viewModel.checkForMissingMessages()
-                    
-                    // Also check for recent messages from persistence
-                    viewModel.checkForRecentMissingMessages(hours: 1)
+                    viewModel.pollServerForMessages()
                     
                     // Small delay for visual feedback
                     try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
@@ -208,16 +205,16 @@ struct ChatView: View {
                     
                     print("🔷 ChatView: Loaded \(self.viewModel.messages.count) messages for restored session")
                     
-                    // Check for missing messages that might have been saved while app was inactive
-                    self.viewModel.checkForMissingMessages()
+                    // Poll server for any new messages (best practices approach)
+                    self.viewModel.pollServerForMessages()
                     
                     // Sync messages from CloudKit
                     Task {
                         await self.viewModel.syncMessages(for: project)
                     }
                     
-                    // Check for any new messages that may have been saved while in a different project
-                    self.refreshMessagesAfterProjectSwitch()
+                    // Simple server poll for any new messages
+                    self.viewModel.pollServerForMessages()
                     
                 case .failure(let error):
                     // No existing session, user can start one when ready
@@ -488,90 +485,16 @@ struct ChatView: View {
         }
     }
     
-    // MARK: - Message Refresh
-    private func refreshMessagesAfterProjectSwitch() {
-        guard let project = selectedProject,
-              let sessionId = viewModel.currentSessionId else {
-            print("🔄 No active session to refresh after project switch")
-            return
-        }
-        
-        print("🔄 ChatView: Checking for new messages after switching to project '\(project.name)'")
-        print("🔄 Current state: \(viewModel.messages.count) messages in memory")
-        
-        // Reload messages from persistence to get any that were saved while in different project
-        let savedMessages = MessagePersistenceService.shared.loadMessages(for: project.path, sessionId: sessionId)
-        print("🔄 Found \(savedMessages.count) messages in persistence")
-        
-        // Use the deduplication method to safely merge messages
-        let newMessageCount = viewModel.mergePersistedMessages(savedMessages)
-        
-        if newMessageCount > 0 {
-            print("✅ ChatView: Successfully merged \(newMessageCount) new messages after project switch")
-        } else {
-            print("🔄 No new messages found after switching to project '\(project.name)'")
-        }
-    }
     
     private func refreshMessagesOnActivation() {
-        guard let project = selectedProject,
-              let sessionId = viewModel.currentSessionId else {
-            print("🔄 No active session to refresh")
-            return
-        }
-        
-        print("🔄 ChatView: Refreshing messages after returning from background")
-        print("🔄 Current state: \(viewModel.messages.count) messages in memory")
-        
-        // Reload messages from persistence to get any that were saved while backgrounded
-        let savedMessages = MessagePersistenceService.shared.loadMessages(for: project.path, sessionId: sessionId)
-        print("🔄 Found \(savedMessages.count) messages in persistence")
-        
-        // Use the new deduplication method to safely merge messages
-        let newMessageCount = viewModel.mergePersistedMessages(savedMessages)
+        // Simple server poll when app becomes active (best practices)
+        print("🔄 ChatView: App became active - polling server")
+        viewModel.pollServerForMessages()
         
         // Also sync from CloudKit when becoming active
-        Task {
-            await viewModel.syncMessages(for: project)
-        }
-        
-        if newMessageCount > 0 {
-            print("✅ ChatView: Successfully merged \(newMessageCount) new messages after returning from background")
-        } else {
-            print("📝 ChatView: No new messages found in persistence")
-            
-            // No new messages found locally - check server for completed long-running responses
-            print("🔄 Polling server for any completed responses...")
-            pollForCompletedResponses()
-        }
-    }
-    
-    private func pollForCompletedResponses() {
-        guard let project = selectedProject,
-              let sessionId = viewModel.currentSessionId else {
-            return
-        }
-        
-        print("🔍 Polling server for completed responses for session: \(sessionId)")
-        
-        // Use the HTTP service to make a lightweight status check
-        HTTPAICLIService.shared.checkSessionStatus(sessionId: sessionId) { result in
-            Task { @MainActor in
-                switch result {
-                case .success(let hasNewMessages):
-                    if hasNewMessages {
-                        print("✅ Server indicates new messages available - refreshing")
-                        // Reload messages from server/persistence
-                        let newMessages = MessagePersistenceService.shared.loadMessages(for: project.path, sessionId: sessionId)
-                        if newMessages.count > self.viewModel.messages.count {
-                            self.viewModel.messages = newMessages
-                        }
-                    } else {
-                        print("ℹ️ No new messages on server")
-                    }
-                case .failure(let error):
-                    print("⚠️ Failed to poll server for completed responses: \(error)")
-                }
+        if let project = selectedProject {
+            Task {
+                await viewModel.syncMessages(for: project)
             }
         }
     }

@@ -356,21 +356,21 @@ class ChatViewModel: ObservableObject {
             }
             .store(in: &cancellables)
         
-        // TODO 1.2: Listen for app state changes to recover missing messages
+        // Simple server polling when app becomes active (best practices approach)
         #if os(iOS)
         // Listen for app becoming active
         NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
             .sink { [weak self] _ in
-                print("📱 App became active - checking for missing messages")
-                self?.checkForMissingMessages()
+                print("📱 App became active - polling server for messages")
+                self?.pollServerForMessages()
             }
             .store(in: &cancellables)
         
         // Listen for app entering foreground
         NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)
             .sink { [weak self] _ in
-                print("📱 App will enter foreground - checking for missing messages")
-                self?.checkForMissingMessages()
+                print("📱 App entering foreground - polling server for messages")
+                self?.pollServerForMessages()
             }
             .store(in: &cancellables)
         #endif
@@ -408,37 +408,12 @@ class ChatViewModel: ObservableObject {
         if currentSessionId == sessionId || (currentSessionId == nil && project.path == currentProject?.path) {
             print("🎯 === PROCESSING CLAUDE RESPONSE ===")
             
-            // Check if we already have this message to prevent duplicates (TODO 2.3: Improved logic)
+            // Simple duplicate check using message IDs only (best practices)
             let existingMessageIds = Set(messages.map { $0.id })
-            let messageContent = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
             
-            // First check: ID-based deduplication (fastest)
             if existingMessageIds.contains(message.id) {
-                print("🔸 DUPLICATE MESSAGE DETECTED (ID match): \(message.id) - SKIPPING")
+                print("🔸 Duplicate message detected (ID: \(message.id)) - skipping")
                 return
-            }
-            
-            // Second check: Content + timestamp window deduplication
-            let duplicateWindow: TimeInterval = 5.0 // 5 seconds
-            let messageTimestamp = message.timestamp ?? Date()
-            
-            for existingMessage in messages {
-                let existingContent = existingMessage.content.trimmingCharacters(in: .whitespacesAndNewlines)
-                let existingTimestamp = existingMessage.timestamp ?? Date.distantPast
-                
-                // Check if content matches AND timestamps are within window
-                if existingContent == messageContent {
-                    let timeDifference = abs(messageTimestamp.timeIntervalSince(existingTimestamp))
-                    
-                    if timeDifference < duplicateWindow {
-                        print("🔸 DUPLICATE MESSAGE DETECTED (content + time match)")
-                        print("   Time difference: \(timeDifference)s")
-                        print("   Content: \(messageContent.prefix(50))...")
-                        return
-                    } else {
-                        print("🔸 Similar content but outside duplicate window (\(timeDifference)s) - ALLOWING")
-                    }
-                }
             }
             
             // Update session ID if we didn't have one (first message case)
@@ -1128,156 +1103,44 @@ class ChatViewModel: ObservableObject {
         }
     }
     
-    // MARK: - Message Recovery System (Plan Phase 1)
+    // MARK: - Simple Server Polling (Plan Phase 2)
     
-    /// Check for missing messages that were saved to persistence but not displayed in UI
-    /// This handles race conditions where notifications arrive before ChatViewModel is ready
-    func checkForMissingMessages() {
-        guard let project = currentProject else {
-            print("⚠️ No current project - skipping message recovery")
+    /// Simple server polling for messages - called when app becomes active
+    func pollServerForMessages() {
+        guard let sessionId = currentSessionId else {
+            print("ℹ️ No active session - skipping server poll")
             return
         }
         
-        print("🔍 === CHECKING FOR MISSING MESSAGES ===")
-        print("🔍 Project: \(project.name) (\(project.path))")
-        print("🔍 Current session: \(currentSessionId ?? "none")")
-        print("🔍 Current message count: \(messages.count)")
+        print("🔄 Polling server for latest messages (session: \(sessionId))")
         
-        // Get messages from persistence for current project
-        let persistedMessages = persistenceService.loadMessages(
-            for: project.path,
-            sessionId: currentSessionId ?? ""
-        )
-        
-        print("🔍 Found \(persistedMessages.count) messages in persistence")
-        
-        guard !persistedMessages.isEmpty else {
-            print("🔍 No persisted messages found")
-            return
-        }
-        
-        // Create sets for efficient comparison
-        let currentMessageIds = Set(messages.map { $0.id })
-        
-        var missingMessages: [Message] = []
-        var recoveredCount = 0
-        
-        for persistedMessage in persistedMessages {
-            let trimmedContent = persistedMessage.content.trimmingCharacters(in: .whitespacesAndNewlines)
-            
-            // Check if message is missing from current thread
-            if !currentMessageIds.contains(persistedMessage.id) {
-                // Use improved duplicate detection with timestamp window
-                var isDuplicate = false
-                let persistedTimestamp = persistedMessage.timestamp ?? Date()
-                let duplicateWindow: TimeInterval = 5.0
-                
-                for existingMessage in messages {
-                    let existingContent = existingMessage.content.trimmingCharacters(in: .whitespacesAndNewlines)
-                    let existingTimestamp = existingMessage.timestamp ?? Date.distantPast
-                    
-                    if existingContent == trimmedContent {
-                        let timeDifference = abs(persistedTimestamp.timeIntervalSince(existingTimestamp))
-                        if timeDifference < duplicateWindow {
-                            isDuplicate = true
-                            break
+        // Use existing checkSessionStatus method for lightweight check
+        HTTPAICLIService.shared.checkSessionStatus(sessionId: sessionId) { result in
+            Task { @MainActor in
+                switch result {
+                case .success(let hasNewMessages):
+                    if hasNewMessages {
+                        print("✅ Server indicates new messages available")
+                        // Reload messages from persistence - server should have updated them
+                        if let project = self.currentProject {
+                            let serverMessages = self.persistenceService.loadMessages(
+                                for: project.path,
+                                sessionId: sessionId
+                            )
+                            // Simple replace - server is source of truth
+                            if serverMessages.count > self.messages.count {
+                                self.messages = serverMessages
+                                print("✅ Loaded \(serverMessages.count) messages from server")
+                            }
                         }
+                    } else {
+                        print("ℹ️ No new messages on server")
                     }
-                }
-                
-                if !isDuplicate {
-                    missingMessages.append(persistedMessage)
-                    recoveredCount += 1
-                    print("🔍 Found missing message: \(persistedMessage.id)")
-                    print("   Content preview: \(trimmedContent.prefix(50))...")
+                case .failure(let error):
+                    print("⚠️ Server poll failed: \(error)")
+                    // Silent failure - user can still interact normally
                 }
             }
-        }
-        
-        // Add missing messages to the current thread
-        if !missingMessages.isEmpty {
-            print("📥 === RECOVERING \(recoveredCount) MISSING MESSAGES ===")
-            
-            // Sort by timestamp to maintain order
-            let sortedMessages = missingMessages.sorted { msg1, msg2 in
-                // Use message timestamp if available
-                if let time1 = msg1.timestamp, let time2 = msg2.timestamp {
-                    return time1 < time2
-                }
-                // Fallback to ID comparison
-                return msg1.id.uuidString < msg2.id.uuidString
-            }
-            
-            // Add messages to current thread
-            for message in sortedMessages {
-                // Check one more time to prevent duplicates
-                if !messages.contains(where: { $0.id == message.id }) {
-                    messages.append(message)
-                    print("✅ Recovered message: \(message.id)")
-                }
-            }
-            
-            print("✅ === MESSAGE RECOVERY COMPLETED ===")
-            print("📊 Total messages now: \(messages.count)")
-            
-            // Update session ID if we recovered messages with a session ID
-            if currentSessionId == nil {
-                for message in sortedMessages {
-                    if let sessionId = message.metadata?.sessionId, !sessionId.isEmpty {
-                        currentSessionId = sessionId
-                        print("🔄 Recovered session ID from messages: \(sessionId)")
-                        break
-                    }
-                }
-            }
-        } else {
-            print("✅ No missing messages found - all messages are displayed")
-        }
-    }
-    
-    /// Check for messages from the last N hours that might be missing
-    func checkForRecentMissingMessages(hours: Int = 24) {
-        guard let project = currentProject else { return }
-        
-        print("🔍 === CHECKING FOR RECENT MISSING MESSAGES (last \(hours) hours) ===")
-        
-        let cutoffDate = Date().addingTimeInterval(-Double(hours * 3600))
-        
-        // Get all recent messages from persistence
-        let allPersistedMessages = persistenceService.loadMessages(
-            for: project.path,
-            sessionId: nil // Get all sessions
-        )
-        
-        // Filter to recent messages only
-        let recentMessages = allPersistedMessages.filter { message in
-            if let timestamp = message.timestamp {
-                return timestamp > cutoffDate
-            }
-            return false
-        }
-        
-        print("🔍 Found \(recentMessages.count) recent messages in persistence")
-        
-        // Check for missing messages
-        let currentMessageIds = Set(messages.map { $0.id })
-        let missingMessages = recentMessages.filter { !currentMessageIds.contains($0.id) }
-        
-        if !missingMessages.isEmpty {
-            print("📥 Recovering \(missingMessages.count) recent missing messages")
-            
-            // Add missing messages sorted by timestamp
-            let sorted = missingMessages.sorted { msg1, msg2 in
-                (msg1.timestamp ?? Date.distantPast) < (msg2.timestamp ?? Date.distantPast)
-            }
-            
-            for message in sorted {
-                if !messages.contains(where: { $0.id == message.id }) {
-                    messages.append(message)
-                }
-            }
-            
-            print("✅ Recent message recovery completed")
         }
     }
 }

@@ -491,6 +491,9 @@ class ChatViewModel: ObservableObject {
         // Update current session ID
         currentSessionId = sessionId
         
+        // Reload the conversation to show all messages including the newly saved ones
+        loadMessages(for: project, sessionId: sessionId)
+        
         print("✅ Fresh chat session setup complete - \(userMessagesToSave.count) user messages saved")
     }
     

@@ -107,10 +107,11 @@ router.get('/:sessionId/messages', async (req, res) => {
 - Remove all `MessagePersistenceService.saveMessages()` calls
 - Update `pollServerForMessages()` to fetch actual messages, not just status
 
-#### TODO 4.3: iOS - Simplify Push Notifications
-- Remove `saveClaudeResponseForBackground()` - not needed
-- Remove `processClaudeResponseInForeground()` complexity
-- Just show notification, let user tap to fetch from server
+#### TODO 4.3: iOS - Simplify Push Notifications ✅
+- Remove `saveClaudeResponseForBackground()` - ✅
+- Remove `processClaudeResponseInForeground()` complexity - ✅
+- Remove temporary session migration logic - ✅
+- Implement single unified APNS handler with simple notification suppression - ✅
 
 #### TODO 4.4: iOS - Remove Stateful Components ✅
 - Remove `BackgroundSessionCoordinator` entirely ✅
@@ -187,11 +188,19 @@ router.get('/:sessionId/messages', async (req, res) => {
 4. Document why code was removed in commit messages
 5. Ensure app still works at each step
 
-**Current Status**: LOCAL-FIRST ARCHITECTURE FULLY IMPLEMENTED ✅
-**Next Step**: USER TESTING - Verify message persistence and project switching works correctly
+**Current Status**: APNS SIMPLIFICATION COMPLETE ✅
+**Next Step**: USER TESTING - Verify simple notification suppression works correctly
 **Last Updated**: 2025-08-13
 
-**IMPLEMENTATION COMPLETE**: All cleanup tasks finished, BackgroundSessionCoordinator removed, ready for user testing.
+**SIMPLIFICATION COMPLETE**: Successfully implemented the planned simple APNS approach:
+- ✅ Single unified APNS handler in PushNotificationService.willPresent
+- ✅ Simple notification suppression using shouldShowNotification()
+- ✅ Removed ~150 lines of complex dual-handler logic
+- ✅ Removed temporary session migration complexity
+- ✅ Always saves messages to local storage via appendMessage()
+- ✅ Industry-standard pattern: suppress if viewing same project, show banner otherwise
+
+**READY FOR TESTING**: Simple notification suppression now matches WhatsApp/iMessage behavior.
 
 ## ACTUAL IMPLEMENTATION: Local-First Architecture ✅
 

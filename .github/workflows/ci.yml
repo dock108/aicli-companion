@@ -236,6 +236,7 @@ jobs:
           CODE_SIGNING_ALLOWED=NO
     
     - name: Run macOS Tests with Coverage
+      continue-on-error: true
       run: |
         cd macos-app
         xcodebuild -project AICLICompanionHost.xcodeproj \

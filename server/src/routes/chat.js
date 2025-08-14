@@ -282,10 +282,38 @@ router.post('/', async (req, res) => {
         });
       }
 
+      // Store message with ID if it's large (for fetching later)
+      let messageId = null;
+      const MESSAGE_FETCH_THRESHOLD = 3000;
+      if (content.length > MESSAGE_FETCH_THRESHOLD) {
+        const { randomUUID } = require('crypto');
+        messageId = randomUUID();
+        
+        // Store the message in the session buffer for later retrieval
+        aicliService.sessionManager.storeMessage(claudeSessionId, messageId, content, {
+          type: 'assistant',
+          requestId,
+          projectPath,
+          originalMessage: message,
+          attachmentInfo: attachments?.map((att) => ({
+            name: att.name,
+            mimeType: att.mimeType,
+            size: att.size || (att.data.length * 3) / 4,
+          })),
+        });
+        
+        logger.info('Stored large message for fetching', {
+          messageId,
+          sessionId: claudeSessionId,
+          contentLength: content.length,
+        });
+      }
+
       // Send Claude response via APNS
       // Use deviceToken as deviceId since that's how we registered it
       await pushNotificationService.sendClaudeResponseNotification(deviceToken, {
         message: content,
+        messageId, // Include message ID for large messages
         sessionId: claudeSessionId,
         projectName: projectPath?.split('/').pop() || 'Project',
         projectPath,

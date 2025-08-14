@@ -6,7 +6,7 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var settings: SettingsManager
     @StateObject private var autoResponseManager = AutoResponseManager.shared
-    @StateObject private var httpService = HTTPAICLIService.shared
+    @StateObject private var httpService = AICLIService.shared
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.horizontalSizeClass) var horizontalSizeClass

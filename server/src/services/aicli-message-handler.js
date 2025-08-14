@@ -1,7 +1,16 @@
 // Pure business logic for AICLI message processing and content analysis
 // Extracted from aicli.js to improve testability
 
+import { randomUUID } from 'crypto';
+
 export class AICLIMessageHandler {
+  /**
+   * Generate a unique message ID
+   */
+  static generateMessageId() {
+    return randomUUID();
+  }
+
   /**
    * Process different types of AICLI CLI responses
    * Pure function - no side effects, only returns processing results
@@ -522,6 +531,41 @@ export class AICLIMessageHandler {
       systemInit: null,
       pendingFinalResponse: null,
       claudeSessionId: null,
+      // Enhanced for message fetching
+      messagesById: new Map(), // Store messages by ID for retrieval
+      userMessages: [], // Track user messages too
     };
+  }
+  
+  /**
+   * Store a message with ID for later retrieval
+   */
+  static storeMessageWithId(buffer, content, metadata = {}) {
+    const messageId = this.generateMessageId();
+    const message = {
+      id: messageId,
+      content,
+      timestamp: new Date().toISOString(),
+      sessionId: buffer.claudeSessionId,
+      requestId: metadata.requestId,
+      type: metadata.type || 'assistant',
+      ...metadata
+    };
+    
+    // Store in map for quick retrieval
+    if (!buffer.messagesById) {
+      buffer.messagesById = new Map();
+    }
+    buffer.messagesById.set(messageId, message);
+    
+    // Also add to appropriate array
+    if (message.type === 'user') {
+      if (!buffer.userMessages) buffer.userMessages = [];
+      buffer.userMessages.push(message);
+    } else {
+      buffer.assistantMessages.push(message);
+    }
+    
+    return messageId;
   }
 }

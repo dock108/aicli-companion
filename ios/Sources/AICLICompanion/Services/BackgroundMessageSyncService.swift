@@ -183,22 +183,24 @@ class BackgroundMessageSyncService: ObservableObject {
         // Use WebSocketService to create a temporary background connection
         // This is different from the main connection - focused only on message fetch
         
-        guard let serverUrl = UserDefaults.standard.url(forKey: "ServerURL") else {
+        guard UserDefaults.standard.url(forKey: "ServerURL") != nil else {
             print("❌ No server URL configured for background sync")
             return false
         }
         
-        // Create temporary WebSocket connection with shorter timeout
-        return await WebSocketService.shared.establishBackgroundConnection(to: serverUrl)
+        // HTTP-based sync doesn't need persistent connection
+        // Just verify we have valid connection settings
+        return AICLIService.shared.isConnected
     }
     
     private func closeBackgroundConnection() async {
-        await WebSocketService.shared.closeBackgroundConnection()
+        // No persistent connection to close with HTTP
     }
     
     private func fetchQueuedMessages(for sessionId: String) async -> [Message] {
-        // Request message history via WebSocket
-        return await WebSocketService.shared.fetchQueuedMessages(for: sessionId)
+        // In HTTP + APNS architecture, messages are delivered via push notifications
+        // Background sync is handled by CloudKit, not server polling
+        return []
     }
     
     private func saveMessagesToLocalStorage(_ messages: [Message], sessionId: String) async -> Bool {

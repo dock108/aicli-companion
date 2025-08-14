@@ -49,7 +49,7 @@ export function setupAICLIStatusRoutes(app, aicliService) {
       // Get active sessions info
       const activeSessions = aicliService.getActiveSessions();
       const sessionDetails = activeSessions.map((sessionId) => {
-        const session = aicliService.activeSessions.get(sessionId);
+        const session = aicliService.sessionManager.activeSessions.get(sessionId);
         return {
           sessionId,
           workingDirectory: session?.workingDirectory || 'unknown',
@@ -102,7 +102,7 @@ export function setupAICLIStatusRoutes(app, aicliService) {
   router.get('/aicli/sessions/:sessionId', async (req, res) => {
     try {
       const { sessionId } = req.params;
-      const session = aicliService.activeSessions.get(sessionId);
+      const session = aicliService.sessionManager.activeSessions.get(sessionId);
 
       if (!session) {
         return res.status(404).json({
@@ -111,15 +111,21 @@ export function setupAICLIStatusRoutes(app, aicliService) {
         });
       }
 
+      // For HTTP sessions (isTemporary=true), process is null but session is still active
+      // Check if there's a message buffer to determine if session is truly active
+      const hasBuffer = aicliService.sessionManager.getSessionBuffer(sessionId) !== null;
+      const isHttpSession = session.isTemporary === true;
+      
       res.json({
         sessionId,
         workingDirectory: session.workingDirectory,
-        isActive: session.isActive,
+        isActive: session.isActive && (isHttpSession ? hasBuffer : true),
         createdAt: new Date(session.createdAt).toISOString(),
         lastActivity: new Date(session.lastActivity).toISOString(),
         process: {
           pid: session.process?.pid || null,
-          connected: session.process?.connected || false,
+          // For HTTP sessions, consider them "connected" if they're active and have a buffer
+          connected: isHttpSession ? (session.isActive && hasBuffer) : (session.process?.connected || false),
           signalCode: session.process?.signalCode || null,
           exitCode: session.process?.exitCode || null,
         },

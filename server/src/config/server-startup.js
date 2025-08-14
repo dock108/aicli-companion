@@ -52,23 +52,21 @@ export class ServerStartup {
    */
   static displayStartupInfo(config, authToken, aicliAvailable, fingerprint) {
     const protocol = config.getProtocol();
-    const wsProtocol = config.getWSProtocol();
     const hostname = config.getDisplayHostname();
 
     console.log(`🚀 AICLI Companion Server started`);
     console.log(`   ${protocol.toUpperCase()} Server: ${protocol}://${hostname}:${config.port}`);
-    console.log(`   WebSocket: ${wsProtocol}://${hostname}:${config.port}/ws`);
 
     if (authToken) {
       console.log(`   🔐 Authentication enabled`);
       // Mask auth token in connection URL for security
       const maskedToken = `${authToken.substring(0, 8)}...****`;
       console.log(
-        `   📱 Mobile app connection: ${wsProtocol}://${hostname}:${config.port}/ws?token=${maskedToken}`
+        `   📱 Mobile app connection: ${protocol}://${hostname}:${config.port}?token=${maskedToken}`
       );
     } else {
       console.log(`   🔓 Authentication disabled (AUTH_REQUIRED=false)`);
-      console.log(`   📱 Mobile app connection: ${wsProtocol}://${hostname}:${config.port}/ws`);
+      console.log(`   📱 Mobile app connection: ${protocol}://${hostname}:${config.port}`);
     }
 
     if (config.enableTLS) {

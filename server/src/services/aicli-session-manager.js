@@ -194,6 +194,23 @@ export class AICLISessionManager extends EventEmitter {
   async trackSessionForRouting(sessionId, workingDirectory) {
     if (!sessionId) return;
 
+    // Check if session already exists
+    const existingSession = this.activeSessions.get(sessionId);
+    if (existingSession) {
+      // Update existing session's last activity and working directory if provided
+      existingSession.lastActivity = new Date();
+      if (workingDirectory) {
+        existingSession.workingDirectory = workingDirectory;
+      }
+      console.log(`📌 Updated existing session ${sessionId} activity time`);
+      
+      // Ensure message buffer exists
+      if (!this.sessionMessageBuffers.has(sessionId)) {
+        this.sessionMessageBuffers.set(sessionId, AICLIMessageHandler.createSessionBuffer());
+      }
+      return;
+    }
+
     // Create minimal session entry for routing only
     const session = {
       sessionId,
@@ -846,6 +863,91 @@ export class AICLISessionManager extends EventEmitter {
    */
   getSessionBuffer(sessionId) {
     return this.sessionMessageBuffers.get(sessionId);
+  }
+  
+  /**
+   * Get a specific message by ID from a session
+   */
+  getMessageById(sessionId, messageId) {
+    const buffer = this.getSessionBuffer(sessionId);
+    if (!buffer || !buffer.messagesById) {
+      return null;
+    }
+    return buffer.messagesById.get(messageId);
+  }
+  
+  /**
+   * Store a message with ID in session buffer
+   */
+  storeMessage(sessionId, messageId, content, metadata = {}) {
+    const buffer = this.getSessionBuffer(sessionId);
+    if (!buffer) {
+      console.warn(`No buffer found for session ${sessionId}`);
+      return null;
+    }
+    
+    const message = {
+      id: messageId,
+      content,
+      timestamp: new Date().toISOString(),
+      sessionId,
+      ...metadata
+    };
+    
+    // Initialize messagesById if needed
+    if (!buffer.messagesById) {
+      buffer.messagesById = new Map();
+    }
+    
+    // Store the message
+    buffer.messagesById.set(messageId, message);
+    
+    // Set expiry for message (24 hours)
+    this.scheduleMessageExpiry(sessionId, messageId, 24 * 60 * 60 * 1000);
+    
+    return message;
+  }
+  
+  /**
+   * Schedule message expiry
+   */
+  scheduleMessageExpiry(sessionId, messageId, ttl) {
+    setTimeout(() => {
+      const buffer = this.getSessionBuffer(sessionId);
+      if (buffer && buffer.messagesById) {
+        buffer.messagesById.delete(messageId);
+        console.log(`🗑️ Expired message ${messageId} from session ${sessionId}`);
+      }
+    }, ttl);
+  }
+  
+  /**
+   * Get all messages for a session with pagination
+   */
+  getSessionMessages(sessionId, limit = 50, offset = 0) {
+    const buffer = this.getSessionBuffer(sessionId);
+    if (!buffer || !buffer.messagesById) {
+      return { messages: [], total: 0 };
+    }
+    
+    // Convert Map to array and sort by timestamp
+    const allMessages = Array.from(buffer.messagesById.values())
+      .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    
+    // Apply pagination
+    const messages = allMessages.slice(offset, offset + limit);
+    
+    return {
+      messages: messages.map(msg => ({
+        id: msg.id,
+        preview: msg.content ? msg.content.substring(0, 100) : '',
+        timestamp: msg.timestamp,
+        type: msg.type,
+        length: msg.content ? msg.content.length : 0
+      })),
+      total: allMessages.length,
+      hasMore: offset + limit < allMessages.length
+    };
   }
 
   /**

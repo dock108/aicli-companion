@@ -243,7 +243,6 @@ export function setupRoutes(app, aicliService) {
         projects: 'GET /api/projects',
         projectInfo: 'GET /api/projects/:name',
       },
-      websocket: '/ws',
     });
   });
 

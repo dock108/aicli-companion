@@ -237,11 +237,11 @@ struct ConnectionView: View {
     }
     
     private func parseConnectionString(_ string: String) -> ServerConnection? {
-        // Format: ws://host:port/ws?token=xxx or wss://domain.ngrok.app/ws?token=xxx
+        // Format: http://host:port?token=xxx or https://domain.ngrok.app?token=xxx
         print("🔍 Parsing QR code: \(string)")
         
         guard let url = URL(string: string),
-              url.scheme == "ws" || url.scheme == "wss",
+              url.scheme == "http" || url.scheme == "https",
               let host = url.host else {
             print("❌ Failed to parse URL - scheme: \(URL(string: string)?.scheme ?? "nil"), host: \(URL(string: string)?.host ?? "nil")")
             return nil
@@ -252,12 +252,12 @@ struct ConnectionView: View {
         if let explicitPort = url.port {
             port = explicitPort
         } else {
-            // Use default ports: 443 for wss, 80 for ws
-            port = (url.scheme == "wss") ? 443 : 80
+            // Use default ports: 443 for https, 80 for http
+            port = (url.scheme == "https") ? 443 : 80
         }
         
         let token = url.queryParameters?["token"]
-        let isSecure = (url.scheme == "wss")
+        let isSecure = (url.scheme == "https")
         
         print("✅ Parsed - host: \(host), port: \(port), token: \(token ?? "none"), secure: \(isSecure)")
         
@@ -291,14 +291,14 @@ struct ManualSetupSheet: View {
                         .font(Typography.font(.heading3))
                         .foregroundColor(Colors.textPrimary(for: colorScheme))
                     
-                    TextField("ws://192.168.1.100:3001 or wss://domain.ngrok.app", text: $serverURL)
+                    TextField("http://192.168.1.100:3001 or https://domain.ngrok.app", text: $serverURL)
                         .textFieldStyle(TerminalTextFieldStyle())
                         #if os(iOS)
                         .autocapitalization(.none)
                         #endif
                         .disableAutocorrection(true)
                     
-                    Text("Enter the WebSocket URL from your server. This can be a local address (ws://192.168.1.100:3001) or an ngrok URL (wss://domain.ngrok-free.app)")
+                    Text("Enter the HTTP URL from your server. This can be a local address (http://192.168.1.100:3001) or an ngrok URL (https://domain.ngrok-free.app)")
                         .font(Typography.font(.caption))
                         .foregroundColor(Colors.textSecondary(for: colorScheme))
                         .padding(.top, Spacing.xs)
@@ -323,7 +323,7 @@ struct ManualSetupSheet: View {
                     if let connection = parseManualURL(serverURL, token: authToken.isEmpty ? nil : authToken) {
                         onConnect(connection)
                     } else {
-                        errorMessage = "Invalid URL format. Please use ws:// or wss:// scheme."
+                        errorMessage = "Invalid URL format. Please use http:// or https:// scheme."
                         showError = true
                     }
                 }
@@ -352,14 +352,9 @@ struct ManualSetupSheet: View {
     private func parseManualURL(_ urlString: String, token: String?) -> ServerConnection? {
         var normalizedURL = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
         
-        // Add ws:// prefix if no scheme is present
+        // Add http:// prefix if no scheme is present
         if !normalizedURL.contains("://") {
-            normalizedURL = "ws://\(normalizedURL)"
-        }
-        
-        // Ensure the URL has /ws path if not present
-        if !normalizedURL.contains("/ws") && (normalizedURL.hasPrefix("ws://") || normalizedURL.hasPrefix("wss://")) {
-            normalizedURL = normalizedURL.trimmingCharacters(in: .init(charactersIn: "/")) + "/ws"
+            normalizedURL = "http://\(normalizedURL)"
         }
         
         // Add token if provided and not in URL
@@ -369,7 +364,7 @@ struct ManualSetupSheet: View {
         
         // Parse using the same logic as QR scanner
         guard let url = URL(string: normalizedURL),
-              url.scheme == "ws" || url.scheme == "wss",
+              url.scheme == "http" || url.scheme == "https",
               let host = url.host else {
             return nil
         }
@@ -379,13 +374,13 @@ struct ManualSetupSheet: View {
         if let explicitPort = url.port {
             port = explicitPort
         } else {
-            // Use default ports: 443 for wss, 80 for ws
-            port = (url.scheme == "wss") ? 443 : 80
+            // Use default ports: 443 for https, 80 for http
+            port = (url.scheme == "https") ? 443 : 80
         }
         
         // Extract token from URL if present, otherwise use the provided one
         let finalToken = url.queryParameters?["token"] ?? token
-        let isSecure = (url.scheme == "wss")
+        let isSecure = (url.scheme == "https")
         
         return ServerConnection(
             address: host,

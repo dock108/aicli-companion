@@ -44,8 +44,8 @@ router.get('/setup', async (req, res) => {
     const primaryAddress = addresses[0]?.address || 'localhost';
 
     // Build connection URL
-    const protocol = enableTLS ? 'wss' : 'ws';
-    let connectionUrl = `${protocol}://${primaryAddress}:${port}/ws`;
+    const protocol = enableTLS ? 'https' : 'http';
+    let connectionUrl = `${protocol}://${primaryAddress}:${port}`;
 
     if (authRequired && authToken) {
       connectionUrl += `?token=${authToken}`;
@@ -93,7 +93,7 @@ router.get('/setup', async (req, res) => {
       availableAddresses: addresses.map((a) => ({
         interface: a.name,
         address: a.address,
-        url: `${protocol}://${a.address}:${port}/ws${authRequired && authToken ? `?token=${authToken}` : ''}`,
+        url: `${protocol}://${a.address}:${port}${authRequired && authToken ? `?token=${authToken}` : ''}`,
       })),
     });
   } catch (error) {

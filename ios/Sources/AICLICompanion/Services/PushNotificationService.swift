@@ -252,13 +252,78 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
         let userInfo = notification.request.content.userInfo
         print("🔔 Notification payload keys: \(userInfo.keys)")
         
-        // Check if this is a Claude response notification with APNS payload
-        if let claudeMessage = userInfo["message"] as? String,
+        // Check if this requires fetching (iMessage-style for large messages)
+        if let requiresFetch = userInfo["requiresFetch"] as? Bool,
+           requiresFetch,
+           let messageId = userInfo["messageId"] as? String,
            let sessionId = userInfo["sessionId"] as? String,
-           let projectPath = userInfo["projectPath"] as? String {
+           let projectPath = userInfo["projectPath"] as? String,
+           let preview = userInfo["preview"] as? String {
+            
+            print("📲 === LARGE MESSAGE SIGNAL RECEIVED ===")
+            print("📲 Message ID: \(messageId)")
+            print("📲 Session ID: \(sessionId)")
+            print("📲 Preview: \(preview)")
+            
+            // Fetch the full message content
+            Task {
+                do {
+                    print("🌐 Fetching full message content...")
+                    let fullMessage = try await AICLIService.shared.fetchMessage(
+                        sessionId: sessionId,
+                        messageId: messageId
+                    )
+                    
+                    print("✅ Full message fetched: \(fullMessage.content.count) characters")
+                    
+                    // Save the fetched message
+                    await saveClaudeMessage(
+                        message: fullMessage.content,
+                        sessionId: sessionId,
+                        projectPath: projectPath,
+                        userInfo: userInfo
+                    )
+                    
+                    // Post notification to UI with full content
+                    await postClaudeResponseNotification(
+                        message: fullMessage.content,
+                        sessionId: sessionId,
+                        projectPath: projectPath
+                    )
+                    
+                } catch {
+                    print("❌ Failed to fetch message: \(error)")
+                    
+                    // Show preview with error indication
+                    let errorMessage = "\(preview)\n\n⚠️ [Failed to load full message. Tap to retry.]"
+                    await saveClaudeMessage(
+                        message: errorMessage,
+                        sessionId: sessionId,
+                        projectPath: projectPath,
+                        userInfo: userInfo
+                    )
+                    
+                    await postClaudeResponseNotification(
+                        message: errorMessage,
+                        sessionId: sessionId,
+                        projectPath: projectPath
+                    )
+                }
+            }
+            
+            // Don't show system notification for large messages being fetched
+            // The notification will be handled after fetching is complete
+            completionHandler([])
+            return
+            
+        } else if let claudeMessage = userInfo["message"] as? String,
+                  let sessionId = userInfo["sessionId"] as? String,
+                  let projectPath = userInfo["projectPath"] as? String {
+            // Small message - process normally (backwards compatible)
             print("🤖 === CLAUDE RESPONSE RECEIVED ===")
             print("🤖 Session ID: \(sessionId)")
             print("🤖 Project Path: \(projectPath)")
+            print("🤖 Message length: \(claudeMessage.count) characters")
             print("🤖 Message preview: \(String(claudeMessage.prefix(100)))...")
             
             // Always save message to local storage (simple local-first pattern)
@@ -271,36 +336,20 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
                 )
             }
             
+            // Notify UI about the Claude response
+            Task {
+                await postClaudeResponseNotification(
+                    message: claudeMessage,
+                    sessionId: sessionId,
+                    projectPath: projectPath
+                )
+            }
+            
             // Simple notification suppression check
             let shouldShow = shouldShowNotification(for: sessionId, projectPath: projectPath)
             
             if !shouldShow {
                 print("🤖 Suppressing notification - user viewing same project/session")
-                
-                // Notify UI directly for current thread
-                Task { @MainActor in
-                    let projectName = projectPath.split(separator: "/").last.map(String.init) ?? "Project"
-                    let project = Project(name: projectName, path: projectPath, type: "directory")
-                    
-                    let message = Message(
-                        content: claudeMessage,
-                        sender: .assistant,
-                        type: .markdown,
-                        metadata: AICLIMessageMetadata(sessionId: sessionId, duration: 0)
-                    )
-                    
-                    NotificationCenter.default.post(
-                        name: .claudeResponseReceived,
-                        object: nil,
-                        userInfo: [
-                            "message": message,
-                            "sessionId": sessionId,
-                            "projectPath": projectPath,
-                            "project": project
-                        ]
-                    )
-                }
-                
                 // Don't show banner
                 completionHandler([])
             } else {
@@ -315,6 +364,41 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
         }
     }
     
+    /// Post Claude response notification to UI
+    @MainActor
+    private func postClaudeResponseNotification(
+        message: String,
+        sessionId: String,
+        projectPath: String
+    ) {
+        let projectName = projectPath.split(separator: "/").last.map(String.init) ?? "Project"
+        let project = Project(name: projectName, path: projectPath, type: "directory")
+        
+        let claudeMessage = Message(
+            content: message,
+            sender: .assistant,
+            type: .markdown,
+            metadata: AICLIMessageMetadata(sessionId: sessionId, duration: 0)
+        )
+        
+        print("🔔 Posting claudeResponseReceived notification to UI")
+        print("🔔 Message content length: \(claudeMessage.content.count)")
+        print("🔔 Message ID: \(claudeMessage.id)")
+        
+        NotificationCenter.default.post(
+            name: .claudeResponseReceived,
+            object: nil,
+            userInfo: [
+                "message": claudeMessage,
+                "sessionId": sessionId,
+                "projectPath": projectPath,
+                "project": project
+            ]
+        )
+        
+        print("🔔 Notification posted successfully")
+    }
+    
     /// Simple method to save Claude message to local storage
     private func saveClaudeMessage(
         message: String,
@@ -323,6 +407,9 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
         userInfo: [AnyHashable: Any]
     ) async {
         print("💾 === SAVING CLAUDE MESSAGE TO LOCAL STORAGE ===")
+        print("💾 Message length: \(message.count) characters")
+        print("💾 Session ID: \(sessionId)")
+        print("💾 Project Path: \(projectPath)")
         
         // Create Message object from Claude response
         let claudeMessage = Message(

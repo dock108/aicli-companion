@@ -6,12 +6,12 @@ import ViewInspector
 @available(iOS 16.0, macOS 13.0, *)
 final class ChatViewTests: XCTestCase {
     
-    var mockAICLIService: MockHTTPAICLIService!
+    var mockAICLIService: MockAICLIService!
     var mockSettings: SettingsManager!
     
     override func setUp() {
         super.setUp()
-        mockAICLIService = MockHTTPAICLIService()
+        mockAICLIService = MockAICLIService()
         mockSettings = SettingsManager()
         
         // Setup connected state
@@ -28,9 +28,15 @@ final class ChatViewTests: XCTestCase {
     
     // MARK: - Initialization Tests
     
+    @MainActor
     func testChatViewCreation() throws {
         let project = TestDataFactory.TestProject.frontend
         let testProject = Project(name: project.name, path: project.path, type: "Frontend")
+        
+        // Reset ChatViewModel singleton state before test
+        ChatViewModel.shared.messages.removeAll()
+        ChatViewModel.shared.currentProject = nil
+        ChatViewModel.shared.currentSessionId = nil
         
         let chatView = ChatView(
             selectedProject: testProject,

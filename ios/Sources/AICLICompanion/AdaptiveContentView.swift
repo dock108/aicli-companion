@@ -3,7 +3,7 @@ import SwiftUI
 @available(iOS 17.0, macOS 14.0, *)
 public struct AdaptiveContentView: View {
     public init() {}
-    @EnvironmentObject var aicliService: HTTPAICLIService
+    @EnvironmentObject var aicliService: AICLIService
     @EnvironmentObject var settings: SettingsManager
     @State private var isConnected = false
     @State private var selectedProject: Project?
@@ -251,7 +251,7 @@ public struct AdaptiveContentView: View {
 @available(iOS 17.0, macOS 14.0, *)
 #Preview("iPad Light") {
     AdaptiveContentView()
-        .environmentObject(AICLIService())
+        .environmentObject(AICLIService.shared)
         .environmentObject(SettingsManager())
         .preferredColorScheme(.light)
         .previewDevice(PreviewDevice(rawValue: "iPad Pro (12.9-inch) (6th generation)"))
@@ -260,7 +260,7 @@ public struct AdaptiveContentView: View {
 @available(iOS 17.0, macOS 14.0, *)
 #Preview("iPad Dark") {
     AdaptiveContentView()
-        .environmentObject(AICLIService())
+        .environmentObject(AICLIService.shared)
         .environmentObject(SettingsManager())
         .preferredColorScheme(.dark)
         .previewDevice(PreviewDevice(rawValue: "iPad Pro (12.9-inch) (6th generation)"))
@@ -269,7 +269,7 @@ public struct AdaptiveContentView: View {
 @available(iOS 17.0, macOS 14.0, *)
 #Preview("iPhone Light") {
     AdaptiveContentView()
-        .environmentObject(AICLIService())
+        .environmentObject(AICLIService.shared)
         .environmentObject(SettingsManager())
         .preferredColorScheme(.light)
         .previewDevice(PreviewDevice(rawValue: "iPhone 15 Pro"))
@@ -278,7 +278,7 @@ public struct AdaptiveContentView: View {
 @available(iOS 17.0, macOS 14.0, *)
 #Preview("iPhone Dark") {
     AdaptiveContentView()
-        .environmentObject(AICLIService())
+        .environmentObject(AICLIService.shared)
         .environmentObject(SettingsManager())
         .preferredColorScheme(.dark)
         .previewDevice(PreviewDevice(rawValue: "iPhone 15 Pro"))

@@ -6,12 +6,12 @@ import ViewInspector
 @available(iOS 16.0, macOS 13.0, *)
 final class ContentViewTests: XCTestCase {
     
-    var mockAICLIService: MockHTTPAICLIService!
+    var mockAICLIService: MockAICLIService!
     var mockSettings: SettingsManager!
     
     override func setUp() {
         super.setUp()
-        mockAICLIService = MockHTTPAICLIService()
+        mockAICLIService = MockAICLIService()
         mockSettings = SettingsManager()
     }
     
@@ -282,7 +282,7 @@ final class ContentViewTests: XCTestCase {
         // (structs are value types and don't need weak reference testing like classes)
         
         for _ in 0..<10 {
-            let localMockService = MockHTTPAICLIService()
+            let localMockService = MockAICLIService()
             let localMockSettings = SettingsManager()
             let contentView = ContentView()
                 .environmentObject(localMockService)

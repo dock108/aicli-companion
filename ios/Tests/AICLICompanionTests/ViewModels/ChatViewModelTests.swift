@@ -7,15 +7,20 @@ import Combine
 final class ChatViewModelTests: XCTestCase {
     
     var chatViewModel: ChatViewModel!
-    var mockAICLIService: MockHTTPAICLIService!
+    var mockAICLIService: MockAICLIService!
     var mockSettings: SettingsManager!
     var cancellables: Set<AnyCancellable>!
     
     override func setUp() async throws {
         try await super.setUp()
-        mockAICLIService = MockHTTPAICLIService()
+        mockAICLIService = MockAICLIService()
         mockSettings = SettingsManager()
-        chatViewModel = ChatViewModel(aicliService: mockAICLIService, settings: mockSettings)
+        // Use the singleton
+        chatViewModel = ChatViewModel.shared
+        // Reset state
+        chatViewModel.messages.removeAll()
+        chatViewModel.currentProject = nil
+        chatViewModel.currentSessionId = nil
         cancellables = Set<AnyCancellable>()
         
         // Setup connected state for HTTP service
@@ -369,9 +374,8 @@ final class ChatViewModelTests: XCTestCase {
         weak var weakViewModel: ChatViewModel?
         
         do {
-            let localMockService = MockHTTPAICLIService()
-            let localMockSettings = SettingsManager()
-            let viewModel = ChatViewModel(aicliService: localMockService, settings: localMockSettings)
+            // Use the singleton
+            let viewModel = ChatViewModel.shared
             weakViewModel = viewModel
             
             // Use the view model
@@ -443,11 +447,13 @@ final class ChatViewModelTests: XCTestCase {
         XCTAssertEqual(chatViewModel.messages.count, 1)
         XCTAssertNotNil(chatViewModel.currentProject)
         
-        // Reset by creating new instance
-        let newChatViewModel = ChatViewModel(aicliService: mockAICLIService, settings: mockSettings)
+        // Reset the singleton's state
+        chatViewModel.messages.removeAll()
+        chatViewModel.currentProject = nil
+        chatViewModel.currentSessionId = nil
         
-        XCTAssertEqual(newChatViewModel.messages.count, 0)
-        XCTAssertNil(newChatViewModel.currentProject)
-        XCTAssertFalse(newChatViewModel.isLoading)
+        XCTAssertEqual(chatViewModel.messages.count, 0)
+        XCTAssertNil(chatViewModel.currentProject)
+        XCTAssertFalse(chatViewModel.isLoading)
     }
 }

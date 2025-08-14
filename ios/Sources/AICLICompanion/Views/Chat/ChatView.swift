@@ -7,9 +7,9 @@ import UIKit
 @available(iOS 16.0, macOS 13.0, *)
 struct ChatView: View {
     // MARK: - Environment & State
-    @EnvironmentObject var aicliService: HTTPAICLIService
+    @EnvironmentObject var aicliService: AICLIService
     @EnvironmentObject var settings: SettingsManager
-    @StateObject private var viewModel: ChatViewModel
+    @ObservedObject private var viewModel = ChatViewModel.shared
     @StateObject private var sessionManager = ChatSessionManager.shared
     @StateObject private var queueManager = MessageQueueManager.shared
     
@@ -47,10 +47,6 @@ struct ChatView: View {
         self.selectedProject = selectedProject
         self.session = session
         self.onSwitchProject = onSwitchProject
-        
-        // ViewModule will be created lazily when environment objects are available
-        // We'll initialize it in body where we have access to environment objects
-        self._viewModel = StateObject(wrappedValue: ChatViewModel(aicliService: HTTPAICLIService.shared, settings: SettingsManager.shared))
     }
     
     // MARK: - Body
@@ -85,7 +81,7 @@ struct ChatView: View {
                 // Message list
                 ChatMessageList(
                     messages: viewModel.messages,
-                    isLoading: viewModel.isLoading,
+                    isLoading: viewModel.isLoadingForProject(selectedProject?.path ?? ""),
                     progressInfo: viewModel.progressInfo,
                     isIPad: isIPad,
                     horizontalSizeClass: horizontalSizeClass,
@@ -114,7 +110,7 @@ struct ChatView: View {
                 // Input bar
                 ChatInputBar(
                     messageText: $messageText,
-                    isLoading: viewModel.isLoading,
+                    isLoading: viewModel.isLoadingForProject(selectedProject?.path ?? ""),
                     isIPad: isIPad,
                     horizontalSizeClass: horizontalSizeClass,
                     colorScheme: colorScheme,
@@ -228,6 +224,9 @@ struct ChatView: View {
                     self.viewModel.setActiveSession(nil)
                     self.viewModel.currentSessionId = nil
                     
+                    // Clear any stuck loading state when no session exists
+                    self.viewModel.clearLoadingState(for: project.path)
+                    
                     // WhatsApp/iMessage pattern: Check if we have any saved conversations for this project
                     let persistenceService = MessagePersistenceService.shared
                     if let metadata = persistenceService.getSessionMetadata(for: project.path),
@@ -245,6 +244,8 @@ struct ChatView: View {
                         // Truly no conversation exists yet
                         print("ℹ️ ChatView: No saved conversation found for \(project.name)")
                         self.viewModel.messages.removeAll()
+                        // Clear any stuck loading state when there's no conversation
+                        self.viewModel.clearLoadingState(for: project.path)
                     }
                     
                     // Sync from CloudKit in background (optional)
@@ -262,6 +263,9 @@ struct ChatView: View {
         // Save messages
         viewModel.saveMessages(for: project)
         
+        // Stop polling (will resume if needed when returning)
+        viewModel.onDisappear()
+        
         // Clean up keyboard observers
         // swiftlint:disable:next notification_center_detachment
         NotificationCenter.default.removeObserver(self)
@@ -274,14 +278,14 @@ struct ChatView: View {
         
         print("🔄 ChatView: Project changed to '\(project.name)'")
         
-        // Note: At this point, selectedProject is already the NEW project
-        // We can't save messages for the old project here because we don't have a reference to it
-        // Messages should have been saved in cleanupView() when leaving the old project
+        // The currentProject setter will handle saving old messages and loading new ones
+        // Just update the currentProject and it will switch contexts
+        viewModel.currentProject = project
         
-        // Clear current state
-        viewModel.messages.removeAll()
-        viewModel.activeSession = nil
-        viewModel.currentSessionId = nil  // Clear Claude's session ID to prevent cross-project contamination
+        // Clear loading state for old project
+        viewModel.isLoading = false  // Clear loading state
+        viewModel.progressInfo = nil  // Clear progress info
+        viewModel.stopSessionPolling()  // Stop any active polling
         messageText = ""
         
         // Set up for new project
@@ -319,21 +323,14 @@ struct ChatView: View {
         // Just clear the local session ID so next message starts fresh
         if let currentSessionId = viewModel.currentSessionId {
             print("🗑️ Clearing local session: \(currentSessionId)")
-            viewModel.currentSessionId = nil
         }
         
-        // Clear messages from UI
-        viewModel.messages.removeAll()
-        
-        // Clear active session
-        viewModel.setActiveSession(nil)
+        // Use the new comprehensive clear function
+        viewModel.clearSession()
         
         // Clear persisted messages and session data
         let persistenceService = MessagePersistenceService.shared
         persistenceService.clearMessages(for: project.path)
-        
-        // Clear current session ID - next message will be a fresh chat
-        viewModel.currentSessionId = nil
         
         // Sync clear operation to CloudKit for cross-device consistency
         Task {
@@ -359,9 +356,9 @@ struct ChatView: View {
         
         let httpURL = "http://\(connection.address):\(connection.port)"
         print("🔗 ChatView: Checking HTTP connection to \(httpURL)")
-        print("   Current connection state: \(HTTPAICLIService.shared.isConnected)")
+        print("   Current connection state: \(AICLIService.shared.isConnected)")
         
-        if HTTPAICLIService.shared.isConnected {
+        if AICLIService.shared.isConnected {
             print("✅ ChatView: HTTP service already connected")
             completion()
             return
@@ -369,10 +366,10 @@ struct ChatView: View {
         
         print("🔗 ChatView: Starting HTTP connection...")
         print("   aicliService instance: \(ObjectIdentifier(aicliService))")
-        print("   HTTPAICLIService.shared instance: \(ObjectIdentifier(HTTPAICLIService.shared))")
+        print("   AICLIService.shared instance: \(ObjectIdentifier(AICLIService.shared))")
         
         // Use the shared instance for connection to ensure consistency
-        HTTPAICLIService.shared.connect(
+        AICLIService.shared.connect(
             to: connection.address,
             port: connection.port,
             authToken: connection.authToken
@@ -524,6 +521,6 @@ struct ChatView: View {
         session: nil,
         onSwitchProject: {}
     )
-    .environmentObject(AICLIService())
+    .environmentObject(AICLIService.shared)
     .environmentObject(SettingsManager())
 }

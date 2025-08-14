@@ -18,7 +18,7 @@ public class SecurityManager: ObservableObject {
     @Published var blockDestructive: Bool = true
     @Published var readOnlyMode: Bool = false
     
-    private let httpService = HTTPAICLIService.shared
+    private let httpService = AICLIService.shared
     private let settingsManager = SettingsManager.shared
     private var cancellables = Set<AnyCancellable>()
     

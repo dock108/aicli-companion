@@ -59,7 +59,7 @@ public class AppDelegate: NSObject, UIApplicationDelegate {
         // Save token for later use
         UserDefaults.standard.set(token, forKey: "devicePushToken")
         
-        // Notify HTTPAICLIService about the device token
+        // Notify AICLIService about the device token
         // The service will register with the server when it connects
         NotificationCenter.default.post(
             name: Notification.Name("DeviceTokenReceived"),

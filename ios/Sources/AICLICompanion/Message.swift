@@ -813,17 +813,19 @@ struct StreamChunkMetadata: Codable {
     // Status-related metadata for Claude CLI status chunks
     let statusType: String?
     let stage: String?
+    let activity: String? // Activity from server stream parser
     let duration: Double?
     let tokens: Int?
     let tools: [String]?
     let canInterrupt: Bool?
     
-    init(language: String? = nil, level: Int? = nil, toolName: String? = nil, statusType: String? = nil, stage: String? = nil, duration: Double? = nil, tokens: Int? = nil, tools: [String]? = nil, canInterrupt: Bool? = nil) {
+    init(language: String? = nil, level: Int? = nil, toolName: String? = nil, statusType: String? = nil, stage: String? = nil, activity: String? = nil, duration: Double? = nil, tokens: Int? = nil, tools: [String]? = nil, canInterrupt: Bool? = nil) {
         self.language = language
         self.level = level
         self.toolName = toolName
         self.statusType = statusType
         self.stage = stage
+        self.activity = activity
         self.duration = duration
         self.tokens = tokens
         self.tools = tools
@@ -839,6 +841,7 @@ struct StreamChunkMetadata: Codable {
         // Decode status-related fields
         self.statusType = try container.decodeIfPresent(String.self, forKey: DynamicCodingKeys(stringValue: "statusType"))
         self.stage = try container.decodeIfPresent(String.self, forKey: DynamicCodingKeys(stringValue: "stage"))
+        self.activity = try container.decodeIfPresent(String.self, forKey: DynamicCodingKeys(stringValue: "activity"))
         self.duration = try container.decodeIfPresent(Double.self, forKey: DynamicCodingKeys(stringValue: "duration"))
         self.tokens = try container.decodeIfPresent(Int.self, forKey: DynamicCodingKeys(stringValue: "tokens"))
         self.tools = try container.decodeIfPresent([String].self, forKey: DynamicCodingKeys(stringValue: "tools"))
@@ -879,10 +882,18 @@ struct ErrorResponse: Codable {
 
 struct SessionStatusResponse: Codable {
     let sessionId: String
-    let status: String
-    let lastActivity: Date
-    let messageCount: Int
-    let totalCost: Double?
+    let workingDirectory: String
+    let isActive: Bool
+    let createdAt: String
+    let lastActivity: String
+    let process: ProcessInfo?
+    
+    struct ProcessInfo: Codable {
+        let pid: Int?
+        let connected: Bool
+        let signalCode: String?
+        let exitCode: Int?
+    }
 }
 
 struct PongResponse: Codable {
@@ -1159,6 +1170,9 @@ struct ProgressInfo {
     let timestamp: Date
     let startTime: Date
     let tokenCount: Int
+    let duration: TimeInterval
+    let activity: String?
+    let canInterrupt: Bool
     
     var elapsedTime: TimeInterval {
         Date().timeIntervalSince(startTime)
@@ -1173,15 +1187,21 @@ struct ProgressInfo {
         self.startTime = progressResponse.timestamp
         // Token count is not in ProgressResponse, default to 0
         self.tokenCount = 0
+        self.duration = 0
+        self.activity = nil
+        self.canInterrupt = false
     }
     
-    init(stage: String, progress: Double? = nil, message: String, startTime: Date = Date(), tokenCount: Int = 0) {
+    init(stage: String, progress: Double? = nil, message: String, startTime: Date = Date(), duration: TimeInterval = 0, tokenCount: Int = 0, activity: String? = nil, canInterrupt: Bool = false) {
         self.stage = stage
         self.progress = progress
         self.message = message
         self.timestamp = Date()
         self.startTime = startTime
         self.tokenCount = tokenCount
+        self.duration = duration
+        self.activity = activity
+        self.canInterrupt = canInterrupt
     }
 }
 

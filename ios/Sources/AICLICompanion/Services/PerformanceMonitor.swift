@@ -20,7 +20,7 @@ class PerformanceMonitor: ObservableObject {
     private var metricsTimer: Timer?
     private let metricsReportInterval: TimeInterval = 60.0 // Report every minute
     
-    private let httpAICLIService = HTTPAICLIService()
+    private let httpAICLIService = AICLIService.shared
     private var cancellables = Set<AnyCancellable>()
     
     // Session tracking

@@ -918,7 +918,29 @@ export class AICLISessionManager extends EventEmitter {
         buffer.messagesById.delete(messageId);
         console.log(`🗑️ Expired message ${messageId} from session ${sessionId}`);
       }
+    // Ensure a map exists for this session
+    if (!this.messageExpiryTimeouts.has(sessionId)) {
+      this.messageExpiryTimeouts.set(sessionId, new Map());
+    }
+    const sessionTimeouts = this.messageExpiryTimeouts.get(sessionId);
+    // If a timeout already exists for this message, clear it first
+    if (sessionTimeouts.has(messageId)) {
+      clearTimeout(sessionTimeouts.get(messageId));
+    }
+    const timeoutId = setTimeout(() => {
+      const buffer = this.getSessionBuffer(sessionId);
+      if (buffer && buffer.messagesById) {
+        buffer.messagesById.delete(messageId);
+        console.log(`🗑️ Expired message ${messageId} from session ${sessionId}`);
+      }
+      // Remove the timeout from the map
+      sessionTimeouts.delete(messageId);
+      // If no more timeouts for this session, remove the session entry
+      if (sessionTimeouts.size === 0) {
+        this.messageExpiryTimeouts.delete(sessionId);
+      }
     }, ttl);
+    sessionTimeouts.set(messageId, timeoutId);
   }
 
   /**

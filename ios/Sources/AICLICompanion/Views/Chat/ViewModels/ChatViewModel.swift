@@ -20,7 +20,7 @@ class ChatViewModel: ObservableObject {
     
     // MARK: - Project-Specific State
     // Store messages per project to prevent cross-project contamination
-    private var projectMessages: [String: [Message]] = [:]
+    private var projectMessages = LRUCache<String, [Message]>(maxSize: 50)
     private var projectSessionIds: [String: String] = [:]
     
     // Track pending user messages that haven't been saved yet (waiting for session ID)

@@ -134,7 +134,17 @@ struct QRCodeView: View {
     private func fetchQRCodeFromServer() {
         // Extract port from connection string
         let components = connectionString.components(separatedBy: ":")
-        let port = components.last?.components(separatedBy: "?").first ?? "3001"
+        // Parse connection string using URLComponents
+        var urlString = connectionString
+        // Ensure the connection string has a scheme for URLComponents
+        if !urlString.contains("://") {
+            urlString = "http://" + urlString
+        }
+        guard let urlComponents = URLComponents(string: urlString) else {
+            generateQRCodeLocally()
+            return
+        }
+        let port = urlComponents.port ?? 3001
         guard let url = URL(string: "http://localhost:\(port)/api/auth/setup") else {
             generateQRCodeLocally()
             return

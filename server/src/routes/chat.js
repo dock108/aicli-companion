@@ -287,7 +287,6 @@ router.post('/', async (req, res) => {
       let messageId = null;
       const MESSAGE_FETCH_THRESHOLD = 3000;
       if (content.length > MESSAGE_FETCH_THRESHOLD) {
-        const { randomUUID } = require('crypto');
         messageId = randomUUID();
 
         // Store the message in the session buffer for later retrieval

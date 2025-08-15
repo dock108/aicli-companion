@@ -286,4 +286,408 @@ describe('Chat Routes', () => {
       assert.strictEqual(options.message, 'Test error message');
     });
   });
+
+  describe('POST /api/chat/auto-response/pause', () => {
+    beforeEach(() => {
+      pushNotificationService.sendAutoResponseControlNotification = mock.fn(() =>
+        Promise.resolve()
+      );
+    });
+
+    it('should pause auto-response mode with device token', async () => {
+      const response = await request(app)
+        .post('/api/chat/auto-response/pause')
+        .set('x-request-id', 'test-pause-123')
+        .send({
+          sessionId: 'test-session',
+          deviceToken: 'test-device-token',
+        });
+
+      assert.strictEqual(response.status, 200);
+      assert.strictEqual(response.body.success, true);
+      assert.strictEqual(response.body.sessionId, 'test-session');
+      assert.strictEqual(response.body.action, 'pause');
+      assert.ok(response.body.timestamp);
+
+      // Verify notification was sent
+      assert.strictEqual(
+        pushNotificationService.sendAutoResponseControlNotification.mock.calls.length,
+        1
+      );
+      const [deviceToken, options] =
+        pushNotificationService.sendAutoResponseControlNotification.mock.calls[0].arguments;
+      assert.strictEqual(deviceToken, 'test-device-token');
+      assert.strictEqual(options.action, 'pause');
+    });
+
+    it('should pause without device token', async () => {
+      const response = await request(app).post('/api/chat/auto-response/pause').send({
+        sessionId: 'test-session',
+      });
+
+      assert.strictEqual(response.status, 200);
+      assert.strictEqual(response.body.success, true);
+      assert.strictEqual(
+        pushNotificationService.sendAutoResponseControlNotification.mock.calls.length,
+        0
+      );
+    });
+
+    it('should return 400 if session ID is missing', async () => {
+      const response = await request(app).post('/api/chat/auto-response/pause').send({
+        deviceToken: 'test-token',
+      });
+
+      assert.strictEqual(response.status, 400);
+      assert.strictEqual(response.body.success, false);
+      assert.strictEqual(response.body.error, 'Session ID is required');
+    });
+  });
+
+  describe('POST /api/chat/auto-response/resume', () => {
+    beforeEach(() => {
+      pushNotificationService.sendAutoResponseControlNotification = mock.fn(() =>
+        Promise.resolve()
+      );
+    });
+
+    it('should resume auto-response mode with device token', async () => {
+      const response = await request(app)
+        .post('/api/chat/auto-response/resume')
+        .set('x-request-id', 'test-resume-456')
+        .send({
+          sessionId: 'test-session',
+          deviceToken: 'test-device-token',
+        });
+
+      assert.strictEqual(response.status, 200);
+      assert.strictEqual(response.body.success, true);
+      assert.strictEqual(response.body.sessionId, 'test-session');
+      assert.strictEqual(response.body.action, 'resume');
+      assert.ok(response.body.timestamp);
+
+      // Verify notification was sent
+      assert.strictEqual(
+        pushNotificationService.sendAutoResponseControlNotification.mock.calls.length,
+        1
+      );
+      const [deviceToken, options] =
+        pushNotificationService.sendAutoResponseControlNotification.mock.calls[0].arguments;
+      assert.strictEqual(deviceToken, 'test-device-token');
+      assert.strictEqual(options.action, 'resume');
+    });
+
+    it('should resume without device token', async () => {
+      const response = await request(app).post('/api/chat/auto-response/resume').send({
+        sessionId: 'test-session',
+      });
+
+      assert.strictEqual(response.status, 200);
+      assert.strictEqual(response.body.success, true);
+      assert.strictEqual(
+        pushNotificationService.sendAutoResponseControlNotification.mock.calls.length,
+        0
+      );
+    });
+
+    it('should return 400 if session ID is missing', async () => {
+      const response = await request(app).post('/api/chat/auto-response/resume').send({
+        deviceToken: 'test-token',
+      });
+
+      assert.strictEqual(response.status, 400);
+      assert.strictEqual(response.body.success, false);
+      assert.strictEqual(response.body.error, 'Session ID is required');
+    });
+  });
+
+  describe('POST /api/chat/auto-response/stop', () => {
+    beforeEach(() => {
+      pushNotificationService.sendAutoResponseControlNotification = mock.fn(() =>
+        Promise.resolve()
+      );
+    });
+
+    it('should stop auto-response mode with reason', async () => {
+      const response = await request(app)
+        .post('/api/chat/auto-response/stop')
+        .set('x-request-id', 'test-stop-789')
+        .send({
+          sessionId: 'test-session',
+          deviceToken: 'test-device-token',
+          reason: 'user_cancelled',
+        });
+
+      assert.strictEqual(response.status, 200);
+      assert.strictEqual(response.body.success, true);
+      assert.strictEqual(response.body.sessionId, 'test-session');
+      assert.strictEqual(response.body.action, 'stop');
+      assert.strictEqual(response.body.reason, 'user_cancelled');
+      assert.ok(response.body.timestamp);
+
+      // Verify notification was sent
+      assert.strictEqual(
+        pushNotificationService.sendAutoResponseControlNotification.mock.calls.length,
+        1
+      );
+      const [deviceToken, options] =
+        pushNotificationService.sendAutoResponseControlNotification.mock.calls[0].arguments;
+      assert.strictEqual(deviceToken, 'test-device-token');
+      assert.strictEqual(options.action, 'stop');
+      assert.strictEqual(options.reason, 'user_cancelled');
+    });
+
+    it('should use default reason if not provided', async () => {
+      const response = await request(app).post('/api/chat/auto-response/stop').send({
+        sessionId: 'test-session',
+      });
+
+      assert.strictEqual(response.status, 200);
+      assert.strictEqual(response.body.reason, 'manual');
+    });
+
+    it('should return 400 if session ID is missing', async () => {
+      const response = await request(app).post('/api/chat/auto-response/stop').send({
+        deviceToken: 'test-token',
+      });
+
+      assert.strictEqual(response.status, 400);
+      assert.strictEqual(response.body.success, false);
+      assert.strictEqual(response.body.error, 'Session ID is required');
+    });
+  });
+
+  describe('GET /api/chat/:sessionId/progress', () => {
+    beforeEach(() => {
+      aicliService.sessionManager = {
+        getSessionBuffer: mock.fn((sessionId) => {
+          if (sessionId === 'active-session') {
+            return {
+              thinkingMetadata: {
+                isThinking: true,
+                activity: 'Analyzing code',
+                duration: 2500,
+                tokenCount: 150,
+              },
+            };
+          }
+          if (sessionId === 'inactive-session') {
+            return {
+              thinkingMetadata: {
+                isThinking: false,
+                activity: null,
+                duration: 0,
+                tokenCount: 0,
+              },
+            };
+          }
+          return null;
+        }),
+      };
+    });
+
+    it('should return thinking progress for active session', async () => {
+      const response = await request(app)
+        .get('/api/chat/active-session/progress')
+        .set('x-request-id', 'test-progress-123');
+
+      assert.strictEqual(response.status, 200);
+      assert.strictEqual(response.body.success, true);
+      assert.strictEqual(response.body.sessionId, 'active-session');
+      assert.strictEqual(response.body.isThinking, true);
+      assert.strictEqual(response.body.activity, 'Analyzing code');
+      assert.strictEqual(response.body.duration, 2500);
+      assert.strictEqual(response.body.tokenCount, 150);
+    });
+
+    it('should return default values for inactive session', async () => {
+      const response = await request(app).get('/api/chat/inactive-session/progress');
+
+      assert.strictEqual(response.status, 200);
+      assert.strictEqual(response.body.isThinking, false);
+      assert.strictEqual(response.body.activity, null);
+      assert.strictEqual(response.body.duration, 0);
+      assert.strictEqual(response.body.tokenCount, 0);
+    });
+
+    it('should return 404 for non-existent session', async () => {
+      const response = await request(app).get('/api/chat/non-existent/progress');
+
+      assert.strictEqual(response.status, 404);
+      assert.strictEqual(response.body.success, false);
+      assert.strictEqual(response.body.error, 'Session not found');
+      assert.strictEqual(response.body.sessionId, 'non-existent');
+    });
+
+    it('should handle missing thinking metadata', async () => {
+      aicliService.sessionManager.getSessionBuffer = mock.fn(() => ({}));
+
+      const response = await request(app).get('/api/chat/test-session/progress');
+
+      assert.strictEqual(response.status, 200);
+      assert.strictEqual(response.body.isThinking, false);
+      assert.strictEqual(response.body.activity, null);
+      assert.strictEqual(response.body.duration, 0);
+      assert.strictEqual(response.body.tokenCount, 0);
+    });
+
+    it('should handle errors gracefully', async () => {
+      aicliService.sessionManager.getSessionBuffer = mock.fn(() => {
+        throw new Error('Database error');
+      });
+
+      const response = await request(app).get('/api/chat/test-session/progress');
+
+      assert.strictEqual(response.status, 500);
+      assert.strictEqual(response.body.success, false);
+      assert.strictEqual(response.body.error, 'Failed to fetch progress');
+    });
+  });
+
+  describe('GET /api/chat/:sessionId/messages', () => {
+    beforeEach(() => {
+      aicliService.sessionManager = {
+        getSessionBuffer: mock.fn((sessionId) => {
+          if (sessionId === 'session-with-messages') {
+            return {
+              userMessages: [
+                { content: 'Hello', timestamp: '2024-01-01T00:00:00Z', requestId: 'req-1' },
+                { content: 'How are you?', timestamp: '2024-01-01T00:00:02Z', requestId: 'req-2' },
+              ],
+              assistantMessages: [
+                {
+                  content: 'Hi there!',
+                  timestamp: '2024-01-01T00:00:01Z',
+                  requestId: 'req-1',
+                  deliveredVia: 'apns',
+                },
+                {
+                  content: 'I am doing well!',
+                  timestamp: '2024-01-01T00:00:03Z',
+                  requestId: 'req-2',
+                  deliveredVia: 'apns',
+                },
+              ],
+            };
+          }
+          if (sessionId === 'large-session') {
+            return {
+              userMessages: Array(20)
+                .fill(null)
+                .map((_, i) => ({
+                  content: `User message ${i}`,
+                  timestamp: new Date(Date.now() + i * 2000).toISOString(),
+                  requestId: `req-${i}`,
+                })),
+              assistantMessages: Array(20)
+                .fill(null)
+                .map((_, i) => ({
+                  content: `Assistant message ${i}`,
+                  timestamp: new Date(Date.now() + i * 2000 + 1000).toISOString(),
+                  requestId: `req-${i}`,
+                })),
+            };
+          }
+          return null;
+        }),
+      };
+    });
+
+    it('should return messages in chronological order', async () => {
+      const response = await request(app).get('/api/chat/session-with-messages/messages');
+
+      assert.strictEqual(response.status, 200);
+      assert.strictEqual(response.body.success, true);
+      assert.strictEqual(response.body.sessionId, 'session-with-messages');
+      assert.strictEqual(response.body.messages.length, 4);
+      assert.strictEqual(response.body.totalCount, 4);
+      assert.strictEqual(response.body.hasMore, false);
+
+      // Verify chronological order
+      assert.strictEqual(response.body.messages[0].content, 'Hello');
+      assert.strictEqual(response.body.messages[0].sender, 'user');
+      assert.strictEqual(response.body.messages[1].content, 'Hi there!');
+      assert.strictEqual(response.body.messages[1].sender, 'assistant');
+      assert.strictEqual(response.body.messages[1].type, 'markdown');
+    });
+
+    it('should handle pagination with limit', async () => {
+      const response = await request(app).get('/api/chat/large-session/messages?limit=10');
+
+      assert.strictEqual(response.status, 200);
+      assert.strictEqual(response.body.messages.length, 10);
+      assert.strictEqual(response.body.totalCount, 40);
+      assert.strictEqual(response.body.hasMore, true);
+    });
+
+    it('should handle pagination with offset', async () => {
+      const response = await request(app).get(
+        '/api/chat/large-session/messages?limit=10&offset=10'
+      );
+
+      assert.strictEqual(response.status, 200);
+      assert.strictEqual(response.body.messages.length, 10);
+      assert.strictEqual(response.body.totalCount, 40);
+      assert.strictEqual(response.body.hasMore, true);
+    });
+
+    it('should handle offset beyond message count', async () => {
+      const response = await request(app).get(
+        '/api/chat/session-with-messages/messages?offset=100'
+      );
+
+      assert.strictEqual(response.status, 200);
+      assert.strictEqual(response.body.messages.length, 0);
+      assert.strictEqual(response.body.totalCount, 4);
+      assert.strictEqual(response.body.hasMore, false);
+    });
+
+    it('should return empty array for non-existent session', async () => {
+      const response = await request(app).get('/api/chat/non-existent/messages');
+
+      assert.strictEqual(response.status, 200);
+      assert.strictEqual(response.body.success, true);
+      assert.strictEqual(response.body.messages.length, 0);
+      assert.strictEqual(response.body.totalCount, 0);
+      assert.strictEqual(response.body.hasMore, false);
+      assert.strictEqual(response.body.note, 'No active session found');
+    });
+
+    it('should handle session with only user messages', async () => {
+      aicliService.sessionManager.getSessionBuffer = mock.fn(() => ({
+        userMessages: [{ content: 'Test', timestamp: new Date().toISOString() }],
+      }));
+
+      const response = await request(app).get('/api/chat/test-session/messages');
+
+      assert.strictEqual(response.status, 200);
+      assert.strictEqual(response.body.messages.length, 1);
+      assert.strictEqual(response.body.messages[0].sender, 'user');
+    });
+
+    it('should handle session with only assistant messages', async () => {
+      aicliService.sessionManager.getSessionBuffer = mock.fn(() => ({
+        assistantMessages: [{ content: 'Response', timestamp: new Date().toISOString() }],
+      }));
+
+      const response = await request(app).get('/api/chat/test-session/messages');
+
+      assert.strictEqual(response.status, 200);
+      assert.strictEqual(response.body.messages.length, 1);
+      assert.strictEqual(response.body.messages[0].sender, 'assistant');
+      assert.strictEqual(response.body.messages[0].type, 'markdown');
+    });
+
+    it('should handle errors gracefully', async () => {
+      aicliService.sessionManager.getSessionBuffer = mock.fn(() => {
+        throw new Error('Database connection lost');
+      });
+
+      const response = await request(app).get('/api/chat/test-session/messages');
+
+      assert.strictEqual(response.status, 500);
+      assert.strictEqual(response.body.success, false);
+      assert.strictEqual(response.body.error, 'Failed to fetch messages');
+    });
+  });
 });

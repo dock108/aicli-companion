@@ -557,52 +557,17 @@ class ChatViewModel: ObservableObject {
     private func handleClaudeResponseNotification(_ notification: Notification) {
         print("🎯 === CHATVIEWMODEL: APNS NOTIFICATION RECEIVED ===")
         
-        guard let userInfo = notification.userInfo,
-              let message = userInfo["message"] as? Message,
-              let sessionId = userInfo["sessionId"] as? String,
-              let project = userInfo["project"] as? Project else {
-            print("⚠️ ChatViewModel: Invalid Claude response notification payload")
-            if let keys = notification.userInfo?.keys {
-                print("⚠️ userInfo keys: \(Array(keys))")
-                // Debug - check what types the values are
-                if let messageValue = notification.userInfo?["message"] {
-                    print("⚠️ message type: \(type(of: messageValue))")
-                }
-                if let sessionValue = notification.userInfo?["sessionId"] {
-                    print("⚠️ sessionId type: \(type(of: sessionValue))")
-                }
-                if let projectValue = notification.userInfo?["project"] {
-                    print("⚠️ project type: \(type(of: projectValue))")
-                }
-            } else {
-                print("⚠️ userInfo is nil")
-            }
+        // Extract and validate notification payload
+        guard let (message, sessionId, project) = extractNotificationPayload(notification) else {
+            debugInvalidNotification(notification)
             return
         }
         
-        print("🎯 ChatViewModel: Claude response notification validated")
-        print("🎯 Session ID: \(sessionId)")
-        print("🎯 Current Session ID: \(currentSessionId ?? "nil")")
-        print("🎯 Project: \(project.name) (\(project.path))")
-        print("🎯 Current Project: \(currentProject?.name ?? "nil") (\(currentProject?.path ?? "nil"))")
-        print("🎯 Message ID: \(message.id)")
-        print("🎯 Message content preview: \(message.content.prefix(100))...")
-        print("🎯 Current loading state: isLoading=\(isLoading), isWaiting=\(isWaitingForClaudeResponse)")
-        print("🎯 Current message count: \(messages.count)")
+        // Log notification details
+        logNotificationDetails(message: message, sessionId: sessionId, project: project)
         
-        // Clear loading state immediately when APNS delivers response for current project
-        if project.path == currentProject?.path && loadingProjectPath == project.path {
-            print("📨 APNS delivered response for current project - clearing loading state")
-            isLoading = false
-            isWaitingForClaudeResponse = false
-            progressInfo = nil
-            loadingProjectPath = nil
-            stopSessionPolling()
-            loadingTimeout?.invalidate()
-            loadingTimeout = nil
-            messageTimeout?.invalidate()
-            messageTimeout = nil
-        }
+        // Clear loading state if needed
+        clearLoadingStateIfNeeded(for: project)
         
         // Only process if:
         // 1. Session IDs match
@@ -620,84 +585,14 @@ class ChatViewModel: ObservableObject {
             
             // Update session ID if we didn't have one (first message case)
             if currentSessionId == nil {
-                // Ensure UI updates happen on main thread
-                DispatchQueue.main.async { [weak self] in
-                    guard let self = self else { return }
-                    
-                    self.currentSessionId = sessionId
-                    print("🔄 ChatViewModel: First message - setting session ID from Claude via APNS: \(sessionId)")
-                    
-                    // Save any pending user messages now that we have a session ID
-                    if !self.pendingUserMessages.isEmpty {
-                        print("💾 Saving \(self.pendingUserMessages.count) pending user messages with new session ID")
-                        for pendingMessage in self.pendingUserMessages {
-                            if let project = self.currentProject {
-                                self.persistenceService.appendMessage(pendingMessage, to: project.path, sessionId: sessionId, project: project)
-                                print("✅ Saved pending user message: \(String(pendingMessage.content.prefix(50)))...")
-                            }
-                        }
-                        // Clear pending messages after saving
-                        self.pendingUserMessages.removeAll()
-                    }
-                    
-                    // Session management for new conversations
-                    if let project = self.currentProject {
-                        let session = ProjectSession(
-                            sessionId: sessionId,
-                            projectName: project.name,
-                            projectPath: project.path,
-                            status: "active",
-                            startedAt: Date().ISO8601Format()
-                        )
-                        self.setActiveSession(session)
-                    }
-                }
+                handleFirstMessage(sessionId: sessionId)
             }
             
-            // WhatsApp/iMessage pattern: Add message to conversation
-            print("📝 Adding Claude response to conversation...")
-            print("📝 Message content length: \(message.content.count) characters")
-            print("📝 Message content preview: \(String(message.content.prefix(100)))...")
-            
-            // Ensure UI updates happen on main thread
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                
-                print("📝 Before append - messages count: \(self.messages.count)")
-                self.messages.append(message)
-                print("📝 After append - messages count: \(self.messages.count)")
-                
-                // Also update project-specific storage
-                if let project = self.currentProject {
-                    self.projectMessages[project.path] = self.messages
-                    print("📝 Updated project messages for \(project.name)")
-                }
-                
-                print("✅ Added Claude response to chat (\(self.messages.count) total messages)")
-                
-                // DO NOT SAVE HERE - PushNotificationService already saved to persistence
-                // This is THE ONE FLOW - message saved once by PushNotificationService
-                print("📌 Message already saved by PushNotificationService - not duplicating")
-                
-                // Loading state already cleared above for current project
-                
-                // Clear badge count
-                #if os(iOS)
-                UIApplication.shared.applicationIconBadgeNumber = 0
-                #endif
-            }
+            // Add message to conversation
+            addMessageToConversation(message)
             
             // Sync to CloudKit in background (optional)
-            if let project = currentProject {
-                Task {
-                    do {
-                        try await cloudKitManager.saveMessage(message, projectPath: project.path)
-                        print("✅ Claude message synced to CloudKit")
-                    } catch {
-                        print("⚠️ Failed to sync Claude message to CloudKit: \(error)")
-                    }
-                }
-            }
+            syncMessageToCloudKit(message)
             
             print("🎯 === CLAUDE RESPONSE PROCESSING COMPLETED ===")
         } else {
@@ -1415,6 +1310,150 @@ class ChatViewModel: ObservableObject {
                 print("✅ Uploaded message to CloudKit: \(message.id)")
             } catch {
                 print("⚠️ Failed to upload message \(message.id): \(error)")
+            }
+        }
+    }
+    
+    // MARK: - Helper Methods for Claude Response Notification
+    
+    private func extractNotificationPayload(_ notification: Notification) -> (Message, String, Project)? {
+        guard let userInfo = notification.userInfo,
+              let message = userInfo["message"] as? Message,
+              let sessionId = userInfo["sessionId"] as? String,
+              let project = userInfo["project"] as? Project else {
+            return nil
+        }
+        return (message, sessionId, project)
+    }
+    
+    private func debugInvalidNotification(_ notification: Notification) {
+        print("⚠️ ChatViewModel: Invalid Claude response notification payload")
+        if let keys = notification.userInfo?.keys {
+            print("⚠️ userInfo keys: \(Array(keys))")
+            // Debug - check what types the values are
+            if let messageValue = notification.userInfo?["message"] {
+                print("⚠️ message type: \(type(of: messageValue))")
+            }
+            if let sessionValue = notification.userInfo?["sessionId"] {
+                print("⚠️ sessionId type: \(type(of: sessionValue))")
+            }
+            if let projectValue = notification.userInfo?["project"] {
+                print("⚠️ project type: \(type(of: projectValue))")
+            }
+        } else {
+            print("⚠️ userInfo is nil")
+        }
+    }
+    
+    private func logNotificationDetails(message: Message, sessionId: String, project: Project) {
+        print("🎯 ChatViewModel: Claude response notification validated")
+        print("🎯 Session ID: \(sessionId)")
+        print("🎯 Current Session ID: \(currentSessionId ?? "nil")")
+        print("🎯 Project: \(project.name) (\(project.path))")
+        print("🎯 Current Project: \(currentProject?.name ?? "nil") (\(currentProject?.path ?? "nil"))")
+        print("🎯 Message ID: \(message.id)")
+        print("🎯 Message content preview: \(message.content.prefix(100))...")
+        print("🎯 Current loading state: isLoading=\(isLoading), isWaiting=\(isWaitingForClaudeResponse)")
+        print("🎯 Current message count: \(messages.count)")
+    }
+    
+    private func clearLoadingStateIfNeeded(for project: Project) {
+        // Clear loading state immediately when APNS delivers response for current project
+        if project.path == currentProject?.path && loadingProjectPath == project.path {
+            print("📨 APNS delivered response for current project - clearing loading state")
+            isLoading = false
+            isWaitingForClaudeResponse = false
+            progressInfo = nil
+            loadingProjectPath = nil
+            stopSessionPolling()
+            loadingTimeout?.invalidate()
+            loadingTimeout = nil
+            messageTimeout?.invalidate()
+            messageTimeout = nil
+        }
+    }
+    
+    private func handleFirstMessage(sessionId: String) {
+        // Ensure UI updates happen on main thread
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            self.currentSessionId = sessionId
+            print("🔄 ChatViewModel: First message - setting session ID from Claude via APNS: \(sessionId)")
+            
+            // Save any pending user messages now that we have a session ID
+            self.savePendingUserMessages(sessionId: sessionId)
+            
+            // Session management for new conversations
+            if let project = self.currentProject {
+                let session = ProjectSession(
+                    sessionId: sessionId,
+                    projectName: project.name,
+                    projectPath: project.path,
+                    status: "active",
+                    startedAt: Date().ISO8601Format()
+                )
+                self.setActiveSession(session)
+            }
+        }
+    }
+    
+    private func savePendingUserMessages(sessionId: String) {
+        if !pendingUserMessages.isEmpty {
+            print("💾 Saving \(pendingUserMessages.count) pending user messages with new session ID")
+            for pendingMessage in pendingUserMessages {
+                if let project = currentProject {
+                    persistenceService.appendMessage(pendingMessage, to: project.path, sessionId: sessionId, project: project)
+                    print("✅ Saved pending user message: \(String(pendingMessage.content.prefix(50)))...")
+                }
+            }
+            // Clear pending messages after saving
+            pendingUserMessages.removeAll()
+        }
+    }
+    
+    private func addMessageToConversation(_ message: Message) {
+        // WhatsApp/iMessage pattern: Add message to conversation
+        print("📝 Adding Claude response to conversation...")
+        print("📝 Message content length: \(message.content.count) characters")
+        print("📝 Message content preview: \(String(message.content.prefix(100)))...")
+        
+        // Ensure UI updates happen on main thread
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            print("📝 Before append - messages count: \(self.messages.count)")
+            self.messages.append(message)
+            print("📝 After append - messages count: \(self.messages.count)")
+            
+            // Also update project-specific storage
+            if let project = self.currentProject {
+                self.projectMessages[project.path] = self.messages
+                print("📝 Updated project messages for \(project.name)")
+            }
+            
+            print("✅ Added Claude response to chat (\(self.messages.count) total messages)")
+            
+            // DO NOT SAVE HERE - PushNotificationService already saved to persistence
+            // This is THE ONE FLOW - message saved once by PushNotificationService
+            print("📌 Message already saved by PushNotificationService - not duplicating")
+            
+            // Clear badge count
+            #if os(iOS)
+            UIApplication.shared.applicationIconBadgeNumber = 0
+            #endif
+        }
+    }
+    
+    private func syncMessageToCloudKit(_ message: Message) {
+        if let project = currentProject {
+            Task {
+                do {
+                    try await cloudKitManager.saveMessage(message, projectPath: project.path)
+                    print("✅ Claude message synced to CloudKit")
+                } catch {
+                    print("⚠️ Failed to sync Claude message to CloudKit: \(error)")
+                }
             }
         }
     }

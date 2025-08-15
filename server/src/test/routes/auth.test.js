@@ -62,10 +62,10 @@ describe('Auth Routes', () => {
 
       assert.strictEqual(response.body.success, true);
       assert.ok(response.body.connectionInfo);
-      assert.strictEqual(response.body.connectionInfo.url, 'ws://192.168.1.100:3001/ws');
+      assert.strictEqual(response.body.connectionInfo.url, 'http://192.168.1.100:3001');
       assert.strictEqual(response.body.connectionInfo.host, '192.168.1.100');
       assert.strictEqual(response.body.connectionInfo.port, 3001);
-      assert.strictEqual(response.body.connectionInfo.protocol, 'ws');
+      assert.strictEqual(response.body.connectionInfo.protocol, 'http');
       assert.strictEqual(response.body.connectionInfo.authRequired, false);
       assert.strictEqual(response.body.connectionInfo.hasToken, false);
 
@@ -99,7 +99,7 @@ describe('Auth Routes', () => {
       assert.strictEqual(response.body.success, true);
       assert.strictEqual(
         response.body.connectionInfo.url,
-        'ws://192.168.1.100:3001/ws?token=test-auth-token-12345'
+        'http://192.168.1.100:3001?token=test-auth-token-12345'
       );
       assert.strictEqual(response.body.connectionInfo.authRequired, true);
       assert.strictEqual(response.body.connectionInfo.hasToken, true);
@@ -107,7 +107,7 @@ describe('Auth Routes', () => {
       // Check that token is included in available addresses
       assert.strictEqual(
         response.body.availableAddresses[0].url,
-        'ws://192.168.1.100:3001/ws?token=test-auth-token-12345'
+        'http://192.168.1.100:3001?token=test-auth-token-12345'
       );
     });
 
@@ -127,9 +127,9 @@ describe('Auth Routes', () => {
       const response = await request(app).get('/api/auth/setup').expect(200);
 
       assert.strictEqual(response.body.success, true);
-      assert.strictEqual(response.body.connectionInfo.protocol, 'wss');
-      assert.strictEqual(response.body.connectionInfo.url, 'wss://10.0.0.50:3001/ws');
-      assert.strictEqual(response.body.availableAddresses[0].url, 'wss://10.0.0.50:3001/ws');
+      assert.strictEqual(response.body.connectionInfo.protocol, 'https');
+      assert.strictEqual(response.body.connectionInfo.url, 'https://10.0.0.50:3001');
+      assert.strictEqual(response.body.availableAddresses[0].url, 'https://10.0.0.50:3001');
     });
 
     it('should handle multiple network interfaces', async () => {
@@ -175,7 +175,7 @@ describe('Auth Routes', () => {
 
       assert.strictEqual(response.body.success, true);
       assert.strictEqual(response.body.connectionInfo.host, 'localhost');
-      assert.strictEqual(response.body.connectionInfo.url, 'ws://localhost:3001/ws');
+      assert.strictEqual(response.body.connectionInfo.url, 'http://localhost:3001');
     });
 
     it('should filter out IPv6 addresses', async () => {
@@ -245,7 +245,7 @@ describe('Auth Routes', () => {
 
       assert.strictEqual(response.body.success, true);
       assert.strictEqual(response.body.connectionInfo.port, 8080);
-      assert.strictEqual(response.body.connectionInfo.url, 'ws://192.168.1.100:8080/ws');
+      assert.strictEqual(response.body.connectionInfo.url, 'http://192.168.1.100:8080');
     });
   });
 

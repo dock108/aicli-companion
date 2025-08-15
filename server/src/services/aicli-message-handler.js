@@ -536,7 +536,7 @@ export class AICLIMessageHandler {
       userMessages: [], // Track user messages too
     };
   }
-  
+
   /**
    * Store a message with ID for later retrieval
    */
@@ -549,15 +549,15 @@ export class AICLIMessageHandler {
       sessionId: buffer.claudeSessionId,
       requestId: metadata.requestId,
       type: metadata.type || 'assistant',
-      ...metadata
+      ...metadata,
     };
-    
+
     // Store in map for quick retrieval
     if (!buffer.messagesById) {
       buffer.messagesById = new Map();
     }
     buffer.messagesById.set(messageId, message);
-    
+
     // Also add to appropriate array
     if (message.type === 'user') {
       if (!buffer.userMessages) buffer.userMessages = [];
@@ -565,7 +565,7 @@ export class AICLIMessageHandler {
     } else {
       buffer.assistantMessages.push(message);
     }
-    
+
     return messageId;
   }
 }

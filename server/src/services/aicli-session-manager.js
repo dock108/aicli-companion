@@ -203,7 +203,7 @@ export class AICLISessionManager extends EventEmitter {
         existingSession.workingDirectory = workingDirectory;
       }
       console.log(`📌 Updated existing session ${sessionId} activity time`);
-      
+
       // Ensure message buffer exists
       if (!this.sessionMessageBuffers.has(sessionId)) {
         this.sessionMessageBuffers.set(sessionId, AICLIMessageHandler.createSessionBuffer());
@@ -864,7 +864,7 @@ export class AICLISessionManager extends EventEmitter {
   getSessionBuffer(sessionId) {
     return this.sessionMessageBuffers.get(sessionId);
   }
-  
+
   /**
    * Get a specific message by ID from a session
    */
@@ -875,7 +875,7 @@ export class AICLISessionManager extends EventEmitter {
     }
     return buffer.messagesById.get(messageId);
   }
-  
+
   /**
    * Store a message with ID in session buffer
    */
@@ -885,29 +885,29 @@ export class AICLISessionManager extends EventEmitter {
       console.warn(`No buffer found for session ${sessionId}`);
       return null;
     }
-    
+
     const message = {
       id: messageId,
       content,
       timestamp: new Date().toISOString(),
       sessionId,
-      ...metadata
+      ...metadata,
     };
-    
+
     // Initialize messagesById if needed
     if (!buffer.messagesById) {
       buffer.messagesById = new Map();
     }
-    
+
     // Store the message
     buffer.messagesById.set(messageId, message);
-    
+
     // Set expiry for message (24 hours)
     this.scheduleMessageExpiry(sessionId, messageId, 24 * 60 * 60 * 1000);
-    
+
     return message;
   }
-  
+
   /**
    * Schedule message expiry
    */
@@ -920,7 +920,7 @@ export class AICLISessionManager extends EventEmitter {
       }
     }, ttl);
   }
-  
+
   /**
    * Get all messages for a session with pagination
    */
@@ -929,24 +929,25 @@ export class AICLISessionManager extends EventEmitter {
     if (!buffer || !buffer.messagesById) {
       return { messages: [], total: 0 };
     }
-    
+
     // Convert Map to array and sort by timestamp
-    const allMessages = Array.from(buffer.messagesById.values())
-      .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-    
+    const allMessages = Array.from(buffer.messagesById.values()).sort(
+      (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+    );
+
     // Apply pagination
     const messages = allMessages.slice(offset, offset + limit);
-    
+
     return {
-      messages: messages.map(msg => ({
+      messages: messages.map((msg) => ({
         id: msg.id,
         preview: msg.content ? msg.content.substring(0, 100) : '',
         timestamp: msg.timestamp,
         type: msg.type,
-        length: msg.content ? msg.content.length : 0
+        length: msg.content ? msg.content.length : 0,
       })),
       total: allMessages.length,
-      hasMore: offset + limit < allMessages.length
+      hasMore: offset + limit < allMessages.length,
     };
   }
 

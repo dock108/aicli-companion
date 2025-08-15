@@ -596,7 +596,6 @@ public class AICLIService: ObservableObject {
                 
                 print("✅ Fetched \(messages.count) messages from server")
                 completion(.success(messages))
-                
             } catch {
                 print("❌ Failed to parse messages response: \(error)")
                 completion(.failure(.jsonParsingError(error)))

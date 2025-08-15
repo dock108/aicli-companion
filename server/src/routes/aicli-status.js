@@ -49,7 +49,8 @@ export function setupAICLIStatusRoutes(app, aicliService) {
       // Get active sessions info
       const activeSessions = aicliService.getActiveSessions();
       const sessionDetails = activeSessions.map((sessionId) => {
-        const session = aicliService.sessionManager.activeSessions.get(sessionId);
+        // Access the sessionManager's activeSessions Map if it exists
+        const session = aicliService.sessionManager?.activeSessions?.get(sessionId);
         return {
           sessionId,
           workingDirectory: session?.workingDirectory || 'unknown',
@@ -102,7 +103,7 @@ export function setupAICLIStatusRoutes(app, aicliService) {
   router.get('/aicli/sessions/:sessionId', async (req, res) => {
     try {
       const { sessionId } = req.params;
-      const session = aicliService.sessionManager.activeSessions.get(sessionId);
+      const session = aicliService.sessionManager?.activeSessions?.get(sessionId);
 
       if (!session) {
         return res.status(404).json({
@@ -115,7 +116,7 @@ export function setupAICLIStatusRoutes(app, aicliService) {
       // Check if there's a message buffer to determine if session is truly active
       const hasBuffer = aicliService.sessionManager.getSessionBuffer(sessionId) !== null;
       const isHttpSession = session.isTemporary === true;
-      
+
       res.json({
         sessionId,
         workingDirectory: session.workingDirectory,
@@ -125,7 +126,9 @@ export function setupAICLIStatusRoutes(app, aicliService) {
         process: {
           pid: session.process?.pid || null,
           // For HTTP sessions, consider them "connected" if they're active and have a buffer
-          connected: isHttpSession ? (session.isActive && hasBuffer) : (session.process?.connected || false),
+          connected: isHttpSession
+            ? session.isActive && hasBuffer
+            : session.process?.connected || false,
           signalCode: session.process?.signalCode || null,
           exitCode: session.process?.exitCode || null,
         },

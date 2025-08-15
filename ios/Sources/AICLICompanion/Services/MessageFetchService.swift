@@ -152,4 +152,3 @@ struct MessagePreview: Codable, Identifiable {
     let type: String
     let length: Int
 }
-

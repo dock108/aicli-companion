@@ -259,7 +259,6 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
            let sessionId = userInfo["sessionId"] as? String,
            let projectPath = userInfo["projectPath"] as? String,
            let preview = userInfo["preview"] as? String {
-            
             print("📲 === LARGE MESSAGE SIGNAL RECEIVED ===")
             print("📲 Message ID: \(messageId)")
             print("📲 Session ID: \(sessionId)")
@@ -290,7 +289,6 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
                         sessionId: sessionId,
                         projectPath: projectPath
                     )
-                    
                 } catch {
                     print("❌ Failed to fetch message: \(error)")
                     
@@ -315,7 +313,6 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
             // The notification will be handled after fetching is complete
             completionHandler([])
             return
-            
         } else if let claudeMessage = userInfo["message"] as? String,
                   let sessionId = userInfo["sessionId"] as? String,
                   let projectPath = userInfo["projectPath"] as? String {

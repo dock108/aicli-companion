@@ -20,7 +20,8 @@ router.post('/', async (req, res) => {
     attachments,
     autoResponse, // Auto-response metadata
   } = req.body;
-  const requestId = req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const requestId =
+    req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
   if (!message) {
     return res.status(400).json({
@@ -265,7 +266,7 @@ router.post('/', async (req, res) => {
             sessionId: claudeSessionId,
           });
         }
-        
+
         // Add assistant response to buffer
         if (!buffer.assistantMessages) {
           buffer.assistantMessages = [];
@@ -288,7 +289,7 @@ router.post('/', async (req, res) => {
       if (content.length > MESSAGE_FETCH_THRESHOLD) {
         const { randomUUID } = require('crypto');
         messageId = randomUUID();
-        
+
         // Store the message in the session buffer for later retrieval
         aicliService.sessionManager.storeMessage(claudeSessionId, messageId, content, {
           type: 'assistant',
@@ -301,7 +302,7 @@ router.post('/', async (req, res) => {
             size: att.size || (att.data.length * 3) / 4,
           })),
         });
-        
+
         logger.info('Stored large message for fetching', {
           messageId,
           sessionId: claudeSessionId,
@@ -371,7 +372,8 @@ router.post('/', async (req, res) => {
  */
 router.post('/auto-response/pause', async (req, res) => {
   const { sessionId, deviceToken } = req.body;
-  const requestId = req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const requestId =
+    req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
   if (!sessionId) {
     return res.status(400).json({
@@ -404,7 +406,8 @@ router.post('/auto-response/pause', async (req, res) => {
  */
 router.post('/auto-response/resume', async (req, res) => {
   const { sessionId, deviceToken } = req.body;
-  const requestId = req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const requestId =
+    req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
   if (!sessionId) {
     return res.status(400).json({
@@ -437,7 +440,8 @@ router.post('/auto-response/resume', async (req, res) => {
  */
 router.post('/auto-response/stop', async (req, res) => {
   const { sessionId, deviceToken, reason } = req.body;
-  const requestId = req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const requestId =
+    req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
   if (!sessionId) {
     return res.status(400).json({
@@ -472,7 +476,8 @@ router.post('/auto-response/stop', async (req, res) => {
  */
 router.get('/:sessionId/progress', async (req, res) => {
   const { sessionId } = req.params;
-  const requestId = req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const requestId =
+    req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
   logger.info('Fetching thinking progress', { sessionId, requestId });
 
@@ -533,10 +538,10 @@ router.get('/:sessionId/messages', async (req, res) => {
   try {
     // Get AICLI service from app instance
     const aicliService = req.app.get('aicliService');
-    
+
     // Get the session buffer which contains all messages
     const buffer = aicliService.sessionManager.getSessionBuffer(sessionId);
-    
+
     if (!buffer) {
       // No buffer means no active session
       return res.json({
@@ -548,13 +553,13 @@ router.get('/:sessionId/messages', async (req, res) => {
         note: 'No active session found',
       });
     }
-    
+
     // Combine user and assistant messages, maintaining chronological order
     const allMessages = [];
-    
+
     // Add user messages with proper structure
     if (buffer.userMessages && buffer.userMessages.length > 0) {
-      buffer.userMessages.forEach(msg => {
+      buffer.userMessages.forEach((msg) => {
         allMessages.push({
           content: msg.content || msg.message,
           sender: 'user',
@@ -564,10 +569,10 @@ router.get('/:sessionId/messages', async (req, res) => {
         });
       });
     }
-    
+
     // Add assistant messages with proper structure
     if (buffer.assistantMessages && buffer.assistantMessages.length > 0) {
-      buffer.assistantMessages.forEach(msg => {
+      buffer.assistantMessages.forEach((msg) => {
         allMessages.push({
           content: msg.content || msg.message,
           sender: 'assistant',
@@ -578,16 +583,16 @@ router.get('/:sessionId/messages', async (req, res) => {
         });
       });
     }
-    
+
     // Sort messages by timestamp to maintain conversation flow
     allMessages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-    
+
     // Apply pagination if needed
     const paginatedMessages = allMessages.slice(
       parseInt(offset),
       parseInt(offset) + parseInt(limit)
     );
-    
+
     logger.info('Returning buffered messages', {
       sessionId,
       totalMessages: allMessages.length,
@@ -595,13 +600,13 @@ router.get('/:sessionId/messages', async (req, res) => {
       offset,
       limit,
     });
-    
+
     res.json({
       success: true,
       sessionId,
       messages: paginatedMessages,
       totalCount: allMessages.length,
-      hasMore: allMessages.length > (parseInt(offset) + parseInt(limit)),
+      hasMore: allMessages.length > parseInt(offset) + parseInt(limit),
     });
   } catch (error) {
     logger.error('Failed to fetch chat messages', {

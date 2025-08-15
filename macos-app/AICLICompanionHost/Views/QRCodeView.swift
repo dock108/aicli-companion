@@ -135,14 +135,12 @@ struct QRCodeView: View {
         // Extract port from connection string
         let components = connectionString.components(separatedBy: ":")
         let port = components.last?.components(separatedBy: "?").first ?? "3001"
-        
         guard let url = URL(string: "http://localhost:\(port)/api/auth/setup") else {
             generateQRCodeLocally()
             return
         }
-        
+
         var request = URLRequest(url: url, timeoutInterval: 3.0)
-        
         // Extract auth token if present in connection string
         if connectionString.contains("token=") {
             let tokenPart = connectionString.components(separatedBy: "token=").last ?? ""
@@ -151,11 +149,10 @@ struct QRCodeView: View {
                 request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             }
         }
-        
-        URLSession.shared.dataTask(with: request) { data, response, error in
+
+        URLSession.shared.dataTask(with: request) { data, _, error in
             DispatchQueue.main.async {
                 self.isLoadingFromServer = false
-                
                 guard error == nil,
                       let data = data,
                       let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -165,7 +162,6 @@ struct QRCodeView: View {
                     self.generateQRCodeLocally()
                     return
                 }
-                
                 self.qrCodeDataURL = dataUrl
             }
         }.resume()

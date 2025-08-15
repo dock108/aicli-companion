@@ -81,6 +81,5 @@ public class AppDelegate: NSObject, UIApplicationDelegate {
         print("📨 Background notification received - trusting APNS delivery")
         completionHandler(.noData)
     }
-    
 }
 #endif

@@ -56,7 +56,6 @@ class ServerManager: ObservableObject {
         return addAuthTokenToURL(baseURL)
     }
 
-
     private func addAuthTokenToURL(_ baseURL: String) -> String {
         guard let token = authToken, SettingsManager.shared.requireAuthentication else {
             return baseURL

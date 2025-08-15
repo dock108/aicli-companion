@@ -318,7 +318,7 @@ class PushNotificationService {
       // Determine if message requires fetching (iMessage-style)
       const MESSAGE_FETCH_THRESHOLD = 3000; // Characters
       const requiresFetch = data.message && data.message.length > MESSAGE_FETCH_THRESHOLD;
-      
+
       // Generate message ID for large messages
       let messageId = data.messageId;
       if (requiresFetch && !messageId) {
@@ -348,8 +348,10 @@ class PushNotificationService {
           autoResponse: data.autoResponse || null,
           thinkingMetadata: data.thinkingMetadata || null,
         };
-        
-        console.log(`📱 Large message (${data.message.length} chars) - sending signal with messageId: ${messageId}`);
+
+        console.log(
+          `📱 Large message (${data.message.length} chars) - sending signal with messageId: ${messageId}`
+        );
       } else {
         // Small message - include full content (backwards compatible)
         notification.payload = {

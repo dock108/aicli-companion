@@ -10,7 +10,7 @@ public class SettingsManager: ObservableObject {
     @Published var autoScroll: Bool = true
     @Published var showTypingIndicators: Bool = true
     @Published var hapticFeedback: Bool = true
-    @Published var storeChatHistory: Bool = false
+    @Published var storeChatHistory: Bool = true
     @Published var isPremium: Bool = false
     
     // Connection status

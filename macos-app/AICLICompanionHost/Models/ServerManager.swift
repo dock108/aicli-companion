@@ -47,29 +47,13 @@ class ServerManager: ObservableObject {
     }
 
     private func buildPublicConnectionString(from publicURL: String) -> String {
-        let wsURL = convertToWebSocketURL(publicURL)
-        return addAuthTokenToURL(wsURL)
+        // Keep HTTP/HTTPS URLs as is
+        return addAuthTokenToURL(publicURL)
     }
 
     private func buildLocalConnectionString() -> String {
-        let baseURL = "ws://\(localIP):\(port)/ws"
+        let baseURL = "http://\(localIP):\(port)"
         return addAuthTokenToURL(baseURL)
-    }
-
-    private func convertToWebSocketURL(_ url: String) -> String {
-        var wsURL = url
-        if url.hasPrefix("https://") {
-            wsURL = url.replacingOccurrences(of: "https://", with: "wss://")
-        } else if url.hasPrefix("http://") {
-            wsURL = url.replacingOccurrences(of: "http://", with: "ws://")
-        }
-
-        // Add WebSocket path if not present
-        if !wsURL.contains("/ws") {
-            wsURL = wsURL.trimmingCharacters(in: .init(charactersIn: "/")) + "/ws"
-        }
-
-        return wsURL
     }
 
     private func addAuthTokenToURL(_ baseURL: String) -> String {

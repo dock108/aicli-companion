@@ -1,5 +1,6 @@
 import apn from '@parse/node-apn';
 import fs from 'fs';
+import { randomUUID } from 'crypto';
 import { getTelemetryService } from './telemetry.js';
 
 class PushNotificationService {
@@ -315,26 +316,64 @@ class PushNotificationService {
       notification.pushType = 'alert';
       notification.category = 'CLAUDE_RESPONSE';
 
-      notification.payload = {
-        sessionId: data.sessionId,
-        projectName: data.projectName,
-        projectPath: data.projectPath, // Full path needed for message persistence
-        message: data.message, // Full Claude response content
-        originalMessage: data.originalMessage, // Original user message for context
-        totalChunks: data.totalChunks,
-        timestamp: new Date().toISOString(),
-        isLongRunningCompletion: data.isLongRunningCompletion || false,
-        requestId: data.requestId,
-        deepLink: `claude-companion://session/${data.sessionId}`,
-        // Always APNS delivery method
-        deliveryMethod: 'apns_primary',
-        // Include attachment metadata if present
-        attachmentInfo: data.attachmentInfo || null,
-        // Include auto-response metadata if present
-        autoResponse: data.autoResponse || null,
-        // Include thinking metadata if present
-        thinkingMetadata: data.thinkingMetadata || null,
-      };
+      // Determine if message requires fetching (iMessage-style)
+      const MESSAGE_FETCH_THRESHOLD = 3000; // Characters
+      const requiresFetch = data.message && data.message.length > MESSAGE_FETCH_THRESHOLD;
+
+      // Generate message ID for large messages
+      let messageId = data.messageId;
+      if (requiresFetch && !messageId) {
+        // Generate a message ID if not provided
+        messageId = randomUUID();
+      }
+
+      // Build payload based on message size
+      if (requiresFetch) {
+        // Large message - send only metadata and preview (iMessage-style)
+        notification.payload = {
+          messageId, // ID for fetching full content
+          sessionId: data.sessionId,
+          projectName: data.projectName,
+          projectPath: data.projectPath,
+          preview: this.truncateMessage(data.message, 100), // Short preview only
+          messageLength: data.message.length,
+          requiresFetch: true, // Flag for iOS to fetch full content
+          timestamp: new Date().toISOString(),
+          isLongRunningCompletion: data.isLongRunningCompletion || false,
+          requestId: data.requestId,
+          deepLink: `claude-companion://session/${data.sessionId}`,
+          deliveryMethod: 'apns_signal', // Signal-only delivery
+          // Include metadata but not full content
+          attachmentInfo: data.attachmentInfo || null,
+          autoResponse: data.autoResponse || null,
+          thinkingMetadata: data.thinkingMetadata || null,
+        };
+
+        console.log(
+          `📱 Large message (${data.message.length} chars) - sending signal with messageId: ${messageId}`
+        );
+      } else {
+        // Small message - include full content (backwards compatible)
+        notification.payload = {
+          sessionId: data.sessionId,
+          projectName: data.projectName,
+          projectPath: data.projectPath,
+          message: data.message, // Full Claude response content
+          originalMessage: data.originalMessage, // Original user message for context
+          totalChunks: data.totalChunks,
+          timestamp: new Date().toISOString(),
+          isLongRunningCompletion: data.isLongRunningCompletion || false,
+          requestId: data.requestId,
+          deepLink: `claude-companion://session/${data.sessionId}`,
+          deliveryMethod: 'apns_primary', // Full delivery
+          // Include attachment metadata if present
+          attachmentInfo: data.attachmentInfo || null,
+          // Include auto-response metadata if present
+          autoResponse: data.autoResponse || null,
+          // Include thinking metadata if present
+          thinkingMetadata: data.thinkingMetadata || null,
+        };
+      }
 
       // Set thread ID for conversation grouping
       notification.threadId = data.sessionId;

@@ -6,7 +6,7 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var settings: SettingsManager
     @StateObject private var autoResponseManager = AutoResponseManager.shared
-    @StateObject private var httpService = HTTPAICLIService.shared
+    @StateObject private var httpService = AICLIService.shared
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
@@ -404,28 +404,29 @@ struct SettingsView: View {
     
     private var privacySection: some View {
         SettingsSection(title: "Privacy") {
-            Toggle(isOn: $settings.storeChatHistory) {
-                Text("Store chat history locally")
+            // Always store chat history locally (required for app to function properly)
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                Text("Chat History")
                     .font(Typography.font(.body))
                     .foregroundColor(Colors.textPrimary(for: colorScheme))
+                Text("Messages are cached locally for performance and offline access")
+                    .font(Typography.font(.caption))
+                    .foregroundColor(Colors.textSecondary(for: colorScheme))
             }
-            .toggleStyle(NeumorphicToggleStyle())
             .padding(.horizontal, Spacing.md)
             .padding(.vertical, Spacing.sm)
-
-            if settings.storeChatHistory {
-                SettingsDivider()
-                
-                Button(action: {
-                    settings.clearChatHistory()
-                }) {
-                    SettingsTile(title: "Clear Chat History") {
-                        EmptyView()
-                    }
-                    .foregroundColor(.red)
+            
+            SettingsDivider()
+            
+            Button(action: {
+                settings.clearChatHistory()
+            }) {
+                SettingsTile(title: "Clear Chat History") {
+                    EmptyView()
                 }
-                .buttonStyle(PlainButtonStyle())
+                .foregroundColor(.red)
             }
+            .buttonStyle(PlainButtonStyle())
         }
     }
     

@@ -3,16 +3,16 @@ import Combine
 @testable import AICLICompanion
 
 @available(iOS 16.0, macOS 13.0, *)
-final class HTTPAICLIServiceTests: XCTestCase {
+final class AICLIServiceTests: XCTestCase {
     
-    var httpService: HTTPAICLIService!
-    var mockService: MockHTTPAICLIService!
+    var httpService: AICLIService!
+    var mockService: MockAICLIService!
     var cancellables: Set<AnyCancellable>!
     
     override func setUp() {
         super.setUp()
-        httpService = HTTPAICLIService()
-        mockService = MockHTTPAICLIService()
+        httpService = AICLIService()
+        mockService = MockAICLIService()
         cancellables = Set<AnyCancellable>()
     }
     

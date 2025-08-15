@@ -49,18 +49,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Known Issues
 - Session context in Claude Code CLI itself may not persist between app restarts
-- Messages are stored per device, not synced across devices
+
+### Features
+- **Local-First Storage**: Messages stored per device with optional CloudKit cross-device sync
+
+## [1.1.0] - 2025-08-13
+
+### Added - Local-First Architecture
+- **Local-First Message Storage**: All conversations stored locally immediately for zero message loss
+- **WhatsApp/iMessage Pattern**: Messages appear instantly in UI and persist across app restarts
+- **Project Switching Fix**: Complete conversation history loads correctly when switching between projects
+- **Simplified Architecture**: Removed complex retry/recovery mechanisms in favor of reliable local storage
+- **Offline Conversation Browsing**: Browse and read previous conversations without server connection
+
+### Changed
+- **Message Persistence**: Transitioned from server-dependent to local-first storage approach
+- **Server Role**: Server now acts as pure message router without storing conversation history
+- **APNS Integration**: Push notifications deliver messages to local storage rather than UI directly
+- **Performance**: Removed ~300 lines of complex retry logic for simpler, more reliable operation
+
+### Fixed
+- **Message Loss on Project Switch**: Fixed ChatView loading logic to properly restore conversations
+- **Session ID Management**: Improved session restoration from local metadata
+- **Conversation History**: All messages now persist correctly across app lifecycle events
+
+### Technical Improvements
+- Implemented `MessagePersistenceService.appendMessage()` for reliable message storage
+- Enhanced project switching logic in ChatView to load from local storage
+- Simplified message flow: Local storage → HTTP request → APNS delivery → Local storage
+- Added comprehensive message persistence testing framework
 
 ## [Unreleased]
 
 ### Planned
+- Remove BackgroundSessionCoordinator (no longer needed with local-first architecture)
 - Android app support
-- Cloud sync for messages and settings
+- Enhanced CloudKit cross-device sync
 - Multiple Claude model support
 - Enhanced code highlighting
-- File upload/download capabilities
 - Voice input support
-- Collaborative features
 
 ---
 

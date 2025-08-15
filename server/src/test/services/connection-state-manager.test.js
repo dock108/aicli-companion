@@ -110,8 +110,8 @@ test('ConnectionStateManager', async (t) => {
     assert.strictEqual(stats.expired, 0);
     assert.strictEqual(stats.storageType, 'memory');
 
-    // Wait for expiration
-    await new Promise((resolve) => setTimeout(resolve, 150));
+    // Wait for expiration - add a small buffer to ensure expiration
+    await new Promise((resolve) => setTimeout(resolve, 200));
 
     stats = manager.getStats();
     assert.strictEqual(stats.total, 2);

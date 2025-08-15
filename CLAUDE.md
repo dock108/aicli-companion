@@ -165,43 +165,50 @@ When you see a TODO tag, check if there's a plan.md that addresses it.
 
 ## Architecture Principles
 
-### Server as Stateless Message Router
-1. **No State Management**
-   - Server doesn't create or manage sessions
-   - Server doesn't track active sessions
-   - Server doesn't persist session state
-   - Server doesn't manage session lifecycle
+### Local-First Message Storage (PRIMARY PATTERN)
+1. **iOS App as Source of Truth**
+   - All messages stored locally immediately upon send/receive
+   - MessagePersistenceService manages local conversation database
+   - Zero message loss - conversations persist across app restarts
+   - Project switching loads messages from local storage
 
-2. **Pure Message Routing**
+2. **WhatsApp/iMessage Pattern Implementation**
+   - Messages appear in UI immediately when sent
+   - Local database updated before HTTP request
+   - APNS delivers Claude responses to local storage
+   - No server polling or complex recovery mechanisms
+
+3. **Simple Append-Only Operations**
+   - New messages added via `appendMessage()` method
+   - Duplicate prevention using message IDs
+   - Chronological ordering maintained automatically
+   - Session IDs managed locally with metadata persistence
+
+### Server as Stateless Message Router (SECONDARY ROLE)
+1. **Pure Message Routing Only**
    - Receives HTTP requests from iOS app
    - Passes messages to Claude CLI
    - Returns Claude's response via APNS
    - Uses requestId for proper message routing
 
-3. **No Message Buffering**
-   - Doesn't store messages
-   - Doesn't queue messages (except for APNS delivery)
-   - Doesn't track conversation history
-   - Doesn't cache responses
+2. **No Message Storage**
+   - Doesn't store conversations or message history
+   - Doesn't queue messages (except for APNS delivery queue)
+   - Doesn't cache responses or maintain session state
+   - No message buffering or persistence
 
-4. **No Welcome Messages**
-   - No initialization handshake
-   - No capability announcements
-   - No session setup on connection
-   - No automatic messages
-
-### Claude CLI as Source of Truth
-- Claude manages all session state internally
+### Claude CLI as Session Authority  
 - Claude generates and owns session IDs
-- Server passes through whatever Claude returns
-- No modification of Claude responses
+- Claude maintains internal context and memory
+- Server passes through Claude responses unchanged
+- No modification of Claude responses by server
 
-### iOS App Manages State
-- Stores session IDs locally
-- Manages conversation history
-- Handles project context
-- Maintains UI state independently
-- **If plan.md includes CloudKit sync, follows sync architecture**
+### iOS App Local State Management (IMPLEMENTED)
+- **Primary Message Storage**: Stores all conversations locally via MessagePersistenceService
+- **Session ID Management**: Stores and retrieves Claude session IDs locally
+- **Project Context**: Manages project-specific conversations independently
+- **Conversation Restoration**: Loads complete message history from local storage
+- **CloudKit Integration**: Optional cross-device sync as secondary backup
 
 ### Project Path as Initial Context
 - First message includes project path
@@ -305,6 +312,15 @@ When you see a TODO tag, check if there's a plan.md that addresses it.
 - Run manual test checklists if specified
 - Update test results in plan.md
 - Document any test failures as blockers
+
+### Local-First Architecture Testing
+**Essential tests for message persistence**:
+- Message saving on send (before server response)
+- Message loading on project switch
+- Session ID restoration from local metadata
+- Conversation history preservation across app restarts
+- APNS message delivery to local storage
+- CloudKit sync as backup (optional)
 
 ## Performance Guidelines
 

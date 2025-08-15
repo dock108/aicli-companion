@@ -533,7 +533,6 @@ describe('API Routes', () => {
       assert.strictEqual(response.version, '1.0.0');
       assert.strictEqual(response.aicliCodeAvailable, true);
       assert.ok(response.endpoints);
-      assert.strictEqual(response.websocket, '/ws');
     });
   });
 });

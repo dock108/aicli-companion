@@ -8,7 +8,7 @@ struct AppMain: App {
     @UIApplicationDelegateAdaptor(AICLICompanion.AppDelegate.self) var appDelegate
     #endif
     
-    @StateObject private var aicliService = AICLICompanion.HTTPAICLIService()
+    @StateObject private var aicliService = AICLICompanion.AICLIService.shared
     @StateObject private var settingsManager = AICLICompanion.SettingsManager()
     @StateObject private var pushNotificationService = AICLICompanion.PushNotificationService.shared
     

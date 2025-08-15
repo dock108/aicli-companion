@@ -134,6 +134,65 @@ router.post('/:sessionId/keepalive', async (req, res) => {
 });
 
 /**
+ * GET /api/sessions/:sessionId/messages/:messageId - Get a specific message
+ */
+router.get('/:sessionId/messages/:messageId', async (req, res) => {
+  const { sessionId, messageId } = req.params;
+
+  try {
+    const aicliService = req.app.get('aicliService');
+    const message = aicliService.sessionManager.getMessageById(sessionId, messageId);
+
+    if (!message) {
+      return res.status(404).json({
+        success: false,
+        error: 'Message not found',
+      });
+    }
+
+    res.json({
+      success: true,
+      message,
+    });
+  } catch (error) {
+    logger.error('Failed to get message', { sessionId, messageId, error: error.message });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve message',
+    });
+  }
+});
+
+/**
+ * GET /api/sessions/:sessionId/messages - Get all messages for a session with pagination
+ */
+router.get('/:sessionId/messages', async (req, res) => {
+  const { sessionId } = req.params;
+  const { limit = 50, offset = 0 } = req.query;
+
+  try {
+    const aicliService = req.app.get('aicliService');
+    const result = aicliService.sessionManager.getSessionMessages(
+      sessionId,
+      parseInt(limit),
+      parseInt(offset)
+    );
+
+    res.json({
+      success: true,
+      ...result,
+      sessionId,
+    });
+  } catch (error) {
+    logger.error('Failed to get session messages', { sessionId, error: error.message });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve session messages',
+    });
+  }
+});
+
+/**
  * GET /api/sessions/claude - Get all Claude sessions being tracked
  */
 router.get('/claude', async (req, res) => {

@@ -18,7 +18,6 @@ permissions:
 env:
   NODE_VERSION: '22'
   XCODE_VERSION: '16.2'
-  IOS_SIMULATOR: 'iPhone 16 Pro'  # Updated for Xcode 16.2
   MINIMUM_COVERAGE: 80  # Minimum code coverage percentage
 
 jobs:
@@ -121,6 +120,9 @@ jobs:
         cd ios
         swiftlint lint --strict --reporter github-actions-logging
     
+    # Skip iOS simulator installation - just build for generic device
+    # This avoids downloading GBs of simulator runtime data
+    
     - name: Resolve Swift Package Dependencies
       run: |
         cd ios
@@ -129,25 +131,30 @@ jobs:
     - name: Build iOS App
       run: |
         cd ios
+        # Build for generic iOS device (no simulator needed)
+        # This is much faster and doesn't require downloading simulator runtimes
         xcodebuild -project AICLICompanion.xcodeproj \
           -scheme AICLICompanion \
-          -destination "platform=iOS Simulator,name=${{ env.IOS_SIMULATOR }}" \
+          -destination "generic/platform=iOS" \
           build \
-          CODE_SIGNING_ALLOWED=NO
+          CODE_SIGNING_ALLOWED=NO \
+          ONLY_ACTIVE_ARCH=NO \
+          -derivedDataPath build
     
     # - name: Run iOS Tests with Coverage
     #   run: |
     #     cd ios
     #     xcodebuild -project AICLICompanion.xcodeproj \
     #       -scheme AICLICompanion \
-    #       -destination "platform=iOS Simulator,name=${{ env.IOS_SIMULATOR }}" \
+    #       -destination "generic/platform=iOS Simulator" \
     #       test \
     #       -enableCodeCoverage YES \
     #       CODE_SIGNING_ALLOWED=NO \
     #       -resultBundlePath ios-test.xcresult \
     #       -parallel-testing-enabled NO \
     #       -maximum-concurrent-test-simulator-destinations 1 \
-    #       IDEBuildOperationMaxNumberOfConcurrentCompileTasks=4
+    #       IDEBuildOperationMaxNumberOfConcurrentCompileTasks=4 \
+    #       ONLY_ACTIVE_ARCH=NO
     
     # - name: Generate iOS Coverage Report
     #   run: |
@@ -325,7 +332,7 @@ jobs:
         echo "### Build Information" >> $GITHUB_STEP_SUMMARY
         echo "- **Node Version:** ${{ env.NODE_VERSION }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Xcode Version:** ${{ env.XCODE_VERSION }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **iOS Simulator:** ${{ env.IOS_SIMULATOR }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **iOS Build:** Generic Device (no simulator)" >> $GITHUB_STEP_SUMMARY
         echo "- **Minimum Coverage:** ${{ env.MINIMUM_COVERAGE }}%" >> $GITHUB_STEP_SUMMARY
         
         # Overall status

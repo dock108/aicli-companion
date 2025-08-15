@@ -7,9 +7,9 @@ import UIKit
 @available(iOS 16.0, macOS 13.0, *)
 struct ChatView: View {
     // MARK: - Environment & State
-    @EnvironmentObject var aicliService: HTTPAICLIService
+    @EnvironmentObject var aicliService: AICLIService
     @EnvironmentObject var settings: SettingsManager
-    @StateObject private var viewModel: ChatViewModel
+    @ObservedObject private var viewModel = ChatViewModel.shared
     @StateObject private var sessionManager = ChatSessionManager.shared
     @StateObject private var queueManager = MessageQueueManager.shared
     
@@ -47,10 +47,6 @@ struct ChatView: View {
         self.selectedProject = selectedProject
         self.session = session
         self.onSwitchProject = onSwitchProject
-        
-        // ViewModule will be created lazily when environment objects are available
-        // We'll initialize it in body where we have access to environment objects
-        self._viewModel = StateObject(wrappedValue: ChatViewModel(aicliService: HTTPAICLIService.shared, settings: SettingsManager.shared))
     }
     
     // MARK: - Body
@@ -85,7 +81,7 @@ struct ChatView: View {
                 // Message list
                 ChatMessageList(
                     messages: viewModel.messages,
-                    isLoading: viewModel.isLoading,
+                    isLoading: viewModel.isLoadingForProject(selectedProject?.path ?? ""),
                     progressInfo: viewModel.progressInfo,
                     isIPad: isIPad,
                     horizontalSizeClass: horizontalSizeClass,
@@ -96,11 +92,25 @@ struct ChatView: View {
                     contentHeight: $contentHeight,
                     onScrollPositionChanged: checkIfNearBottom
                 )
+                #if os(iOS)
+                .refreshable {
+                    // WhatsApp/iMessage pattern: Just reload local conversation
+                    print("🔄 User triggered pull-to-refresh - reloading conversation")
+                    
+                    // Reload messages from local database (instant)
+                    if let project = selectedProject, let sessionId = viewModel.currentSessionId {
+                        viewModel.loadMessages(for: project, sessionId: sessionId)
+                    }
+                    
+                    // Small delay for visual feedback
+                    try? await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
+                }
+                #endif
                 
                 // Input bar
                 ChatInputBar(
                     messageText: $messageText,
-                    isLoading: viewModel.isLoading,
+                    isLoading: viewModel.isLoadingForProject(selectedProject?.path ?? ""),
                     isIPad: isIPad,
                     horizontalSizeClass: horizontalSizeClass,
                     colorScheme: colorScheme,
@@ -195,30 +205,50 @@ struct ChatView: View {
                     
                     print("🔷 ChatView: Loaded \(self.viewModel.messages.count) messages for restored session")
                     
-                    // Sync messages from CloudKit
+                    // WhatsApp/iMessage pattern: Messages loaded from local database only
+                    // Push notifications will deliver any new messages automatically
+                    
+                    // Sync messages from CloudKit in background (optional)
                     Task {
                         await self.viewModel.syncMessages(for: project)
                     }
                     
-                    // Check for any new messages that may have been saved while in a different project
-                    self.refreshMessagesAfterProjectSwitch()
+                    // WhatsApp/iMessage pattern: Messages already loaded from local database
+                    // Push notifications deliver new messages automatically
                     
                 case .failure(let error):
-                    // No existing session, user can start one when ready
-                    print("ℹ️ No existing session (\(error.localizedDescription)), waiting for user to start")
+                    // No existing session, but check if we have saved messages for this project
+                    print("ℹ️ No existing session (\(error.localizedDescription)), checking for saved conversations")
                     
                     // Clear any stale session data
                     self.viewModel.setActiveSession(nil)
                     self.viewModel.currentSessionId = nil
-                    self.viewModel.messages.removeAll()
                     
-                    // Check for pending messages that might have been saved without a session ID
-                    if let pendingMessages = BackgroundSessionCoordinator.shared.retrievePendingMessages(for: project.path) {
-                        print("🔄 ChatView: Found \(pendingMessages.count) pending messages for project")
-                        self.viewModel.messages = pendingMessages
+                    // Clear any stuck loading state when no session exists
+                    self.viewModel.clearLoadingState(for: project.path)
+                    
+                    // WhatsApp/iMessage pattern: Check if we have any saved conversations for this project
+                    let persistenceService = MessagePersistenceService.shared
+                    if let metadata = persistenceService.getSessionMetadata(for: project.path),
+                       let sessionId = metadata.aicliSessionId {
+                        print("🔄 ChatView: Found saved conversation with session \(sessionId), loading messages")
+                        
+                        // Load the saved conversation
+                        self.viewModel.loadMessages(for: project, sessionId: sessionId)
+                        
+                        // Set the session ID for future messages
+                        self.viewModel.currentSessionId = sessionId
+                        
+                        print("✅ ChatView: Loaded \(self.viewModel.messages.count) messages from saved conversation")
+                    } else {
+                        // Truly no conversation exists yet
+                        print("ℹ️ ChatView: No saved conversation found for \(project.name)")
+                        self.viewModel.messages.removeAll()
+                        // Clear any stuck loading state when there's no conversation
+                        self.viewModel.clearLoadingState(for: project.path)
                     }
                     
-                    // Still sync from CloudKit even without a session
+                    // Sync from CloudKit in background (optional)
                     Task {
                         await self.viewModel.syncMessages(for: project)
                     }
@@ -233,6 +263,9 @@ struct ChatView: View {
         // Save messages
         viewModel.saveMessages(for: project)
         
+        // Stop polling (will resume if needed when returning)
+        viewModel.onDisappear()
+        
         // Clean up keyboard observers
         // swiftlint:disable:next notification_center_detachment
         NotificationCenter.default.removeObserver(self)
@@ -245,14 +278,14 @@ struct ChatView: View {
         
         print("🔄 ChatView: Project changed to '\(project.name)'")
         
-        // Note: At this point, selectedProject is already the NEW project
-        // We can't save messages for the old project here because we don't have a reference to it
-        // Messages should have been saved in cleanupView() when leaving the old project
+        // The currentProject setter will handle saving old messages and loading new ones
+        // Just update the currentProject and it will switch contexts
+        viewModel.currentProject = project
         
-        // Clear current state
-        viewModel.messages.removeAll()
-        viewModel.activeSession = nil
-        viewModel.currentSessionId = nil  // Clear Claude's session ID to prevent cross-project contamination
+        // Clear loading state for old project
+        viewModel.isLoading = false  // Clear loading state
+        viewModel.progressInfo = nil  // Clear progress info
+        viewModel.stopSessionPolling()  // Stop any active polling
         messageText = ""
         
         // Set up for new project
@@ -290,21 +323,14 @@ struct ChatView: View {
         // Just clear the local session ID so next message starts fresh
         if let currentSessionId = viewModel.currentSessionId {
             print("🗑️ Clearing local session: \(currentSessionId)")
-            viewModel.currentSessionId = nil
         }
         
-        // Clear messages from UI
-        viewModel.messages.removeAll()
-        
-        // Clear active session
-        viewModel.setActiveSession(nil)
+        // Use the new comprehensive clear function
+        viewModel.clearSession()
         
         // Clear persisted messages and session data
         let persistenceService = MessagePersistenceService.shared
         persistenceService.clearMessages(for: project.path)
-        
-        // Clear current session ID - next message will be a fresh chat
-        viewModel.currentSessionId = nil
         
         // Sync clear operation to CloudKit for cross-device consistency
         Task {
@@ -330,9 +356,9 @@ struct ChatView: View {
         
         let httpURL = "http://\(connection.address):\(connection.port)"
         print("🔗 ChatView: Checking HTTP connection to \(httpURL)")
-        print("   Current connection state: \(HTTPAICLIService.shared.isConnected)")
+        print("   Current connection state: \(AICLIService.shared.isConnected)")
         
-        if HTTPAICLIService.shared.isConnected {
+        if AICLIService.shared.isConnected {
             print("✅ ChatView: HTTP service already connected")
             completion()
             return
@@ -340,10 +366,10 @@ struct ChatView: View {
         
         print("🔗 ChatView: Starting HTTP connection...")
         print("   aicliService instance: \(ObjectIdentifier(aicliService))")
-        print("   HTTPAICLIService.shared instance: \(ObjectIdentifier(HTTPAICLIService.shared))")
+        print("   AICLIService.shared instance: \(ObjectIdentifier(AICLIService.shared))")
         
         // Use the shared instance for connection to ensure consistency
-        HTTPAICLIService.shared.connect(
+        AICLIService.shared.connect(
             to: connection.address,
             port: connection.port,
             authToken: connection.authToken
@@ -472,90 +498,16 @@ struct ChatView: View {
         }
     }
     
-    // MARK: - Message Refresh
-    private func refreshMessagesAfterProjectSwitch() {
-        guard let project = selectedProject,
-              let sessionId = viewModel.currentSessionId else {
-            print("🔄 No active session to refresh after project switch")
-            return
-        }
-        
-        print("🔄 ChatView: Checking for new messages after switching to project '\(project.name)'")
-        print("🔄 Current state: \(viewModel.messages.count) messages in memory")
-        
-        // Reload messages from persistence to get any that were saved while in different project
-        let savedMessages = MessagePersistenceService.shared.loadMessages(for: project.path, sessionId: sessionId)
-        print("🔄 Found \(savedMessages.count) messages in persistence")
-        
-        // Use the deduplication method to safely merge messages
-        let newMessageCount = viewModel.mergePersistedMessages(savedMessages)
-        
-        if newMessageCount > 0 {
-            print("✅ ChatView: Successfully merged \(newMessageCount) new messages after project switch")
-        } else {
-            print("🔄 No new messages found after switching to project '\(project.name)'")
-        }
-    }
     
     private func refreshMessagesOnActivation() {
-        guard let project = selectedProject,
-              let sessionId = viewModel.currentSessionId else {
-            print("🔄 No active session to refresh")
-            return
-        }
+        // WhatsApp/iMessage pattern: No server polling needed when app becomes active
+        // Push notifications deliver new messages automatically
+        print("🔄 ChatView: App became active - conversation already loaded from local database")
         
-        print("🔄 ChatView: Refreshing messages after returning from background")
-        print("🔄 Current state: \(viewModel.messages.count) messages in memory")
-        
-        // Reload messages from persistence to get any that were saved while backgrounded
-        let savedMessages = MessagePersistenceService.shared.loadMessages(for: project.path, sessionId: sessionId)
-        print("🔄 Found \(savedMessages.count) messages in persistence")
-        
-        // Use the new deduplication method to safely merge messages
-        let newMessageCount = viewModel.mergePersistedMessages(savedMessages)
-        
-        // Also sync from CloudKit when becoming active
-        Task {
-            await viewModel.syncMessages(for: project)
-        }
-        
-        if newMessageCount > 0 {
-            print("✅ ChatView: Successfully merged \(newMessageCount) new messages after returning from background")
-        } else {
-            print("📝 ChatView: No new messages found in persistence")
-            
-            // No new messages found locally - check server for completed long-running responses
-            print("🔄 Polling server for any completed responses...")
-            pollForCompletedResponses()
-        }
-    }
-    
-    private func pollForCompletedResponses() {
-        guard let project = selectedProject,
-              let sessionId = viewModel.currentSessionId else {
-            return
-        }
-        
-        print("🔍 Polling server for completed responses for session: \(sessionId)")
-        
-        // Use the HTTP service to make a lightweight status check
-        HTTPAICLIService.shared.checkSessionStatus(sessionId: sessionId) { result in
-            Task { @MainActor in
-                switch result {
-                case .success(let hasNewMessages):
-                    if hasNewMessages {
-                        print("✅ Server indicates new messages available - refreshing")
-                        // Reload messages from server/persistence
-                        let newMessages = MessagePersistenceService.shared.loadMessages(for: project.path, sessionId: sessionId)
-                        if newMessages.count > self.viewModel.messages.count {
-                            self.viewModel.messages = newMessages
-                        }
-                    } else {
-                        print("ℹ️ No new messages on server")
-                    }
-                case .failure(let error):
-                    print("⚠️ Failed to poll server for completed responses: \(error)")
-                }
+        // Sync from CloudKit when becoming active (optional background sync)
+        if let project = selectedProject {
+            Task {
+                await viewModel.syncMessages(for: project)
             }
         }
     }
@@ -569,6 +521,6 @@ struct ChatView: View {
         session: nil,
         onSwitchProject: {}
     )
-    .environmentObject(AICLIService())
+    .environmentObject(AICLIService.shared)
     .environmentObject(SettingsManager())
 }

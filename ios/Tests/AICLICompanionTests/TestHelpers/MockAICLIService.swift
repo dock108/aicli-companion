@@ -2,11 +2,11 @@ import Foundation
 import Combine
 @testable import AICLICompanion
 
-/// Mock implementation of HTTPAICLIService for testing
+/// Mock implementation of AICLIService for testing
 @available(iOS 16.0, macOS 13.0, *)
-class MockHTTPAICLIService: HTTPAICLIService {
+class MockAICLIService: AICLIService {
     
-    // MARK: - Inherited Published Properties from HTTPAICLIService
+    // MARK: - Inherited Published Properties from AICLIService
     // isConnected, connectionStatus, currentSession are inherited
     
     // MARK: - Mock Control Properties

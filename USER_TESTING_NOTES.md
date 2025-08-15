@@ -3,26 +3,20 @@
 ## Overview
 This document tracks issues, observations, and improvements discovered during user testing of the AICLI Companion app.
 
+## Test Cases and Results
+
+### Test Case #1: Message Persistence on Project Navigation
+**Test Steps**: Send "hello", wait for response, leave project, return to project chat
+**Expected**: Messages persist correctly without duplication
+**Result**: ❌ FAIL - Received message was duplicated in thread upon returning to project
+**Date**: 2025-08-15
+
 ## Issues Discovered
 
 ### Priority: High
 <!-- Critical issues that block core functionality -->
 
-- **Push notifications disappearing**: Notifications arrive but don't appear in the message thread. This happens when:
-  - User is still in the app when notification arrives
-  - User opens the app shortly after notification arrives
-  - Possible race condition between notification delivery and app state
-
-- **Message Formatting Issues** (2025-08-12) ✅ FIXED
-  - Long messages don't look aesthetically pleasing
-  - Raw markdown appearing in push notifications
-  - Note: We may have implemented code for this earlier - need to check existing implementation
-  - **RESOLUTION**: Added `stripMarkdown()` function to remove markdown formatting from push notification body text
-  - **IMPLEMENTATION**: Updates in `server/src/services/push-notification.js`
-    - New `stripMarkdown()` method removes code blocks, headers, bold/italic, links, etc.
-    - `truncateMessage()` now strips markdown before truncating
-    - Truncation tries to break at word boundaries for cleaner display
-  - **TESTED**: Added comprehensive tests in `push-notification-markdown.test.js`
+- **Message duplication on project re-entry** - When leaving and returning to a project, received messages are duplicated in the chat thread (Test Case #1)
 
 ### Priority: Medium
 <!-- Issues that affect user experience but have workarounds -->
@@ -46,4 +40,4 @@ This document tracks issues, observations, and improvements discovered during us
 ---
 
 **Created**: 2025-08-12
-**Last Updated**: 2025-08-12 (Push notification disappearing issue, message formatting issues)
+**Last Updated**: 2025-08-15

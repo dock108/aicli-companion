@@ -44,7 +44,7 @@ struct AppSettings: Codable {
     var autoScroll: Bool = true
     var showTypingIndicators: Bool = true
     var hapticFeedback: Bool = true
-    var storeChatHistory: Bool = false
+    var storeChatHistory: Bool = true
     var maxChatHistory: Int = 100
 
     // Premium features

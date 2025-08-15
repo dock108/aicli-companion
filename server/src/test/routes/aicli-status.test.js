@@ -39,18 +39,36 @@ describe('AICLI Status Routes', () => {
       checkAvailability: mock.fn(async () => true),
       getActiveSessions: mock.fn(() => ['session-1', 'session-2']),
       maxSessions: 5,
-      activeSessions: new Map([
-        [
-          'session-1',
-          {
-            workingDirectory: '/home/user/project1',
-            isActive: true,
-            createdAt: Date.now(),
-            lastActivity: Date.now(),
-            process: { pid: 1234, connected: true },
-          },
-        ],
-      ]),
+      sessionManager: {
+        activeSessions: new Map([
+          [
+            'session-1',
+            {
+              workingDirectory: '/home/user/project1',
+              isActive: true,
+              createdAt: Date.now(),
+              lastActivity: Date.now(),
+              process: { pid: 1234, connected: true },
+            },
+          ],
+          [
+            'session-2',
+            {
+              workingDirectory: '/home/user/project2',
+              isActive: true,
+              createdAt: Date.now(),
+              lastActivity: Date.now(),
+              process: { pid: 5678, connected: true },
+            },
+          ],
+        ]),
+        getSessionBuffer: mock.fn((sessionId) => {
+          if (sessionId === 'session-1') {
+            return { messages: [] };
+          }
+          return null;
+        }),
+      },
       sendOneTimePrompt: mock.fn(async () => ({ result: 'Test response' })),
       testAICLICommand: mock.fn(async (type) => {
         switch (type) {

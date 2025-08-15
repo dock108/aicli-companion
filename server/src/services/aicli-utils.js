@@ -2,6 +2,7 @@ import { resolve } from 'path';
 import { access, constants } from 'fs/promises';
 import { existsSync } from 'fs';
 import { execSync } from 'child_process';
+import { AICLIMessageHandler } from './aicli-message-handler.js';
 
 // Input validation and sanitization utilities
 export class InputValidator {
@@ -376,7 +377,10 @@ export class MessageProcessor {
     }
   }
 
+  // Deprecated: Use from aicli.js or implement your own classification
   static classifyAICLIMessage(message) {
+    // This method is deprecated and kept for backward compatibility
+    // The actual classification logic should be in aicli.js which handles the full context
     if (typeof message === 'string' || message === null || message === undefined) {
       return {
         eventType: 'streamData',
@@ -589,84 +593,28 @@ export class MessageProcessor {
   }
 
   static containsApprovalResponse(text) {
-    if (!text || typeof text !== 'string') {
-      return false;
-    }
-
-    const cleanText = text.toLowerCase().trim();
-    const approvalWords = ['y', 'yes', 'approve', 'allow', 'accept', 'ok'];
-
-    return approvalWords.includes(cleanText);
+    // Delegate to AICLIMessageHandler for consistent behavior
+    return AICLIMessageHandler.containsApprovalResponse(text);
   }
 
   static extractPermissionPrompt(resultText) {
-    if (!resultText || typeof resultText !== 'string') {
-      return null;
-    }
-
-    // Look for question patterns in the text
-    const lines = resultText.split('\n');
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (trimmed.includes('?') && (trimmed.includes('continue') || trimmed.includes('proceed'))) {
-        return trimmed;
-      }
-    }
-
-    return resultText.trim();
+    // Delegate to AICLIMessageHandler for consistent behavior
+    return AICLIMessageHandler.extractPermissionPrompt(resultText);
   }
 
   static containsPermissionRequest(content) {
-    if (!content) return false;
-
-    if (typeof content === 'string') {
-      return this.containsPermissionPatterns(content);
-    }
-
-    if (Array.isArray(content)) {
-      return content.some((block) => {
-        if (block.type === 'text' && block.text) {
-          return this.containsPermissionPatterns(block.text);
-        }
-        return false;
-      });
-    }
-
-    return false;
+    // Delegate to AICLIMessageHandler for consistent behavior
+    return AICLIMessageHandler.containsPermissionRequest(content);
   }
 
   static containsToolUse(content) {
-    if (!content) return false;
-
-    if (Array.isArray(content)) {
-      return content.some((block) => block.type === 'tool_use');
-    }
-
-    return false;
+    // Delegate to AICLIMessageHandler for consistent behavior
+    return AICLIMessageHandler.containsToolUse(content);
   }
 
   static extractCodeBlocks(content) {
-    if (!content) return [];
-
-    const codeBlocks = [];
-
-    if (Array.isArray(content)) {
-      for (const block of content) {
-        if (block.type === 'text' && block.text) {
-          // Extract code blocks from text using regex
-          const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
-          let match;
-          while ((match = codeBlockRegex.exec(block.text)) !== null) {
-            codeBlocks.push({
-              language: match[1] || 'text',
-              code: match[2].trim(),
-            });
-          }
-        }
-      }
-    }
-
-    return codeBlocks;
+    // Delegate to AICLIMessageHandler for consistent behavior
+    return AICLIMessageHandler.extractCodeBlocks(content);
   }
 
   static aggregateBufferedContent(buffer) {

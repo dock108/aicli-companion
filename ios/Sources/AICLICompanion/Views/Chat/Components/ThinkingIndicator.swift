@@ -3,92 +3,73 @@ import SwiftUI
 /// Claude thinking indicator showing progress like "Creating... (1096s · ⚒ 27.7k tokens · esc to interrupt)"
 @available(iOS 16.0, macOS 13.0, *)
 struct ThinkingIndicator: View {
-    let isVisible: Bool
-    let duration: TimeInterval
-    let tokenCount: Int
-    let activity: String
+    let progressInfo: ProgressInfo?
     
     @Environment(\.colorScheme) var colorScheme
     @State private var pulseOpacity: Double = 0.3
     
+    // Legacy init for compatibility
     init(
         isVisible: Bool = false,
         duration: TimeInterval = 0,
         tokenCount: Int = 0,
         activity: String = "Thinking"
     ) {
-        self.isVisible = isVisible
-        self.duration = duration
-        self.tokenCount = tokenCount
-        self.activity = activity
+        if isVisible {
+            self.progressInfo = ProgressInfo(
+                stage: activity,
+                progress: nil,
+                message: activity,
+                startTime: Date(),
+                duration: duration,
+                tokenCount: tokenCount,
+                activity: activity,
+                canInterrupt: duration > 10
+            )
+        } else {
+            self.progressInfo = nil
+        }
+    }
+    
+    // New init for ProgressInfo
+    init(progressInfo: ProgressInfo?) {
+        self.progressInfo = progressInfo
     }
     
     var body: some View {
-        if isVisible {
-            HStack(spacing: 8) {
-                // Animated thinking dots
-                HStack(spacing: 4) {
-                    ForEach(0..<3, id: \.self) { index in
-                        Circle()
-                            .fill(Colors.accentPrimaryEnd)
-                            .frame(width: 6, height: 6)
-                            .opacity(pulseOpacity)
-                            .animation(
-                                Animation.easeInOut(duration: 0.8)
-                                    .repeatForever(autoreverses: true)
-                                    .delay(Double(index) * 0.2),
-                                value: pulseOpacity
-                            )
-                    }
-                }
+        if let info = progressInfo {
+            HStack(spacing: 10) {
+                // Simple animated spinner
+                ProgressView()
+                    .scaleEffect(0.7)
+                    .tint(Colors.accentPrimaryEnd)
                 
-                // Activity text with stats
-                Text(formattedText)
-                    .font(Typography.font(.bodySmall))
-                    .foregroundColor(Colors.textSecondary(for: colorScheme))
-                    .animation(.easeInOut(duration: 0.3), value: duration)
-                    .animation(.easeInOut(duration: 0.3), value: tokenCount)
-                
-                // Interrupt hint
-                if duration > 10 {
-                    Text("• esc to interrupt")
-                        .font(Typography.font(.caption))
-                        .foregroundColor(Colors.textSecondary(for: colorScheme).opacity(0.7))
-                }
-                
-                Spacer()
+                // Just the 2-word message
+                Text(info.activity ?? info.stage)
+                    .font(Typography.font(.body))
+                    .foregroundColor(Colors.textPrimary(for: colorScheme))
+                    .animation(.easeInOut(duration: 0.3), value: info.stage)
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Colors.bgCard(for: colorScheme))
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(Colors.bgCard(for: colorScheme).opacity(0.95))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Colors.accentPrimaryEnd.opacity(0.2), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(Colors.accentPrimaryEnd.opacity(0.15), lineWidth: 1)
                     )
             )
-            .onAppear {
-                pulseOpacity = 1.0
-            }
-            .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            .transition(
+                .asymmetric(
+                    insertion: .scale(scale: 0.95).combined(with: .opacity),
+                    removal: .scale(scale: 0.95).combined(with: .opacity)
+                )
+            )
         }
     }
     
-    private var formattedText: String {
-        let durationText = formatDuration(duration)
-        let tokenText = formatTokenCount(tokenCount)
-        
-        if duration > 0 && tokenCount > 0 {
-            return "\(activity)... (\(durationText) · ⚒ \(tokenText))"
-        } else if duration > 0 {
-            return "\(activity)... (\(durationText))"
-        } else if tokenCount > 0 {
-            return "\(activity)... (⚒ \(tokenText))"
-        } else {
-            return "\(activity)..."
-        }
-    }
+    // Removed formattedText - no longer needed with new layout
     
     private func formatDuration(_ seconds: TimeInterval) -> String {
         let totalSeconds = Int(seconds)
@@ -109,9 +90,9 @@ struct ThinkingIndicator: View {
     private func formatTokenCount(_ count: Int) -> String {
         if count >= 1000 {
             let thousands = Double(count) / 1000.0
-            return String(format: "%.1fk tokens", thousands)
+            return String(format: "%.1fk", thousands)
         } else {
-            return "\(count) tokens"
+            return "\(count)"
         }
     }
 }

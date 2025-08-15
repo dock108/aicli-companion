@@ -193,9 +193,11 @@ struct SecuritySettingsView: View {
                 }
             }
             .navigationTitle("Security")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.large)
+            #endif
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
                         dismiss()
                     }
@@ -255,21 +257,25 @@ struct AddItemSheet: View {
             Form {
                 Section {
                     TextField(placeholder, text: $value)
+                        #if os(iOS)
                         .autocapitalization(.none)
+                        #endif
                         .autocorrectionDisabled()
                 } footer: {
                     Text("Enter the full path or pattern")
                 }
             }
             .navigationTitle(title)
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
                         dismiss()
                     }
                 }
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .confirmationAction) {
                     Button("Add") {
                         onAdd()
                         dismiss()
@@ -295,11 +301,15 @@ struct TestCommandSheet: View {
             Form {
                 Section("Test Command") {
                     TextField("Command", text: $command)
+                        #if os(iOS)
                         .autocapitalization(.none)
+                        #endif
                         .autocorrectionDisabled()
                     
                     TextField("Working Directory", text: $workingDirectory)
+                        #if os(iOS)
                         .autocapitalization(.none)
+                        #endif
                         .autocorrectionDisabled()
                 }
                 
@@ -345,9 +355,11 @@ struct TestCommandSheet: View {
                 }
             }
             .navigationTitle("Test Command")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
                         dismiss()
                     }
@@ -410,12 +422,14 @@ struct AuditLogView: View {
             }
         }
         .navigationTitle("Audit Log")
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
         .refreshable {
             await securityManager.fetchAuditLog()
         }
         .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
+            ToolbarItem(placement: .confirmationAction) {
                 Button {
                     Task {
                         await securityManager.clearAuditLog()

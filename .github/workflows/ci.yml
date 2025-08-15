@@ -18,7 +18,7 @@ permissions:
 env:
   NODE_VERSION: '22'
   XCODE_VERSION: '16.2'
-  IOS_SIMULATOR: 'iPhone 16 Pro'  # Updated for Xcode 16.2
+  IOS_SIMULATOR: 'generic/platform=iOS Simulator'  # Generic iOS Simulator for CI
   MINIMUM_COVERAGE: 80  # Minimum code coverage percentage
 
 jobs:
@@ -121,6 +121,20 @@ jobs:
         cd ios
         swiftlint lint --strict --reporter github-actions-logging
     
+    - name: Install iOS Simulator Runtime
+      run: |
+        # List available runtimes
+        xcrun simctl list runtimes
+        # Install iOS runtime if needed
+        sudo xcode-select -s /Applications/Xcode_${{ env.XCODE_VERSION }}.app
+        # Create a generic iOS simulator if none exist
+        xcrun simctl list devices iOS | grep -q "iPhone" || xcrun simctl create "iPhone 15 Pro" "iPhone 15 Pro" "iOS16.4" || true
+    
+    - name: List Available Destinations
+      run: |
+        cd ios
+        xcodebuild -project AICLICompanion.xcodeproj -scheme AICLICompanion -showdestinations
+    
     - name: Resolve Swift Package Dependencies
       run: |
         cd ios
@@ -129,25 +143,28 @@ jobs:
     - name: Build iOS App
       run: |
         cd ios
+        # Use generic iOS Simulator destination that doesn't require a specific device
         xcodebuild -project AICLICompanion.xcodeproj \
           -scheme AICLICompanion \
-          -destination "platform=iOS Simulator,name=${{ env.IOS_SIMULATOR }}" \
+          -destination "generic/platform=iOS Simulator" \
           build \
-          CODE_SIGNING_ALLOWED=NO
+          CODE_SIGNING_ALLOWED=NO \
+          ONLY_ACTIVE_ARCH=NO
     
     # - name: Run iOS Tests with Coverage
     #   run: |
     #     cd ios
     #     xcodebuild -project AICLICompanion.xcodeproj \
     #       -scheme AICLICompanion \
-    #       -destination "platform=iOS Simulator,name=${{ env.IOS_SIMULATOR }}" \
+    #       -destination "generic/platform=iOS Simulator" \
     #       test \
     #       -enableCodeCoverage YES \
     #       CODE_SIGNING_ALLOWED=NO \
     #       -resultBundlePath ios-test.xcresult \
     #       -parallel-testing-enabled NO \
     #       -maximum-concurrent-test-simulator-destinations 1 \
-    #       IDEBuildOperationMaxNumberOfConcurrentCompileTasks=4
+    #       IDEBuildOperationMaxNumberOfConcurrentCompileTasks=4 \
+    #       ONLY_ACTIVE_ARCH=NO
     
     # - name: Generate iOS Coverage Report
     #   run: |

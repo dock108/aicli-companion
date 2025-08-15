@@ -1,5 +1,6 @@
 import apn from '@parse/node-apn';
 import fs from 'fs';
+import { randomUUID } from 'crypto';
 import { getTelemetryService } from './telemetry.js';
 
 class PushNotificationService {

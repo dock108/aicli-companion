@@ -121,14 +121,30 @@ jobs:
         cd ios
         swiftlint lint --strict --reporter github-actions-logging
     
-    - name: Install iOS Simulator Runtime
+    - name: Install iOS Runtime
+      timeout-minutes: 10
       run: |
         # List available runtimes
+        echo "=== Available runtimes ==="
         xcrun simctl list runtimes
-        # Install iOS runtime if needed
+        
+        # Install iOS runtime using xcodebuild
+        echo "=== Installing iOS platform ==="
         sudo xcode-select -s /Applications/Xcode_${{ env.XCODE_VERSION }}.app
-        # Create a generic iOS simulator if none exist
-        xcrun simctl list devices iOS | grep -q "iPhone" || xcrun simctl create "iPhone 15 Pro" "iPhone 15 Pro" "iOS16.4" || true
+        
+        # Download iOS platform and simulators
+        # This may take a while but is necessary for CI
+        xcodebuild -downloadPlatform iOS 2>&1 | grep -E "Downloading|Installing|Downloaded|%|iOS" || true
+        
+        # Wait a moment for installation to complete
+        sleep 5
+        
+        # Verify installation
+        echo "=== Verifying iOS platform installation ==="
+        xcodebuild -showsdks | grep -i ios || echo "iOS SDK not found"
+        
+        echo "=== Available devices after installation ==="
+        xcrun simctl list devices
     
     - name: List Available Destinations
       run: |
@@ -143,13 +159,32 @@ jobs:
     - name: Build iOS App
       run: |
         cd ios
-        # Use generic iOS Simulator destination that doesn't require a specific device
+        
+        # Try different destination options based on what's available
+        echo "=== Checking available build destinations ==="
+        
+        # Check if iOS Simulator platform is available
+        if xcodebuild -showdestinations -project AICLICompanion.xcodeproj -scheme AICLICompanion 2>/dev/null | grep -q "iOS Simulator"; then
+          echo "iOS Simulator platform is available"
+          DESTINATION="generic/platform=iOS Simulator"
+        # Otherwise try generic iOS device (will build but not run)
+        elif xcodebuild -showdestinations -project AICLICompanion.xcodeproj -scheme AICLICompanion 2>/dev/null | grep -q "iOS"; then
+          echo "Building for generic iOS device (no simulator available)"
+          DESTINATION="generic/platform=iOS"
+        else
+          echo "WARNING: No iOS destinations found, trying fallback"
+          DESTINATION="generic/platform=iOS Simulator"
+        fi
+        
+        echo "Using destination: $DESTINATION"
+        
         xcodebuild -project AICLICompanion.xcodeproj \
           -scheme AICLICompanion \
-          -destination "generic/platform=iOS Simulator" \
+          -destination "$DESTINATION" \
           build \
           CODE_SIGNING_ALLOWED=NO \
-          ONLY_ACTIVE_ARCH=NO
+          ONLY_ACTIVE_ARCH=NO \
+          -derivedDataPath build
     
     # - name: Run iOS Tests with Coverage
     #   run: |

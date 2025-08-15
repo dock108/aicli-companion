@@ -916,18 +916,18 @@ export class AICLISessionManager extends EventEmitter {
     if (!this.messageExpiryTimeouts) {
       this.messageExpiryTimeouts = new Map();
     }
-    
+
     // Ensure a map exists for this session
     if (!this.messageExpiryTimeouts.has(sessionId)) {
       this.messageExpiryTimeouts.set(sessionId, new Map());
     }
     const sessionTimeouts = this.messageExpiryTimeouts.get(sessionId);
-    
+
     // If a timeout already exists for this message, clear it first
     if (sessionTimeouts.has(messageId)) {
       clearTimeout(sessionTimeouts.get(messageId));
     }
-    
+
     const timeoutId = setTimeout(() => {
       const buffer = this.getSessionBuffer(sessionId);
       if (buffer && buffer.messagesById) {
@@ -941,7 +941,7 @@ export class AICLISessionManager extends EventEmitter {
         this.messageExpiryTimeouts.delete(sessionId);
       }
     }, ttl);
-    
+
     sessionTimeouts.set(messageId, timeoutId);
   }
 

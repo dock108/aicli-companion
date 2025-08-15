@@ -1,4 +1,5 @@
 import express from 'express';
+import { randomUUID } from 'crypto';
 import { createLogger } from '../utils/logger.js';
 
 const logger = createLogger('ChatAPI');

@@ -48,7 +48,8 @@ struct ChatInputBar: View {
                             .font(.system(size: 28))
                             .foregroundColor(Colors.textSecondary(for: colorScheme))
                     }
-                    .disabled(isLoading)
+                    // Allow attachments even while loading
+                    .disabled(false)
                     
                     // Text input container
                     VStack(spacing: 0) {
@@ -56,10 +57,9 @@ struct ChatInputBar: View {
                             .textFieldStyle(.plain)
                             .font(Typography.font(.body))
                             .foregroundColor(Colors.textPrimary(for: colorScheme))
-                            .accentColor(Colors.accentPrimary(for: colorScheme).first ?? Colors.accentPrimaryStart)
+                            .accentColor(Colors.accentPrimaryStart)
                             .lineLimit(1...6)
                             .focused($isInputFocused)
-                            .disabled(isLoading)
                             .onSubmit {
                                 if hasContent {
                                     sendMessage()
@@ -70,11 +70,11 @@ struct ChatInputBar: View {
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
                                     .fill(Colors.bgCard(for: colorScheme))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .stroke(Colors.strokeLight, lineWidth: 1)
-                                    )
+                                    .strokeBorder(Colors.strokeLight, lineWidth: 1)
                             )
+                            .onTapGesture {
+                                isInputFocused = true
+                            }
                     }
                     
                     // Send button
@@ -91,7 +91,8 @@ struct ChatInputBar: View {
                                 )
                             )
                     }
-                    .disabled(!hasContent || isLoading)
+                    // Allow sending even while loading - messages will be queued
+                    .disabled(!hasContent)
                     .animation(.easeInOut(duration: 0.2), value: hasContent)
                 }
             }

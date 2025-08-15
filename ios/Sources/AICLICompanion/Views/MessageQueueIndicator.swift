@@ -49,7 +49,7 @@ struct MessageQueueIndicator: View {
     }
     
     private var messageCountText: some View {
-        Text("Receiving \(queuedMessageCount) queued message\(queuedMessageCount == 1 ? "" : "s")")
+        Text("\(queuedMessageCount) message\(queuedMessageCount == 1 ? "" : "s") queued")
             .font(Typography.font(.caption))
             .foregroundColor(Colors.textSecondary(for: colorScheme))
     }

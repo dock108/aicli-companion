@@ -151,7 +151,7 @@ class ChatSessionManager: ObservableObject {
             }
         }
         
-        // Fallback to legacy session metadata
+        // Check for existing session metadata
         guard let metadata = persistenceService.getSessionMetadata(for: project.path) else {
             print("🔷 SessionManager: No existing session found for '\(project.name)'")
             isRestoring = false

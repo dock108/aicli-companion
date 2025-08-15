@@ -11,13 +11,13 @@ public class AppDelegate: NSObject, UIApplicationDelegate {
         // Local-first pattern: No background session coordination needed
         print("🎯 AppDelegate initialized with local-first message storage")
         
-        // Perform session cleanup on app launch
-        performSessionCleanup()
+        // Perform async initialization tasks in background
+        Task {
+            // Perform session cleanup on app launch
+            await performSessionCleanupAsync()
+        }
         
-        // Migrate legacy session data if needed
-        SessionStatePersistenceService.shared.migrateFromLegacyStorage()
-        
-        // Start performance monitoring session
+        // Start performance monitoring session (lightweight, can stay synchronous)
         PerformanceMonitor.shared.startSession()
         
         // Setup enhanced push notifications
@@ -26,24 +26,30 @@ public class AppDelegate: NSObject, UIApplicationDelegate {
         return true
     }
     
-    private func performSessionCleanup() {
-        print("🚀 App launched - performing session cleanup")
-        
-        // Clean up expired sessions
-        SessionStatePersistenceService.shared.cleanupExpiredSessions()
-        
-        // Clean up stale session deduplication entries
-        SessionDeduplicationManager.shared.cleanupExpiredSessions()
-        
-        // Local-first pattern: Message persistence handled by MessagePersistenceService
-        // No pending message cleanup needed
-        
-        // Log active sessions
-        let activeSessions = SessionStatePersistenceService.shared.getActiveSessions()
-        print("📊 Active sessions: \(activeSessions.count)")
-        
-        for session in activeSessions {
-            print("  - \(session.projectName): expires \(session.formattedExpiry)")
+    private func performSessionCleanupAsync() async {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .background).async {
+                print("🚀 App launched - performing session cleanup")
+                
+                // Clean up expired sessions
+                SessionStatePersistenceService.shared.cleanupExpiredSessions()
+                
+                // Clean up stale session deduplication entries
+                SessionDeduplicationManager.shared.cleanupExpiredSessions()
+                
+                // Local-first pattern: Message persistence handled by MessagePersistenceService
+                // No pending message cleanup needed
+                
+                // Log active sessions
+                let activeSessions = SessionStatePersistenceService.shared.getActiveSessions()
+                print("📊 Active sessions: \(activeSessions.count)")
+                
+                for session in activeSessions {
+                    print("  - \(session.projectName): expires \(session.formattedExpiry)")
+                }
+                
+                continuation.resume()
+            }
         }
     }
     

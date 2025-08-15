@@ -33,13 +33,6 @@ struct NotificationHandler: ViewModifier {
                 handleOpenProject(notification)
             }
             .store(in: &cancellables)
-        
-        // Listen for open chat session notifications
-        NotificationCenter.default.publisher(for: .openChatSession)
-            .sink { notification in
-                handleOpenChatSession(notification)
-            }
-            .store(in: &cancellables)
     }
     
     private func handleOpenProject(_ notification: Notification) {
@@ -67,21 +60,6 @@ struct NotificationHandler: ViewModifier {
         // Clear badge for this project
         PushNotificationService.shared.clearProjectNotifications(projectId)
     }
-    
-    private func handleOpenChatSession(_ notification: Notification) {
-        guard let userInfo = notification.userInfo,
-              let sessionId = userInfo["sessionId"] as? String else {
-            return
-        }
-        
-        print("📱 Opening chat session from notification: \(sessionId)")
-        
-        // For now, just store the session ID
-        // The actual navigation would depend on your app's structure
-        DispatchQueue.main.async {
-            navigateToSession = sessionId
-        }
-    }
 }
 
 // MARK: - View Extension
@@ -90,62 +68,5 @@ struct NotificationHandler: ViewModifier {
 extension View {
     func handleNotifications() -> some View {
         self.modifier(NotificationHandler())
-    }
-}
-
-// MARK: - Badge Management View
-
-@available(iOS 16.0, macOS 13.0, *)
-struct BadgeCountView: View {
-    @StateObject private var notificationService = PushNotificationService.shared
-    
-    var body: some View {
-        Group {
-            if notificationService.badgeCount > 0 {
-                ZStack {
-                    Circle()
-                        .fill(Color.red)
-                        .frame(width: 20, height: 20)
-                    
-                    Text("\(notificationService.badgeCount)")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(.white)
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Project List Badge Extension
-
-@available(iOS 16.0, macOS 13.0, *)
-struct ProjectBadgeModifier: ViewModifier {
-    let projectId: String
-    @StateObject private var notificationService = PushNotificationService.shared
-    
-    func body(content: Content) -> some View {
-        content
-            .overlay(alignment: .topTrailing) {
-                // swiftlint:disable:next empty_count
-                if let count = notificationService.pendingNotifications[projectId], count > 0 {
-                    ZStack {
-                        Circle()
-                            .fill(Color.red)
-                            .frame(width: 18, height: 18)
-                        
-                        Text("\(count)")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(.white)
-                    }
-                    .offset(x: 8, y: -8)
-                }
-            }
-    }
-}
-
-@available(iOS 16.0, macOS 13.0, *)
-extension View {
-    func projectBadge(for projectId: String) -> some View {
-        self.modifier(ProjectBadgeModifier(projectId: projectId))
     }
 }

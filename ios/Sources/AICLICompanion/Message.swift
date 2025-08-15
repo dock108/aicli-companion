@@ -12,14 +12,12 @@ struct Message: Identifiable, Codable {
     let requestId: String?
     let richContent: RichContent?
     
-    // CloudKit sync properties (excluded from Codable)
     var cloudKitRecordID: CKRecord.ID?
     var readByDevices: [String] = []
     var deletedByDevices: [String] = []
     var syncedAt: Date?
     var needsSync: Bool = true
     
-    // Custom Codable implementation to exclude CloudKit properties
     enum CodingKeys: String, CodingKey {
         case id, content, sender, timestamp, type, metadata, streamingState, requestId, richContent
     }
@@ -1236,9 +1234,6 @@ extension Message {
         if let sessionId = metadata?.sessionId {
             record[CKField.sessionId] = sessionId
         }
-        
-        // TODO: [OPTIMIZE] Add projectPath field when available from context
-        // Current assumption: projectPath will be added by the sync manager
         
         return record
     }

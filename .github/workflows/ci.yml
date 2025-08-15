@@ -18,7 +18,6 @@ permissions:
 env:
   NODE_VERSION: '22'
   XCODE_VERSION: '16.2'
-  IOS_SIMULATOR: 'generic/platform=iOS Simulator'  # Generic iOS Simulator for CI
   MINIMUM_COVERAGE: 80  # Minimum code coverage percentage
 
 jobs:
@@ -121,35 +120,8 @@ jobs:
         cd ios
         swiftlint lint --strict --reporter github-actions-logging
     
-    - name: Install iOS Runtime
-      timeout-minutes: 10
-      run: |
-        # List available runtimes
-        echo "=== Available runtimes ==="
-        xcrun simctl list runtimes
-        
-        # Install iOS runtime using xcodebuild
-        echo "=== Installing iOS platform ==="
-        sudo xcode-select -s /Applications/Xcode_${{ env.XCODE_VERSION }}.app
-        
-        # Download iOS platform and simulators
-        # This may take a while but is necessary for CI
-        xcodebuild -downloadPlatform iOS 2>&1 | grep -E "Downloading|Installing|Downloaded|%|iOS" || true
-        
-        # Wait a moment for installation to complete
-        sleep 5
-        
-        # Verify installation
-        echo "=== Verifying iOS platform installation ==="
-        xcodebuild -showsdks | grep -i ios || echo "iOS SDK not found"
-        
-        echo "=== Available devices after installation ==="
-        xcrun simctl list devices
-    
-    - name: List Available Destinations
-      run: |
-        cd ios
-        xcodebuild -project AICLICompanion.xcodeproj -scheme AICLICompanion -showdestinations
+    # Skip iOS simulator installation - just build for generic device
+    # This avoids downloading GBs of simulator runtime data
     
     - name: Resolve Swift Package Dependencies
       run: |
@@ -159,28 +131,11 @@ jobs:
     - name: Build iOS App
       run: |
         cd ios
-        
-        # Try different destination options based on what's available
-        echo "=== Checking available build destinations ==="
-        
-        # Check if iOS Simulator platform is available
-        if xcodebuild -showdestinations -project AICLICompanion.xcodeproj -scheme AICLICompanion 2>/dev/null | grep -q "iOS Simulator"; then
-          echo "iOS Simulator platform is available"
-          DESTINATION="generic/platform=iOS Simulator"
-        # Otherwise try generic iOS device (will build but not run)
-        elif xcodebuild -showdestinations -project AICLICompanion.xcodeproj -scheme AICLICompanion 2>/dev/null | grep -q "iOS"; then
-          echo "Building for generic iOS device (no simulator available)"
-          DESTINATION="generic/platform=iOS"
-        else
-          echo "WARNING: No iOS destinations found, trying fallback"
-          DESTINATION="generic/platform=iOS Simulator"
-        fi
-        
-        echo "Using destination: $DESTINATION"
-        
+        # Build for generic iOS device (no simulator needed)
+        # This is much faster and doesn't require downloading simulator runtimes
         xcodebuild -project AICLICompanion.xcodeproj \
           -scheme AICLICompanion \
-          -destination "$DESTINATION" \
+          -destination "generic/platform=iOS" \
           build \
           CODE_SIGNING_ALLOWED=NO \
           ONLY_ACTIVE_ARCH=NO \
@@ -377,7 +332,7 @@ jobs:
         echo "### Build Information" >> $GITHUB_STEP_SUMMARY
         echo "- **Node Version:** ${{ env.NODE_VERSION }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Xcode Version:** ${{ env.XCODE_VERSION }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **iOS Simulator:** ${{ env.IOS_SIMULATOR }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **iOS Build:** Generic Device (no simulator)" >> $GITHUB_STEP_SUMMARY
         echo "- **Minimum Coverage:** ${{ env.MINIMUM_COVERAGE }}%" >> $GITHUB_STEP_SUMMARY
         
         # Overall status

@@ -323,7 +323,6 @@ class PushNotificationService {
       let messageId = data.messageId;
       if (requiresFetch && !messageId) {
         // Generate a message ID if not provided
-        const { randomUUID } = require('crypto');
         messageId = randomUUID();
       }
 

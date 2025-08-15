@@ -53,7 +53,7 @@ class ChatViewModel: ObservableObject {
     // MARK: - Services
     private let persistenceService = MessagePersistenceService.shared
     private let performanceMonitor = PerformanceMonitor.shared
-    private let aicliService = AICLIService.shared
+    private let aicliService: AICLIService
     private let settings = SettingsManager.shared
     private let cloudKitManager = CloudKitSyncManager.shared
     

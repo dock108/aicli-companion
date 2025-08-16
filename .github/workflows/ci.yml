@@ -38,8 +38,6 @@ env:
   BUILD_CONFIGURATION: 'Release'
   ENABLE_TESTABILITY: 'YES'
   ARTIFACT_RETENTION_DAYS: 30
-  DEFAULT_TIMEOUT: 30
-  TEST_TIMEOUT: 45
 
 jobs:
   # ============================================================================
@@ -101,7 +99,7 @@ jobs:
     permissions:
       contents: read
       checks: write
-    timeout-minutes: ${{ fromJSON(env.TEST_TIMEOUT) }}
+    timeout-minutes: 45
     
     strategy:
       matrix:
@@ -192,7 +190,7 @@ jobs:
       contents: read
       checks: write
     runs-on: macos-15
-    timeout-minutes: ${{ fromJSON(env.TEST_TIMEOUT) }}
+    timeout-minutes: 45
     
     steps:
     - uses: actions/checkout@v4
@@ -333,7 +331,7 @@ jobs:
       contents: read
       checks: write
     runs-on: macos-15
-    timeout-minutes: ${{ fromJSON(env.TEST_TIMEOUT) }}
+    timeout-minutes: 45
     
     steps:
     - uses: actions/checkout@v4

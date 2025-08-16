@@ -52,8 +52,9 @@ class ChatViewModel: ObservableObject {
     @Published var messages: [Message] = []
     @Published var isLoading = false  // Synced with current project's state
     @Published var progressInfo: ProgressInfo?  // Synced with current project's state
-    @Published var queuedMessageCount = 0  // Synced with current project's state
-    @Published var hasQueuedMessages = false  // Synced with current project's state
+    // FEATURE FLAG: Queue system properties (controlled by FeatureFlags)
+    @Published var queuedMessageCount = 0  // Reflects actual queue when enabled, 0 when disabled
+    @Published var hasQueuedMessages = false  // Reflects actual queue when enabled, false when disabled
     @Published var sessionError: String?
     @Published var activeSession: ProjectSession?
     @Published var currentSessionId: String?
@@ -116,6 +117,71 @@ class ChatViewModel: ObservableObject {
     // Note: queuedMessageCount and hasQueuedMessages are now @Published properties
     // They are synced with current project state in syncPublishedProperties()
     
+    // MARK: - Send Blocking Logic (Simple One-Message-At-A-Time Flow)
+    
+    /// Check if sending should be blocked (simple blocking rules)
+    /// Returns true if sending should be blocked, false if allowed
+    func shouldBlockSending(for project: Project) -> Bool {
+        let hasSession = currentSessionId != nil
+        let isLoading = isLoadingForProject(project.path)
+        let isWaiting = isWaitingForClaudeResponse
+        let hasMessages = !messages.isEmpty
+        
+        // Only log debug info when blocking (to reduce console spam)
+        let willBlock = isLoading || isWaiting || (hasMessages && currentSessionId == nil) ||
+                       (hasMessages && messages.last?.sender == .user)
+        
+        if willBlock {
+            print("🔵 Send blocking check:")
+            print("   hasSession: \(hasSession)")
+            print("   isLoading: \(isLoading)")
+            print("   isWaiting: \(isWaiting)")
+            print("   hasMessages: \(hasMessages)")
+            print("   currentSessionId: \(currentSessionId ?? "nil")")
+        }
+        
+        // Rule 1: Currently loading/waiting for response
+        if isLoadingForProject(project.path) {
+            print("   ❌ Blocking: Loading for project")
+            return true
+        }
+        
+        // Rule 2: Explicitly waiting for Claude response
+        if isWaitingForClaudeResponse {
+            print("   ❌ Blocking: Waiting for Claude response")
+            return true
+        }
+        
+        // Rule 3: Only block for session ID if we have messages but no session
+        // (Fresh chats with no messages are allowed to send the first message)
+        if hasMessages && currentSessionId == nil {
+            print("   ❌ Blocking: Has messages but no session ID")
+            return true
+        }
+        
+        // Rule 4: If we have messages, check if last message is from user (waiting for response)
+        if hasMessages {
+            if let lastMessage = messages.last {
+                print("   Last message sender: \(lastMessage.sender)")
+                print("   Last message content preview: \"\(String(lastMessage.content.prefix(50)))...\"")
+                
+                if lastMessage.sender == .user {
+                    print("   ❌ Blocking: Last message from user, waiting for Claude")
+                    return true
+                }
+            } else {
+                print("   Warning: hasMessages=true but messages.last is nil")
+            }
+        }
+        
+        // Only log when allowing send after being blocked
+        if !willBlock {
+            print("   ✅ Send allowed")
+        }
+        return false
+    }
+    
+    
     // Debug helper to log current queue state
     func debugQueueState() {
         guard let project = currentProject else {
@@ -153,22 +219,23 @@ class ChatViewModel: ObservableObject {
     // Clear loading state for a specific project
     func clearLoadingState(for projectPath: String) {
         if var state = projectStates[projectPath] {
-            state.isLoading = false
-            state.isWaitingForResponse = false
-            state.progressInfo = nil
-            state.cancelTimers()
-            projectStates[projectPath] = state
-            
-            // Update global state if this is the current project
-            if currentProject?.path == projectPath {
-                isLoading = false
-                progressInfo = nil
-                isWaitingForClaudeResponse = false
+            // Only update if actually loading to avoid unnecessary UI updates
+            if state.isLoading || state.isWaitingForResponse {
+                state.isLoading = false
+                state.isWaitingForResponse = false
+                state.progressInfo = nil
+                state.cancelTimers()
+                projectStates[projectPath] = state
+                
+                // Update global state if this is the current project
+                if currentProject?.path == projectPath {
+                    isLoading = false
+                    progressInfo = nil
+                    isWaitingForClaudeResponse = false
+                }
+                
+                print("🧹 Cleared loading state for project: \(projectPath)")
             }
-            
-            // Legacy state cleanup (will be removed)
-            
-            print("🧹 Cleared loading state for project: \(projectPath)")
         }
     }
     
@@ -266,23 +333,23 @@ class ChatViewModel: ObservableObject {
             currentProject = project
             // Notify push notification service about the active project
             PushNotificationService.shared.setActiveProject(project, sessionId: currentSessionId)
-            
-            // Sync published queue properties for new current project
-            let count = projectStates[project.path]?.messageQueue.count ?? 0
-            queuedMessageCount = count
-            hasQueuedMessages = !(projectStates[project.path]?.messageQueue.isEmpty ?? true)
         }
         
-        // If currently waiting for a response for THIS project, queue the message instead of blocking
-        let projectState = projectStates[project.path]
-        let isProcessing = projectState?.isProcessingQueue ?? false
-        let isWaitingForResponse = projectState?.isWaitingForResponse ?? false
-        
-        print("🔍 Queue check for \(project.name): waiting=\(isWaitingForResponse), processing=\(isProcessing)")
-        
-        if isWaitingForResponse && !isProcessing {
-            print("📦 Queueing message because project is waiting for response")
-            return queueMessage(text, for: project, attachments: attachments)
+        // FEATURE FLAG: Queue system logic (currently disabled)
+        if FeatureFlags.shouldUseQueueSystem {
+            // Check if we should queue the message instead of sending immediately
+            let projectState = projectStates[project.path]
+            let isProcessing = projectState?.isProcessingQueue ?? false
+            let isWaitingForResponse = projectState?.isWaitingForResponse ?? false
+            
+            print("🔍 Queue check for \(project.name): waiting=\(isWaitingForResponse), processing=\(isProcessing)")
+            
+            if isWaitingForResponse && !isProcessing {
+                print("📦 Queueing message because project is waiting for response")
+                return queueMessage(text, for: project, attachments: attachments)
+            }
+        } else {
+            FeatureFlags.logFeatureDisabled("Queue System", reason: "Using simple one-message-at-a-time flow")
         }
         
         // Prepare message content with attachments
@@ -465,6 +532,11 @@ class ChatViewModel: ObservableObject {
     // MARK: - Message Queue Management
     
     private func queueMessage(_ text: String, for project: Project, attachments: [AttachmentData]) {
+        // FEATURE FLAG: Queue system disabled
+        guard FeatureFlags.shouldUseQueueSystem else {
+            FeatureFlags.logFeatureDisabled("queueMessage", reason: "Queue system disabled by feature flag")
+            return
+        }
         updateProjectState(for: project) { state in
             // Check if this project's queue is full
             if state.messageQueue.count >= maxQueueSize {
@@ -480,10 +552,16 @@ class ChatViewModel: ObservableObject {
         
         // Sync published queue properties for current project
         if project.path == currentProject?.path {
-            let count = projectStates[project.path]?.messageQueue.count ?? 0
-            print("📊 Queue sync after add: \(project.name) has \(count) messages queued")
-            queuedMessageCount = count
-            hasQueuedMessages = !(projectStates[project.path]?.messageQueue.isEmpty ?? true)
+            if FeatureFlags.showQueueUI {
+                let count = projectStates[project.path]?.messageQueue.count ?? 0
+                print("📊 Queue sync after add: \(project.name) has \(count) messages queued")
+                queuedMessageCount = count
+                hasQueuedMessages = !(projectStates[project.path]?.messageQueue.isEmpty ?? true)
+            } else {
+                // Queue UI disabled - always show 0
+                queuedMessageCount = 0
+                hasQueuedMessages = false
+            }
         }
         
         // Show queued message in UI immediately (local-first UX)
@@ -514,6 +592,11 @@ class ChatViewModel: ObservableObject {
     }
     
     private func processMessageQueue() {
+        // FEATURE FLAG: Queue processing disabled
+        guard FeatureFlags.enableQueueProcessing else {
+            FeatureFlags.logFeatureDisabled("processMessageQueue", reason: "Queue processing disabled by feature flag")
+            return
+        }
         // Process queue for the current project only
         guard let project = currentProject else { return }
         
@@ -539,10 +622,16 @@ class ChatViewModel: ObservableObject {
         
         // Sync published queue properties for current project after removing from queue
         if project.path == currentProject?.path {
-            let count = projectStates[project.path]?.messageQueue.count ?? 0
-            print("📊 Queue sync after remove: \(project.name) has \(count) messages queued")
-            queuedMessageCount = count
-            hasQueuedMessages = !(projectStates[project.path]?.messageQueue.isEmpty ?? true)
+            if FeatureFlags.showQueueUI {
+                let count = projectStates[project.path]?.messageQueue.count ?? 0
+                print("📊 Queue sync after remove: \(project.name) has \(count) messages queued")
+                queuedMessageCount = count
+                hasQueuedMessages = !(projectStates[project.path]?.messageQueue.isEmpty ?? true)
+            } else {
+                // Queue UI disabled - always show 0
+                queuedMessageCount = 0
+                hasQueuedMessages = false
+            }
         }
         
         if let nextMessage = nextMessage {
@@ -814,10 +903,16 @@ class ChatViewModel: ObservableObject {
         currentSessionId = sessionId
         
         // Sync published queue properties for new current project
-        let count = projectStates[project.path]?.messageQueue.count ?? 0
-        print("📊 Queue sync on project switch: \(project.name) has \(count) messages queued")
-        queuedMessageCount = count
-        hasQueuedMessages = !(projectStates[project.path]?.messageQueue.isEmpty ?? true)
+        if FeatureFlags.showQueueUI {
+            let count = projectStates[project.path]?.messageQueue.count ?? 0
+            print("📊 Queue sync on project switch: \(project.name) has \(count) messages queued")
+            queuedMessageCount = count
+            hasQueuedMessages = !(projectStates[project.path]?.messageQueue.isEmpty ?? true)
+        } else {
+            // Queue UI disabled - always show 0
+            queuedMessageCount = 0
+            hasQueuedMessages = false
+        }
         
         // Store the session ID for this project
         projectSessionIds[project.path] = sessionId

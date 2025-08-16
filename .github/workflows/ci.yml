@@ -17,7 +17,7 @@ permissions:
 
 env:
   NODE_VERSION: '22'
-  XCODE_VERSION: '16.2'
+  XCODE_VERSION: '15.4'  # Use Xcode 15.4 to avoid iOS 18.2 requirement
   MINIMUM_COVERAGE: 80  # Minimum code coverage percentage
 
 jobs:
@@ -139,6 +139,7 @@ jobs:
           build \
           CODE_SIGNING_ALLOWED=NO \
           ONLY_ACTIVE_ARCH=NO \
+          IPHONEOS_DEPLOYMENT_TARGET=17.0 \
           -derivedDataPath build
     
     # - name: Run iOS Tests with Coverage
@@ -332,7 +333,7 @@ jobs:
         echo "### Build Information" >> $GITHUB_STEP_SUMMARY
         echo "- **Node Version:** ${{ env.NODE_VERSION }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Xcode Version:** ${{ env.XCODE_VERSION }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **iOS Build:** Generic Device (no simulator)" >> $GITHUB_STEP_SUMMARY
+        echo "- **iOS Build:** Generic Device (iOS 17.0+ target)" >> $GITHUB_STEP_SUMMARY
         echo "- **Minimum Coverage:** ${{ env.MINIMUM_COVERAGE }}%" >> $GITHUB_STEP_SUMMARY
         
         # Overall status

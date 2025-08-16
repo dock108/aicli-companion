@@ -12,6 +12,9 @@ struct ChatInputBar: View {
     let colorScheme: ColorScheme
     let onSendMessage: ([AttachmentData]) -> Void
     
+    // FEATURE: Simple send blocking logic
+    let isSendBlocked: Bool
+    
     @FocusState private var isInputFocused: Bool
     @State private var attachments: [AttachmentData] = []
     @State private var showingAttachmentPicker = false
@@ -61,7 +64,7 @@ struct ChatInputBar: View {
                             .lineLimit(1...6)
                             .focused($isInputFocused)
                             .onSubmit {
-                                if hasContent {
+                                if hasContent && !isSendBlocked {
                                     sendMessage()
                                 }
                             }
@@ -83,7 +86,7 @@ struct ChatInputBar: View {
                             .font(.system(size: 32))
                             .foregroundStyle(
                                 LinearGradient(
-                                    colors: hasContent
+                                    colors: (hasContent && !isSendBlocked)
                                         ? Colors.accentPrimary(for: colorScheme)
                                         : [Colors.textSecondary(for: colorScheme)],
                                     startPoint: .topLeading,
@@ -91,15 +94,16 @@ struct ChatInputBar: View {
                                 )
                             )
                     }
-                    // Allow sending even while loading - messages will be queued
-                    .disabled(!hasContent)
+                    // FEATURE: Simple send blocking - disable when blocked or no content
+                    .disabled(!hasContent || isSendBlocked)
                     .animation(.easeInOut(duration: 0.2), value: hasContent)
+                    .animation(.easeInOut(duration: 0.2), value: isSendBlocked)
                 }
             }
             .padding(.horizontal, isIPad && horizontalSizeClass == .regular ? 40 : 16)
             .padding(.vertical, 16)
-            .background(.ultraThinMaterial)
         }
+        .background(.ultraThinMaterial)
         .sheet(isPresented: $showingAttachmentPicker) {
             AttachmentPicker(
                 isPresented: $showingAttachmentPicker,

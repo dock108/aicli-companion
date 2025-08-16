@@ -68,8 +68,10 @@ struct ChatView: View {
                 }
                 
                 
-                // Auto-response controls
-                AutoResponseControls()
+                // FEATURE FLAG: Auto-response controls (currently hidden)
+                if FeatureFlags.showAutoModeUI {
+                    AutoResponseControls()
+                }
                 
                 // Message list
                 ChatMessageList(
@@ -100,8 +102,8 @@ struct ChatView: View {
                 }
                 #endif
                 
-                // Queue status indicator
-                if viewModel.hasQueuedMessages {
+                // FEATURE FLAG: Queue status indicator (currently hidden)
+                if FeatureFlags.showQueueUI && viewModel.hasQueuedMessages {
                     HStack {
                         Image(systemName: "clock.arrow.circlepath")
                             .font(.system(size: 14))
@@ -128,7 +130,8 @@ struct ChatView: View {
                     colorScheme: colorScheme,
                     onSendMessage: { attachments in
                         sendMessage(with: attachments)
-                    }
+                    },
+                    isSendBlocked: selectedProject.map { viewModel.shouldBlockSending(for: $0) } ?? true
                 )
                 .offset(y: inputBarOffset)
             }
@@ -207,6 +210,9 @@ struct ChatView: View {
                     
                     print("🔷 ChatView: Loaded \(self.viewModel.messages.count) messages for restored session")
                     
+                    // Clear loading state now that session is fully restored
+                    self.viewModel.clearLoadingState(for: project.path)
+                    
                     // WhatsApp/iMessage pattern: Messages loaded from local database only
                     // Push notifications will deliver any new messages automatically
                     
@@ -234,6 +240,9 @@ struct ChatView: View {
                         self.viewModel.currentSessionId = sessionId
                         
                         print("✅ ChatView: Loaded \(self.viewModel.messages.count) messages from saved conversation")
+                        
+                        // Clear loading state now that saved conversation is loaded
+                        self.viewModel.clearLoadingState(for: project.path)
                     } else {
                         // Truly no conversation exists yet
                         print("ℹ️ ChatView: No saved conversation found for \(project.name)")

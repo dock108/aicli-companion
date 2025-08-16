@@ -123,6 +123,22 @@ jobs:
     # Skip iOS simulator installation - just build for generic device
     # This avoids downloading GBs of simulator runtime data
     
+    - name: Check Available SDKs
+      run: |
+        echo "Available SDKs:"
+        xcodebuild -showsdks || true
+        echo ""
+        echo "Checking if iOS platform needs to be installed..."
+        
+    - name: Install iOS Platform
+      run: |
+        # Download and install iOS platform if not present
+        echo "Installing iOS platform..."
+        sudo xcode-select -s /Applications/Xcode_${{ env.XCODE_VERSION }}.app
+        # This downloads the iOS SDK without the simulator
+        xcodebuild -downloadPlatform iOS || true
+        echo "iOS platform installation complete"
+        
     - name: Resolve Swift Package Dependencies
       run: |
         cd ios
@@ -131,13 +147,16 @@ jobs:
     - name: Build iOS App
       run: |
         cd ios
-        # Build for macOS platform which is always available on CI runners
-        # This validates the codebase compilation without needing iOS SDK
-        xcodebuild -project AICLICompanion.xcodeproj \
+        # Build for generic iOS device
+        xcodebuild build \
+          -project AICLICompanion.xcodeproj \
           -scheme AICLICompanionApp \
-          -destination "platform=macOS" \
-          build \
+          -sdk iphoneos \
+          -configuration Release \
           CODE_SIGNING_ALLOWED=NO \
+          CODE_SIGNING_REQUIRED=NO \
+          CODE_SIGN_IDENTITY="" \
+          DEVELOPMENT_TEAM="" \
           ONLY_ACTIVE_ARCH=NO \
           -derivedDataPath build
     

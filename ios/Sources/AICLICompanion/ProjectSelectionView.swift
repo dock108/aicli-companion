@@ -50,7 +50,11 @@ struct ProjectSelectionView: View {
     @Binding var isProjectSelected: Bool
     let onDisconnect: (() -> Void)?
     @State private var projects: [Project] = []
-    @State private var isLoading = true
+    @StateObject private var loadingStateCoordinator = LoadingStateCoordinator.shared
+    
+    private var isLoading: Bool {
+        loadingStateCoordinator.isLoading(.projectSelection)
+    }
     @State private var errorMessage: String?
     @State private var lastSelectionTime: Date = .distantPast
     @State private var sessionMetadataCache: [String: PersistedSessionMetadata?] = [:]
@@ -167,12 +171,12 @@ struct ProjectSelectionView: View {
     // MARK: - Private Methods
     
     private func loadProjects() {
-        isLoading = true
+        loadingStateCoordinator.startLoading(.projectSelection, timeout: 10.0)
         errorMessage = nil
         
         guard let serverURL = settings.serverURL else {
             errorMessage = "Server connection not configured"
-            isLoading = false
+            loadingStateCoordinator.stopLoading(.projectSelection)
             return
         }
         
@@ -189,7 +193,7 @@ struct ProjectSelectionView: View {
         
         URLSession.shared.dataTask(with: request) { data, response, error in
             DispatchQueue.main.async {
-                isLoading = false
+                loadingStateCoordinator.stopLoading(.projectSelection)
                 
                 if let error = error {
                     // Handle specific network errors more gracefully

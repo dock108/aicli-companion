@@ -283,7 +283,7 @@ struct ChatView: View {
         // Clear loading state for old project
         viewModel.isLoading = false  // Clear loading state
         viewModel.progressInfo = nil  // Clear progress info
-        viewModel.stopSessionPolling()  // Stop any active polling
+        // Polling removed - using APNS delivery
         messageText = ""
         
         // Set up for new project

@@ -6,7 +6,7 @@ public struct ContentView: View {
     @EnvironmentObject var aicliService: AICLIService
     @EnvironmentObject var settings: SettingsManager
     @State private var isConnected = false
-    @State private var selectedProject: Project?
+    @StateObject private var projectStateManager = ProjectStateManager.shared
     @State private var isProjectSelected = false
     @State private var currentSession: ProjectSession?
     @State private var backgroundOpacity: Double = 0
@@ -30,10 +30,13 @@ public struct ContentView: View {
                                     insertion: .move(edge: .leading).combined(with: .opacity),
                                     removal: .move(edge: .trailing).combined(with: .opacity)
                                 ))
-                        } else if !isProjectSelected || selectedProject == nil {
+                        } else if !isProjectSelected || projectStateManager.currentProject == nil {
                             // Step 2: Project selection screen
                             ProjectSelectionView(
-                                selectedProject: $selectedProject,
+                                selectedProject: Binding(
+                                    get: { projectStateManager.currentProject },
+                                    set: { projectStateManager.setCurrentProject($0) }
+                                ),
                                 isProjectSelected: $isProjectSelected,
                                 onDisconnect: disconnectFromServer
                             )
@@ -41,7 +44,7 @@ public struct ContentView: View {
                                 insertion: .move(edge: .trailing).combined(with: .opacity),
                                 removal: .move(edge: .leading).combined(with: .opacity)
                             ))
-                        } else if let project = selectedProject {
+                        } else if let project = projectStateManager.currentProject {
                             // Step 3: Chat screen with selected project
                             ChatView(
                                 selectedProject: project,
@@ -68,21 +71,21 @@ public struct ContentView: View {
         .onChange(of: isConnected) { _, connected in
             if !connected {
                 // Reset project selection when disconnected
-                selectedProject = nil
+                projectStateManager.setCurrentProject(nil)
                 isProjectSelected = false
             }
         }
         .onChange(of: isProjectSelected) { _, selected in
             print("🎯 ContentView: isProjectSelected changed to: \(selected)")
-            if selected, let project = selectedProject {
+            if selected, let project = projectStateManager.currentProject {
                 print("🎯 ContentView: Navigation should show ChatView for project: \(project.name)")
             }
         }
-        .onChange(of: selectedProject) { _, project in
+        .onChange(of: projectStateManager.currentProject) { _, project in
             if let project = project {
-                print("🎯 ContentView: selectedProject changed to: \(project.name)")
+                print("🎯 ContentView: projectStateManager.currentProject changed to: \(project.name)")
             } else {
-                print("🎯 ContentView: selectedProject changed to: nil")
+                print("🎯 ContentView: projectStateManager.currentProject changed to: nil")
             }
         }
     }
@@ -96,7 +99,7 @@ public struct ContentView: View {
         settings.clearConnection()
         withAnimation(.easeInOut(duration: 0.3)) {
             isConnected = false
-            selectedProject = nil
+            projectStateManager.setCurrentProject(nil)
             isProjectSelected = false
             currentSession = nil
         }
@@ -115,7 +118,7 @@ public struct ContentView: View {
         
         // Reset to project selection screen
         withAnimation(.easeInOut(duration: 0.3)) {
-            selectedProject = nil
+            projectStateManager.setCurrentProject(nil)
             isProjectSelected = false
             currentSession = nil
         }

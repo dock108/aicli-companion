@@ -44,7 +44,11 @@ public struct AdaptiveContentView: View {
                 isProjectSelected = false
             }
         }
-        .handleNotifications()
+        .handleNotifications(
+            isConnected: $isConnected,
+            selectedProject: $selectedProject,
+            isProjectSelected: $isProjectSelected
+        )
     }
     
     // MARK: - iPad Layout with NavigationSplitView

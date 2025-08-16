@@ -13,8 +13,14 @@ public class PushNotificationService: NSObject, ObservableObject {
     
     @Published public var badgeCount: Int = 0
     @Published public var pendingNotifications: [String: Int] = [:] // projectId: count
-    @Published public var currentActiveProject: Project?
-    @Published public var currentActiveSessionId: String?
+    // Use unified project state instead of duplicate tracking
+    private let projectStateManager = ProjectStateManager.shared
+    
+    // Get session ID from ChatViewModel instead of duplicate tracking
+    @MainActor
+    private var currentActiveSessionId: String? {
+        return ChatViewModel.shared.currentSessionId
+    }
     
     // MARK: - Constants
     
@@ -195,8 +201,8 @@ public class PushNotificationService: NSObject, ObservableObject {
     
     /// Update the currently active project and session
     public func setActiveProject(_ project: Project?, sessionId: String?) {
-        currentActiveProject = project
-        currentActiveSessionId = sessionId
+        // Project state is now managed by ProjectStateManager
+        // Session state is now managed by ChatViewModel.currentSessionId
         
         if let project = project {
             print("📍 Active project set to: \(project.name) (session: \(sessionId ?? "none"))")
@@ -206,10 +212,11 @@ public class PushNotificationService: NSObject, ObservableObject {
     }
     
     /// Simple check if notification should be shown (best practices)
+    @MainActor
     func shouldShowNotification(for sessionId: String, projectPath: String) -> Bool {
         // Only suppress if user is actively viewing this exact conversation
         let isViewingSameSession = (currentActiveSessionId == sessionId)
-        let isViewingSameProject = (currentActiveProject?.path == projectPath)
+        let isViewingSameProject = (projectStateManager.currentProject?.path == projectPath)
         
         // Suppress notification only if both match (viewing exact same thread)
         return !(isViewingSameSession && isViewingSameProject)
@@ -244,7 +251,7 @@ public class PushNotificationService: NSObject, ObservableObject {
 extension PushNotificationService {
     /// Unified APNS message handler - ALL messages go through this single pipeline
     /// Handles both small messages and large message fetching
-    private func processAPNSMessage(userInfo: [AnyHashable: Any]) async {
+    public func processAPNSMessage(userInfo: [AnyHashable: Any]) async {
         print("🚀 === UNIFIED MESSAGE PROCESSING ===")
         
         // 1. Extract message data
@@ -364,14 +371,16 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
         // Banner decision logic (UI presentation only)
         if let sessionId = userInfo["sessionId"] as? String,
            let projectPath = userInfo["projectPath"] as? String {
-            let shouldShow = shouldShowNotification(for: sessionId, projectPath: projectPath)
-            
-            if !shouldShow {
-                print("🔕 Suppressing banner - user viewing same project")
-                completionHandler([])
-            } else {
-                print("🔔 Showing banner - different project")
-                completionHandler([.banner, .sound, .badge])
+            Task { @MainActor in
+                let shouldShow = shouldShowNotification(for: sessionId, projectPath: projectPath)
+                
+                if !shouldShow {
+                    print("🔕 Suppressing banner - user viewing same project")
+                    completionHandler([])
+                } else {
+                    print("🔔 Showing banner - different project")
+                    completionHandler([.banner, .sound, .badge])
+                }
             }
         } else {
             // Non-Claude notification

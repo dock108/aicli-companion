@@ -79,13 +79,29 @@ public class AppDelegate: NSObject, UIApplicationDelegate {
     
     public func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any], fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
         print("📨 === BACKGROUND NOTIFICATION RECEIVED ===")
+        print("📨 UserInfo: \(userInfo)")
         
-        // Simplified: All APNS notifications handled by PushNotificationService.willPresent
-        // This method only called when app is not in foreground
-        // Just acknowledge and let willPresent handle the logic
-        
-        print("📨 Background notification received - trusting APNS delivery")
-        completionHandler(.noData)
+        // Process APNS message through unified pipeline when app is backgrounded
+        Task {
+            // Check if this is a Claude message that needs processing
+            if userInfo["sessionId"] != nil || userInfo["message"] != nil || userInfo["requiresFetch"] != nil {
+                print("📨 Processing Claude message in background...")
+                
+                // Process through PushNotificationService unified pipeline
+                // This will save to local storage and post notification to UI
+                await PushNotificationService.shared.processAPNSMessage(userInfo: userInfo)
+                
+                // Indicate new data was fetched
+                await MainActor.run {
+                    completionHandler(.newData)
+                }
+            } else {
+                print("📨 Non-Claude notification in background")
+                await MainActor.run {
+                    completionHandler(.noData)
+                }
+            }
+        }
     }
 }
 #endif

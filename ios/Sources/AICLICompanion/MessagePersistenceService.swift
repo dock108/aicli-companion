@@ -71,6 +71,7 @@ class MessagePersistenceService: ObservableObject {
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
     private let fileManager = FileManager.default
+    private let logger = LoggingManager.shared
     
     @Published var savedSessions: [String: PersistedSessionMetadata] = [:]
     private var isInitialized = false
@@ -220,9 +221,13 @@ class MessagePersistenceService: ObservableObject {
             print("🗂️ MessagePersistence: Successfully decoded \(persistedMessages.count) messages for '\(projectId)'")
             
             let messages = persistedMessages.map { $0.toMessage() }
-            print("🗂️ MessagePersistence: Converted to \(messages.count) Message objects for '\(projectId)'")
+            print("🗂️ MessagePersistenceService: Converted to \(messages.count) Message objects for '\(projectId)'")
             
-            return messages
+            // Ensure chronological order (defensive)
+            let sortedMessages = messages.sorted { $0.timestamp < $1.timestamp }
+            print("🗂️ MessagePersistenceService: Messages sorted chronologically")
+            
+            return sortedMessages
         } catch {
             print("❌ MessagePersistence: Failed to load messages for project '\(projectId)': \(error)")
             print("❌ MessagePersistence: Error details: \(error.localizedDescription)")

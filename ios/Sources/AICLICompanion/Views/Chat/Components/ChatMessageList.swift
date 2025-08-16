@@ -102,7 +102,8 @@ struct ChatMessageList: View {
                     }
                 }
                 .onChange(of: isLoading) { newLoading in
-                    handleLoadingStateChange(oldLoading: !newLoading, newLoading: newLoading, proxy: proxy)
+                .onChange(of: isLoading) { oldLoading, newLoading in
+                    handleLoadingStateChange(oldLoading: oldLoading, newLoading: newLoading, proxy: proxy)
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .scrollToBottom)) { _ in
                     scrollToBottomSmooth(proxy: proxy)

@@ -276,40 +276,40 @@ jobs:
           ONLY_ACTIVE_ARCH=NO \
           -derivedDataPath build
     
-    # - name: Run iOS Tests with Coverage
-    #   run: |
-    #     cd ios
-    #     xcodebuild -project AICLICompanion.xcodeproj \
-    #       -scheme AICLICompanion \
-    #       -destination "generic/platform=iOS Simulator" \
-    #       test \
-    #       -enableCodeCoverage YES \
-    #       CODE_SIGNING_ALLOWED=NO \
-    #       -resultBundlePath ios-test.xcresult \
-    #       -parallel-testing-enabled NO \
-    #       -maximum-concurrent-test-simulator-destinations 1 \
-    #       IDEBuildOperationMaxNumberOfConcurrentCompileTasks=4 \
-    #       ONLY_ACTIVE_ARCH=NO
+    - name: Run iOS Tests with Coverage
+      run: |
+        cd ios
+        xcodebuild -project AICLICompanion.xcodeproj \
+          -scheme AICLICompanion \
+          -destination "generic/platform=iOS Simulator" \
+          test \
+          -enableCodeCoverage YES \
+          CODE_SIGNING_ALLOWED=NO \
+          -resultBundlePath ios-test.xcresult \
+          -parallel-testing-enabled NO \
+          -maximum-concurrent-test-simulator-destinations 1 \
+          IDEBuildOperationMaxNumberOfConcurrentCompileTasks=4 \
+          ONLY_ACTIVE_ARCH=NO
     
-    # - name: Generate iOS Coverage Report
-    #   run: |
-    #     cd ios
-    #     xcrun xccov view --report --json ios-test.xcresult > ios-coverage.json || true
-    #     xcrun xccov view --report ios-test.xcresult > ios-coverage.txt || true
+    - name: Generate iOS Coverage Report
+      run: |
+        cd ios
+        xcrun xccov view --report --json ios-test.xcresult > ios-coverage.json || true
+        xcrun xccov view --report ios-test.xcresult > ios-coverage.txt || true
     
-    # - name: Check iOS Coverage Threshold
-    #   run: |
-    #     cd ios
-    #     if [ -f ios-coverage.json ]; then
-    #       coverage=$(cat ios-coverage.json | python3 -c "import json, sys; data = json.load(sys.stdin); coverage = data['targets'][0].get('lineCoverage', 0) * 100 if 'targets' in data and len(data['targets']) > 0 else 0; print(f'{coverage:.1f}')")
-    #       echo "Code coverage: ${coverage}%"
-    #       if (( $(echo "$coverage < ${{ env.MINIMUM_COVERAGE }}" | bc -l) )); then
-    #         echo "❌ Coverage ${coverage}% is below minimum threshold of ${{ env.MINIMUM_COVERAGE }}%"
-    #         exit 1
-    #       else
-    #         echo "✅ Coverage ${coverage}% meets minimum threshold"
-    #       fi
-    #     fi
+    - name: Check iOS Coverage Threshold
+      run: |
+        cd ios
+        if [ -f ios-coverage.json ]; then
+          coverage=$(cat ios-coverage.json | python3 -c "import json, sys; data = json.load(sys.stdin); coverage = data['targets'][0].get('lineCoverage', 0) * 100 if 'targets' in data and len(data['targets']) > 0 else 0; print(f'{coverage:.1f}')")
+          echo "Code coverage: ${coverage}%"
+          if (( $(echo "$coverage < ${{ env.MINIMUM_COVERAGE }}" | bc -l) )); then
+            echo "❌ Coverage ${coverage}% is below minimum threshold of ${{ env.MINIMUM_COVERAGE }}%"
+            exit 1
+          else
+            echo "✅ Coverage ${coverage}% meets minimum threshold"
+          fi
+        fi
     - name: Upload iOS Coverage Reports
       uses: actions/upload-artifact@v4
       with:

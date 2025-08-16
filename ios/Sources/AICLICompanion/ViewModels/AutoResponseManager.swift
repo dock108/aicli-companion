@@ -63,6 +63,11 @@ public class AutoResponseManager: ObservableObject {
     
     /// Activate auto-response mode
     public func activate() {
+        // FEATURE FLAG: Auto mode disabled
+        guard FeatureFlags.shouldUseAutoMode else {
+            FeatureFlags.logFeatureDisabled("AutoResponseManager.activate", reason: "Auto mode disabled by feature flag")
+            return
+        }
         guard canActivate else { return }
         
         isActive = true
@@ -142,6 +147,10 @@ public class AutoResponseManager: ObservableObject {
     
     /// Process incoming message for auto-response
     func processMessage(_ message: Message) -> String? {
+        // FEATURE FLAG: Auto mode disabled
+        guard FeatureFlags.shouldUseAutoMode else {
+            return nil
+        }
         guard isActive && !isPaused else { return nil }
         
         // Check for stop phrases

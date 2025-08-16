@@ -31,7 +31,6 @@ final class MessageTests: XCTestCase {
         XCTAssertNil(message.requestId)
         XCTAssertNil(message.richContent)
         
-        // CloudKit properties should be initialized
         XCTAssertNil(message.cloudKitRecordID)
         XCTAssertEqual(message.readByDevices, [])
         XCTAssertEqual(message.deletedByDevices, [])
@@ -95,7 +94,6 @@ final class MessageTests: XCTestCase {
         XCTAssertNil(decodedMessage.requestId) // Not in original test message
         XCTAssertNil(decodedMessage.richContent) // Not in original test message
         
-        // CloudKit properties should not be encoded/decoded
         XCTAssertNil(decodedMessage.cloudKitRecordID)
         XCTAssertEqual(decodedMessage.readByDevices, [])
         XCTAssertEqual(decodedMessage.deletedByDevices, [])
@@ -119,7 +117,6 @@ final class MessageTests: XCTestCase {
         let decoder = JSONDecoder()
         let decodedMessage = try decoder.decode(Message.self, from: data)
         
-        // CloudKit properties should be reset to defaults
         XCTAssertEqual(decodedMessage.readByDevices, [])
         XCTAssertEqual(decodedMessage.deletedByDevices, [])
         XCTAssertNil(decodedMessage.syncedAt)

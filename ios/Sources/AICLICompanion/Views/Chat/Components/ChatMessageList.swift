@@ -18,8 +18,10 @@ struct ChatMessageList: View {
     // Enhanced scroll state management
     @State private var hasInitiallyScrolled: Bool = false
     @State private var isScrollingProgrammatically: Bool = false
+    @State private var isUserScrolling: Bool = false
     @State private var scrollDebounceTask: Task<Void, Never>?
     @State private var lastReadMessageId: UUID?
+    @State private var userScrollTimer: Timer?
     
     // Callbacks
     let onScrollPositionChanged: (CGFloat) -> Void
@@ -61,17 +63,15 @@ struct ChatMessageList: View {
                 }
                 .onChange(of: geometry.size.height) { _, newHeight in
                     scrollViewHeight = newHeight
-                    // Handle rotation or screen size changes
-                    if hasInitiallyScrolled && isNearBottom {
-                        scrollToBottomSmooth(proxy: proxy)
-                    }
                 }
                 .onPreferenceChange(ContentHeightPreferenceKey.self) { value in
                     let previousContentHeight = contentHeight
                     contentHeight = value
                     
-                    // Handle content height changes (e.g., keyboard appearance)
-                    if hasInitiallyScrolled && abs(value - previousContentHeight) > 50 && isNearBottom {
+                    // Only auto-scroll for keyboard appearance, not general content changes
+                    // This prevents scrolling issues when reviewing history
+                    let isKeyboardRelatedChange = abs(value - previousContentHeight) > 200
+                    if hasInitiallyScrolled && isKeyboardRelatedChange && isNearBottom && !isScrollingProgrammatically {
                         scrollToBottomSmooth(proxy: proxy)
                     }
                 }
@@ -137,6 +137,15 @@ struct ChatMessageList: View {
         // Cancel any pending debounce task
         scrollDebounceTask?.cancel()
         
+        // Track user scrolling state
+        if !isScrollingProgrammatically {
+            isUserScrolling = true
+            userScrollTimer?.invalidate()
+            userScrollTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
+                self.isUserScrolling = false
+            }
+        }
+        
         // Debounce rapid scroll changes to prevent performance issues
         scrollDebounceTask = Task {
             try? await Task.sleep(nanoseconds: 50_000_000) // 50ms debounce
@@ -167,6 +176,9 @@ struct ChatMessageList: View {
     private func handleMessageCountChange(oldCount: Int, newCount: Int, proxy: ScrollViewProxy) {
         guard newCount > oldCount else { return }
         
+        // Don't auto-scroll if user is actively scrolling or reviewing history
+        guard !isScrollingProgrammatically else { return }
+        
         let shouldScroll: Bool
         
         if oldCount == 0 {
@@ -174,11 +186,12 @@ struct ChatMessageList: View {
             shouldScroll = true
         } else if let lastMessage = messages.last {
             if lastMessage.sender == .user {
-                // Always scroll for user messages
+                // Always scroll for user messages (they just sent it)
                 shouldScroll = true
             } else {
-                // For assistant messages, only scroll if near bottom
-                shouldScroll = isNearBottom
+                // For assistant messages, only scroll if already near bottom
+                // This allows users to review history without interruption
+                shouldScroll = isNearBottom && !isUserScrolling
             }
         } else {
             shouldScroll = false

@@ -222,9 +222,6 @@ class CloudKitSyncManager: ObservableObject {
         // This will be called on app launch
         // For now, just log that we're ready
         print("✅ CloudKit sync manager ready for syncing")
-        
-        // TODO: [OPTIMIZE] Fetch recent messages for active projects
-        // Current assumption: sync on demand when user opens a project
     }
     
     // MARK: - Manual Sync
@@ -232,9 +229,6 @@ class CloudKitSyncManager: ObservableObject {
         guard iCloudAvailable else { return }
         
         syncStatus = .syncing(progress: 0.0)
-        
-        // TODO: [OPTIMIZE] Implement full sync logic
-        // For now, just update status
         
         await MainActor.run {
             self.syncStatus = .completed

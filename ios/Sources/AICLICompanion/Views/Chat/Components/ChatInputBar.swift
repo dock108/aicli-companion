@@ -12,6 +12,9 @@ struct ChatInputBar: View {
     let colorScheme: ColorScheme
     let onSendMessage: ([AttachmentData]) -> Void
     
+    // FEATURE: Simple send blocking logic
+    let isSendBlocked: Bool
+    
     @FocusState private var isInputFocused: Bool
     @State private var attachments: [AttachmentData] = []
     @State private var showingAttachmentPicker = false
@@ -48,7 +51,8 @@ struct ChatInputBar: View {
                             .font(.system(size: 28))
                             .foregroundColor(Colors.textSecondary(for: colorScheme))
                     }
-                    .disabled(isLoading)
+                    // Allow attachments even while loading
+                    .disabled(false)
                     
                     // Text input container
                     VStack(spacing: 0) {
@@ -56,12 +60,11 @@ struct ChatInputBar: View {
                             .textFieldStyle(.plain)
                             .font(Typography.font(.body))
                             .foregroundColor(Colors.textPrimary(for: colorScheme))
-                            .accentColor(Colors.accentPrimary(for: colorScheme).first ?? Colors.accentPrimaryStart)
+                            .accentColor(Colors.accentPrimaryStart)
                             .lineLimit(1...6)
                             .focused($isInputFocused)
-                            .disabled(isLoading)
                             .onSubmit {
-                                if hasContent {
+                                if hasContent && !isSendBlocked {
                                     sendMessage()
                                 }
                             }
@@ -70,11 +73,11 @@ struct ChatInputBar: View {
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
                                     .fill(Colors.bgCard(for: colorScheme))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .stroke(Colors.strokeLight, lineWidth: 1)
-                                    )
+                                    .strokeBorder(Colors.strokeLight, lineWidth: 1)
                             )
+                            .onTapGesture {
+                                isInputFocused = true
+                            }
                     }
                     
                     // Send button
@@ -83,7 +86,7 @@ struct ChatInputBar: View {
                             .font(.system(size: 32))
                             .foregroundStyle(
                                 LinearGradient(
-                                    colors: hasContent
+                                    colors: (hasContent && !isSendBlocked)
                                         ? Colors.accentPrimary(for: colorScheme)
                                         : [Colors.textSecondary(for: colorScheme)],
                                     startPoint: .topLeading,
@@ -91,14 +94,16 @@ struct ChatInputBar: View {
                                 )
                             )
                     }
-                    .disabled(!hasContent || isLoading)
+                    // FEATURE: Simple send blocking - disable when blocked or no content
+                    .disabled(!hasContent || isSendBlocked)
                     .animation(.easeInOut(duration: 0.2), value: hasContent)
+                    .animation(.easeInOut(duration: 0.2), value: isSendBlocked)
                 }
             }
             .padding(.horizontal, isIPad && horizontalSizeClass == .regular ? 40 : 16)
             .padding(.vertical, 16)
-            .background(.ultraThinMaterial)
         }
+        .background(.ultraThinMaterial)
         .sheet(isPresented: $showingAttachmentPicker) {
             AttachmentPicker(
                 isPresented: $showingAttachmentPicker,

@@ -8,7 +8,6 @@ struct ThinkingIndicator: View {
     @Environment(\.colorScheme) var colorScheme
     @State private var pulseOpacity: Double = 0.3
     
-    // Legacy init for compatibility
     init(
         isVisible: Bool = false,
         duration: TimeInterval = 0,

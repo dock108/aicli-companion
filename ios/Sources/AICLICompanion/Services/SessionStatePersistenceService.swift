@@ -250,33 +250,3 @@ class SessionStatePersistenceService: ObservableObject {
         }
     }
 }
-
-// MARK: - Extensions
-
-@available(iOS 16.0, macOS 13.0, *)
-extension SessionStatePersistenceService {
-    /// Migrate session data from old format if needed
-    func migrateFromLegacyStorage() {
-        // Check if we have old session data in MessagePersistenceService format
-        let messagePersistence = MessagePersistenceService.shared
-        
-        for (projectId, metadata) in messagePersistence.savedSessions {
-            // Check if we already have this session
-            // swiftlint:disable:next for_where
-            if getSessionState(for: projectId) == nil {
-                // Migrate the session
-                saveSessionState(
-                    sessionId: metadata.sessionId,
-                    projectId: projectId,
-                    projectName: metadata.projectName,
-                    projectPath: metadata.projectPath,
-                    messageCount: metadata.messageCount,
-                    aicliSessionId: metadata.aicliSessionId,
-                    metadata: ["migrated": "true", "migratedAt": ISO8601DateFormatter().string(from: Date())]
-                )
-                
-                print("📦 Migrated session for project: \(metadata.projectName)")
-            }
-        }
-    }
-}

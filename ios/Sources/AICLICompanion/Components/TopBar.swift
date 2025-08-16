@@ -91,12 +91,21 @@ public struct NavigationTopBar<Destination: View>: View {
     }
     
     public var body: some View {
-        TopBar(
-            title: title,
-            leadingIcon: leadingIcon,
-            trailingAction: nil
-        )
-        .overlay(alignment: .trailing) {
+        HStack(spacing: Spacing.sm) {
+            // Leading terminal glyph
+            Image(systemName: leadingIcon)
+                .font(.system(size: 24))
+                .foregroundColor(Colors.accentPrimaryEnd)
+                .frame(width: 24, height: 24)
+            
+            // Title in SF Mono
+            Text(title)
+                .font(Typography.font(.navTitle))
+                .foregroundColor(Colors.textPrimary(for: colorScheme))
+            
+            Spacer()
+            
+            // Single Navigation-based gear icon (no overlay)
             NavigationLink(destination: destination) {
                 Image(systemName: "gearshape")
                     .font(.system(size: 20))
@@ -105,8 +114,25 @@ public struct NavigationTopBar<Destination: View>: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(PlainButtonStyle())
-            .padding(.trailing, Spacing.Component.navBarPadding)
         }
+        .padding(.horizontal, Spacing.Component.navBarPadding)
+        .padding(.vertical, Spacing.Component.navBarVerticalPadding)
+        .frame(height: 44)
+        .background(
+            // Blur background with systemThin material
+            ZStack {
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                
+                // Add subtle bottom border
+                VStack {
+                    Spacer()
+                    Rectangle()
+                        .fill(colorScheme == .dark ? Colors.divider : Colors.dividerLight)
+                        .frame(height: 1)
+                }
+            }
+        )
     }
 }
 

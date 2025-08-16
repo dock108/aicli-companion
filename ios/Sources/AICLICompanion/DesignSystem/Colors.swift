@@ -162,7 +162,7 @@ public struct Gradients {
         )
     }
 
-    // MARK: - Legacy gradients for compatibility
+    // MARK: - Gradients
     public static let primaryButton = LinearGradient(
         colors: [Colors.accentPrimaryStart, Colors.accentPrimaryEnd],
         startPoint: .top,

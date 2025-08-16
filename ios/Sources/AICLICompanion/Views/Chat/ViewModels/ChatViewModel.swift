@@ -10,72 +10,308 @@ class ChatViewModel: ObservableObject {
     // MARK: - Singleton
     static let shared = ChatViewModel()
     
-    // MARK: - Published Properties
-    @Published var messages: [Message] = []
-    @Published var isLoading = false
-    @Published var progressInfo: ProgressInfo?
-    @Published var sessionError: String?
-    @Published var activeSession: ProjectSession?
-    @Published var currentSessionId: String?
-    
-    // MARK: - Project-Specific State
-    // Store messages per project to prevent cross-project contamination
-    private var projectMessages = LRUCache<String, [Message]>(maxSize: 50)
-    private var projectSessionIds: [String: String] = [:]
-    
-    // Track pending user messages that haven't been saved yet (waiting for session ID)
-    private var pendingUserMessages: [Message] = []
-    
-    // Track which project is currently loading
-    private var loadingProjectPath: String?
-    
-    // Computed property to check if a specific project is loading
-    func isLoadingForProject(_ projectPath: String) -> Bool {
-        return isLoading && loadingProjectPath == projectPath
-    }
-    
-    // Clear loading state for a specific project
-    func clearLoadingState(for projectPath: String) {
-        if loadingProjectPath == projectPath {
-            isLoading = false
-            isWaitingForClaudeResponse = false
-            progressInfo = nil
-            loadingProjectPath = nil
-            stopSessionPolling()
-            loadingTimeout?.invalidate()
-            loadingTimeout = nil
+    // MARK: - Project State Structure
+    private struct ProjectState {
+        var isLoading: Bool = false
+        var progressInfo: ProgressInfo?
+        var isWaitingForResponse: Bool = false
+        // Persistent thinking indicator state (survives app lifecycle changes)
+        var persistentThinkingInfo: ProgressInfo?
+        var messageTimeout: Timer?
+        var loadingTimeout: Timer?
+        var sessionLostTimer: Timer?
+        var autoSaveTimer: Timer?
+        // Message storage removed - using MessagePersistenceService directly
+        var pendingUserMessages: [Message] = []
+        // Queue management for message flow control
+        var messageQueue: [(text: String, attachments: [AttachmentData])] = []
+        var isProcessingQueue: Bool = false
+        var lastStatusCheckTime: Date = Date()
+        
+        mutating func cancelTimers() {
             messageTimeout?.invalidate()
             messageTimeout = nil
-            print("🧹 Cleared loading state for project: \(projectPath)")
+            loadingTimeout?.invalidate()
+            loadingTimeout = nil
+            sessionLostTimer?.invalidate()
+            sessionLostTimer = nil
+            autoSaveTimer?.invalidate()
+            autoSaveTimer = nil
+        }
+        
+        mutating func cancelNonPollingTimers() {
+            sessionLostTimer?.invalidate()
+            sessionLostTimer = nil
         }
     }
     
     // MARK: - Services
+    private let loadingStateCoordinator = LoadingStateCoordinator.shared
+    private let logger = LoggingManager.shared
+    
+    // MARK: - Published Properties
+    @Published var messages: [Message] = []
+    @Published var isLoading = false  // Synced with unified loading state coordinator
+    @Published var progressInfo: ProgressInfo?  // Synced with current project's state
+    @Published var sessionError: String?
+    @Published var activeSession: ProjectSession?
+    @Published var currentSessionId: String?
+    @Published var queuedMessageCount: Int = 0
+    @Published var hasQueuedMessages: Bool = false
+    
+    // MARK: - Queue Configuration
+    public var maxQueueSize: Int = 10
+    
+    // MARK: - Performance Optimization
+    private var updateDebounceTimer: Timer?
+    private let updateDebounceInterval: TimeInterval = 0.1 // 100ms debounce
+    
+    // MARK: - Defensive Error Handling
+    private let maxLoadingDuration: TimeInterval = 300.0 // 5 minutes max loading
+    private let sessionValidationInterval: TimeInterval = 60.0 // Validate session every minute
+    private var lastSessionValidation: Date = Date()
+    
+    // MARK: - Project-Specific State
+    // All project-specific state managed through ProjectState
+    private var projectStates: [String: ProjectState] = [:]
+    
+    // Legacy: These will be fully migrated in Phase 6
+    private var projectSessionIds: [String: String] = [:]
+    private var pendingUserMessages: [Message] = []
+    
+    // MARK: - Project State Helpers
+    private func getOrCreateProjectState(for project: Project) -> ProjectState {
+        if projectStates[project.path] == nil {
+            var newState = ProjectState()
+            // No initialization needed - messages loaded from persistence on demand
+            projectStates[project.path] = newState
+        }
+        return projectStates[project.path]!
+    }
+    
+    private func updateProjectState(for project: Project, update: (inout ProjectState) -> Void) {
+        var state = getOrCreateProjectState(for: project)
+        update(&state)
+        projectStates[project.path] = state
+    }
+    
+    // MARK: - Message Management Helpers
+    
+    private func appendMessageToProject(_ message: Message, project: Project? = nil) {
+        guard let project = project ?? currentProject else {
+            print("❌ ERROR: No project context for message")
+            return
+        }
+        
+        // Message storage consolidated - no need to update ProjectState messages
+        
+        // Update current view if this is current project
+        if project.path == currentProject?.path {
+            messages.append(message)
+        }
+        
+        // Message storage consolidated - no caching needed
+        
+        // Persist if we have session
+        if let sessionId = getSessionId(for: project) {
+            persistenceService.appendMessage(message, to: project.path, sessionId: sessionId, project: project)
+        }
+    }
+    
+    // Note: queuedMessageCount and hasQueuedMessages are @Published properties
+    // They are updated when queue operations occur
+    
+    // MARK: - Send Blocking Logic (Simple One-Message-At-A-Time Flow)
+    
+    /// Check if sending should be blocked (simple blocking rules)
+    /// Returns true if sending should be blocked, false if allowed
+    func shouldBlockSending(for project: Project) -> Bool {
+        // Get project-specific session ID instead of global currentSessionId
+        let projectSessionId = getSessionId(for: project)
+        let hasSession = projectSessionId != nil
+        let isLoading = isLoadingForProject(project.path)
+        let isWaiting = isWaitingForClaudeResponse
+        let hasMessages = !messages.isEmpty
+        
+        // Only log debug info when blocking (to reduce console spam)
+        let willBlock = isLoading || isWaiting || (hasMessages && projectSessionId == nil) ||
+                       (hasMessages && messages.last?.sender == .user)
+        
+        if willBlock {
+            print("🔵 Send blocking check for project \(project.name):")
+            print("   hasSession: \(hasSession)")
+            print("   isLoading: \(isLoading)")
+            print("   isWaiting: \(isWaiting)")
+            print("   hasMessages: \(hasMessages)")
+            print("   projectSessionId: \(projectSessionId ?? "nil")")
+        }
+        
+        // Rule 1: Currently loading/waiting for response
+        if isLoading {
+            print("   ❌ Blocking: Loading for project")
+            return true
+        }
+        
+        // Rule 2: Explicitly waiting for Claude response
+        if isWaitingForClaudeResponse {
+            print("   ❌ Blocking: Waiting for Claude response")
+            return true
+        }
+        
+        // Rule 3: Only block for session ID if we have messages but no session
+        // (Fresh chats with no messages are allowed to send the first message)
+        if hasMessages && projectSessionId == nil {
+            print("   ❌ Blocking: Has messages but no session ID for this project")
+            return true
+        }
+        
+        // Rule 4: If we have messages, check if last message is from user (waiting for response)
+        if hasMessages {
+            if let lastMessage = messages.last {
+                print("   Last message sender: \(lastMessage.sender)")
+                print("   Last message content preview: \"\(String(lastMessage.content.prefix(50)))...\"")
+                
+                if lastMessage.sender == .user {
+                    print("   ❌ Blocking: Last message from user, waiting for Claude")
+                    return true
+                }
+            } else {
+                print("   Warning: hasMessages=true but messages.last is nil")
+            }
+        }
+        
+        // Only log when allowing send after being blocked
+        if !willBlock {
+            print("   ✅ Send allowed")
+        }
+        return false
+    }
+    
+    
+    // Debug helper to log current queue state
+    func debugQueueState() {
+        guard let project = currentProject else {
+            logger.debug("No current project", category: .state)
+            return
+        }
+        
+        let state = projectStates[project.path]
+        let queueCount = state?.messageQueue.count ?? 0
+        let isWaiting = state?.isWaitingForResponse ?? false
+        let isProcessing = state?.isProcessingQueue ?? false
+        let isLoading = state?.isLoading ?? false
+        
+        logger.debug("Queue State for \(project.name):", category: .queue)
+        print("   Queue count: \(queueCount)")
+        print("   Published queuedMessageCount: \(queuedMessageCount)")
+        print("   Published hasQueuedMessages: \(hasQueuedMessages)")
+        print("   isWaitingForResponse: \(isWaiting)")
+        print("   isProcessingQueue: \(isProcessing)")
+        print("   isLoading: \(isLoading)")
+        
+        if queueCount > 0 {
+            print("   Queued messages:")
+            for (index, queuedMsg) in (state?.messageQueue ?? []).enumerated() {
+                print("     \(index + 1). \(String(queuedMsg.text.prefix(50)))...")
+            }
+        }
+    }
+    
+    // Computed property to check if a specific project is loading
+    func isLoadingForProject(_ projectPath: String) -> Bool {
+        // Use unified loading state coordinator as source of truth
+        return loadingStateCoordinator.isChatLoading(for: projectPath)
+    }
+    
+    // Clear loading state for a specific project
+    func clearLoadingState(for projectPath: String) {
+        // Use unified loading state coordinator
+        loadingStateCoordinator.stopChatLoading(for: projectPath)
+        
+        if var state = projectStates[projectPath] {
+            state.isLoading = false
+            state.isWaitingForResponse = false
+            // Don't clear progressInfo if there's persistent thinking info
+            if state.persistentThinkingInfo == nil {
+                state.progressInfo = nil
+            }
+            state.cancelTimers()
+            projectStates[projectPath] = state
+            
+            // Update global state if this is the current project
+            if currentProject?.path == projectPath {
+                // isLoading will be updated via setupLoadingStateSync()
+                // Keep progressInfo if there's persistent thinking info
+                if let persistentInfo = projectStates[projectPath]?.persistentThinkingInfo {
+                    progressInfo = persistentInfo
+                } else {
+                    progressInfo = nil
+                }
+                isWaitingForClaudeResponse = false
+            }
+            
+            print("🧹 Cleared loading state for project: \(projectPath)")
+        }
+    }
+    
+    
+    // MARK: - Services
     private let persistenceService = MessagePersistenceService.shared
     private let performanceMonitor = PerformanceMonitor.shared
-    private let aicliService: AICLIService
+    private let aicliService = AICLIService.shared
     private let settings = SettingsManager.shared
     private let cloudKitManager = CloudKitSyncManager.shared
     
     // MARK: - Project Reference
     var currentProject: Project? {
         didSet {
+            // Update the unified project state manager
+            ProjectStateManager.shared.setCurrentProject(currentProject)
+            
             if let oldProject = oldValue, oldProject.path != currentProject?.path {
-                // Save messages for the old project before switching
-                projectMessages[oldProject.path] = messages
+                // Save state for the old project before switching
+                updateProjectState(for: oldProject) { state in
+                    // Messages are now persisted directly, no caching needed
+                    state.pendingUserMessages = pendingUserMessages
+                    // Timers are already in state, will be cancelled if needed
+                }
+                
+                // Update session storage (messages now in ProjectState only)
                 if let sessionId = currentSessionId {
                     projectSessionIds[oldProject.path] = sessionId
+                } else if !pendingUserMessages.isEmpty {
+                    projectSessionIds[oldProject.path] = "pending-\(oldProject.path)"
                 }
+                
+                pendingUserMessages.removeAll()
             }
             
-            // Load messages for the new project
+            // Load state for the new project
             if let newProject = currentProject {
-                messages = projectMessages[newProject.path] ?? []
-                currentSessionId = projectSessionIds[newProject.path]
+                // Initialize project state if needed
+                let projectState = getOrCreateProjectState(for: newProject)
                 
-                // Update the active session if we have one stored
+                // Load messages from persistence instead of cached state
+                let sessionId = getSessionId(for: newProject)
+                currentSessionId = sessionId
+                messages = MessagePersistenceService.shared.loadMessages(
+                    for: newProject.path,
+                    sessionId: sessionId ?? ""
+                )
+                pendingUserMessages = projectState.pendingUserMessages
+                
+                // Update published properties from project state
+                isLoading = projectState.isLoading
+                // Restore persistent thinking info if it exists, otherwise use regular progress info
+                progressInfo = projectState.persistentThinkingInfo ?? projectState.progressInfo
+                
+                // Handle pending marker
+                if let sessionId = projectSessionIds[newProject.path], sessionId.starts(with: "pending-") {
+                    currentSessionId = nil
+                }
+                
+                // Notify push notification service
                 if let sessionId = currentSessionId {
-                    // Notify push notification service about the active project
                     PushNotificationService.shared.setActiveProject(newProject, sessionId: sessionId)
                 }
             }
@@ -83,38 +319,49 @@ class ChatViewModel: ObservableObject {
     }
     
     // MARK: - Private Properties
-    private var messageTimeout: Timer?
-    private var loadingTimeout: Timer?
-    private var autoSaveTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
     private var isWaitingForClaudeResponse = false
     private var lastRequestId: String?
     private let autoResponseManager = AutoResponseManager.shared
-    private var statusPollingTimer: Timer?
-    private var lastStatusCheckTime: Date?
-    private var sessionLostTimer: Timer?
     
     // MARK: - Initialization
     private init() {
-        setupAutoSave()
         setupNotificationListeners()
+        setupLoadingStateSync()
+    }
+    
+    private func setupLoadingStateSync() {
+        // Sync loading state with the unified coordinator
+        loadingStateCoordinator.$projectLoadingStates
+            .sink { [weak self] projectStates in
+                guard let self = self, let currentProject = self.currentProject else { return }
+                
+                let newLoadingState = projectStates[currentProject.path] ?? false
+                if self.isLoading != newLoadingState {
+                    self.isLoading = newLoadingState
+                }
+            }
+            .store(in: &cancellables)
     }
     
     deinit {
-        messageTimeout?.invalidate()
-        loadingTimeout?.invalidate()
-        autoSaveTimer?.invalidate()
-        statusPollingTimer?.invalidate()
-        sessionLostTimer?.invalidate()
+        // Cancel all project timers
+        for (_, state) in projectStates {
+            var mutableState = state
+            mutableState.cancelTimers()
+        }
     }
     
     // MARK: - Lifecycle Management
     
     func onDisappear() {
-        // Stop polling when leaving the chat view
-        // It will resume automatically if needed when returning
-        stopSessionPolling()
-        print("👋 Chat view disappeared - stopped polling")
+        // Clean up timers when leaving the chat view
+        if let currentProject = currentProject {
+            updateProjectState(for: currentProject) { state in
+                state.cancelNonPollingTimers()
+            }
+        }
+        print("👋 Chat view disappeared - cleaned up timers")
     }
     
     // MARK: - Message Management
@@ -126,6 +373,23 @@ class ChatViewModel: ObservableObject {
             currentProject = project
             // Notify push notification service about the active project
             PushNotificationService.shared.setActiveProject(project, sessionId: currentSessionId)
+        }
+        
+        // FEATURE FLAG: Queue system logic (currently disabled)
+        if FeatureFlags.shouldUseQueueSystem {
+            // Check if we should queue the message instead of sending immediately
+            let projectState = projectStates[project.path]
+            let isProcessing = projectState?.isProcessingQueue ?? false
+            let isWaitingForResponse = projectState?.isWaitingForResponse ?? false
+            
+            print("🔍 Queue check for \(project.name): waiting=\(isWaitingForResponse), processing=\(isProcessing)")
+            
+            if isWaitingForResponse && !isProcessing {
+                print("📦 Queueing message because project is waiting for response")
+                return queueMessage(text, for: project, attachments: attachments)
+            }
+        } else {
+            FeatureFlags.logFeatureDisabled("Queue System", reason: "Using simple one-message-at-a-time flow")
         }
         
         // Prepare message content with attachments
@@ -148,10 +412,7 @@ class ChatViewModel: ObservableObject {
         // WhatsApp/iMessage pattern: Add to conversation immediately
         messages.append(userMessage)
         
-        // Also update project-specific storage
-        if let project = currentProject {
-            projectMessages[project.path] = messages
-        }
+        // Message added to UI state (persistence handled separately)
         
         // Save to local database immediately (local-first)
         if let sessionId = currentSessionId {
@@ -163,23 +424,21 @@ class ChatViewModel: ObservableObject {
             pendingUserMessages.append(userMessage)
             print("💾 Fresh chat - user message shown in UI and tracked as pending")
             print("📌 Pending messages count: \(pendingUserMessages.count)")
+            
+            // Mark this project as having pending messages
+            projectSessionIds[project.path] = "pending-\(project.path)"
         }
         
-        // Sync to CloudKit in background (optional)
-        Task {
-            do {
-                try await cloudKitManager.saveMessage(userMessage, projectPath: project.path)
-                print("✅ Message synced to CloudKit")
-            } catch {
-                print("⚠️ Failed to sync message to CloudKit: \(error)")
-                // Continue anyway - local first approach
-            }
-        }
+        // Messages persisted immediately to MessagePersistenceService
         
         // Send command - set loading state for THIS project
-        isLoading = true
-        loadingProjectPath = project.path
-        startLoadingTimeout()
+        loadingStateCoordinator.startChatLoading(for: project.path, timeout: 300.0)
+        
+        updateProjectState(for: project) { state in
+            state.isLoading = true
+        }
+        // isLoading will be updated via setupLoadingStateSync()
+        startLoadingTimeout(for: project)
         updateLoadingMessage()
         
         // Start performance tracking
@@ -201,8 +460,10 @@ class ChatViewModel: ObservableObject {
         
         // Ensure HTTP service is connected
         guard aicliService.isConnected else {
+            updateProjectState(for: project) { state in
+                state.isLoading = false
+            }
             isLoading = false
-            loadingProjectPath = nil
             print("❌ ChatViewModel: Service not connected, showing error message")
             let errorMessage = Message(
                 content: "❌ Not connected to server. Please check your connection.",
@@ -213,37 +474,49 @@ class ChatViewModel: ObservableObject {
             return
         }
         
-        // Use Claude's session ID if we have one, otherwise send without session ID
-        // For fresh chats: currentSessionId will be nil
-        // For continued chats: currentSessionId will have Claude's session ID
-        let sessionIdToUse = currentSessionId ?? activeSession?.sessionId
+        // Use project-specific session ID if we have one, otherwise send without session ID
+        // For fresh chats: project session will be nil
+        // For continued chats: project session will have Claude's session ID
+        let sessionIdToUse = getSessionId(for: project)
         
         print("📤 Sending HTTP message to server: \(command)")
         print("   Session ID: \(sessionIdToUse ?? "none (fresh chat)")")
         print("   Project path: \(project.path)")
         
         // Set timeout - 30 minutes to match server timeout
-        messageTimeout?.invalidate()
-        messageTimeout = Timer.scheduledTimer(withTimeInterval: 1800.0, repeats: false) { _ in
-            Task { @MainActor in
-                // Only clear loading if it's for the same project
-                if self.loadingProjectPath == project.path {
-                    self.isLoading = false
-                    self.loadingProjectPath = nil
+        updateProjectState(for: project) { state in
+            state.messageTimeout?.invalidate()
+            state.messageTimeout = Timer.scheduledTimer(withTimeInterval: 1800.0, repeats: false) { _ in
+                Task { @MainActor in
+                    // Clear loading state for this specific project
+                    self.updateProjectState(for: project) { state in
+                        state.isLoading = false
+                        state.isWaitingForResponse = false
+                        state.messageTimeout = nil
+                    }
+                    
+                    // Update global state if this is the current project
+                    if self.currentProject?.path == project.path {
+                        self.isLoading = false
+                        self.isWaitingForClaudeResponse = false
+                    }
+                    
+                    // Response timeout handled
+                    let timeoutMessage = Message(
+                        content: "⏰ Request timed out. The connection may have been lost or the server is taking too long to respond. Please try again.",
+                        sender: .assistant,
+                        type: .text
+                    )
+                    self.messages.append(timeoutMessage)
                 }
-                self.isWaitingForClaudeResponse = false
-                let timeoutMessage = Message(
-                    content: "⏰ Request timed out. The connection may have been lost or the server is taking too long to respond. Please try again.",
-                    sender: .assistant,
-                    type: .text
-                )
-                self.messages.append(timeoutMessage)
             }
         }
         
         // Mark that we're waiting for a direct Claude response
+        updateProjectState(for: project) { state in
+            state.isWaitingForResponse = true
+        }
         isWaitingForClaudeResponse = true
-        loadingProjectPath = project.path
         
         // Send via HTTP
         aicliService.sendMessage(
@@ -260,11 +533,7 @@ class ChatViewModel: ObservableObject {
                     // Handle response (session management only)
                     self.handleHTTPResponse(response)
                     
-                    // Start polling session status if we have a session ID
-                    if let sessionId = response.sessionId ?? self.currentSessionId {
-                        self.startSessionPolling(sessionId: sessionId)
-                        print("🔄 Started polling session status for: \(sessionId)")
-                    }
+                    // APNS will deliver responses automatically - no polling needed
                     
                     // ALWAYS keep loading state active - wait for APNS delivery
                     // All responses come through APNS for cross-device sync
@@ -272,8 +541,207 @@ class ChatViewModel: ObservableObject {
                     
                 case .failure(let error):
                     // Always clear loading state on error
-                    self.messageTimeout?.invalidate()
-                    self.messageTimeout = nil
+                    self.updateProjectState(for: project) { state in
+                        state.messageTimeout?.invalidate()
+                        state.messageTimeout = nil
+                        state.isLoading = false
+                        state.isWaitingForResponse = false
+                    }
+                    self.isLoading = false
+                    self.isWaitingForClaudeResponse = false
+                    self.handleHTTPError(error)
+                }
+            }
+        }
+    }
+    
+    // MARK: - Message Queue Management
+    
+    private func queueMessage(_ text: String, for project: Project, attachments: [AttachmentData]) {
+        // FEATURE FLAG: Queue system disabled
+        guard FeatureFlags.shouldUseQueueSystem else {
+            FeatureFlags.logFeatureDisabled("queueMessage", reason: "Queue system disabled by feature flag")
+            return
+        }
+        updateProjectState(for: project) { state in
+            // Check if this project's queue is full
+            if state.messageQueue.count >= maxQueueSize {
+                print("📦 Message queue for project \(project.name) is full (\(maxQueueSize) messages) - dropping oldest message")
+                state.messageQueue.removeFirst()
+            }
+            
+            // Add message to this project's queue
+            state.messageQueue.append((text: text, attachments: attachments))
+            let queueCount = state.messageQueue.count
+            print("📦 Queued message for \(project.name) (\(queueCount)/\(maxQueueSize)): \(String(text.prefix(50)))...")
+        }
+        
+        // Sync published queue properties for current project
+        if project.path == currentProject?.path {
+            if FeatureFlags.showQueueUI {
+                let count = projectStates[project.path]?.messageQueue.count ?? 0
+                logger.debug("Queue sync after add: \(project.name) has \(count) messages queued", category: .queue)
+                queuedMessageCount = count
+                hasQueuedMessages = !(projectStates[project.path]?.messageQueue.isEmpty ?? true)
+            } else {
+                // Queue UI disabled - always show 0
+                queuedMessageCount = 0
+                hasQueuedMessages = false
+            }
+        }
+        
+        // Show queued message in UI immediately (local-first UX)
+        let queuedMessage = Message(
+            content: text,
+            sender: .user,
+            type: .text,
+            attachments: attachments
+        )
+        
+        messages.append(queuedMessage)
+        
+        // Message added to UI state (persistence handled separately)
+        
+        // Save queued message to local database immediately (pending queue processing)
+        if let sessionId = currentSessionId {
+            persistenceService.appendMessage(queuedMessage, to: project.path, sessionId: sessionId, project: project)
+            print("💾 Saved queued message with session ID: \(sessionId)")
+        } else {
+            pendingUserMessages.append(queuedMessage)
+            print("💾 Added queued message to pending list (no session ID yet)")
+        }
+        
+        print("📝 Message queued - will send when current request completes")
+    }
+    
+    private func processMessageQueue() {
+        // FEATURE FLAG: Queue processing disabled
+        guard FeatureFlags.enableQueueProcessing else {
+            FeatureFlags.logFeatureDisabled("processMessageQueue", reason: "Queue processing disabled by feature flag")
+            return
+        }
+        // Process queue for the current project only
+        guard let project = currentProject else { return }
+        
+        let projectState = projectStates[project.path]
+        let isProcessing = projectState?.isProcessingQueue ?? false
+        let hasMessages = !(projectState?.messageQueue.isEmpty ?? true)
+        let isWaitingForResponse = projectState?.isWaitingForResponse ?? false
+        
+        guard !isProcessing && hasMessages && !isWaitingForResponse else { return }
+        
+        updateProjectState(for: project) { state in
+            state.isProcessingQueue = true
+        }
+        
+        let queueCount = projectState?.messageQueue.count ?? 0
+        print("🚀 Processing message queue for \(project.name) (\(queueCount) messages)")
+        
+        // Get and remove the next message from queue
+        var nextMessage: (text: String, attachments: [AttachmentData])?
+        updateProjectState(for: project) { state in
+            nextMessage = state.messageQueue.isEmpty ? nil : state.messageQueue.removeFirst()
+        }
+        
+        // Sync published queue properties for current project after removing from queue
+        if project.path == currentProject?.path {
+            if FeatureFlags.showQueueUI {
+                let count = projectStates[project.path]?.messageQueue.count ?? 0
+                logger.debug("Queue sync after remove: \(project.name) has \(count) messages queued", category: .queue)
+                queuedMessageCount = count
+                hasQueuedMessages = !(projectStates[project.path]?.messageQueue.isEmpty ?? true)
+            } else {
+                // Queue UI disabled - always show 0
+                queuedMessageCount = 0
+                hasQueuedMessages = false
+            }
+        }
+        
+        if let nextMessage = nextMessage {
+            print("📤 Sending queued message: \(String(nextMessage.text.prefix(50)))...")
+            
+            // Process the queued message
+            sendMessageDirect(nextMessage.text, for: project, attachments: nextMessage.attachments)
+        }
+        
+        updateProjectState(for: project) { state in
+            state.isProcessingQueue = false
+        }
+        
+        // Update published properties after processing
+        if project.path == currentProject?.path {
+            let count = projectStates[project.path]?.messageQueue.count ?? 0
+            logger.debug("Final queue sync after processing: \(project.name) has \(count) messages queued", category: .queue)
+            queuedMessageCount = count
+            hasQueuedMessages = !(projectStates[project.path]?.messageQueue.isEmpty ?? true)
+        }
+        
+        // Continue processing if there are more messages in this project's queue
+        let remainingCount = projectStates[project.path]?.messageQueue.count ?? 0
+        if remainingCount > 0 {
+            print("📦 \(remainingCount) messages remaining in queue for \(project.name)")
+        }
+    }
+    
+    private func sendMessageDirect(_ text: String, for project: Project, attachments: [AttachmentData]) {
+        // This is the original sendMessage logic without queueing
+        print("📤 Sending queued message directly: \(String(text.prefix(50)))...")
+        
+        // Prepare message content with attachments
+        var messageContent = text
+        if !attachments.isEmpty {
+            messageContent += "\n\n[Attachments: \(attachments.count) file(s)]"
+            for attachment in attachments {
+                messageContent += "\n- \(attachment.name) (\(attachment.type))"
+            }
+        }
+        
+        // Create the command with project context
+        let command = "Working in project: \(project.path)\n\n\(messageContent)"
+        
+        // Set loading state for THIS project  
+        loadingStateCoordinator.startChatLoading(for: project.path, timeout: 300.0)
+        
+        updateProjectState(for: project) { state in
+            state.isLoading = true
+            state.isWaitingForResponse = true
+        }
+        // isLoading will be updated via setupLoadingStateSync()
+        isWaitingForClaudeResponse = true
+        startLoadingTimeout(for: project)
+        updateLoadingMessage()
+        
+        // Use project-specific session ID if we have one, otherwise send without session ID
+        let sessionIdToUse = getSessionId(for: project)
+        
+        // Send via HTTP
+        aicliService.sendMessage(
+            message: command,
+            projectPath: project.path,
+            sessionId: sessionIdToUse,
+            attachments: attachments
+        ) { [weak self] result in
+            Task { @MainActor in
+                guard let self = self else { return }
+                
+                switch result {
+                case .success(let response):
+                    // Handle response (session management only)
+                    self.handleHTTPResponse(response)
+                    
+                    // APNS will deliver responses automatically - no polling needed
+                    
+                    // ALWAYS keep loading state active - wait for APNS delivery
+                    print("⏳ Keeping loading state active until APNS delivers Claude's response (queued message)")
+                    
+                case .failure(let error):
+                    // Clear loading state on error
+                    self.updateProjectState(for: project) { state in
+                        state.messageTimeout?.invalidate()
+                        state.messageTimeout = nil
+                        state.isLoading = false
+                        state.isWaitingForResponse = false
+                    }
                     self.isLoading = false
                     self.isWaitingForClaudeResponse = false
                     self.handleHTTPError(error)
@@ -292,7 +760,7 @@ class ChatViewModel: ObservableObject {
                 currentSessionId = sessionId
                 
                 // Create session object for the UI if we have a current project
-                if let project = getProjectFromSession(), activeSession == nil {
+                if let project = currentProject, activeSession == nil {
                     let session = ProjectSession(
                         sessionId: sessionId,
                         projectName: project.name,
@@ -309,7 +777,7 @@ class ChatViewModel: ObservableObject {
         }
         
         // ALL responses go through APNS - no direct response path
-        // This ensures all messages sync across devices via CloudKit
+        // Messages are delivered via APNS to maintain single source of truth
         print("📋 ChatViewModel: Acknowledgment received - waiting for APNS delivery")
         
         if response.sessionId == nil {
@@ -346,10 +814,7 @@ class ChatViewModel: ObservableObject {
         )
         messages.append(errorMessage)
         
-        // Also update project-specific storage
-        if let project = currentProject {
-            projectMessages[project.path] = messages
-        }
+        // Message added to UI state (persistence handled separately)
         
         print("❌ ChatViewModel: Added HTTP error message: \(error)")
         
@@ -375,20 +840,27 @@ class ChatViewModel: ObservableObject {
     // MARK: - Message Persistence
     func saveMessages(for project: Project) {
         // THE ONE FLOW: Messages are saved by PushNotificationService when they arrive
-        // This function now only needs to handle edge cases like unsent user messages
+        // This function handles edge cases like unsent user messages or pending messages
+        
+        // Save pending user messages - they'll be matched with session ID when response arrives
+        if !pendingUserMessages.isEmpty {
+            print("📌 Keeping \(pendingUserMessages.count) pending messages for project: \(project.path)")
+            // Keep messages in memory until we get a session ID from Claude
+            // They're already shown in the UI, just waiting for proper persistence
+        }
         
         guard !messages.isEmpty else {
             print("📝 No messages to save for project \(project.name)")
             return
         }
         
-        // Use Claude's session ID if available, fallback to other sources
-        let sessionId = currentSessionId ?? activeSession?.sessionId
+        // Use consolidated session ID method
+        let sessionId = getSessionId(for: project)
         
         if let sessionId = sessionId {
             // Messages should already be saved via THE ONE FLOW
             // Just log for debugging
-            print("📝 Messages already persisted via APNS flow for project \(project.name)")
+            print("📝 Messages already persisted for project \(project.name) with session: \(sessionId)")
         } else {
             // No session ID yet - this happens when user leaves before Claude responds
             print("⚠️ No session ID available yet for project \(project.name)")
@@ -410,9 +882,8 @@ class ChatViewModel: ObservableObject {
         // Clear session ID
         currentSessionId = nil
         
-        // Clear project-specific storage
+        // Clear project session storage
         if let project = currentProject {
-            projectMessages[project.path] = []
             projectSessionIds.removeValue(forKey: project.path)
         }
         
@@ -423,12 +894,16 @@ class ChatViewModel: ObservableObject {
         isLoading = false
         isWaitingForClaudeResponse = false
         progressInfo = nil
-        loadingProjectPath = nil
-        stopSessionPolling()
-        loadingTimeout?.invalidate()
-        loadingTimeout = nil
-        messageTimeout?.invalidate()
-        messageTimeout = nil
+        
+        // Clear project state timers if we have a project
+        if let project = currentProject {
+            updateProjectState(for: project) { state in
+                state.cancelTimers()
+                state.isLoading = false
+                state.progressInfo = nil
+                state.isWaitingForResponse = false
+            }
+        }
         
         print("🧹 Session cleared completely")
     }
@@ -444,6 +919,18 @@ class ChatViewModel: ObservableObject {
         currentProject = project
         currentSessionId = sessionId
         
+        // Sync published queue properties for new current project
+        if FeatureFlags.showQueueUI {
+            let count = projectStates[project.path]?.messageQueue.count ?? 0
+            logger.debug("Queue sync on project switch: \(project.name) has \(count) messages queued", category: .queue)
+            queuedMessageCount = count
+            hasQueuedMessages = !(projectStates[project.path]?.messageQueue.isEmpty ?? true)
+        } else {
+            // Queue UI disabled - always show 0
+            queuedMessageCount = 0
+            hasQueuedMessages = false
+        }
+        
         // Store the session ID for this project
         projectSessionIds[project.path] = sessionId
         
@@ -455,50 +942,17 @@ class ChatViewModel: ObservableObject {
         let localMessages = persistenceService.loadMessages(for: project.path, sessionId: sessionId)
         self.messages = localMessages
         
-        // Also store in project-specific dictionary
-        projectMessages[project.path] = localMessages
+        // Messages loaded from persistence to UI state
         
         print("✅ Loaded \(self.messages.count) messages for \(project.name) (local-only)")
         
-        // Check if we need to resume polling (last message was from user)
-        if let lastMessage = messages.last, lastMessage.sender == .user {
-            print("🔄 Last message was from user - checking if we need to resume polling")
-            
-            // Check how long ago the last message was sent
-            let timeSinceLastMessage = Date().timeIntervalSince(lastMessage.timestamp)
-            
-            // Only resume polling if the message is recent (within 5 minutes)
-            if timeSinceLastMessage < 300 {
-                print("📡 Recent user message detected (\(Int(timeSinceLastMessage))s ago) - resuming polling")
-                
-                // Start loading state and polling FOR THIS PROJECT
-                isLoading = true
-                isWaitingForClaudeResponse = true
-                loadingProjectPath = project.path
-                updateLoadingMessage()
-                startSessionPolling(sessionId: sessionId)
-                startLoadingTimeout()
-                
-                print("📡 Resumed polling for pending response")
-            } else {
-                print("⏰ Last user message is old (\(Int(timeSinceLastMessage))s ago) - not resuming polling")
-                // Clear loading state if it was for a different project
-                if loadingProjectPath != project.path {
-                    isLoading = false
-                    isWaitingForClaudeResponse = false
-                    loadingProjectPath = nil
-                }
-            }
-        } else {
-            // Clear loading state if it was for a different project
-            if loadingProjectPath != project.path {
-                isLoading = false
-                isWaitingForClaudeResponse = false
-                loadingProjectPath = nil
-            }
-        }
+        // Clear loading state after successful message loading (especially for pull-to-refresh)
+        clearLoadingState(for: project.path)
         
-        // No server sync needed - push notifications handle new messages
+        // APNS-based delivery: No polling resumption needed
+        // Push notifications will automatically deliver any pending Claude responses
+        
+        // Messages loaded directly from MessagePersistenceService
         // Local database is the source of truth for the conversation
     }
     
@@ -513,45 +967,49 @@ class ChatViewModel: ObservableObject {
     
     // MARK: - Private Methods
     private func setupAutoSave() {
-        autoSaveTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { _ in
-            // Note: saveMessages needs project context, which should be provided by the view
-        }
+        // Auto-save is now handled per project when needed
+        // Each project can have its own auto-save timer if required
     }
     
-    private func startLoadingTimeout() {
-        loadingTimeout?.invalidate()
-        // 5 minute timeout as a safety net for stuck states only
-        loadingTimeout = Timer.scheduledTimer(withTimeInterval: 300.0, repeats: false) { [weak self] _ in
-            guard let self = self else { return }
-            if self.isLoading {
-                print("⏰ Loading state timeout - forcing clear after 5 minutes (safety net)")
-                self.isLoading = false
-                self.progressInfo = nil
-                self.isWaitingForClaudeResponse = false
-                self.messageTimeout?.invalidate()
-                self.messageTimeout = nil
+    private func startLoadingTimeout(for project: Project) {
+        updateProjectState(for: project) { state in
+            state.loadingTimeout?.invalidate()
+            // 5 minute timeout as a safety net for stuck states only
+            state.loadingTimeout = Timer.scheduledTimer(withTimeInterval: 300.0, repeats: false) { [weak self] _ in
+                guard let self = self else { return }
+                
+                // Check if this project is still loading
+                if self.projectStates[project.path]?.isLoading == true {
+                    print("⏰ Loading state timeout for project \(project.name) - forcing clear after 5 minutes (safety net)")
+                    
+                    // Clear state for this project
+                    self.updateProjectState(for: project) { state in
+                        state.isLoading = false
+                        state.progressInfo = nil
+                        state.isWaitingForResponse = false
+                        state.loadingTimeout = nil
+                        state.messageTimeout?.invalidate()
+                        state.messageTimeout = nil
+                    }
+                    
+                    // Update global state if this is the current project
+                    if self.currentProject?.path == project.path {
+                        self.isLoading = false
+                        self.progressInfo = nil
+                        self.isWaitingForClaudeResponse = false
+                    }
+                }
             }
         }
     }
     
     private func setupNotificationListeners() {
-        // Listen for Claude responses received via APNS
+        // Listen for Claude responses received via APNS (includes fresh session info)
         NotificationCenter.default.publisher(for: .claudeResponseReceived)
             .sink { [weak self] notification in
                 self?.handleClaudeResponseNotification(notification)
             }
             .store(in: &cancellables)
-        
-        // Listen for fresh chat session establishment
-        NotificationCenter.default.publisher(for: .freshChatSessionEstablished)
-            .sink { [weak self] notification in
-                self?.handleFreshSessionEstablished(notification)
-            }
-            .store(in: &cancellables)
-        
-        // No WebSocket needed - using intelligent progress simulation
-        // Push notifications deliver new messages automatically
-        // App lifecycle events don't need to trigger server requests
     }
     
     private func handleClaudeResponseNotification(_ notification: Notification) {
@@ -563,16 +1021,21 @@ class ChatViewModel: ObservableObject {
             return
         }
         
+        // Check if this is a fresh session
+        let isFreshSession = notification.userInfo?["isFreshSession"] as? Bool ?? false
+        
         // Log notification details
         logNotificationDetails(message: message, sessionId: sessionId, project: project)
+        print("🆕 Fresh session: \(isFreshSession)")
         
         // Clear loading state if needed
         clearLoadingStateIfNeeded(for: project)
         
         // Only process if:
-        // 1. Session IDs match
+        // 1. Project-specific session IDs match
         // 2. We don't have a session yet (first message) and project matches
-        if currentSessionId == sessionId || (currentSessionId == nil && project.path == currentProject?.path) {
+        let projectSessionId = getSessionId(for: project)
+        if projectSessionId == sessionId || (projectSessionId == nil && project.path == currentProject?.path) {
             print("🎯 === PROCESSING CLAUDE RESPONSE ===")
             
             // Simple duplicate check using message IDs only (best practices)
@@ -583,182 +1046,53 @@ class ChatViewModel: ObservableObject {
                 return
             }
             
-            // Update session ID if we didn't have one (first message case)
-            if currentSessionId == nil {
+            // Handle fresh session setup if needed
+            if isFreshSession && projectSessionId == nil {
+                print("🆕 Setting up fresh session for project \(project.name)")
+                handleFirstMessage(sessionId: sessionId)
+                
+                // Save any pending user messages
+                let userMessagesToSave = messages.filter { $0.sender == .user }
+                for msg in userMessagesToSave {
+                    persistenceService.appendMessage(msg, to: project.path, sessionId: sessionId, project: project)
+                    print("💾 Saved pending user message: \(String(msg.content.prefix(50)))...")
+                }
+                
+                // Update session tracking using helper method
+                setSessionId(sessionId, for: project)
+            } else if projectSessionId == nil {
                 handleFirstMessage(sessionId: sessionId)
             }
             
             // Add message to conversation
             addMessageToConversation(message)
             
-            // Sync to CloudKit in background (optional)
-            syncMessageToCloudKit(message)
+            // Message saved locally via MessagePersistenceService
             
             print("🎯 === CLAUDE RESPONSE PROCESSING COMPLETED ===")
         } else {
             print("❌ === SESSION MISMATCH - IGNORING RESPONSE ===")
-            print("❌ Expected session: \(currentSessionId ?? "nil")")
+            print("❌ Expected session: \(projectSessionId ?? "nil")")
             print("❌ Received session: \(sessionId)")
             print("❌ Expected project: \(currentProject?.path ?? "nil")")
             print("❌ Received project: \(project.path)")
-        }
-    }
-    
-    private func handleFreshSessionEstablished(_ notification: Notification) {
-        print("🆕 === FRESH SESSION ESTABLISHED ===")
-        
-        guard let userInfo = notification.userInfo,
-              let sessionId = userInfo["sessionId"] as? String,
-              let projectPath = userInfo["projectPath"] as? String,
-              let project = userInfo["project"] as? Project else {
-            print("⚠️ ChatViewModel: Invalid fresh session notification payload")
-            return
-        }
-        
-        print("🆕 Fresh session established for project: \(project.name)")
-        print("🆕 Session ID: \(sessionId)")
-        
-        // Check if we have pending messages for this project
-        // Even if it's not the current project, we should save pending messages
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
             
-            if projectPath == self.currentProject?.path {
-                print("🆕 Fresh session for current project")
+            // CRITICAL: Save the session ID for this project even though we're not viewing it
+            // This ensures when user switches back, they have the correct session
+            if projectSessionIds[project.path] == nil || projectSessionIds[project.path]?.starts(with: "pending-") == true {
+                print("💾 Saving session ID \(sessionId) for project \(project.path) for later use")
+                projectSessionIds[project.path] = sessionId
                 
-                // Check if we already have this session ID (from handleClaudeResponse)
-                if self.currentSessionId == sessionId {
-                    print("📌 Session already established via APNS response - skipping reload")
-                    // Session was already set up in handleClaudeResponse, no need to reload
-                    return
-                }
-                
-                // Save any pending user messages that were shown in UI but not persisted
-                let userMessagesToSave = self.messages.filter { $0.sender == .user }
-                
-                for message in userMessagesToSave {
-                    self.persistenceService.appendMessage(message, to: projectPath, sessionId: sessionId, project: project)
-                    print("💾 Saved pending user message: \(String(message.content.prefix(50)))...")
-                }
-                
-                // Update current session ID
-                self.currentSessionId = sessionId
-                
-                // Reload the conversation to show all messages including the newly saved ones
-                self.loadMessages(for: project, sessionId: sessionId)
-                
-                // Also update project-specific storage with the updated session ID
-                self.projectSessionIds[project.path] = sessionId
-                
-                // Clear loading state when fresh session is established
-                print("🔄 Clearing loading state (fresh session established)")
-                self.isLoading = false
-                self.isWaitingForClaudeResponse = false
-                self.progressInfo = nil
-                self.stopSessionPolling()
-                self.loadingTimeout?.invalidate()
-                self.loadingTimeout = nil
-                
-                print("✅ Fresh chat session setup complete - \(userMessagesToSave.count) user messages saved")
-            } else {
-                print("🔍 Fresh session for different project - saving any pending messages")
-                
-                // Check if we have pending messages for this project in projectMessages
-                if let projectMsgs = self.projectMessages[projectPath] {
-                    let userMessagesToSave = projectMsgs.filter { $0.sender == .user }
-                    
-                    for message in userMessagesToSave {
-                        self.persistenceService.appendMessage(message, to: projectPath, sessionId: sessionId, project: project)
-                        print("💾 Saved pending user message for other project: \(String(message.content.prefix(50)))...")
-                    }
-                    
-                    // Update the session ID for that project
-                    self.projectSessionIds[projectPath] = sessionId
-                    
-                    print("✅ Saved \(userMessagesToSave.count) pending messages for project: \(project.name)")
-                }
+                // Messages are now persisted immediately, no delayed saving needed
             }
         }
     }
     
-    // MARK: - Session Status Polling
-    
-    private func startSessionPolling(sessionId: String) {
-        lastStatusCheckTime = Date()
-        
-        // Poll every 5 seconds
-        statusPollingTimer?.invalidate()
-        statusPollingTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                await self?.checkSessionStatus(sessionId: sessionId)
-            }
-        }
-        
-        // Start 30-second timeout for lost connection ONLY if we're waiting for a response
-        if isWaitingForClaudeResponse {
-            sessionLostTimer?.invalidate()
-            sessionLostTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: false) { [weak self] _ in
-                guard let self = self, self.isWaitingForClaudeResponse else { return }
-                self.handleLostConnection()
-            }
-        }
-        
-        // Do first check immediately
-        Task { @MainActor in
-            await checkSessionStatus(sessionId: sessionId)
-        }
-    }
-    
-    private func checkSessionStatus(sessionId: String) async {
-        do {
-            let status = try await aicliService.checkSessionStatus(sessionId: sessionId)
-            
-            if status.isActive && status.processConnected {
-                // Session is still active, update last check time
-                lastStatusCheckTime = Date()
-                print("✅ Session \(sessionId) is active")
-                
-                // Reset the 30-second timer since we got a successful response
-                // Only restart timer if we're still waiting for Claude's response
-                if isWaitingForClaudeResponse {
-                    sessionLostTimer?.invalidate()
-                    sessionLostTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: false) { [weak self] _ in
-                        guard let self = self, self.isWaitingForClaudeResponse else { return }
-                        self.handleLostConnection()
-                    }
-                }
-                
-                // Update loading message occasionally
-                if Int.random(in: 0...2) == 0 {
-                    updateLoadingMessage()
-                }
-            } else {
-                // Session died
-                print("❌ Session \(sessionId) is no longer active")
-                if isWaitingForClaudeResponse {
-                    handleLostConnection()
-                }
-            }
-        } catch {
-            print("⚠️ Failed to check session status: \(error)")
-            // Don't immediately fail on one failed check, wait for timeout
-            // The session endpoint might be having issues but Claude might still be processing
-        }
-    }
-    
-    func stopSessionPolling() {
-        statusPollingTimer?.invalidate()
-        statusPollingTimer = nil
-        sessionLostTimer?.invalidate()
-        sessionLostTimer = nil
-        lastStatusCheckTime = nil
-    }
+    // MARK: - Connection Handling (APNS-based)
     
     private func handleLostConnection() {
-        stopSessionPolling()
         isLoading = false
         progressInfo = nil
-        loadingProjectPath = nil
         isWaitingForClaudeResponse = false
         
         let errorMessage = Message(
@@ -766,17 +1100,22 @@ class ChatViewModel: ObservableObject {
             sender: .assistant,
             type: .text
         )
-        messages.append(errorMessage)
         
-        // Also update project-specific storage
-        if let project = currentProject {
-            projectMessages[project.path] = messages
+        // Validate message before adding to prevent blank messages
+        if MessageValidator.shouldDisplayMessage(errorMessage) {
+            messages.append(errorMessage)
+            
+            // Also update project-specific storage
+            if let project = currentProject {
+            }
+            
+            print("💔 Connection lost - added error message")
+        } else {
+            print("🚫 Filtered blank connection lost message")
         }
-        
-        print("💔 Connection lost - added error message")
     }
     
-    private func updateLoadingMessage() {
+    private func updateLoadingMessage(for project: Project? = nil) {
         let funMessages = [
             "Pondering deeply",
             "Brain storming",
@@ -806,9 +1145,10 @@ class ChatViewModel: ObservableObject {
         ]
         
         let randomMessage = funMessages.randomElement() ?? "Working hard"
-        let elapsed = lastStatusCheckTime.map { Date().timeIntervalSince($0) } ?? 0
+        let projectState = project.flatMap { projectStates[$0.path] }
+        let elapsed = projectState.map { Date().timeIntervalSince($0.lastStatusCheckTime) } ?? 0
         
-        progressInfo = ProgressInfo(
+        let newProgressInfo = ProgressInfo(
             stage: randomMessage,
             progress: nil,
             message: randomMessage,
@@ -818,6 +1158,18 @@ class ChatViewModel: ObservableObject {
             activity: randomMessage,
             canInterrupt: elapsed > 10
         )
+        
+        // Update project state if project provided
+        if let project = project {
+            updateProjectState(for: project) { state in
+                state.progressInfo = newProgressInfo
+                // Set persistent thinking info to survive app lifecycle changes
+                state.persistentThinkingInfo = newProgressInfo
+            }
+        }
+        
+        // Update global state for UI
+        progressInfo = newProgressInfo
     }
     
     // Removed handleCommandResponse - not needed without WebSocket
@@ -861,7 +1213,7 @@ class ChatViewModel: ObservableObject {
     }
     
     private func createSessionIfNeeded(sessionId: String) {
-        guard let project = getProjectFromSession(), activeSession == nil else { return }
+        guard let project = currentProject, activeSession == nil else { return }
         
         ChatSessionManager.shared.createSessionFromClaudeResponse(
             sessionId: sessionId,
@@ -879,7 +1231,7 @@ class ChatViewModel: ObservableObject {
     }
     
     private func updateSessionPersistence(sessionId: String) {
-        guard let project = getProjectFromSession() else { return }
+        guard let project = currentProject else { return }
         
         // Local-first pattern: Check if we have existing session metadata
         if persistenceService.getSessionMetadata(for: project.path) != nil {
@@ -920,34 +1272,59 @@ class ChatViewModel: ObservableObject {
             triggerAutoResponse(autoResponse)
         }
         
-        // Sync to CloudKit
-        syncMessageToCloudKit(assistantMessage)
+        // Message saved locally via MessagePersistenceService
         
         // Save conversation
-        if let project = getProjectFromSession() {
+        if let project = currentProject {
             saveMessages(for: project)
         }
     }
     
+    // MARK: - Defensive Recovery Methods
+    
+    /// Automatically recover from stuck loading states
+    private func recoverFromStuckLoadingState(for project: Project) {
+        guard let state = projectStates[project.path] else { return }
+        
+        let loadingDuration = Date().timeIntervalSince(state.lastStatusCheckTime)
+        if state.isLoading && loadingDuration > maxLoadingDuration {
+            logger.warning("Auto-recovering from stuck loading state for project: \(project.name) (stuck for \(Int(loadingDuration))s)", category: .error)
+            
+            // Force clear all loading states
+            updateProjectState(for: project) { state in
+                state.isLoading = false
+                state.isWaitingForResponse = false
+                state.progressInfo = nil
+                state.persistentThinkingInfo = nil
+                state.cancelTimers()
+            }
+            
+            // Clear global state if this is current project
+            if project.path == currentProject?.path {
+                isLoading = false
+                progressInfo = nil
+                isWaitingForClaudeResponse = false
+            }
+            
+            // Clear from loading coordinator
+            loadingStateCoordinator.stopProjectLoading(project.path)
+            
+            // Add error message to inform user
+            let errorMessage = Message(
+                content: "⚠️ The request timed out after 5 minutes. Please try again.",
+                sender: .system,
+                type: .error
+            )
+            messages.append(errorMessage)
+        }
+    }
+    
     private func triggerAutoResponse(_ autoResponse: String) {
-        print("🤖 Auto-response triggered: \(autoResponse)")
+        logger.debug("Auto-response triggered: \(autoResponse)", category: .message)
         
         DispatchQueue.main.asyncAfter(deadline: .now() + autoResponseManager.config.delayBetweenResponses) { [weak self] in
             guard let self = self, let project = self.currentProject else { return }
             self.sendMessage(autoResponse, for: project)
-        }
-    }
-    
-    private func syncMessageToCloudKit(_ message: Message) {
-        guard let project = currentProject else { return }
-        
-        Task {
-            do {
-                try await cloudKitManager.saveMessage(message, projectPath: project.path)
-                print("✅ Assistant message synced to CloudKit")
-            } catch {
-                print("⚠️ Failed to sync assistant message to CloudKit: \(error)")
-            }
         }
     }
     
@@ -957,12 +1334,39 @@ class ChatViewModel: ObservableObject {
             sender: .assistant,
             type: .text
         )
-        messages.append(errorMessage)
-        print("❌ ChatViewModel: Added error message to chat: \(error ?? "Unknown error")")
+        
+        // Validate message before adding to prevent blank messages
+        if MessageValidator.shouldDisplayMessage(errorMessage) {
+            messages.append(errorMessage)
+            print("❌ ChatViewModel: Added error message to chat: \(error ?? "Unknown error")")
+        } else {
+            print("🚫 Filtered blank error message: \(error ?? "nil")")
+        }
     }
     
     private func handleCommandError(_ error: AICLICompanionError) {
-        messageTimeout?.invalidate()
+        // Clear state for current project
+        if let project = currentProject {
+            updateProjectState(for: project) { state in
+                state.isLoading = false
+                state.isWaitingForResponse = false
+                state.progressInfo = nil
+                state.messageTimeout?.invalidate()
+                state.messageTimeout = nil
+            }
+        }
+        
+        // Clear timers for current project
+        if let project = currentProject {
+            updateProjectState(for: project) { state in
+                state.messageTimeout?.invalidate()
+                state.messageTimeout = nil
+                state.isLoading = false
+                state.isWaitingForResponse = false
+                state.progressInfo = nil
+            }
+        }
+        
         isLoading = false
         isWaitingForClaudeResponse = false
         progressInfo = nil
@@ -972,7 +1376,13 @@ class ChatViewModel: ObservableObject {
             sender: .assistant,
             type: .text
         )
-        messages.append(errorMessage)
+        
+        // Validate message before adding to prevent blank messages
+        if MessageValidator.shouldDisplayMessage(errorMessage) {
+            messages.append(errorMessage)
+        } else {
+            print("🚫 Filtered blank command error message: \(error.localizedDescription)")
+        }
     }
     
     // MARK: - HTTP Event Handling (Simplified)
@@ -981,13 +1391,15 @@ class ChatViewModel: ObservableObject {
     
     // WebSocket streaming handlers removed - HTTP responses are complete and immediate
     
-    private func getProjectFromSession() -> Project? {
-        return currentProject
-    }
     
     private func handleStreamingComplete(_ message: Message) {
         // Cancel timeout since we got a response
-        messageTimeout?.invalidate()
+        if let project = currentProject {
+            updateProjectState(for: project) { state in
+                state.messageTimeout?.invalidate()
+                state.messageTimeout = nil
+            }
+        }
         
         // HTTP responses are direct - no deduplication or queuing needed
         // Add the message directly to the UI
@@ -1007,7 +1419,12 @@ class ChatViewModel: ObservableObject {
     
     private func handleConversationResult(_ result: ConversationResultResponse, messageId: String?) {
         // Cancel timeout since we got a response
-        messageTimeout?.invalidate()
+        if let project = currentProject {
+            updateProjectState(for: project) { state in
+                state.messageTimeout?.invalidate()
+                state.messageTimeout = nil
+            }
+        }
         
         // Extract and store Claude's session ID if different from current
         if let claudeSessionId = result.claudeSessionId ?? result.sessionId {
@@ -1017,7 +1434,7 @@ class ChatViewModel: ObservableObject {
                 print("🔄 ChatViewModel: Session ID successfully set to: \(currentSessionId ?? "nil")")
                 
                 // Create session object for the UI if we have a current project and no active session
-                if let project = getProjectFromSession(), activeSession == nil {
+                if let project = currentProject, activeSession == nil {
                     ChatSessionManager.shared.createSessionFromClaudeResponse(
                         sessionId: claudeSessionId,
                         for: project
@@ -1034,7 +1451,7 @@ class ChatViewModel: ObservableObject {
                 }
                 
                 // Update persistence with Claude's session ID
-                if let project = getProjectFromSession() {
+                if let project = currentProject {
                     persistenceService.updateSessionMetadata(for: project.path, aicliSessionId: claudeSessionId)
                 }
             }
@@ -1060,7 +1477,7 @@ class ChatViewModel: ObservableObject {
             messages.append(message)
             
             // Save the complete conversation now that we have messages and a session ID
-            if let project = getProjectFromSession() {
+            if let project = currentProject {
                 saveMessages(for: project)
             }
         }
@@ -1071,7 +1488,12 @@ class ChatViewModel: ObservableObject {
     
     private func handleAssistantMessage(_ assistantMsg: AssistantMessageResponse, messageId: String?) {
         // Cancel timeout since we got a response  
-        messageTimeout?.invalidate()
+        if let project = currentProject {
+            updateProjectState(for: project) { state in
+                state.messageTimeout?.invalidate()
+                state.messageTimeout = nil
+            }
+        }
         
         // Extract text content from content blocks
         let textContent = assistantMsg.content
@@ -1103,7 +1525,7 @@ class ChatViewModel: ObservableObject {
             messages.append(message)
             
             // Save the complete conversation now that we have messages
-            if let project = getProjectFromSession() {
+            if let project = currentProject {
                 saveMessages(for: project)
             }
         }
@@ -1175,7 +1597,6 @@ class ChatViewModel: ObservableObject {
             
             // Also update project-specific storage
             if let project = currentProject {
-                projectMessages[project.path] = messages
             }
             
             print("✅ Added all \(serverMessages.count) server messages (no local messages)")
@@ -1216,10 +1637,7 @@ class ChatViewModel: ObservableObject {
         print("✅ Added \(addedCount) new messages from server")
         print("📊 Total messages now: \(messages.count)")
         
-        // Also update project-specific storage
-        if let project = currentProject {
-            projectMessages[project.path] = messages
-        }
+        // Message added to UI state (persistence handled separately)
         
         // Messages are already saved via append operations - no bulk save needed
     }
@@ -1230,89 +1648,7 @@ class ChatViewModel: ObservableObject {
     // MARK: - WhatsApp/iMessage Pattern: Simple Local Operations
     // No complex merging needed - messages are appended via APNS or user actions
     
-    // MARK: - CloudKit Sync Methods
-    
-    func syncMessages(for project: Project) async {
-        guard cloudKitManager.iCloudAvailable else {
-            print("⚠️ iCloud not available, skipping sync")
-            return
-        }
-        
-        do {
-            print("🔄 Starting CloudKit sync for project: \(project.path)")
-            let cloudMessages = try await cloudKitManager.fetchMessages(for: project.path)
-            
-            await MainActor.run {
-                self.mergeCloudMessages(cloudMessages)
-            }
-            
-            print("✅ CloudKit sync completed for project: \(project.path)")
-        } catch {
-            print("❌ Failed to sync messages from CloudKit: \(error)")
-        }
-    }
-    
-    private func mergeCloudMessages(_ cloudMessages: [Message]) {
-        var newMessagesCount = 0
-        var foundSessionId: String?
-        
-        for cloudMessage in cloudMessages {
-            // Extract sessionId from CloudKit messages if we don't have one
-            if currentSessionId == nil,
-               let sessionId = cloudMessage.metadata?.sessionId,
-               !sessionId.isEmpty {
-                foundSessionId = sessionId
-            }
-            
-            // Check if message already exists locally
-            if !messages.contains(where: { $0.id == cloudMessage.id }) {
-                // Find correct insertion point to maintain chronological order
-                if let insertIndex = messages.firstIndex(where: { $0.timestamp > cloudMessage.timestamp }) {
-                    messages.insert(cloudMessage, at: insertIndex)
-                } else {
-                    // Message is newest, append to end
-                    messages.append(cloudMessage)
-                }
-                newMessagesCount += 1
-            }
-        }
-        
-        // Adopt the sessionId from CloudKit messages for project continuity
-        if let sessionId = foundSessionId, currentSessionId == nil {
-            currentSessionId = sessionId
-            print("📱 Adopted sessionId from CloudKit: \(sessionId)")
-            print("🔄 This device will now continue the same conversation")
-        }
-        
-        if newMessagesCount > 0 {
-            print("✅ Merged \(newMessagesCount) new messages from CloudKit")
-            print("📊 Total messages now: \(messages.count)")
-            
-            // Also update project-specific storage
-            if let project = currentProject {
-                projectMessages[project.path] = messages
-            }
-        } else {
-            print("📝 No new messages from CloudKit (all already local)")
-        }
-    }
-    
-    func performManualSync(for project: Project) async {
-        guard cloudKitManager.iCloudAvailable else { return }
-        
-        // First, sync messages from CloudKit
-        await syncMessages(for: project)
-        
-        // Then, upload any local messages that need syncing
-        for message in messages where message.needsSync {
-            do {
-                try await cloudKitManager.saveMessage(message, projectPath: project.path)
-                print("✅ Uploaded message to CloudKit: \(message.id)")
-            } catch {
-                print("⚠️ Failed to upload message \(message.id): \(error)")
-            }
-        }
-    }
+    // MARK: - Message Persistence - Single Source of Truth
     
     // MARK: - Helper Methods for Claude Response Notification
     
@@ -1359,17 +1695,33 @@ class ChatViewModel: ObservableObject {
     
     private func clearLoadingStateIfNeeded(for project: Project) {
         // Clear loading state immediately when APNS delivers response for current project
-        if project.path == currentProject?.path && loadingProjectPath == project.path {
+        if project.path == currentProject?.path && projectStates[project.path]?.isLoading == true {
             print("📨 APNS delivered response for current project - clearing loading state")
+            
+            updateProjectState(for: project) { state in
+                state.isLoading = false
+                state.isWaitingForResponse = false
+                state.progressInfo = nil
+                // Clear persistent thinking info when Claude actually responds
+                state.persistentThinkingInfo = nil
+                state.cancelTimers()
+            }
+            
             isLoading = false
             isWaitingForClaudeResponse = false
             progressInfo = nil
-            loadingProjectPath = nil
-            stopSessionPolling()
-            loadingTimeout?.invalidate()
-            loadingTimeout = nil
-            messageTimeout?.invalidate()
-            messageTimeout = nil
+            
+            // Debug current queue state
+            debugQueueState()
+            
+            // Process any queued messages for the current project
+            if let project = currentProject,
+               let queueCount = projectStates[project.path]?.messageQueue.count,
+               queueCount > 0 {
+                print("📦 Processing queued messages for \(project.name) (\(queueCount) in queue)")
+                // Process queue immediately instead of with delay
+                processMessageQueue()
+            }
         }
     }
     
@@ -1418,6 +1770,12 @@ class ChatViewModel: ObservableObject {
         print("📝 Message content length: \(message.content.count) characters")
         print("📝 Message content preview: \(String(message.content.prefix(100)))...")
         
+        // Validate message before adding to prevent blank messages
+        guard MessageValidator.shouldDisplayMessage(message) else {
+            print("🚫 Filtered blank message from conversation")
+            return
+        }
+        
         // Ensure UI updates happen on main thread
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
@@ -1428,7 +1786,6 @@ class ChatViewModel: ObservableObject {
             
             // Also update project-specific storage
             if let project = self.currentProject {
-                self.projectMessages[project.path] = self.messages
                 print("📝 Updated project messages for \(project.name)")
             }
             
@@ -1445,16 +1802,36 @@ class ChatViewModel: ObservableObject {
         }
     }
     
-    private func syncMessageToCloudKit(_ message: Message) {
-        if let project = currentProject {
-            Task {
-                do {
-                    try await cloudKitManager.saveMessage(message, projectPath: project.path)
-                    print("✅ Claude message synced to CloudKit")
-                } catch {
-                    print("⚠️ Failed to sync Claude message to CloudKit: \(error)")
-                }
+    // MARK: - Session Management Helpers
+    
+    /// Get session ID for a specific project (single source of truth)
+    private func getSessionId(for project: Project) -> String? {
+        // Priority order:
+        // 1. If this is the current project, use currentSessionId
+        // 2. Otherwise, use project-specific session ID from projectSessionIds
+        if currentProject?.path == project.path {
+            return currentSessionId
+        } else {
+            let projectSessionId = projectSessionIds[project.path]
+            // Filter out pending session IDs
+            if let sessionId = projectSessionId, !sessionId.starts(with: "pending-") {
+                return sessionId
             }
+            return nil
+        }
+    }
+    
+    /// Set session ID for a specific project
+    private func setSessionId(_ sessionId: String?, for project: Project) {
+        // Update both global currentSessionId (if current project) and project-specific storage
+        if currentProject?.path == project.path {
+            currentSessionId = sessionId
+        }
+        
+        if let sessionId = sessionId {
+            projectSessionIds[project.path] = sessionId
+        } else {
+            projectSessionIds.removeValue(forKey: project.path)
         }
     }
     

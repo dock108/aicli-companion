@@ -132,6 +132,9 @@ enum SuggestionPriority: Int, CaseIterable {
 class ProjectAwarenessService: ObservableObject {
     @Published var currentProject: ProjectContext?
     @Published var recentProjects: [ProjectContext] = []
+    
+    // Use unified project state manager
+    private let projectStateManager = ProjectStateManager.shared
 
     private let maxRecentProjects = 10
 
@@ -142,6 +145,11 @@ class ProjectAwarenessService: ObservableObject {
         DispatchQueue.main.async {
             self.currentProject = projectContext
             self.addToRecentProjects(projectContext)
+            
+            // Update unified project state - convert ProjectContext to Project
+            if let project = self.convertToProject(from: projectContext) {
+                self.projectStateManager.setCurrentProject(project)
+            }
         }
 
         return projectContext
@@ -527,6 +535,18 @@ class ProjectAwarenessService: ObservableObject {
 
     func getHighPrioritySuggestions() -> [ProjectSuggestion] {
         return currentProject?.suggestions.filter { $0.priority == .high || $0.priority == .critical } ?? []
+    }
+    
+    // MARK: - Conversion Helper
+    
+    /// Convert ProjectContext to Project for unified state manager
+    private func convertToProject(from context: ProjectContext) -> Project? {
+        let projectName = (context.workingDirectory as NSString).lastPathComponent
+        return Project(
+            name: projectName,
+            path: context.workingDirectory,
+            type: "directory"
+        )
     }
 }
 

@@ -422,15 +422,6 @@ final class SessionStatePersistenceServiceTests: XCTestCase {
         XCTAssertTrue(sessionChanges[1].contains { $0.id == testSessionId })
     }
     
-    // MARK: - Migration Tests
-    
-    func testMigrateFromLegacyStorage() throws {
-        // This test verifies the migration doesn't crash
-        persistenceService.migrateFromLegacyStorage()
-        
-        // Should complete without throwing
-        XCTAssertNotNil(persistenceService.activeSessions)
-    }
     
     // MARK: - Concurrent Access Tests
     

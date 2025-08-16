@@ -4,25 +4,18 @@ import Combine
 /// Handles navigation from push notifications
 @available(iOS 16.0, macOS 13.0, *)
 struct NotificationHandler: ViewModifier {
-    @State private var navigateToProject: Project?
-    @State private var navigateToSession: String?
     @State private var cancellables = Set<AnyCancellable>()
+    @StateObject private var projectStateManager = ProjectStateManager.shared
+    
+    // Bindings to parent view state
+    @Binding var isConnected: Bool
+    @Binding var selectedProject: Project?
+    @Binding var isProjectSelected: Bool
     
     func body(content: Content) -> some View {
         content
             .onAppear {
                 setupNotificationHandlers()
-            }
-            .sheet(item: $navigateToProject) { project in
-                NavigationView {
-                    ChatView(
-                        selectedProject: project,
-                        session: nil,
-                        onSwitchProject: {
-                            navigateToProject = nil
-                        }
-                    )
-                }
             }
     }
     
@@ -33,119 +26,83 @@ struct NotificationHandler: ViewModifier {
                 handleOpenProject(notification)
             }
             .store(in: &cancellables)
-        
-        // Listen for open chat session notifications
-        NotificationCenter.default.publisher(for: .openChatSession)
-            .sink { notification in
-                handleOpenChatSession(notification)
-            }
-            .store(in: &cancellables)
     }
     
     private func handleOpenProject(_ notification: Notification) {
-        guard let userInfo = notification.userInfo,
-              let projectId = userInfo["projectId"] as? String,
-              let projectName = userInfo["projectName"] as? String else {
+        guard let userInfo = notification.userInfo else {
+            print("⚠️ No userInfo in openProject notification")
             return
         }
         
-        print("📱 Opening project from notification: \(projectName)")
+        // Handle both old format (projectId/projectName) and new format (project/projectPath)
+        var project: Project?
         
-        // Create project object
-        let project = Project(
-            name: projectName,
-            path: projectId,
-            type: "directory"
-        )
+        if let projectObj = userInfo["project"] as? Project {
+            // New format with Project object
+            project = projectObj
+        } else if let projectPath = userInfo["projectPath"] as? String {
+            // New format with projectPath
+            let projectName = userInfo["projectName"] as? String ?? projectPath.split(separator: "/").last.map(String.init) ?? "Project"
+            project = Project(
+                name: projectName,
+                path: projectPath,
+                type: "directory"
+            )
+        } else if let projectId = userInfo["projectId"] as? String {
+            // Old format with projectId
+            let projectName = userInfo["projectName"] as? String ?? "Project"
+            project = Project(
+                name: projectName,
+                path: projectId,
+                type: "directory"
+            )
+        }
         
-        // Navigate to project
+        guard let finalProject = project else {
+            print("⚠️ Could not extract project from notification")
+            return
+        }
+        
+        print("📱 Opening project from notification: \(finalProject.name) at \(finalProject.path)")
+        
+        // Navigate to project within existing navigation
         DispatchQueue.main.async {
-            navigateToProject = project
-            navigateToSession = userInfo["sessionId"] as? String
+            // Ensure we're connected first
+            if !self.isConnected {
+                print("⚠️ Not connected to server, cannot navigate to project")
+                return
+            }
+            
+            // Set the project in both places to ensure navigation
+            self.projectStateManager.setCurrentProject(finalProject)
+            self.selectedProject = finalProject
+            self.isProjectSelected = true
+            
+            // Store session ID if provided
+            if let sessionId = userInfo["sessionId"] as? String {
+                print("📱 Restoring session: \(sessionId)")
+                ChatViewModel.shared.currentSessionId = sessionId
+            }
         }
         
         // Clear badge for this project
-        PushNotificationService.shared.clearProjectNotifications(projectId)
-    }
-    
-    private func handleOpenChatSession(_ notification: Notification) {
-        guard let userInfo = notification.userInfo,
-              let sessionId = userInfo["sessionId"] as? String else {
-            return
-        }
-        
-        print("📱 Opening chat session from notification: \(sessionId)")
-        
-        // For now, just store the session ID
-        // The actual navigation would depend on your app's structure
-        DispatchQueue.main.async {
-            navigateToSession = sessionId
-        }
+        PushNotificationService.shared.clearProjectNotifications(finalProject.path)
     }
 }
 
 // MARK: - View Extension
 
-@available(iOS 13.0, macOS 10.15, *)
-extension View {
-    func handleNotifications() -> some View {
-        self.modifier(NotificationHandler())
-    }
-}
-
-// MARK: - Badge Management View
-
-@available(iOS 16.0, macOS 13.0, *)
-struct BadgeCountView: View {
-    @StateObject private var notificationService = PushNotificationService.shared
-    
-    var body: some View {
-        Group {
-            if notificationService.badgeCount > 0 {
-                ZStack {
-                    Circle()
-                        .fill(Color.red)
-                        .frame(width: 20, height: 20)
-                    
-                    Text("\(notificationService.badgeCount)")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(.white)
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Project List Badge Extension
-
-@available(iOS 16.0, macOS 13.0, *)
-struct ProjectBadgeModifier: ViewModifier {
-    let projectId: String
-    @StateObject private var notificationService = PushNotificationService.shared
-    
-    func body(content: Content) -> some View {
-        content
-            .overlay(alignment: .topTrailing) {
-                // swiftlint:disable:next empty_count
-                if let count = notificationService.pendingNotifications[projectId], count > 0 {
-                    ZStack {
-                        Circle()
-                            .fill(Color.red)
-                            .frame(width: 18, height: 18)
-                        
-                        Text("\(count)")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(.white)
-                    }
-                    .offset(x: 8, y: -8)
-                }
-            }
-    }
-}
-
 @available(iOS 16.0, macOS 13.0, *)
 extension View {
-    func projectBadge(for projectId: String) -> some View {
-        self.modifier(ProjectBadgeModifier(projectId: projectId))
+    func handleNotifications(
+        isConnected: Binding<Bool>,
+        selectedProject: Binding<Project?>,
+        isProjectSelected: Binding<Bool>
+    ) -> some View {
+        self.modifier(NotificationHandler(
+            isConnected: isConnected,
+            selectedProject: selectedProject,
+            isProjectSelected: isProjectSelected
+        ))
     }
 }

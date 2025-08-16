@@ -71,8 +71,10 @@ class MessagePersistenceService: ObservableObject {
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
     private let fileManager = FileManager.default
+    private let logger = LoggingManager.shared
     
     @Published var savedSessions: [String: PersistedSessionMetadata] = [:]
+    private var isInitialized = false
     
     private init() {
         // Setup directories
@@ -86,8 +88,10 @@ class MessagePersistenceService: ObservableObject {
         encoder.dateEncodingStrategy = .iso8601
         decoder.dateDecodingStrategy = .iso8601
         
-        // Load existing session metadata from disk
-        loadAllSessionMetadata()
+        // Load metadata asynchronously to avoid blocking UI
+        Task {
+            await loadAllSessionMetadataAsync()
+        }
     }
     
     // MARK: - Public Methods
@@ -217,9 +221,13 @@ class MessagePersistenceService: ObservableObject {
             print("🗂️ MessagePersistence: Successfully decoded \(persistedMessages.count) messages for '\(projectId)'")
             
             let messages = persistedMessages.map { $0.toMessage() }
-            print("🗂️ MessagePersistence: Converted to \(messages.count) Message objects for '\(projectId)'")
+            print("🗂️ MessagePersistenceService: Converted to \(messages.count) Message objects for '\(projectId)'")
             
-            return messages
+            // Ensure chronological order (defensive)
+            let sortedMessages = messages.sorted { $0.timestamp < $1.timestamp }
+            print("🗂️ MessagePersistenceService: Messages sorted chronologically")
+            
+            return sortedMessages
         } catch {
             print("❌ MessagePersistence: Failed to load messages for project '\(projectId)': \(error)")
             print("❌ MessagePersistence: Error details: \(error.localizedDescription)")
@@ -378,25 +386,44 @@ class MessagePersistenceService: ObservableObject {
     
     // MARK: - Private Methods
     
-    private func loadAllSessionMetadata() {
-        print("🗂️ MessagePersistence: Loading all session metadata from disk")
-        
-        guard let projectDirs = try? fileManager.contentsOfDirectory(at: sessionsDirectory, includingPropertiesForKeys: nil) else {
-            print("   ❌ Failed to list sessions directory")
-            return
-        }
-        
-        for projectDir in projectDirs {
-            let metadataFile = projectDir.appendingPathComponent("metadata.json")
-            if let data = try? Data(contentsOf: metadataFile),
-               let metadata = try? decoder.decode(PersistedSessionMetadata.self, from: data) {
-                // Store by projectPath for consistency with getSessionMetadata
-                savedSessions[metadata.projectPath] = metadata
-                print("   ✅ Loaded metadata for project: \(metadata.projectName) - Last message: \(metadata.formattedLastUsed)")
+    private func loadAllSessionMetadataAsync() async {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .background).async { [weak self] in
+                guard let self = self else {
+                    continuation.resume()
+                    return
+                }
+                
+                print("🗂️ MessagePersistence: Loading all session metadata from disk")
+                
+                guard let projectDirs = try? self.fileManager.contentsOfDirectory(at: self.sessionsDirectory, includingPropertiesForKeys: nil) else {
+                    print("   ❌ Failed to list sessions directory")
+                    continuation.resume()
+                    return
+                }
+                
+                var loadedSessions: [String: PersistedSessionMetadata] = [:]
+                
+                for projectDir in projectDirs {
+                    let metadataFile = projectDir.appendingPathComponent("metadata.json")
+                    if let data = try? Data(contentsOf: metadataFile),
+                       let metadata = try? self.decoder.decode(PersistedSessionMetadata.self, from: data) {
+                        // Store by projectPath for consistency with getSessionMetadata
+                        loadedSessions[metadata.projectPath] = metadata
+                        print("   ✅ Loaded metadata for project: \(metadata.projectName) - Last message: \(metadata.formattedLastUsed)")
+                    }
+                }
+                
+                print("   📊 Loaded metadata for \(loadedSessions.count) projects")
+                
+                // Update on main thread
+                DispatchQueue.main.async {
+                    self.savedSessions = loadedSessions
+                    self.isInitialized = true
+                    continuation.resume()
+                }
             }
         }
-        
-        print("   📊 Loaded metadata for \(savedSessions.count) projects")
     }
     
     private func sanitizeFilename(_ filename: String) -> String {

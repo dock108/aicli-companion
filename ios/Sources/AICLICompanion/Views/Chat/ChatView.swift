@@ -11,7 +11,6 @@ struct ChatView: View {
     @EnvironmentObject var settings: SettingsManager
     @ObservedObject private var viewModel = ChatViewModel.shared
     @StateObject private var sessionManager = ChatSessionManager.shared
-    @StateObject private var queueManager = MessageQueueManager.shared
     
     @State private var messageText = ""
     @State private var keyboardHeight: CGFloat = 0
@@ -68,15 +67,11 @@ struct ChatView: View {
                     )
                 }
                 
-                // Message queue indicator
-                MessageQueueIndicator(
-                    queuedMessageCount: queueManager.queuedMessageCount,
-                    isReceivingQueued: queueManager.isReceivingQueued,
-                    oldestQueuedTimestamp: queueManager.oldestQueuedTimestamp
-                )
                 
-                // Auto-response controls
-                AutoResponseControls()
+                // FEATURE FLAG: Auto-response controls (currently hidden)
+                if FeatureFlags.showAutoModeUI {
+                    AutoResponseControls()
+                }
                 
                 // Message list
                 ChatMessageList(
@@ -107,6 +102,25 @@ struct ChatView: View {
                 }
                 #endif
                 
+                // FEATURE FLAG: Queue status indicator (currently hidden)
+                if FeatureFlags.showQueueUI && viewModel.hasQueuedMessages {
+                    HStack {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.system(size: 14))
+                            .foregroundColor(Colors.accentWarning)
+                        
+                        Text("\(viewModel.queuedMessageCount) message\(viewModel.queuedMessageCount == 1 ? "" : "s") queued • Max \(viewModel.maxQueueSize)")
+                            .font(Typography.font(.caption))
+                            .foregroundColor(Colors.textSecondary(for: colorScheme))
+                        
+                        Spacer()
+                    }
+                    .padding(.horizontal, isIPad && horizontalSizeClass == .regular ? 40 : 16)
+                    .padding(.vertical, 8)
+                    .background(Colors.bgCard(for: colorScheme).opacity(0.8))
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+                
                 // Input bar
                 ChatInputBar(
                     messageText: $messageText,
@@ -116,17 +130,13 @@ struct ChatView: View {
                     colorScheme: colorScheme,
                     onSendMessage: { attachments in
                         sendMessage(with: attachments)
-                    }
+                    },
+                    isSendBlocked: selectedProject.map { viewModel.shouldBlockSending(for: $0) } ?? true
                 )
                 .offset(y: inputBarOffset)
             }
             
-            // Scroll to bottom FAB
-            ScrollToBottomButton(
-                isVisible: !isNearBottom && !viewModel.messages.isEmpty,
-                unreadCount: unreadMessageCount,
-                onTap: scrollToBottom
-            )
+            // Scroll to bottom FAB - Removed per user request
         }
         .copyConfirmationOverlay()
         .onAppear {
@@ -136,11 +146,6 @@ struct ChatView: View {
         .onDisappear {
             cleanupView()
         }
-        #if os(iOS)
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-            refreshMessagesOnActivation()
-        }
-        #endif
         .onChange(of: selectedProject?.path) { oldPath, newPath in
             if let oldPath = oldPath, let newPath = newPath, oldPath != newPath {
                 // Save messages for the old project before switching
@@ -205,16 +210,11 @@ struct ChatView: View {
                     
                     print("🔷 ChatView: Loaded \(self.viewModel.messages.count) messages for restored session")
                     
+                    // Clear loading state now that session is fully restored
+                    self.viewModel.clearLoadingState(for: project.path)
+                    
                     // WhatsApp/iMessage pattern: Messages loaded from local database only
                     // Push notifications will deliver any new messages automatically
-                    
-                    // Sync messages from CloudKit in background (optional)
-                    Task {
-                        await self.viewModel.syncMessages(for: project)
-                    }
-                    
-                    // WhatsApp/iMessage pattern: Messages already loaded from local database
-                    // Push notifications deliver new messages automatically
                     
                 case .failure(let error):
                     // No existing session, but check if we have saved messages for this project
@@ -240,17 +240,15 @@ struct ChatView: View {
                         self.viewModel.currentSessionId = sessionId
                         
                         print("✅ ChatView: Loaded \(self.viewModel.messages.count) messages from saved conversation")
+                        
+                        // Clear loading state now that saved conversation is loaded
+                        self.viewModel.clearLoadingState(for: project.path)
                     } else {
                         // Truly no conversation exists yet
                         print("ℹ️ ChatView: No saved conversation found for \(project.name)")
                         self.viewModel.messages.removeAll()
                         // Clear any stuck loading state when there's no conversation
                         self.viewModel.clearLoadingState(for: project.path)
-                    }
-                    
-                    // Sync from CloudKit in background (optional)
-                    Task {
-                        await self.viewModel.syncMessages(for: project)
                     }
                 }
             }
@@ -285,7 +283,7 @@ struct ChatView: View {
         // Clear loading state for old project
         viewModel.isLoading = false  // Clear loading state
         viewModel.progressInfo = nil  // Clear progress info
-        viewModel.stopSessionPolling()  // Stop any active polling
+        // Polling removed - using APNS delivery
         messageText = ""
         
         // Set up for new project
@@ -331,17 +329,6 @@ struct ChatView: View {
         // Clear persisted messages and session data
         let persistenceService = MessagePersistenceService.shared
         persistenceService.clearMessages(for: project.path)
-        
-        // Sync clear operation to CloudKit for cross-device consistency
-        Task {
-            do {
-                try await CloudKitSyncManager.shared.clearChat(for: project.path)
-                print("✅ Chat cleared in CloudKit for project: \(project.path)")
-            } catch {
-                print("⚠️ Failed to clear chat in CloudKit: \(error)")
-                // Continue anyway - local clear succeeded
-            }
-        }
         
         // HTTP doesn't maintain active sessions - they're request-scoped
     }
@@ -495,20 +482,6 @@ struct ChatView: View {
         // Reset count when switching projects or loading initial messages
         if oldCount == 0 {
             unreadMessageCount = 0
-        }
-    }
-    
-    
-    private func refreshMessagesOnActivation() {
-        // WhatsApp/iMessage pattern: No server polling needed when app becomes active
-        // Push notifications deliver new messages automatically
-        print("🔄 ChatView: App became active - conversation already loaded from local database")
-        
-        // Sync from CloudKit when becoming active (optional background sync)
-        if let project = selectedProject {
-            Task {
-                await viewModel.syncMessages(for: project)
-            }
         }
     }
 }

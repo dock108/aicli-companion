@@ -17,7 +17,11 @@ struct ConnectionView: View {
     @State private var errorMessage: String?
     @State private var showManualSetup = false
     @State private var showQRScanner = false
-    @State private var isLoadingQR = false
+    @StateObject private var loadingStateCoordinator = LoadingStateCoordinator.shared
+    
+    private var isLoadingQR: Bool {
+        loadingStateCoordinator.isLoading(.qrScanning)
+    }
     @State private var showHelp = false
     @State private var heroScale: CGFloat = 0.9
     @State private var heroOpacity: Double = 0
@@ -55,7 +59,16 @@ struct ConnectionView: View {
                 // Scan QR Code button with loading state
                 LoadingPrimaryButton(
                     "Scan QR Code",
-                    isLoading: $isLoadingQR
+                    isLoading: Binding(
+                        get: { loadingStateCoordinator.isLoading(.qrScanning) },
+                        set: { newValue in
+                            if newValue {
+                                loadingStateCoordinator.startLoading(.qrScanning)
+                            } else {
+                                loadingStateCoordinator.stopLoading(.qrScanning)
+                            }
+                        }
+                    )
                 ) {
                     await scanQRCode()
                 }
@@ -114,7 +127,7 @@ struct ConnectionView: View {
         }
         .sheet(isPresented: $showQRScanner, onDismiss: {
             // Reset loading state when sheet is dismissed
-            isLoadingQR = false
+            loadingStateCoordinator.stopLoading(.qrScanning)
         }) {
             #if os(iOS)
             if #available(iOS 16.0, *) {
@@ -131,7 +144,7 @@ struct ConnectionView: View {
                             }
                         }
                         showQRScanner = false
-                        isLoadingQR = false
+                        loadingStateCoordinator.stopLoading(.qrScanning)
                     }
                 )
             } else {

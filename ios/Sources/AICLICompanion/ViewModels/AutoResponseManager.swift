@@ -145,7 +145,12 @@ public class AutoResponseManager: ObservableObject {
         print("▶️ Auto-response mode RESUMED")
     }
     
-    /// Process incoming message for auto-response
+    /**
+     Processes an incoming message and determines if an auto-response should be generated.
+     
+     - Parameter message: The incoming `Message` to process.
+     - Returns: An auto-generated response as a `String` if applicable, or `nil` if no response is generated or if auto-response mode is inactive, paused, or deactivated due to stop conditions.
+     */
     func processMessage(_ message: Message) -> String? {
         // FEATURE FLAG: Auto mode disabled
         guard FeatureFlags.shouldUseAutoMode else {

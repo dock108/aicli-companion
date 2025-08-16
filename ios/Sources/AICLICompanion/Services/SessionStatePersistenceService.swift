@@ -55,7 +55,9 @@ class SessionStatePersistenceService: ObservableObject {
                 formatter.dateStyle = .short
                 formatter.timeStyle = .short
                 return formatter.string(from: expiresAt)
-            }
+            let formatter = RelativeDateTimeFormatter()
+            formatter.unitsStyle = .short
+            return formatter.localizedString(for: expiresAt, relativeTo: Date())
         }
     }
     

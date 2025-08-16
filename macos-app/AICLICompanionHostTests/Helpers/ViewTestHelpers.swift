@@ -47,7 +47,7 @@ class ViewTestCase: XCTestCase {
     // Helper to wait for async updates
     func waitForAsync(timeout: TimeInterval = 1.0) {
         let expectation = XCTestExpectation(description: "Async update")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             expectation.fulfill()
         }
         wait(for: [expectation], timeout: timeout)

@@ -1,4 +1,5 @@
 import express from 'express';
+import { randomUUID } from 'crypto';
 import { createLogger } from '../utils/logger.js';
 
 const logger = createLogger('ChatAPI');
@@ -12,7 +13,16 @@ const router = express.Router();
  * POST /api/chat - Send message to Claude and get response via APNS (always async)
  */
 router.post('/', async (req, res) => {
-  const { message, projectPath, sessionId, deviceToken } = req.body;
+  const {
+    message,
+    projectPath,
+    sessionId,
+    deviceToken,
+    attachments,
+    autoResponse, // Auto-response metadata
+  } = req.body;
+  const requestId =
+    req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
   if (!message) {
     return res.status(400).json({
@@ -28,7 +38,54 @@ router.post('/', async (req, res) => {
     });
   }
 
-  const requestId = req.headers['x-request-id'] || `REQ_${Date.now()}`;
+  // Validate attachments if provided
+  if (attachments && Array.isArray(attachments)) {
+    const MAX_ATTACHMENT_SIZE = parseInt(process.env.MAX_ATTACHMENT_SIZE || '10485760'); // 10MB default
+    const ALLOWED_MIME_TYPES = [
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'application/pdf',
+      'text/plain',
+      'text/markdown',
+      'application/json',
+      'text/javascript',
+      'text/x-python',
+      'text/x-swift',
+      'text/x-java-source',
+      'text/x-c++src',
+      'text/x-csrc',
+      'text/x-chdr',
+      'application/octet-stream',
+    ];
+
+    for (const attachment of attachments) {
+      if (!attachment.data || !attachment.name || !attachment.mimeType) {
+        return res.status(400).json({
+          success: false,
+          error: 'Each attachment must have data, name, and mimeType',
+        });
+      }
+
+      // Validate size (base64 is ~33% larger than original)
+      const estimatedSize = (attachment.data.length * 3) / 4;
+      if (estimatedSize > MAX_ATTACHMENT_SIZE) {
+        return res.status(400).json({
+          success: false,
+          error: `Attachment ${attachment.name} exceeds maximum size of ${MAX_ATTACHMENT_SIZE} bytes`,
+        });
+      }
+
+      // Validate MIME type
+      if (!ALLOWED_MIME_TYPES.includes(attachment.mimeType)) {
+        logger.warn('Unsupported MIME type for attachment', {
+          name: attachment.name,
+          mimeType: attachment.mimeType,
+          requestId,
+        });
+      }
+    }
+  }
 
   logger.info('Processing chat message for APNS delivery', {
     requestId,
@@ -36,6 +93,13 @@ router.post('/', async (req, res) => {
     projectPath,
     sessionId: sessionId || 'new',
     deviceToken: `${deviceToken.substring(0, 16)}...`,
+    attachmentCount: attachments?.length || 0,
+    autoResponse: autoResponse
+      ? {
+          isActive: autoResponse.isActive,
+          iteration: autoResponse.iteration,
+        }
+      : null,
   });
 
   // Register device for push notifications
@@ -61,6 +125,29 @@ router.post('/', async (req, res) => {
       requestId,
       timestamp: new Date().toISOString(),
     });
+  }
+
+  // If we have an existing session, immediately add the user message to the buffer
+  if (sessionId) {
+    const aicliService = req.app.get('aicliService');
+    await aicliService.sessionManager.trackSessionForRouting(sessionId, projectPath);
+    const buffer = aicliService.sessionManager.getSessionBuffer(sessionId);
+    if (buffer) {
+      if (!buffer.userMessages) {
+        buffer.userMessages = [];
+      }
+      buffer.userMessages.push({
+        content: message,
+        timestamp: new Date().toISOString(),
+        requestId,
+        attachments: attachments?.length || 0,
+      });
+      logger.info('Added user message to existing session buffer', {
+        requestId,
+        sessionId,
+        messageCount: buffer.userMessages.length,
+      });
+    }
   }
 
   // Send immediate acknowledgment
@@ -97,6 +184,8 @@ router.post('/', async (req, res) => {
         workingDirectory: projectPath || process.cwd(),
         skipPermissions: true,
         format: 'text',
+        attachments, // Pass attachments to AICLI service
+        autoResponse, // Pass auto-response metadata
       });
 
       // Log the full result structure for debugging
@@ -161,15 +250,63 @@ router.post('/', async (req, res) => {
       await aicliService.sessionManager.trackSessionForRouting(claudeSessionId, projectPath);
       const buffer = aicliService.sessionManager.getSessionBuffer(claudeSessionId);
       if (buffer) {
+        // Only add user message if this is a new conversation (no sessionId was provided initially)
+        if (!sessionId) {
+          // This is a new conversation, add the user message
+          if (!buffer.userMessages) {
+            buffer.userMessages = [];
+          }
+          buffer.userMessages.push({
+            content: message,
+            timestamp: new Date().toISOString(),
+            requestId,
+            attachments: attachments?.length || 0,
+          });
+          logger.info('Added user message to new session buffer', {
+            requestId,
+            sessionId: claudeSessionId,
+          });
+        }
+
+        // Add assistant response to buffer
+        if (!buffer.assistantMessages) {
+          buffer.assistantMessages = [];
+        }
         buffer.assistantMessages.push({
           content,
           timestamp: new Date().toISOString(),
           requestId,
           deliveredVia: 'apns',
         });
-        logger.info('Added response to session buffer', {
+        logger.info('Added assistant response to session buffer', {
           requestId,
           sessionId: claudeSessionId,
+        });
+      }
+
+      // Store message with ID if it's large (for fetching later)
+      let messageId = null;
+      const MESSAGE_FETCH_THRESHOLD = 3000;
+      if (content.length > MESSAGE_FETCH_THRESHOLD) {
+        messageId = randomUUID();
+
+        // Store the message in the session buffer for later retrieval
+        aicliService.sessionManager.storeMessage(claudeSessionId, messageId, content, {
+          type: 'assistant',
+          requestId,
+          projectPath,
+          originalMessage: message,
+          attachmentInfo: attachments?.map((att) => ({
+            name: att.name,
+            mimeType: att.mimeType,
+            size: att.size || (att.data.length * 3) / 4,
+          })),
+        });
+
+        logger.info('Stored large message for fetching', {
+          messageId,
+          sessionId: claudeSessionId,
+          contentLength: content.length,
         });
       }
 
@@ -177,6 +314,7 @@ router.post('/', async (req, res) => {
       // Use deviceToken as deviceId since that's how we registered it
       await pushNotificationService.sendClaudeResponseNotification(deviceToken, {
         message: content,
+        messageId, // Include message ID for large messages
         sessionId: claudeSessionId,
         projectName: projectPath?.split('/').pop() || 'Project',
         projectPath,
@@ -184,6 +322,12 @@ router.post('/', async (req, res) => {
         requestId,
         isLongRunningCompletion: true, // All APNS deliveries are treated as completions
         originalMessage: message, // Include original user message for context
+        attachmentInfo: attachments?.map((att) => ({
+          name: att.name,
+          mimeType: att.mimeType,
+          size: att.size || (att.data.length * 3) / 4,
+        })), // Include attachment metadata without the data
+        autoResponse, // Include auto-response metadata
       });
 
       logger.info('Claude response delivered via APNS', {
@@ -224,6 +368,165 @@ router.post('/', async (req, res) => {
 });
 
 /**
+ * POST /api/chat/auto-response/pause - Pause auto-response mode for a session
+ */
+router.post('/auto-response/pause', async (req, res) => {
+  const { sessionId, deviceToken } = req.body;
+  const requestId =
+    req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+  if (!sessionId) {
+    return res.status(400).json({
+      success: false,
+      error: 'Session ID is required',
+    });
+  }
+
+  logger.info('Pausing auto-response mode', { sessionId, requestId });
+
+  // Send pause notification if device token provided
+  if (deviceToken) {
+    await pushNotificationService.sendAutoResponseControlNotification(deviceToken, {
+      sessionId,
+      action: 'pause',
+      requestId,
+    });
+  }
+
+  res.json({
+    success: true,
+    sessionId,
+    action: 'pause',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+/**
+ * POST /api/chat/auto-response/resume - Resume auto-response mode for a session
+ */
+router.post('/auto-response/resume', async (req, res) => {
+  const { sessionId, deviceToken } = req.body;
+  const requestId =
+    req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+  if (!sessionId) {
+    return res.status(400).json({
+      success: false,
+      error: 'Session ID is required',
+    });
+  }
+
+  logger.info('Resuming auto-response mode', { sessionId, requestId });
+
+  // Send resume notification if device token provided
+  if (deviceToken) {
+    await pushNotificationService.sendAutoResponseControlNotification(deviceToken, {
+      sessionId,
+      action: 'resume',
+      requestId,
+    });
+  }
+
+  res.json({
+    success: true,
+    sessionId,
+    action: 'resume',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+/**
+ * POST /api/chat/auto-response/stop - Stop auto-response mode for a session
+ */
+router.post('/auto-response/stop', async (req, res) => {
+  const { sessionId, deviceToken, reason } = req.body;
+  const requestId =
+    req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+  if (!sessionId) {
+    return res.status(400).json({
+      success: false,
+      error: 'Session ID is required',
+    });
+  }
+
+  logger.info('Stopping auto-response mode', { sessionId, reason, requestId });
+
+  // Send stop notification if device token provided
+  if (deviceToken) {
+    await pushNotificationService.sendAutoResponseControlNotification(deviceToken, {
+      sessionId,
+      action: 'stop',
+      reason: reason || 'manual',
+      requestId,
+    });
+  }
+
+  res.json({
+    success: true,
+    sessionId,
+    action: 'stop',
+    reason: reason || 'manual',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+/**
+ * GET /api/chat/:sessionId/progress - Get thinking progress for a session
+ */
+router.get('/:sessionId/progress', async (req, res) => {
+  const { sessionId } = req.params;
+  const requestId =
+    req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+  logger.info('Fetching thinking progress', { sessionId, requestId });
+
+  try {
+    // Get AICLI service from app instance
+    const aicliService = req.app.get('aicliService');
+
+    // Check if session exists and get progress
+    const sessionBuffer = aicliService.sessionManager.getSessionBuffer(sessionId);
+
+    if (!sessionBuffer) {
+      return res.status(404).json({
+        success: false,
+        error: 'Session not found',
+        sessionId,
+      });
+    }
+
+    // Extract thinking metadata from session
+    const thinkingMetadata = sessionBuffer.thinkingMetadata || {
+      isThinking: false,
+      activity: null,
+      duration: 0,
+      tokenCount: 0,
+    };
+
+    res.json({
+      success: true,
+      sessionId,
+      isThinking: thinkingMetadata.isThinking,
+      activity: thinkingMetadata.activity,
+      duration: thinkingMetadata.duration,
+      tokenCount: thinkingMetadata.tokenCount,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error('Failed to fetch thinking progress', {
+      sessionId,
+      error: error.message,
+    });
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch progress',
+    });
+  }
+});
+
+/**
  * GET /api/chat/:sessionId/messages - Get messages for a session
  */
 router.get('/:sessionId/messages', async (req, res) => {
@@ -233,15 +536,77 @@ router.get('/:sessionId/messages', async (req, res) => {
   logger.info('Fetching chat messages', { sessionId, limit, offset });
 
   try {
-    // In stateless architecture, we don't store messages server-side
-    // This endpoint exists for potential future use or external integrations
+    // Get AICLI service from app instance
+    const aicliService = req.app.get('aicliService');
+
+    // Get the session buffer which contains all messages
+    const buffer = aicliService.sessionManager.getSessionBuffer(sessionId);
+
+    if (!buffer) {
+      // No buffer means no active session
+      return res.json({
+        success: true,
+        sessionId,
+        messages: [],
+        totalCount: 0,
+        hasMore: false,
+        note: 'No active session found',
+      });
+    }
+
+    // Combine user and assistant messages, maintaining chronological order
+    const allMessages = [];
+
+    // Add user messages with proper structure
+    if (buffer.userMessages && buffer.userMessages.length > 0) {
+      buffer.userMessages.forEach((msg) => {
+        allMessages.push({
+          content: msg.content || msg.message,
+          sender: 'user',
+          timestamp: msg.timestamp || new Date().toISOString(),
+          requestId: msg.requestId,
+          type: 'text',
+        });
+      });
+    }
+
+    // Add assistant messages with proper structure
+    if (buffer.assistantMessages && buffer.assistantMessages.length > 0) {
+      buffer.assistantMessages.forEach((msg) => {
+        allMessages.push({
+          content: msg.content || msg.message,
+          sender: 'assistant',
+          timestamp: msg.timestamp || new Date().toISOString(),
+          requestId: msg.requestId,
+          type: 'markdown',
+          deliveredVia: msg.deliveredVia || 'apns',
+        });
+      });
+    }
+
+    // Sort messages by timestamp to maintain conversation flow
+    allMessages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+    // Apply pagination if needed
+    const paginatedMessages = allMessages.slice(
+      parseInt(offset),
+      parseInt(offset) + parseInt(limit)
+    );
+
+    logger.info('Returning buffered messages', {
+      sessionId,
+      totalMessages: allMessages.length,
+      returnedMessages: paginatedMessages.length,
+      offset,
+      limit,
+    });
+
     res.json({
       success: true,
       sessionId,
-      messages: [],
-      totalCount: 0,
-      hasMore: false,
-      note: 'Server is stateless - messages managed client-side',
+      messages: paginatedMessages,
+      totalCount: allMessages.length,
+      hasMore: allMessages.length > parseInt(offset) + parseInt(limit),
     });
   } catch (error) {
     logger.error('Failed to fetch chat messages', {

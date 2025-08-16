@@ -26,6 +26,8 @@ struct RichContentView: View {
                 ToolResultView(toolData: toolData, isExpanded: $isExpanded)
             case .markdown(let markdownData):
                 MarkdownView(markdownData: markdownData)
+            case .attachments(let attachmentData):
+                AttachmentView(attachmentData: attachmentData)
             }
         }
     }
@@ -592,6 +594,194 @@ struct MarkdownView: View {
     }
 }
 
+// MARK: - Attachment View
+
+@available(iOS 16.0, macOS 13.0, *)
+struct AttachmentView: View {
+    let attachmentData: AttachmentsData
+    @State private var showActions = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(attachmentData.attachments, id: \.id) { attachment in
+                AttachmentItemView(attachment: attachment)
+            }
+        }
+        .onAppear {
+            showActions = true
+        }
+    }
+}
+
+@available(iOS 16.0, macOS 13.0, *)
+struct AttachmentItemView: View {
+    let attachment: AttachmentInfo
+    @State private var showFullImage = false
+    #if os(iOS)
+    @State private var loadedImage: UIImage?
+    #endif
+    @Environment(\.colorScheme) var colorScheme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            // Header
+            HStack {
+                Image(systemName: iconForAttachment(attachment))
+                    .foregroundColor(.blue)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(attachment.name)
+                        .font(.caption)
+                        .fontWeight(.medium)
+
+                    Text("\(attachment.mimeType) • \(attachment.formattedSize)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                // Quick actions
+                HStack(spacing: 8) {
+                    Button(action: {
+                        saveAttachmentToFiles()
+                    }) {
+                        Image(systemName: "square.and.arrow.down")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+
+                    Menu {
+                        Button("Share Attachment") {
+                            shareAttachment()
+                        }
+                        Button("Copy to Clipboard") {
+                            copyAttachmentToClipboard()
+                        }
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+
+            // Content preview for images
+            if attachment.mimeType.hasPrefix("image/"),
+               let base64Data = attachment.base64Data,
+               let imageData = Data(base64Encoded: base64Data) {
+                #if os(iOS)
+                if let image = UIImage(data: imageData) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxHeight: 200)
+                        .cornerRadius(8)
+                        .onTapGesture {
+                            showFullImage = true
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 8)
+                        .onAppear {
+                            loadedImage = image
+                        }
+                }
+                #endif
+            } else {
+                // Text preview for text files
+                if attachment.mimeType.hasPrefix("text/"),
+                   let base64Data = attachment.base64Data,
+                   let textData = Data(base64Encoded: base64Data),
+                   let textContent = String(data: textData, encoding: .utf8) {
+                    Text(String(textContent.prefix(200)) + (textContent.count > 200 ? "..." : ""))
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundColor(.primary)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 8)
+                }
+            }
+        }
+        .background(Colors.bgCard(for: colorScheme))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Colors.strokeLight, lineWidth: 1)
+        )
+        .cornerRadius(8)
+        .sheet(isPresented: $showFullImage) {
+            #if os(iOS)
+            if let image = loadedImage {
+                NavigationView {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .navigationTitle(attachment.name)
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .navigationBarTrailing) {
+                                Button("Done") {
+                                    showFullImage = false
+                                }
+                            }
+                        }
+                }
+            }
+            #endif
+        }
+    }
+
+    private func iconForAttachment(_ attachment: AttachmentInfo) -> String {
+        if attachment.mimeType.hasPrefix("image/") {
+            return "photo"
+        } else if attachment.mimeType.hasPrefix("text/") {
+            return "doc.text"
+        } else if attachment.mimeType.hasPrefix("application/pdf") {
+            return "doc.richtext"
+        } else if attachment.mimeType.hasPrefix("video/") {
+            return "video"
+        } else if attachment.mimeType.hasPrefix("audio/") {
+            return "waveform"
+        } else {
+            return "doc"
+        }
+    }
+
+    private func saveAttachmentToFiles() {
+        guard let base64Data = attachment.base64Data,
+              let data = Data(base64Encoded: base64Data) else { return }
+        
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(attachment.name)
+
+        do {
+            try data.write(to: tempURL)
+            exportFile(url: tempURL)
+        } catch {
+            print("Failed to save attachment: \(error)")
+        }
+    }
+
+    private func shareAttachment() {
+        guard let base64Data = attachment.base64Data,
+              let data = Data(base64Encoded: base64Data) else { return }
+        shareContent([data])
+    }
+
+    private func copyAttachmentToClipboard() {
+        guard let base64Data = attachment.base64Data,
+              let data = Data(base64Encoded: base64Data) else { return }
+        
+        #if os(iOS)
+        if attachment.mimeType.hasPrefix("image/"), let image = UIImage(data: data) {
+            UIPasteboard.general.image = image
+        } else if attachment.mimeType.hasPrefix("text/"), let text = String(data: data, encoding: .utf8) {
+            UIPasteboard.general.string = text
+        }
+        #endif
+    }
+}
+
 // MARK: - Utility Extensions
 
 extension String {
@@ -668,6 +858,10 @@ private func exportFile(url: URL) {
     #elseif os(macOS)
     // On macOS, show save panel
     let savePanel = NSSavePanel()
+    if #available(macOS 11.0, *) {
+        savePanel.allowedContentTypes = [.plainText]
+    } else {
+        savePanel.allowedFileTypes = ["txt", "log"]
     savePanel.allowedContentTypes = [.plainText]
     savePanel.nameFieldStringValue = url.lastPathComponent
     savePanel.begin { result in

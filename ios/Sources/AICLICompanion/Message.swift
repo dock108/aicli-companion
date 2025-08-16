@@ -1,4 +1,5 @@
 import Foundation
+import CloudKit
 
 struct Message: Identifiable, Codable {
     let id: UUID
@@ -10,8 +11,18 @@ struct Message: Identifiable, Codable {
     var streamingState: StreamingState?
     let requestId: String?
     let richContent: RichContent?
+    
+    var cloudKitRecordID: CKRecord.ID?
+    var readByDevices: [String] = []
+    var deletedByDevices: [String] = []
+    var syncedAt: Date?
+    var needsSync: Bool = true
+    
+    enum CodingKeys: String, CodingKey {
+        case id, content, sender, timestamp, type, metadata, streamingState, requestId, richContent
+    }
 
-    init(id: UUID = UUID(), content: String, sender: MessageSender, timestamp: Date = Date(), type: MessageType = .text, metadata: AICLIMessageMetadata? = nil, streamingState: StreamingState? = nil, requestId: String? = nil, richContent: RichContent? = nil) {
+    init(id: UUID = UUID(), content: String, sender: MessageSender, timestamp: Date = Date(), type: MessageType = .text, metadata: AICLIMessageMetadata? = nil, streamingState: StreamingState? = nil, requestId: String? = nil, richContent: RichContent? = nil, attachments: [AttachmentData]? = nil) {
         self.id = id
         self.content = content
         self.sender = sender
@@ -20,7 +31,34 @@ struct Message: Identifiable, Codable {
         self.metadata = metadata
         self.streamingState = streamingState
         self.requestId = requestId
-        self.richContent = richContent
+        
+        // If attachments are provided, create rich content for them
+        if let attachments = attachments, !attachments.isEmpty {
+            let attachmentsData = AttachmentsData(attachments: attachments.map { attachment in
+                AttachmentInfo(
+                    id: UUID(),
+                    name: attachment.name,
+                    mimeType: attachment.mimeType,
+                    size: attachment.size,
+                    base64Data: attachment.data.base64EncodedString(),
+                    url: nil,
+                    thumbnailBase64: nil
+                )
+            })
+            self.richContent = RichContent(
+                contentType: .attachments,
+                data: .attachments(attachmentsData)
+            )
+        } else {
+            self.richContent = richContent
+        }
+        
+        // Initialize CloudKit properties
+        self.cloudKitRecordID = nil
+        self.readByDevices = []
+        self.deletedByDevices = []
+        self.syncedAt = nil
+        self.needsSync = true
     }
 }
 
@@ -37,6 +75,7 @@ enum RichContentType: String, Codable {
     case commandOutput = "command_output"
     case toolResult = "tool_result"
     case markdown = "markdown"
+    case attachments = "attachments"
 }
 
 enum RichContentData: Codable {
@@ -45,6 +84,7 @@ enum RichContentData: Codable {
     case commandOutput(CommandOutputData)
     case toolResult(ToolResultData)
     case markdown(MarkdownData)
+    case attachments(AttachmentsData)
 }
 
 struct CodeBlockData: Codable {
@@ -92,6 +132,24 @@ enum MarkdownRenderMode: String, Codable {
     case stripped
 }
 
+struct AttachmentsData: Codable {
+    let attachments: [AttachmentInfo]
+}
+
+struct AttachmentInfo: Codable, Identifiable {
+    let id: UUID
+    let name: String
+    let mimeType: String
+    let size: Int
+    let base64Data: String? // For small files
+    let url: String? // For files stored on server
+    let thumbnailBase64: String? // For images
+    
+    var formattedSize: String {
+        ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
+    }
+}
+
 enum MessageSender: String, Codable, CaseIterable {
     case user
     case assistant
@@ -116,6 +174,26 @@ enum StreamingState: String, Codable, CaseIterable {
     case streaming
     case completed
     case failed
+}
+
+enum ConnectionStatus: Equatable {
+    case disconnected
+    case connecting
+    case connected
+    case error(AICLICompanionError)
+    
+    static func == (lhs: ConnectionStatus, rhs: ConnectionStatus) -> Bool {
+        switch (lhs, rhs) {
+        case (.disconnected, .disconnected),
+             (.connecting, .connecting),
+             (.connected, .connected):
+            return true
+        case (.error(let lhsError), .error(let rhsError)):
+            return lhsError == rhsError
+        default:
+            return false
+        }
+    }
 }
 
 struct AICLIMessageMetadata: Codable {
@@ -280,14 +358,21 @@ struct ServerConnection: Codable {
         
         // Handle IPv6 addresses by wrapping them in brackets
         let formattedAddress: String
-        if address.contains(":") && !address.hasPrefix("[") {
+        if address.contains(":") && !address.hasPrefix("[") && !address.contains(".") {
             // This is likely an IPv6 address that needs brackets
+            // (contains colons, no brackets, and no dots which would indicate a domain)
             formattedAddress = "[\(address)]"
         } else {
             formattedAddress = address
         }
         
-        return URL(string: "\(scheme)://\(formattedAddress):\(port)")
+        // Don't include port if it's the default for the scheme
+        let defaultPort = isSecure ? 443 : 80
+        if port == defaultPort {
+            return URL(string: "\(scheme)://\(formattedAddress)")
+        } else {
+            return URL(string: "\(scheme)://\(formattedAddress):\(port)")
+        }
     }
 
     var wsURL: URL? {
@@ -295,14 +380,21 @@ struct ServerConnection: Codable {
         
         // Handle IPv6 addresses by wrapping them in brackets
         let formattedAddress: String
-        if address.contains(":") && !address.hasPrefix("[") {
+        if address.contains(":") && !address.hasPrefix("[") && !address.contains(".") {
             // This is likely an IPv6 address that needs brackets
+            // (contains colons, no brackets, and no dots which would indicate a domain)
             formattedAddress = "[\(address)]"
         } else {
             formattedAddress = address
         }
         
-        return URL(string: "\(scheme)://\(formattedAddress):\(port)/ws")
+        // Don't include port if it's the default for the scheme
+        let defaultPort = isSecure ? 443 : 80
+        if port == defaultPort {
+            return URL(string: "\(scheme)://\(formattedAddress)/ws")
+        } else {
+            return URL(string: "\(scheme)://\(formattedAddress):\(port)/ws")
+        }
     }
 }
 
@@ -362,6 +454,14 @@ struct WebSocketMessage: Codable {
         case deviceRegistered(DeviceRegisteredResponse)
         case getMessageHistoryResponse(GetMessageHistoryResponse)
         case clearChatResponse(ClearChatResponse)
+    }
+    
+    // Memberwise initializer for creating messages programmatically
+    init(type: WebSocketMessageType, requestId: String?, timestamp: Date, data: Data) {
+        self.type = type
+        self.requestId = requestId
+        self.timestamp = timestamp
+        self.data = data
     }
     
     // Custom decoding to handle server message format
@@ -711,17 +811,19 @@ struct StreamChunkMetadata: Codable {
     // Status-related metadata for Claude CLI status chunks
     let statusType: String?
     let stage: String?
+    let activity: String? // Activity from server stream parser
     let duration: Double?
     let tokens: Int?
     let tools: [String]?
     let canInterrupt: Bool?
     
-    init(language: String? = nil, level: Int? = nil, toolName: String? = nil, statusType: String? = nil, stage: String? = nil, duration: Double? = nil, tokens: Int? = nil, tools: [String]? = nil, canInterrupt: Bool? = nil) {
+    init(language: String? = nil, level: Int? = nil, toolName: String? = nil, statusType: String? = nil, stage: String? = nil, activity: String? = nil, duration: Double? = nil, tokens: Int? = nil, tools: [String]? = nil, canInterrupt: Bool? = nil) {
         self.language = language
         self.level = level
         self.toolName = toolName
         self.statusType = statusType
         self.stage = stage
+        self.activity = activity
         self.duration = duration
         self.tokens = tokens
         self.tools = tools
@@ -737,6 +839,7 @@ struct StreamChunkMetadata: Codable {
         // Decode status-related fields
         self.statusType = try container.decodeIfPresent(String.self, forKey: DynamicCodingKeys(stringValue: "statusType"))
         self.stage = try container.decodeIfPresent(String.self, forKey: DynamicCodingKeys(stringValue: "stage"))
+        self.activity = try container.decodeIfPresent(String.self, forKey: DynamicCodingKeys(stringValue: "activity"))
         self.duration = try container.decodeIfPresent(Double.self, forKey: DynamicCodingKeys(stringValue: "duration"))
         self.tokens = try container.decodeIfPresent(Int.self, forKey: DynamicCodingKeys(stringValue: "tokens"))
         self.tools = try container.decodeIfPresent([String].self, forKey: DynamicCodingKeys(stringValue: "tools"))
@@ -777,10 +880,18 @@ struct ErrorResponse: Codable {
 
 struct SessionStatusResponse: Codable {
     let sessionId: String
-    let status: String
-    let lastActivity: Date
-    let messageCount: Int
-    let totalCost: Double?
+    let workingDirectory: String
+    let isActive: Bool
+    let createdAt: String
+    let lastActivity: String
+    let process: ProcessInfo?
+    
+    struct ProcessInfo: Codable {
+        let pid: Int?
+        let connected: Bool
+        let signalCode: String?
+        let exitCode: Int?
+    }
 }
 
 struct PongResponse: Codable {
@@ -969,7 +1080,7 @@ struct AnyCodable: Codable {
     }
 }
 
-enum AICLICompanionError: LocalizedError {
+enum AICLICompanionError: LocalizedError, Equatable {
     case connectionFailed(String)
     case authenticationFailed
     case serverNotFound
@@ -1017,6 +1128,35 @@ enum AICLICompanionError: LocalizedError {
             return "Request timed out"
         }
     }
+    
+    // MARK: - Equatable Implementation
+    static func == (lhs: AICLICompanionError, rhs: AICLICompanionError) -> Bool {
+        switch (lhs, rhs) {
+        case (.connectionFailed(let lhsMessage), .connectionFailed(let rhsMessage)):
+            return lhsMessage == rhsMessage
+        case (.authenticationFailed, .authenticationFailed),
+             (.serverNotFound, .serverNotFound),
+             (.invalidResponse, .invalidResponse),
+             (.invalidURL, .invalidURL),
+             (.noData, .noData),
+             (.permissionDenied, .permissionDenied),
+             (.rateLimited, .rateLimited),
+             (.timeout, .timeout):
+            return true
+        case (.httpError(let lhsCode), .httpError(let rhsCode)):
+            return lhsCode == rhsCode
+        case (.networkError(let lhsError), .networkError(let rhsError)):
+            return lhsError.localizedDescription == rhsError.localizedDescription
+        case (.jsonParsingError(let lhsError), .jsonParsingError(let rhsError)):
+            return lhsError.localizedDescription == rhsError.localizedDescription
+        case (.webSocketError(let lhsMessage), .webSocketError(let rhsMessage)):
+            return lhsMessage == rhsMessage
+        case (.sessionNotFound(let lhsSession), .sessionNotFound(let rhsSession)):
+            return lhsSession == rhsSession
+        default:
+            return false
+        }
+    }
 }
 
 // MARK: - Progress Info for UI
@@ -1026,12 +1166,40 @@ struct ProgressInfo {
     let progress: Double?
     let message: String
     let timestamp: Date
+    let startTime: Date
+    let tokenCount: Int
+    let duration: TimeInterval
+    let activity: String?
+    let canInterrupt: Bool
+    
+    var elapsedTime: TimeInterval {
+        Date().timeIntervalSince(startTime)
+    }
     
     init(from progressResponse: ProgressResponse) {
         self.stage = progressResponse.stage
         self.progress = progressResponse.progress
         self.message = progressResponse.message
         self.timestamp = progressResponse.timestamp
+        // Use timestamp as start time if not specified
+        self.startTime = progressResponse.timestamp
+        // Token count is not in ProgressResponse, default to 0
+        self.tokenCount = 0
+        self.duration = 0
+        self.activity = nil
+        self.canInterrupt = false
+    }
+    
+    init(stage: String, progress: Double? = nil, message: String, startTime: Date = Date(), duration: TimeInterval = 0, tokenCount: Int = 0, activity: String? = nil, canInterrupt: Bool = false) {
+        self.stage = stage
+        self.progress = progress
+        self.message = message
+        self.timestamp = Date()
+        self.startTime = startTime
+        self.tokenCount = tokenCount
+        self.duration = duration
+        self.activity = activity
+        self.canInterrupt = canInterrupt
     }
 }
 
@@ -1045,4 +1213,68 @@ struct RegisterDeviceRequest: Codable {
 struct DeviceRegisteredResponse: Codable {
     let success: Bool
     let message: String?
+}
+
+// MARK: - CloudKit Extensions
+
+extension Message {
+    func toCKRecord() -> CKRecord {
+        let recordID = cloudKitRecordID ?? CKRecord.ID(recordName: id.uuidString)
+        let record = CKRecord(recordType: CKRecordType.message, recordID: recordID)
+        
+        record[CKField.messageId] = id.uuidString
+        record[CKField.content] = content
+        record[CKField.sender] = sender.rawValue
+        record[CKField.timestamp] = timestamp
+        record[CKField.messageType] = type.rawValue
+        record[CKField.readByDevices] = readByDevices as CKRecordValue
+        record[CKField.deletedByDevices] = deletedByDevices as CKRecordValue
+        
+        // Add session/project info if available
+        if let sessionId = metadata?.sessionId {
+            record[CKField.sessionId] = sessionId
+        }
+        
+        return record
+    }
+    
+    static func from(record: CKRecord) -> Message? {
+        guard let messageId = record[CKField.messageId] as? String,
+              let content = record[CKField.content] as? String,
+              let senderRaw = record[CKField.sender] as? String,
+              let sender = MessageSender(rawValue: senderRaw),
+              let timestamp = record[CKField.timestamp] as? Date else {
+            return nil
+        }
+        
+        let messageTypeRaw = record[CKField.messageType] as? String ?? "text"
+        let messageType = MessageType(rawValue: messageTypeRaw) ?? .text
+        
+        var message = Message(
+            id: UUID(uuidString: messageId) ?? UUID(),
+            content: content,
+            sender: sender,
+            timestamp: timestamp,
+            type: messageType
+        )
+        
+        message.cloudKitRecordID = record.recordID
+        message.readByDevices = (record[CKField.readByDevices] as? [String]) ?? []
+        message.deletedByDevices = (record[CKField.deletedByDevices] as? [String]) ?? []
+        message.syncedAt = Date()
+        message.needsSync = false
+        
+        // Reconstruct metadata if sessionId exists in CloudKit record
+        // This preserves the session across devices for project continuity
+        if let sessionId = record[CKField.sessionId] as? String {
+            message.metadata = AICLIMessageMetadata(
+                sessionId: sessionId,
+                duration: 0,
+                cost: nil,
+                tools: nil
+            )
+        }
+        
+        return message
+    }
 }

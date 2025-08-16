@@ -1,16 +1,16 @@
-# Claude Companion
+# AICLI Companion
 
 A comprehensive AI assistant integration system that brings Claude's capabilities to iOS through a modern, native experience. The system consists of three core components working seamlessly together.
 
 ## 🎯 Overview
 
-Claude Companion enables iOS users to interact with Claude (via AICLI) from their mobile devices, with full project context, streaming responses, and persistent conversations. Perfect for developers who want to leverage AI assistance on the go.
+AICLI Companion enables iOS users to interact with AI assistants (currently via Claude CLI) from their mobile devices, with full project context, push notification delivery, and persistent conversations. Perfect for developers who want to leverage AI assistance on the go.
 
 ### Core Components
 
 1. **📱 iOS App** - Native SwiftUI application with modern chat interface
 2. **🖥️ macOS Companion** - Menu bar app for server lifecycle management  
-3. **🚀 Server** - Node.js backend bridging iOS app with AICLI
+3. **🚀 Server** - Node.js backend bridging iOS app with Claude CLI
 
 ## ✨ Key Features
 
@@ -18,10 +18,13 @@ Claude Companion enables iOS users to interact with Claude (via AICLI) from thei
 - **Modern Chat Interface**: Clean, intuitive design following iOS Human Interface Guidelines
 - **Real-time Streaming**: See Claude's responses character-by-character as they're generated
 - **Project Management**: Organize conversations by project with full context preservation
-- **Message Persistence**: Never lose a conversation - all messages are synced with the server
+- **Local-First Storage**: Never lose a conversation - all messages stored locally with optional CloudKit sync
 - **Push Notifications**: Get notified when Claude completes long-running tasks
 - **Rich Content Rendering**: Beautiful rendering of code blocks, markdown, and tool outputs
 - **Offline Support**: Browse previous conversations even without connection
+- **Attachment Support**: Send images, documents, and code files to Claude (up to 10MB)
+- **Auto-Response Mode**: "Jesus Take the Wheel" mode for automated task continuation
+- **Thinking Indicator**: Real-time progress with duration and token count display
 
 ### macOS Companion
 - **Menu Bar Integration**: Always accessible from your menu bar
@@ -31,17 +34,19 @@ Claude Companion enables iOS users to interact with Claude (via AICLI) from thei
 - **Native Performance**: Built with SwiftUI for optimal macOS experience
 
 ### Server
-- **AICLI Integration**: Seamless bridge to Claude via AICLI CLI
-- **WebSocket Communication**: Real-time bidirectional messaging
-- **Session Management**: Intelligent session handling with persistence
+- **Claude CLI Integration**: Seamless bridge to Claude via Claude CLI
+- **Message Router**: Routes messages between iOS app and Claude CLI without storing conversations
+- **HTTP + APNS**: HTTP requests trigger Claude, responses delivered via Apple Push Notifications
+- **Session Management**: Active session tracking with timeout management
 - **Security First**: Token authentication, TLS support, configurable permissions
 - **Service Discovery**: Automatic discovery via Bonjour/mDNS
-- **RESTful API**: Clean API for project management and configuration
+- **RESTful API**: Clean API for chat routing and project management
 
 ## 🏗️ Architecture
 
+### Project Structure
 ```
-claude-companion/
+aicli-companion/
 ├── ios/                    # iOS app (SwiftUI)
 │   ├── Sources/           # Swift source code
 │   ├── Tests/             # Unit tests
@@ -55,6 +60,29 @@ claude-companion/
 └── docs/                  # Documentation
 ```
 
+### Message Flow (Local-First Pattern)
+
+```
+[User types message] → [Save to local database] → [Send HTTP request]
+                                ↓
+[Display in UI immediately]     ↓
+                                ↓
+                    [Server routes to Claude CLI]
+                                ↓
+                    [Claude processes & responds]
+                                ↓
+                    [Server sends APNS notification]
+                                ↓
+[Receive APNS] → [Save Claude response locally] → [Update UI]
+```
+
+**Key Principles:**
+- **Local-First**: All messages stored locally immediately for zero data loss
+- **Server as Router**: Server routes messages but doesn't store conversation history
+- **APNS Delivery**: Push notifications deliver Claude responses to local storage
+- **Offline Capable**: Browse and continue conversations even without connection
+- **Cross-Device Sync**: Optional CloudKit sync for conversation history across devices
+
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -62,7 +90,7 @@ claude-companion/
 - **macOS 14.0+** (for development)
 - **Xcode 15.0+**
 - **Node.js 18+**
-- **AICLI CLI** installed and configured
+- **Claude CLI** installed and configured
 - **iOS 16.0+** device or simulator
 
 ### 1. Clone and Setup
@@ -116,13 +144,22 @@ HOST=0.0.0.0
 AUTH_REQUIRED=true
 AUTH_TOKEN=your-secure-token
 
-# AICLI
+# Claude CLI
 CLAUDE_SKIP_PERMISSIONS=false
 CLAUDE_ALLOWED_TOOLS=Read,Write,Edit,Bash
 
 # Features
 ENABLE_BONJOUR=true
 ENABLE_TLS=false
+MAX_ATTACHMENT_SIZE=10485760  # 10MB in bytes
+TEMP_FILE_PATH=/tmp/claude-attachments
+
+# APNS (for push notifications)
+APNS_KEY_PATH=/path/to/key.p8
+APNS_KEY_ID=your-key-id
+APNS_TEAM_ID=your-team-id
+APNS_BUNDLE_ID=com.claude.companion
+APNS_PRODUCTION=false
 
 # Paths
 CONFIG_PATH=/path/to/projects
@@ -173,7 +210,8 @@ npm run lint
 - **Authentication**: Token-based authentication for all connections
 - **Encryption**: Optional TLS support for production deployments
 - **Permissions**: Configurable AICLI tool permissions
-- **Local First**: All data stays on your devices
+- **Local-First Storage**: All conversation data stays on your devices with optional CloudKit sync
+- **Zero Message Loss**: Robust local persistence ensures no conversations are ever lost
 - **No Telemetry**: Zero tracking or analytics
 
 ## 🤝 Contributing
@@ -206,4 +244,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-Made with ❤️ by the Claude Companion team
+Made with ❤️ by the AICLI Companion team

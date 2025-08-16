@@ -1,16 +1,24 @@
 import Foundation
 import Combine
-import Network
+import UserNotifications
+#if os(iOS)
+import UIKit
+#endif
+
+// MARK: - Connection Status
 
 @available(iOS 16.0, macOS 13.0, *)
 public class AICLIService: ObservableObject {
+    public static let shared = AICLIService()
+    
     @Published var isConnected = false
     @Published var connectionStatus: ConnectionStatus = .disconnected
     @Published var currentSession: String?
 
-    private var currentConnection: ServerConnection?
+    private var baseURL: URL?
     private var urlSession: URLSession
-    private var webSocketTask: URLSessionWebSocketTask?
+    private var deviceToken: String?
+    private var authToken: String?
     private var cancellables = Set<AnyCancellable>()
 
     private let encoder = JSONEncoder()
@@ -19,58 +27,80 @@ public class AICLIService: ObservableObject {
     public init() {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
-        config.timeoutIntervalForResource = 60
+        config.timeoutIntervalForResource = 120 // Longer timeout for Claude processing
+        config.waitsForConnectivity = true // Wait for network connectivity
+        config.allowsCellularAccess = true
+        config.sessionSendsLaunchEvents = true
         self.urlSession = URLSession(configuration: config)
 
         setupDateFormatters()
+        setupPushNotifications()
+        setupDeviceTokenListener()
     }
 
     deinit {
         // Cancel any pending tasks
-        webSocketTask?.cancel(with: .goingAway, reason: nil)
-        webSocketTask = nil
-
-        // Clear all references
+        urlSession.getAllTasks { tasks in
+            tasks.forEach { $0.cancel() }
+        }
         cancellables.removeAll()
-        currentConnection = nil
-        currentSession = nil
     }
 
     // MARK: - Connection Management
 
     func connect(to address: String, port: Int, authToken: String?, completion: @escaping (Result<Void, AICLICompanionError>) -> Void) {
-        let connection = ServerConnection(
-            address: address,
-            port: port,
-            authToken: authToken,
-            isSecure: port == 443 || address.contains("https")
-        )
+        let scheme = port == 443 || address.contains("https") ? "https" : "http"
+        
+        // For default ports (443 for https, 80 for http), don't include port in URL
+        // This is especially important for ngrok URLs like domain.ngrok-free.app
+        let urlString: String
+        if (scheme == "https" && port == 443) || (scheme == "http" && port == 80) {
+            urlString = "\(scheme)://\(address)"
+        } else {
+            urlString = "\(scheme)://\(address):\(port)"
+        }
+        
+        guard let url = URL(string: urlString) else {
+            completion(.failure(.invalidURL))
+            return
+        }
 
-        currentConnection = connection
-
-        // Test basic connectivity first
-        testConnection(connection) { [weak self] result in
-            switch result {
-            case .success:
-                self?.establishWebSocketConnection(connection, completion: completion)
-            case .failure(let error):
-                completion(.failure(error))
+        baseURL = url
+        self.authToken = authToken // Store the auth token for later use
+        
+        // Test connection by hitting the health endpoint
+        testConnection { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success:
+                    self?.isConnected = true
+                    self?.connectionStatus = .connected
+                    
+                    // Notify ConnectionReliabilityManager
+                    ConnectionReliabilityManager.shared.handleConnectionEstablished()
+                    
+                    // Register device for push notifications if we have a token
+                    if let deviceToken = self?.deviceToken {
+                        self?.registerDeviceForPushNotifications(deviceToken: deviceToken) { _ in }
+                    }
+                    
+                    completion(.success(()))
+                case .failure(let error):
+                    self?.isConnected = false
+                    self?.connectionStatus = .error(error)
+                    completion(.failure(error))
+                }
             }
         }
     }
 
     func disconnect() {
-        // Cancel WebSocket task
-        webSocketTask?.cancel(with: .goingAway, reason: nil)
-        webSocketTask = nil
-
         // Cancel all URLSession tasks
         urlSession.getAllTasks { tasks in
             tasks.forEach { $0.cancel() }
         }
 
-        // Clear references
-        currentConnection = nil
+        baseURL = nil
         currentSession = nil
 
         DispatchQueue.main.async { [weak self] in
@@ -79,63 +109,96 @@ public class AICLIService: ObservableObject {
         }
     }
 
-    // MARK: - Server Discovery
-
-    func discoverLocalServers(completion: @escaping (Result<[DiscoveredServer], AICLICompanionError>) -> Void) {
-        // Use Bonjour to discover local Claude Code servers
-        let browser = NetworkServiceBrowser()
-
-        browser.browseForServices(ofType: "_claudecode._tcp", inDomain: "local.") { services in
-            let discoveredServers = services.compactMap { service -> DiscoveredServer? in
-                guard let address = service.hostName,
-                      let port = service.port else { return nil }
-
-                return DiscoveredServer(
-                    name: service.name,
-                    address: address,
-                    port: port,
-                    isSecure: false // Local discovery typically uses HTTP
-                )
+    // MARK: - Message Fetching (iMessage-style)
+    
+    /// Fetch a message by ID from the server
+    func fetchMessage(sessionId: String, messageId: String) async throws -> Message {
+        guard let baseURL = baseURL else {
+            throw AICLICompanionError.invalidURL
+        }
+        
+        let url = baseURL
+            .appendingPathComponent("api")
+            .appendingPathComponent("sessions")
+            .appendingPathComponent(sessionId)
+            .appendingPathComponent("messages")
+            .appendingPathComponent(messageId)
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 30
+        
+        // Add authorization if needed
+        if let authToken = authToken {
+            request.addValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
+        }
+        
+        let (data, response) = try await urlSession.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AICLICompanionError.invalidResponse
+        }
+        
+        if httpResponse.statusCode == 404 {
+            throw AICLICompanionError.httpError(404)
+        }
+        
+        guard 200...299 ~= httpResponse.statusCode else {
+            throw AICLICompanionError.httpError(httpResponse.statusCode)
+        }
+        
+        // Parse response
+        struct FetchResponse: Codable {
+            let success: Bool
+            let message: FetchedMessage
+            
+            struct FetchedMessage: Codable {
+                let id: String
+                let content: String
+                let timestamp: String
+                let sessionId: String
+                let type: String?
+                let metadata: [String: String]?
             }
-
-            completion(.success(discoveredServers))
         }
-
-        // Fallback: scan common ports on local network
-        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 2.0) {
-            completion(.success([]))
-        }
+        
+        let fetchResponse = try decoder.decode(FetchResponse.self, from: data)
+        
+        // Create Message object
+        let message = Message(
+            content: fetchResponse.message.content,
+            sender: .assistant,
+            type: .markdown,
+            metadata: AICLIMessageMetadata(
+                sessionId: sessionId,
+                duration: 0
+            )
+        )
+        
+        return message
     }
+    
+    // MARK: - Health Check
 
-    // MARK: - Claude Code API
-
-    func sendPrompt(_ prompt: String, completion: @escaping (Result<AICLIResponse, AICLICompanionError>) -> Void) {
-        guard let connection = currentConnection,
-              let url = connection.url else {
-            completion(.failure(AICLICompanionError.connectionFailed("No active connection")))
+    private func testConnection(completion: @escaping (Result<Void, AICLICompanionError>) -> Void) {
+        guard let baseURL = baseURL else {
+            completion(.failure(.invalidURL))
             return
         }
 
-        let requestBody = AICLIRequest(prompt: prompt, format: "json")
-
-        guard let bodyData = try? encoder.encode(requestBody) else {
-            completion(.failure(AICLICompanionError.jsonParsingError(NSError(domain: "EncodingError", code: 0))))
-            return
+        let healthURL = baseURL.appendingPathComponent("health")
+        var request = URLRequest(url: healthURL)
+        request.httpMethod = "GET"
+        request.addValue("application/json", forHTTPHeaderField: "Accept")
+        
+        // Add authorization header if we have a token
+        if let token = authToken {
+            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
 
-        var request = URLRequest(url: url.appendingPathComponent("/api/ask"))
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        if let token = connection.authToken {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-
-        request.httpBody = bodyData
-
-        urlSession.dataTask(with: request) { [weak self] data, response, error in
+        urlSession.dataTask(with: request) { _, response, error in
             if let error = error {
-                completion(.failure(AICLICompanionError.networkError(error)))
+                completion(.failure(.networkError(error)))
                 return
             }
 
@@ -144,216 +207,579 @@ public class AICLIService: ObservableObject {
                 return
             }
 
-            guard 200...299 ~= httpResponse.statusCode else {
-                completion(.failure(.connectionFailed("HTTP \(httpResponse.statusCode)")))
+            if httpResponse.statusCode == 200 {
+                completion(.success(()))
+            } else {
+                completion(.failure(.httpError(httpResponse.statusCode)))
+            }
+        }.resume()
+    }
+
+    // MARK: - Push Notifications Setup
+
+    private func setupPushNotifications() {
+        // Skip notification setup in test environment
+        if NSClassFromString("XCTestCase") != nil {
+            return
+        }
+        
+        // Request notification permission
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+            if granted {
+                DispatchQueue.main.async {
+                    #if os(iOS)
+                    UIApplication.shared.registerForRemoteNotifications()
+                    #endif
+                }
+            }
+        }
+    }
+
+    private func setupDeviceTokenListener() {
+        // Listen for device token updates from AppDelegate
+        NotificationCenter.default.addObserver(
+            forName: Notification.Name("DeviceTokenReceived"),
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            if let token = notification.object as? String {
+                self?.setDeviceToken(token)
+            }
+        }
+    }
+
+    func setDeviceToken(_ token: String) {
+        self.deviceToken = token
+        
+        // Register with server if we're connected
+        if isConnected {
+            registerDeviceForPushNotifications(deviceToken: token) { result in
+                switch result {
+                case .success:
+                    print("✅ Device registered for push notifications")
+                case .failure(let error):
+                    print("❌ Failed to register device: \(error)")
+                }
+            }
+        }
+    }
+
+    private func registerDeviceForPushNotifications(deviceToken: String, completion: @escaping (Result<Void, AICLICompanionError>) -> Void) {
+        guard let baseURL = baseURL else {
+            completion(.failure(.invalidURL))
+            return
+        }
+
+        let registerURL = baseURL.appendingPathComponent("api/devices/register")
+        var request = URLRequest(url: registerURL)
+        request.httpMethod = "POST"
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        // Add authorization header if we have a token
+        if let token = authToken {
+            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        let payload = [
+            "deviceToken": deviceToken,
+            "platform": "ios",
+            "bundleId": "com.aiclicompanion.ios"
+        ]
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        } catch {
+            completion(.failure(.jsonParsingError(error)))
+            return
+        }
+
+        urlSession.dataTask(with: request) { _, response, error in
+            if let error = error {
+                completion(.failure(.networkError(error)))
                 return
             }
 
-            guard let data = data else {
+            guard let httpResponse = response as? HTTPURLResponse else {
                 completion(.failure(.invalidResponse))
                 return
             }
 
-            do {
-                let claudeResponse = try self?.decoder.decode(AICLIResponse.self, from: data)
-                if let response = claudeResponse {
-                    completion(.success(response))
-                } else {
-                    completion(.failure(.jsonParsingError(NSError(domain: "DecodingError", code: 0))))
+            if httpResponse.statusCode == 200 {
+                completion(.success(()))
+            } else {
+                completion(.failure(.httpError(httpResponse.statusCode)))
+            }
+        }.resume()
+    }
+
+    // MARK: - Chat API
+
+    func sendMessage(
+        message: String,
+        projectPath: String?,
+        sessionId: String? = nil,
+        attachments: [AttachmentData]? = nil,
+        completion: @escaping (Result<ClaudeChatResponse, AICLICompanionError>) -> Void
+    ) {
+        guard let baseURL = baseURL else {
+            completion(.failure(.invalidURL))
+            return
+        }
+
+        let request = createChatRequest(baseURL: baseURL, message: message, projectPath: projectPath, sessionId: sessionId, attachments: attachments)
+        
+        guard let httpRequest = request else {
+            completion(.failure(.jsonParsingError(NSError(domain: "AICLIService", code: -1, userInfo: nil))))
+            return
+        }
+
+        print("📤 Sending HTTP message to: \(httpRequest.url?.absoluteString ?? "")")
+
+        // Create background task for iOS to continue request when app is backgrounded
+        #if os(iOS)
+        var backgroundTaskID: UIBackgroundTaskIdentifier = .invalid
+        backgroundTaskID = UIApplication.shared.beginBackgroundTask(withName: "Claude Chat Request") {
+            // Clean up if task expires
+            UIApplication.shared.endBackgroundTask(backgroundTaskID)
+            backgroundTaskID = .invalid
+        }
+        #endif
+        
+        let task = urlSession.dataTask(with: httpRequest) { data, response, error in
+            #if os(iOS)
+            defer {
+                if backgroundTaskID != .invalid {
+                    UIApplication.shared.endBackgroundTask(backgroundTaskID)
                 }
+            }
+            #endif
+            
+            self.handleChatResponse(data: data, response: response, error: error, completion: completion)
+        }
+        task.resume()
+    }
+    
+    // MARK: - Helper Methods
+    
+    private func createChatRequest(baseURL: URL, message: String, projectPath: String?, sessionId: String?, attachments: [AttachmentData]? = nil) -> URLRequest? {
+        let chatURL = baseURL.appendingPathComponent("api/chat")
+        var request = URLRequest(url: chatURL)
+        request.httpMethod = "POST"
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 120 // Extended timeout for Claude processing
+        
+        // Add authorization header if we have a token
+        if let token = authToken {
+            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        var payload: [String: Any] = ["message": message]
+        
+        if let projectPath = projectPath {
+            payload["projectPath"] = projectPath
+        }
+        
+        if let sessionId = sessionId {
+            payload["sessionId"] = sessionId
+        }
+        
+        if let deviceToken = deviceToken {
+            payload["deviceToken"] = deviceToken
+        }
+        
+        // Add attachments as base64 encoded data
+        if let attachments = attachments, !attachments.isEmpty {
+            let attachmentPayloads = attachments.map { attachment in
+                return [
+                    "name": attachment.name,
+                    "data": attachment.data.base64EncodedString(),
+                    "mimeType": attachment.mimeType,
+                    "size": attachment.size
+                ] as [String: Any]
+            }
+            payload["attachments"] = attachmentPayloads
+        }
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+            print("   Payload: \(payload)")
+            return request
+        } catch {
+            print("❌ Failed to serialize request payload: \(error)")
+            return nil
+        }
+    }
+    
+    private func handleChatResponse(
+        data: Data?,
+        response: URLResponse?,
+        error: Error?,
+        completion: @escaping (Result<ClaudeChatResponse, AICLICompanionError>) -> Void
+    ) {
+        if let error = error {
+            handleNetworkError(error, completion: completion)
+            return
+        }
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            completion(.failure(.invalidResponse))
+            return
+        }
+
+        print("📥 HTTP Response status: \(httpResponse.statusCode)")
+
+        guard let data = data else {
+            completion(.failure(.noData))
+            return
+        }
+        
+        // Handle error status codes
+        if httpResponse.statusCode == 401 {
+            handleAuthenticationError(data: data, completion: completion)
+            return
+        }
+        
+        guard 200...299 ~= httpResponse.statusCode else {
+            handleServerError(data: data, statusCode: httpResponse.statusCode, completion: completion)
+            return
+        }
+
+        // Parse the successful response
+        parseSuccessResponse(data: data, completion: completion)
+    }
+    
+    private func handleNetworkError(_ error: Error, completion: @escaping (Result<ClaudeChatResponse, AICLICompanionError>) -> Void) {
+        print("❌ Network error: \(error)")
+        let nsError = error as NSError
+        if nsError.code == NSURLErrorTimedOut {
+            let timeoutError = NSError(
+                domain: "AICLIService",
+                code: -1001,
+                userInfo: [NSLocalizedDescriptionKey: "The request timed out. Please check your connection and try again."]
+            )
+            completion(.failure(.networkError(timeoutError)))
+        } else {
+            completion(.failure(.networkError(error)))
+        }
+    }
+    
+    private func handleAuthenticationError(data: Data, completion: @escaping (Result<ClaudeChatResponse, AICLICompanionError>) -> Void) {
+        if let errorDict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let errorMessage = errorDict["message"] as? String {
+            print("❌ Authentication error: \(errorMessage)")
+            completion(.failure(.connectionFailed("Authentication failed: \(errorMessage)")))
+        } else {
+            completion(.failure(.connectionFailed("Authentication failed. Please check your credentials.")))
+        }
+    }
+    
+    private func handleServerError(data: Data, statusCode: Int, completion: @escaping (Result<ClaudeChatResponse, AICLICompanionError>) -> Void) {
+        if let errorDict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let errorMessage = errorDict["message"] as? String ?? errorDict["error"] as? String {
+            completion(.failure(.connectionFailed("Server error: \(errorMessage)")))
+        } else {
+            completion(.failure(.httpError(statusCode)))
+        }
+    }
+    
+    private func parseSuccessResponse(data: Data, completion: @escaping (Result<ClaudeChatResponse, AICLICompanionError>) -> Void) {
+        do {
+            let chatResponse = try self.decoder.decode(ClaudeChatResponse.self, from: data)
+            print("✅ Chat response received: \(chatResponse.content?.prefix(100) ?? "acknowledgment")...")
+            
+            // Update session ID if provided
+            if let newSessionId = chatResponse.sessionId {
+                DispatchQueue.main.async {
+                    self.currentSession = newSessionId
+                }
+            }
+            
+            completion(.success(chatResponse))
+        } catch {
+            print("❌ JSON parsing error: \(error)")
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("   Raw response: \(responseString)")
+            }
+            completion(.failure(.jsonParsingError(error)))
+        }
+    }
+
+    // MARK: - Session Management
+    
+    /// Fetch all messages for a session from the server
+    func fetchMessages(sessionId: String, completion: @escaping (Result<[Message], AICLICompanionError>) -> Void) {
+        guard let baseURL = baseURL else {
+            completion(.failure(.invalidURL))
+            return
+        }
+        
+        let messagesURL = baseURL.appendingPathComponent("api/chat/\(sessionId)/messages")
+        var request = URLRequest(url: messagesURL)
+        request.httpMethod = "GET"
+        request.addValue("application/json", forHTTPHeaderField: "Accept")
+        request.timeoutInterval = 15 // Allow more time for message fetching
+        
+        // Add authorization header if we have a token
+        if let token = authToken {
+            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        print("📥 Fetching messages from server: \(messagesURL)")
+        
+        let task = urlSession.dataTask(with: request) { data, response, error in
+            if let error = error {
+                print("❌ Failed to fetch messages: \(error)")
+                completion(.failure(.networkError(error)))
+                return
+            }
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                completion(.failure(.invalidResponse))
+                return
+            }
+            
+            guard let data = data else {
+                completion(.failure(.noData))
+                return
+            }
+            
+            do {
+                let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+                guard let messagesArray = json?["messages"] as? [[String: Any]] else {
+                    print("⚠️ No messages in response")
+                    completion(.success([]))
+                    return
+                }
+                
+                // Convert server messages to Message objects
+                let dateFormatter = ISO8601DateFormatter()
+                let messages = messagesArray.compactMap { msgDict -> Message? in
+                    guard let content = msgDict["content"] as? String,
+                          let senderStr = msgDict["sender"] as? String else {
+                        return nil
+                    }
+                    
+                    let sender: MessageSender = senderStr == "user" ? .user : .assistant
+                    let typeStr = msgDict["type"] as? String ?? "text"
+                    let messageType: MessageType = typeStr == "markdown" ? .markdown : .text
+                    let timestamp = msgDict["timestamp"] as? String
+                    let requestId = msgDict["requestId"] as? String
+                    
+                    // Create metadata for the message
+                    let metadata = AICLIMessageMetadata(
+                        sessionId: sessionId,
+                        duration: 0,
+                        additionalInfo: [
+                            "requestId": requestId ?? "",
+                            "deliveredVia": msgDict["deliveredVia"] as? String ?? "server",
+                            "timestamp": timestamp ?? ""
+                        ]
+                    )
+                    
+                    // Parse the timestamp if available
+                    let messageDate: Date = {
+                        if let timestamp = timestamp {
+                            return dateFormatter.date(from: timestamp) ?? Date()
+                        }
+                        return Date()
+                    }()
+                    
+                    return Message(
+                        content: content,
+                        sender: sender,
+                        timestamp: messageDate,
+                        type: messageType,
+                        metadata: metadata,
+                        requestId: requestId
+                    )
+                }
+                
+                print("✅ Fetched \(messages.count) messages from server")
+                completion(.success(messages))
+            } catch {
+                print("❌ Failed to parse messages response: \(error)")
+                completion(.failure(.jsonParsingError(error)))
+            }
+        }
+        task.resume()
+    }
+    
+    func checkSessionStatus(sessionId: String, completion: @escaping (Result<Bool, AICLICompanionError>) -> Void) {
+        guard let baseURL = baseURL else {
+            completion(.failure(.invalidURL))
+            return
+        }
+        
+        let statusURL = baseURL.appendingPathComponent("api/sessions/\(sessionId)/status")
+        var request = URLRequest(url: statusURL)
+        request.httpMethod = "GET"
+        request.addValue("application/json", forHTTPHeaderField: "Accept")
+        request.timeoutInterval = 10 // Quick status check
+        
+        // Add authorization header if we have a token
+        if let token = authToken {
+            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        print("📡 Checking session status: \(statusURL)")
+        
+        urlSession.dataTask(with: request) { data, response, error in
+            if let error = error {
+                completion(.failure(.networkError(error)))
+                return
+            }
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                completion(.failure(.invalidResponse))
+                return
+            }
+            
+            guard let data = data else {
+                completion(.failure(.noData))
+                return
+            }
+            
+            do {
+                let statusResponse = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+                let hasNewMessages = statusResponse?["hasNewMessages"] as? Bool ?? false
+                completion(.success(hasNewMessages))
             } catch {
                 completion(.failure(.jsonParsingError(error)))
             }
         }.resume()
     }
 
-    func sendStreamingPrompt(_ prompt: String, onPartialResponse: @escaping (String) -> Void, completion: @escaping (Result<AICLIResponse, AICLICompanionError>) -> Void) {
-        // TODO: Implement streaming via WebSocket
-        sendPrompt(prompt, completion: completion)
-    }
-    
+    // MARK: - Project Management
 
-    // MARK: - Health Check
-
-    func healthCheck(completion: @escaping (Result<ServerHealth, AICLICompanionError>) -> Void) {
-        guard let connection = currentConnection,
-              let url = connection.url else {
-            completion(.failure(AICLICompanionError.connectionFailed("No active connection")))
+    func getProjects(completion: @escaping (Result<[Project], AICLICompanionError>) -> Void) {
+        guard let baseURL = baseURL else {
+            completion(.failure(.invalidURL))
             return
         }
 
-        var request = URLRequest(url: url.appendingPathComponent("/api/health"))
+        let projectsURL = baseURL.appendingPathComponent("api/projects")
+        var request = URLRequest(url: projectsURL)
         request.httpMethod = "GET"
-
-        if let token = connection.authToken {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.addValue("application/json", forHTTPHeaderField: "Accept")
+        
+        // Add authorization header if we have a token
+        if let token = authToken {
+            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
 
-        urlSession.dataTask(with: request) { _, response, error in
+        urlSession.dataTask(with: request) { data, _, error in
             if let error = error {
-                completion(.failure(AICLICompanionError.networkError(error)))
+                completion(.failure(.networkError(error)))
                 return
             }
 
-            guard let httpResponse = response as? HTTPURLResponse,
-                  200...299 ~= httpResponse.statusCode else {
-                completion(.failure(.connectionFailed("Health check failed")))
+            guard let data = data else {
+                completion(.failure(.noData))
                 return
             }
 
-            // Parse health response if available
-            let health = ServerHealth(status: "healthy", version: "1.0.0")
-            completion(.success(health))
+            do {
+                let projects = try self.decoder.decode([Project].self, from: data)
+                completion(.success(projects))
+            } catch {
+                completion(.failure(.jsonParsingError(error)))
+            }
         }.resume()
     }
 
-    // MARK: - Private Methods
+    // MARK: - Utility Methods
 
     private func setupDateFormatters() {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSZ"
-        decoder.dateDecodingStrategy = .formatted(formatter)
-        encoder.dateEncodingStrategy = .formatted(formatter)
-    }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
 
-    private func testConnection(_ connection: ServerConnection, completion: @escaping (Result<Void, AICLICompanionError>) -> Void) {
-        guard let url = connection.url else {
-            completion(.failure(.connectionFailed("Invalid server URL")))
-            return
+        encoder.dateEncodingStrategy = .custom { date, encoder in
+            var container = encoder.singleValueContainer()
+            try container.encode(formatter.string(from: date))
         }
 
-        var request = URLRequest(url: url.appendingPathComponent("/api/health"))
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let string = try container.decode(String.self)
+
+            if let date = formatter.date(from: string) {
+                return date
+            }
+
+            // Fallback to standard ISO8601 without fractional seconds
+            let fallbackFormatter = ISO8601DateFormatter()
+            if let date = fallbackFormatter.date(from: string) {
+                return date
+            }
+
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date format")
+        }
+    }
+    
+    // MARK: - Session Status Checking
+    
+    func checkSessionStatus(sessionId: String) async throws -> SessionStatus {
+        guard let baseURL = baseURL else {
+            throw AICLICompanionError.invalidURL
+        }
+        
+        let statusURL = baseURL.appendingPathComponent("api/aicli/sessions/\(sessionId)")
+        var request = URLRequest(url: statusURL)
         request.httpMethod = "GET"
-        request.timeoutInterval = 10
-
-        if let token = connection.authToken {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.addValue("application/json", forHTTPHeaderField: "Accept")
+        
+        // Add authorization header if we have a token
+        if let token = authToken {
+            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
-
-        urlSession.dataTask(with: request) { _, response, error in
-            if let error = error {
-                completion(.failure(AICLICompanionError.networkError(error)))
-                return
-            }
-
+        
+        do {
+            let (data, response) = try await urlSession.data(for: request)
+            
             guard let httpResponse = response as? HTTPURLResponse else {
-                completion(.failure(.invalidResponse))
-                return
+                throw AICLICompanionError.invalidResponse
             }
-
-            if httpResponse.statusCode == 401 {
-                completion(.failure(.authenticationFailed))
-                return
+            
+            if httpResponse.statusCode == 404 {
+                // Session not found - it's dead
+                return SessionStatus(isActive: false, processConnected: false)
             }
-
-            guard 200...299 ~= httpResponse.statusCode else {
-                completion(.failure(.connectionFailed("HTTP \(httpResponse.statusCode)")))
-                return
+            
+            if httpResponse.statusCode != 200 {
+                throw AICLICompanionError.httpError(httpResponse.statusCode)
             }
-
-            completion(.success(()))
-        }.resume()
-    }
-
-    private func establishWebSocketConnection(_ connection: ServerConnection, completion: @escaping (Result<Void, AICLICompanionError>) -> Void) {
-        guard let wsURL = connection.wsURL else {
-            completion(.failure(.connectionFailed("Invalid WebSocket URL")))
-            return
-        }
-
-        var request = URLRequest(url: wsURL)
-        if let token = connection.authToken {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-
-        webSocketTask = urlSession.webSocketTask(with: request)
-        webSocketTask?.resume()
-
-        DispatchQueue.main.async { [weak self] in
-            self?.isConnected = true
-            self?.connectionStatus = .connected
-        }
-
-        completion(.success(()))
-        startReceivingMessages()
-    }
-
-    private func startReceivingMessages() {
-        webSocketTask?.receive { [weak self] result in
-            switch result {
-            case .success(let message):
-                self?.handleWebSocketMessage(message)
-                self?.startReceivingMessages() // Continue receiving
-            case .failure(let error):
-                print("WebSocket error: \(error)")
-                DispatchQueue.main.async {
-                    self?.connectionStatus = .disconnected
-                    self?.isConnected = false
-                }
+            
+            // Parse the response
+            let sessionInfo = try JSONDecoder().decode(SessionStatusResponse.self, from: data)
+            return SessionStatus(
+                isActive: sessionInfo.isActive,
+                processConnected: sessionInfo.process?.connected ?? false
+            )
+        } catch {
+            if let aicliError = error as? AICLICompanionError {
+                throw aicliError
             }
-        }
-    }
-
-    private func handleWebSocketMessage(_ message: URLSessionWebSocketTask.Message) {
-        switch message {
-        case .string(let text):
-            print("Received WebSocket message: \(text)")
-        // Handle real-time updates, streaming responses, etc.
-        case .data(let data):
-            print("Received WebSocket data: \(data.count) bytes")
-        @unknown default:
-            break
+            throw AICLICompanionError.networkError(error)
         }
     }
 }
 
-// MARK: - Supporting Types
+// MARK: - Session Status Models
 
-enum ConnectionStatus {
-    case disconnected
-    case connecting
-    case connected
-    case error(AICLICompanionError)
+struct SessionStatus {
+    let isActive: Bool
+    let processConnected: Bool
 }
 
-struct AICLIRequest: Codable {
-    let prompt: String
-    let format: String
+// MARK: - Response Models
+
+struct ClaudeChatResponse: Codable {
+    let content: String?        // Optional - not present in acknowledgments
     let sessionId: String?
-
-    init(prompt: String, format: String = "json", sessionId: String? = nil) {
-        self.prompt = prompt
-        self.format = format
-        self.sessionId = sessionId
-    }
-}
-
-struct ServerHealth: Codable {
-    let status: String
-    let version: String
-    let claudeCodeVersion: String?
-
-    init(status: String, version: String, claudeCodeVersion: String? = nil) {
-        self.status = status
-        self.version = version
-        self.claudeCodeVersion = claudeCodeVersion
-    }
-}
-
-// MARK: - Network Service Browser (Simplified)
-
-class NetworkServiceBrowser {
-    func browseForServices(ofType type: String, inDomain domain: String, completion: @escaping ([NetworkService]) -> Void) {
-        // TODO: Implement actual Bonjour discovery using Network framework
-        // For now, return empty array
-        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 1.0) {
-            completion([])
-        }
-    }
-}
-
-struct NetworkService {
-    let name: String
-    let hostName: String?
-    let port: Int?
+    let projectPath: String?
+    let timestamp: Date
+    let success: Bool
+    let message: String?        // Acknowledgment message
+    let deliveryMethod: String? // "apns" for acknowledgments
+    let requestId: String?      // Track request/response pairs
 }

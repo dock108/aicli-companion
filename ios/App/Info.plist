@@ -32,6 +32,8 @@
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>AICLI Companion needs access to your local network to connect to your development server.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>AICLI Companion needs camera access to scan QR codes for connecting to your development server.</string>
 	<key>UIDeviceFamily</key>
 	<array>
 		<integer>1</integer>
@@ -57,6 +59,11 @@
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+		<string>background-fetch</string>
 	</array>
 </dict>
 </plist>

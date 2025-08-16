@@ -1,7 +1,7 @@
 import { describe, it, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert';
 import express from 'express';
-import { setupRoutes } from '../../routes/index.js';
+import { setupRoutes } from '../../routes/api-routes.js';
 
 describe('API Routes', () => {
   let app;
@@ -533,7 +533,6 @@ describe('API Routes', () => {
       assert.strictEqual(response.version, '1.0.0');
       assert.strictEqual(response.aicliCodeAvailable, true);
       assert.ok(response.endpoints);
-      assert.strictEqual(response.websocket, '/ws');
     });
   });
 });

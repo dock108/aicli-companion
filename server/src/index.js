@@ -6,14 +6,16 @@ import { createServer as createHttpsServer } from 'https';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
-import { setupRoutes } from './routes/index.js';
+import { setupRoutes } from './routes/api-routes.js';
 import { setupProjectRoutes } from './routes/projects.js';
 import { setupAICLIStatusRoutes } from './routes/aicli-status.js';
 import sessionRoutes from './routes/sessions.js';
-import telemetryRoutes from './routes/telemetry.js';
+import telemetryRoutes from './routes/telemetry-api.js';
 import pushNotificationRoutes from './routes/push-notifications.js';
 import chatRoutes from './routes/chat.js';
 import devicesRoutes from './routes/devices.js';
+import authRoutes from './routes/auth.js';
+import securityRoutes from './routes/security.js';
 import { errorHandler } from './middleware/error.js';
 import { AICLIService } from './services/aicli.js';
 import { ServerConfig } from './config/server-config.js';
@@ -21,6 +23,7 @@ import { MiddlewareConfig } from './config/middleware-config.js';
 import { TLSConfig } from './config/tls-config.js';
 import { ServerStartup } from './config/server-startup.js';
 import { pushNotificationService } from './services/push-notification.js';
+import { tunnelService } from './services/tunnel.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -56,9 +59,19 @@ class AICLICompanionServer {
     // Will be set up during start()
     this.server = null;
     this.wss = null;
-    this.authToken = this.config.authToken;
+
+    // Set up auth token early if required
+    if (this.config.authRequired) {
+      this.authToken = ServerStartup.generateAuthToken(
+        this.config.authToken,
+        this.config.authRequired
+      );
+    } else {
+      this.authToken = null;
+    }
 
     this.setupBasicMiddleware();
+    this.setupAuthMiddleware(); // Configure auth BEFORE routes
     this.setupRoutes();
     this.setupErrorHandling();
   }
@@ -68,7 +81,20 @@ class AICLICompanionServer {
     MiddlewareConfig.configure(this.app, this.config);
   }
 
+  setupAuthMiddleware() {
+    // Configure authentication middleware if token is set
+    if (this.authToken) {
+      MiddlewareConfig.configureAuth(this.app, this.authToken);
+    }
+  }
+
   setupRoutes() {
+    // Store config in app.locals for routes to access
+    this.app.locals.authRequired = this.config.authRequired;
+    this.app.locals.authToken = this.authToken;
+    this.app.locals.port = this.config.port;
+    this.app.locals.enableTLS = this.config.enableTLS;
+
     // Health check (no auth required)
     this.app.get('/health', (req, res) => {
       res.json({
@@ -78,6 +104,12 @@ class AICLICompanionServer {
         timestamp: new Date().toISOString(),
       });
     });
+
+    // Auth routes (QR code generation, etc.)
+    this.app.use('/api/auth', authRoutes);
+
+    // Security routes
+    this.app.use('/api/security', securityRoutes);
 
     // API routes
     setupRoutes(this.app, this.aicliService);
@@ -105,9 +137,12 @@ class AICLICompanionServer {
         endpoints: {
           health: '/health',
           api: '/api',
+          auth: '/api/auth',
+          security: '/api/security',
           chat: '/api/chat',
           devices: '/api/devices',
           projects: '/api/projects',
+          qrCode: '/api/auth/setup',
         },
       });
     });
@@ -133,14 +168,7 @@ class AICLICompanionServer {
 
   async start() {
     try {
-      // Generate auth token only if authentication is required
-      if (this.config.authRequired) {
-        this.authToken = ServerStartup.generateAuthToken(this.authToken, this.config.authRequired);
-        // Configure auth middleware now that we have the token
-        MiddlewareConfig.configureAuth(this.app, this.authToken);
-      } else {
-        this.authToken = null;
-      }
+      // Auth token and middleware already configured in constructor
 
       // Initialize push notification service with APNs HTTP/2 API
       pushNotificationService.initialize({
@@ -148,7 +176,7 @@ class AICLICompanionServer {
         keyId: process.env.APNS_KEY_ID || '2Y226B9433',
         teamId: process.env.APNS_TEAM_ID || 'E3G5D247ZN',
         bundleId: process.env.APNS_BUNDLE_ID || 'com.aiclicompanion.ios',
-        production: process.env.NODE_ENV === 'production',
+        production: process.env.APNS_PRODUCTION === 'true', // Explicitly check APNS_PRODUCTION, default to false
       });
 
       // Set up TLS if enabled
@@ -189,12 +217,45 @@ class AICLICompanionServer {
       const isAvailable = await ServerStartup.checkAICLIAvailability(this.aicliService);
 
       // Start server
-      this.server.listen(this.config.port, this.config.host, () => {
+      this.server.listen(this.config.port, this.config.host, async () => {
         const fingerprint = this.config.enableTLS
           ? this.tlsConfig.getCertificateFingerprint()
           : null;
 
         ServerStartup.displayStartupInfo(this.config, this.authToken, isAvailable, fingerprint);
+
+        // Start tunnel if enabled
+        if (this.config.enableTunnel) {
+          console.log('🌐 Starting internet tunnel...');
+          const publicUrl = await tunnelService.startTunnel(
+            this.config.port,
+            process.env.NGROK_AUTH_TOKEN
+          );
+
+          if (publicUrl) {
+            console.log('');
+            console.log('═══════════════════════════════════════════════════════');
+            console.log('🌍 PUBLIC TUNNEL ACTIVE');
+            console.log('═══════════════════════════════════════════════════════');
+            console.log(`   Public URL: ${publicUrl}`);
+            console.log(`   Auth Required: YES`);
+            if (this.authToken) {
+              // Mask auth token for security - show only first 8 chars
+              const maskedToken = `${this.authToken.substring(0, 8)}...****`;
+              console.log(`   Auth Token: ${maskedToken}`);
+              console.log('');
+              console.log('   iOS Connection URL:');
+              console.log(`   ${publicUrl}?token=${maskedToken}`);
+            } else {
+              console.log('   ⚠️  WARNING: No auth token set!');
+              console.log('   Generate one by restarting with AUTH_TOKEN=<your-token>');
+            }
+            console.log('═══════════════════════════════════════════════════════');
+            console.log('');
+          } else {
+            console.log('❌ Failed to start tunnel - server still available locally');
+          }
+        }
       });
 
       // Setup service discovery
@@ -209,8 +270,13 @@ class AICLICompanionServer {
     }
   }
 
-  shutdown() {
+  async shutdown() {
     console.log('🔄 Shutting down server...');
+
+    // Shutdown tunnel if active
+    if (tunnelService.isTunnelActive()) {
+      await tunnelService.stopTunnel();
+    }
 
     // Shutdown AICLI service
     this.aicliService.shutdown();

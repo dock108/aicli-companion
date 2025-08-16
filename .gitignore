@@ -14,13 +14,18 @@ audit-report.json
 server/keys/
 *.p8
 
+# Generated/synced server bundle (use main /server as source)
+macos-app/AICLICompanionHost/Resources/server/
+
 # =================================
-# iOS / Xcode
+# iOS / Xcode / macOS App
 # =================================
 
 # Build generated
 build/
 DerivedData/
+build-test/
+macos-app/build-test/
 
 # Various settings
 *.pbxuser

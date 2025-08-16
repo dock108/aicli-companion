@@ -25,6 +25,16 @@ struct ClaudeStatusIndicator: View {
         .animation(.easeInOut(duration: 0.3), value: statusManager.currentStatus)
     }
     
+    // MARK: - Computed Properties
+    
+    private var backgroundColor: Color {
+        #if os(iOS)
+        return Color(UIColor.systemBackground)
+        #else
+        return Color(NSColor.windowBackgroundColor)
+        #endif
+    }
+    
     // MARK: - Status Content
     
     @ViewBuilder
@@ -88,7 +98,7 @@ struct ClaudeStatusIndicator: View {
         .padding(.vertical, 12)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color(.systemBackground))
+                .fill(backgroundColor)
                 .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
         )
         .overlay(
@@ -268,6 +278,13 @@ struct ClaudeStatus: Identifiable, Equatable {
 #if DEBUG
 @available(iOS 16.0, macOS 13.0, *)
 struct ClaudeStatusIndicator_Previews: PreviewProvider {
+    private static var systemGroupedBackgroundColor: Color {
+        #if os(iOS)
+        return Color(UIColor.systemGroupedBackground)
+        #else
+        return Color(NSColor.windowBackgroundColor)
+        #endif
+    }
     static var previews: some View {
         VStack(spacing: 20) {
             // Progress status
@@ -303,7 +320,7 @@ struct ClaudeStatusIndicator_Previews: PreviewProvider {
             Spacer()
         }
         .padding()
-        .background(Color(.systemGroupedBackground))
+        .background(Self.systemGroupedBackgroundColor)
     }
 }
 #endif

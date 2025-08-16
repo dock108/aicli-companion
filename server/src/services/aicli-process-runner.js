@@ -4,6 +4,9 @@ import { processMonitor } from '../utils/process-monitor.js';
 import { InputValidator, MessageProcessor } from './aicli-utils.js';
 import { ClaudeStreamParser } from './stream-parser.js';
 import { createLogger } from '../utils/logger.js';
+import { commandSecurity } from './command-security.js';
+import { permissionManager } from './permission-manager.js';
+import { activityMonitor } from './activity-monitor.js';
 
 const logger = createLogger('AICLIProcess');
 
@@ -297,14 +300,109 @@ export class AICLIProcessRunner extends EventEmitter {
   }
 
   /**
+   * Intercept and validate tool use from Claude
+   * This is called when we detect Claude is trying to use a tool
+   */
+  async validateToolUse(toolName, toolInput, sessionId) {
+    // Only validate Bash commands for now
+    if (toolName !== 'Bash') {
+      return { allowed: true };
+    }
+
+    // Extract command from tool input
+    const command = toolInput.command || toolInput;
+
+    // Validate the command with security service
+    const validation = await commandSecurity.validateCommand(
+      command,
+      this.currentWorkingDirectory,
+      { sessionId }
+    );
+
+    // Track the command in activity monitor
+    activityMonitor.trackCommand(command, validation, sessionId);
+
+    if (!validation.allowed) {
+      logger.warn('Security blocked command', {
+        sessionId,
+        command,
+        reason: validation.reason,
+        code: validation.code,
+      });
+
+      // Track security violation
+      activityMonitor.trackSecurityViolation(
+        {
+          type: 'COMMAND_BLOCKED',
+          details: { command, reason: validation.reason },
+          severity: 'high',
+        },
+        sessionId
+      );
+
+      // Emit security violation
+      this.emit('securityViolation', {
+        sessionId,
+        type: 'COMMAND_BLOCKED',
+        command,
+        reason: validation.reason,
+        code: validation.code,
+      });
+    } else if (validation.requiresConfirmation) {
+      // Request permission for destructive command
+      logger.info('Requesting permission for destructive command', { command, sessionId });
+
+      const permission = await permissionManager.requestPermission(`Execute command: ${command}`, {
+        command,
+        workingDirectory: this.currentWorkingDirectory,
+        sessionId,
+      });
+
+      if (!permission.approved) {
+        validation.allowed = false;
+        validation.reason = permission.reason || 'Permission denied';
+
+        // Track denial
+        activityMonitor.trackActivity({
+          type: 'permission_denied',
+          command,
+          reason: validation.reason,
+          sessionId,
+        });
+      }
+    }
+
+    return validation;
+  }
+
+  /**
    * Execute AICLI CLI command for a session
    * This method handles both regular and long-running commands
    */
-  async executeAICLICommand(session, prompt) {
+  async executeAICLICommand(session, prompt, attachmentPaths = []) {
     const { sessionId, workingDirectory, requestId } = session;
 
     // Create logger with session context
     const sessionLogger = logger.child({ sessionId });
+
+    // Security validation for working directory
+    const dirValidation = await commandSecurity.validateDirectory(workingDirectory);
+    if (!dirValidation.allowed) {
+      sessionLogger.warn('Security violation: Working directory not allowed', {
+        workingDirectory,
+        reason: dirValidation.reason,
+      });
+
+      // Emit security violation event
+      this.emit('securityViolation', {
+        sessionId,
+        type: 'DIRECTORY_VIOLATION',
+        workingDirectory,
+        reason: dirValidation.reason,
+      });
+
+      throw new Error(`Security violation: ${dirValidation.reason}`);
+    }
 
     // Build AICLI CLI arguments - use stream-json to avoid buffer limits
     // Include --print flag as required by AICLI CLI for stdin input
@@ -320,6 +418,17 @@ export class AICLIProcessRunner extends EventEmitter {
     } else {
       // For fresh chats (no sessionId), let Claude CLI create its own session ID
       sessionLogger.info('Starting new conversation (no session ID)');
+    }
+
+    // Add attachment file paths if provided
+    if (attachmentPaths && attachmentPaths.length > 0) {
+      // Claude CLI accepts files as additional arguments after the prompt
+      sessionLogger.info('Adding attachment file paths to command', {
+        count: attachmentPaths.length,
+      });
+      for (const filePath of attachmentPaths) {
+        args.push(filePath);
+      }
     }
 
     // Add permission configuration
@@ -394,6 +503,10 @@ export class AICLIProcessRunner extends EventEmitter {
       promptLength: prompt?.length || 0,
       workingDirectory,
     });
+
+    // Store working directory for command validation
+    this.currentWorkingDirectory = workingDirectory;
+    this.currentSessionId = sessionId;
 
     return new Promise((promiseResolve, reject) => {
       let aicliProcess;

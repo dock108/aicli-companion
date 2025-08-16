@@ -548,7 +548,7 @@ test('PushNotificationService', async (t) => {
       const service = new pushNotificationService.constructor();
 
       const result = service.truncateMessage('This is a test message', 10);
-      assert.strictEqual(result, 'This is a ...');
+      assert.strictEqual(result, 'This is a...');
     });
 
     await tt.test('should handle null or undefined messages', () => {

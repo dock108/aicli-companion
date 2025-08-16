@@ -3,7 +3,7 @@ import SwiftUI
 @available(iOS 17.0, macOS 14.0, *)
 public struct AdaptiveContentView: View {
     public init() {}
-    @EnvironmentObject var aicliService: HTTPAICLIService
+    @EnvironmentObject var aicliService: AICLIService
     @EnvironmentObject var settings: SettingsManager
     @State private var isConnected = false
     @State private var selectedProject: Project?
@@ -11,13 +11,9 @@ public struct AdaptiveContentView: View {
     @State private var currentSession: ProjectSession?
     @State private var backgroundOpacity: Double = 0
     @State private var navigationSplitViewVisibility: NavigationSplitViewVisibility = .automatic
-    @State private var showSettings = false
-    @State private var isInteractionEnabled = true
-    @State private var appBecameActiveTime: Date = .distantPast
     
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
-    @Environment(\.scenePhase) var scenePhase
     
     private var isIPad: Bool {
         #if os(iOS)
@@ -48,26 +44,11 @@ public struct AdaptiveContentView: View {
                 isProjectSelected = false
             }
         }
-        .handleNotifications()
-        .onChange(of: scenePhase) { _, newPhase in
-            switch newPhase {
-            case .active:
-                print("🌟 App became active")
-                appBecameActiveTime = Date()
-                // Briefly disable interactions to prevent double-taps during app activation
-                isInteractionEnabled = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    isInteractionEnabled = true
-                    print("🌟 Interactions re-enabled after app activation")
-                }
-            case .inactive:
-                print("🌙 App became inactive")
-            case .background:
-                print("🌙 App entered background")
-            @unknown default:
-                break
-            }
-        }
+        .handleNotifications(
+            isConnected: $isConnected,
+            selectedProject: $selectedProject,
+            isProjectSelected: $isProjectSelected
+        )
     }
     
     // MARK: - iPad Layout with NavigationSplitView
@@ -93,16 +74,8 @@ public struct AdaptiveContentView: View {
                         isProjectSelected: $isProjectSelected,
                         onDisconnect: disconnectFromServer
                     )
-                    .allowsHitTesting(isInteractionEnabled)
                     .navigationTitle("Projects")
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            Button(action: { showSettings = true }) {
-                                Image(systemName: "gear")
-                                    .foregroundColor(Colors.textSecondary(for: colorScheme))
-                            }
-                        }
-                    }
+                    // Removed toolbar gear icon - NavigationTopBar in ProjectSelectionView already provides settings
                 }
             }
             .navigationSplitViewColumnWidth(min: 320, ideal: 380, max: 450)
@@ -147,9 +120,7 @@ public struct AdaptiveContentView: View {
             }
         }
         .navigationSplitViewStyle(.balanced)
-        .sheet(isPresented: $showSettings) {
-            SettingsView()
-        }
+        // Settings sheet removed - NavigationTopBar handles navigation to settings
     }
     
     // MARK: - iPhone Layout with NavigationStack
@@ -179,7 +150,6 @@ public struct AdaptiveContentView: View {
                                 isProjectSelected: $isProjectSelected,
                                 onDisconnect: disconnectFromServer
                             )
-                            .allowsHitTesting(isInteractionEnabled)
                             .transition(.asymmetric(
                                 insertion: .move(edge: .trailing).combined(with: .opacity),
                                 removal: .move(edge: .leading).combined(with: .opacity)
@@ -242,7 +212,7 @@ public struct AdaptiveContentView: View {
 @available(iOS 17.0, macOS 14.0, *)
 #Preview("iPad Light") {
     AdaptiveContentView()
-        .environmentObject(AICLIService())
+        .environmentObject(AICLIService.shared)
         .environmentObject(SettingsManager())
         .preferredColorScheme(.light)
         .previewDevice(PreviewDevice(rawValue: "iPad Pro (12.9-inch) (6th generation)"))
@@ -251,7 +221,7 @@ public struct AdaptiveContentView: View {
 @available(iOS 17.0, macOS 14.0, *)
 #Preview("iPad Dark") {
     AdaptiveContentView()
-        .environmentObject(AICLIService())
+        .environmentObject(AICLIService.shared)
         .environmentObject(SettingsManager())
         .preferredColorScheme(.dark)
         .previewDevice(PreviewDevice(rawValue: "iPad Pro (12.9-inch) (6th generation)"))
@@ -260,7 +230,7 @@ public struct AdaptiveContentView: View {
 @available(iOS 17.0, macOS 14.0, *)
 #Preview("iPhone Light") {
     AdaptiveContentView()
-        .environmentObject(AICLIService())
+        .environmentObject(AICLIService.shared)
         .environmentObject(SettingsManager())
         .preferredColorScheme(.light)
         .previewDevice(PreviewDevice(rawValue: "iPhone 15 Pro"))
@@ -269,7 +239,7 @@ public struct AdaptiveContentView: View {
 @available(iOS 17.0, macOS 14.0, *)
 #Preview("iPhone Dark") {
     AdaptiveContentView()
-        .environmentObject(AICLIService())
+        .environmentObject(AICLIService.shared)
         .environmentObject(SettingsManager())
         .preferredColorScheme(.dark)
         .previewDevice(PreviewDevice(rawValue: "iPhone 15 Pro"))

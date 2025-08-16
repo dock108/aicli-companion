@@ -13,7 +13,22 @@ export class ServerConfig {
     this.version = SERVER_VERSION;
     this.port = process.env.PORT || DEFAULT_CONFIG.PORT;
     this.host = process.env.HOST || DEFAULT_CONFIG.HOST;
-    this.authRequired = process.env.AUTH_REQUIRED !== 'false';
+    this.enableTunnel = process.env.ENABLE_TUNNEL === 'true';
+    this.tunnelProvider = process.env.TUNNEL_PROVIDER || 'ngrok';
+
+    // Auto-require auth if exposed to internet
+    const explicitAuthRequired = process.env.AUTH_REQUIRED === 'true';
+    const explicitAuthDisabled = process.env.AUTH_REQUIRED === 'false';
+
+    if (this.isInternetExposed && !explicitAuthDisabled) {
+      // Force auth for internet exposure unless explicitly disabled
+      this.authRequired = true;
+      console.log('🔒 Internet exposure detected - authentication required');
+    } else {
+      // Use explicit setting or default to false for local
+      this.authRequired = explicitAuthRequired;
+    }
+
     this.authToken = this.authRequired ? process.env.AUTH_TOKEN || null : null;
     this.enableBonjour = process.env.ENABLE_BONJOUR !== 'false';
     this.enableTLS = process.env.ENABLE_TLS === 'true';
@@ -75,5 +90,23 @@ export class ServerConfig {
    */
   getDisplayHostname() {
     return this.host === '0.0.0.0' ? 'localhost' : this.host;
+  }
+
+  /**
+   * Check if server is exposed to internet
+   */
+  get isInternetExposed() {
+    // Tunnel explicitly enables internet exposure
+    if (this.enableTunnel) {
+      return true;
+    }
+
+    // Check if explicitly marked for public exposure
+    if (process.env.EXPOSE_PUBLIC === 'true') {
+      return true;
+    }
+
+    // Default to false (local only)
+    return false;
   }
 }

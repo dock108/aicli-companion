@@ -90,7 +90,6 @@ describe('ServerStartup', () => {
     beforeEach(() => {
       mockConfig = {
         getProtocol: mock.fn(() => 'http'),
-        getWSProtocol: mock.fn(() => 'ws'),
         getDisplayHostname: mock.fn(() => 'localhost'),
         port: 3001,
         enableTLS: false,
@@ -106,7 +105,6 @@ describe('ServerStartup', () => {
 
       // Verify config methods were called
       assert.strictEqual(mockConfig.getProtocol.mock.calls.length, 1);
-      assert.strictEqual(mockConfig.getWSProtocol.mock.calls.length, 1);
       assert.strictEqual(mockConfig.getDisplayHostname.mock.calls.length, 1);
 
       // Verify console.log was called multiple times

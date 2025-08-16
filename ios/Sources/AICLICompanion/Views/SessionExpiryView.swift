@@ -32,11 +32,19 @@ struct SessionExpiryView: View {
             }
             .navigationTitle("Session Status")
             .toolbar {
+                #if os(iOS)
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Clean Up") {
                         performCleanup()
                     }
                 }
+                #else
+                ToolbarItem(placement: .automatic) {
+                    Button("Clean Up") {
+                        performCleanup()
+                    }
+                }
+                #endif
             }
         }
         .alert("Session Expired", isPresented: $showingExpiredAlert) {
@@ -112,9 +120,16 @@ struct SessionExpiryRow: View {
         if session.isExpired {
             timeRemaining = "Expired"
         } else {
-            let formatter = RelativeDateTimeFormatter()
-            formatter.unitsStyle = .abbreviated
-            timeRemaining = formatter.localizedString(for: session.expiresAt, relativeTo: Date())
+            if #available(macOS 10.15, iOS 13.0, *) {
+                let formatter = RelativeDateTimeFormatter()
+                formatter.unitsStyle = .abbreviated
+                timeRemaining = formatter.localizedString(for: session.expiresAt, relativeTo: Date())
+            } else {
+                let formatter = DateFormatter()
+                formatter.dateStyle = .short
+                formatter.timeStyle = .short
+                timeRemaining = formatter.string(from: session.expiresAt)
+            }
         }
     }
 }

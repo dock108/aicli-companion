@@ -9,7 +9,7 @@ public struct AICLICompanionApp: App {
     public var body: some Scene {
         WindowGroup {
             ContentView()
-                .environmentObject(HTTPAICLIService())
+                .environmentObject(AICLIService.shared)
                 .environmentObject(SettingsManager())
         }
     }

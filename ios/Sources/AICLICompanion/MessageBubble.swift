@@ -47,84 +47,46 @@ struct MessageBubble: View {
     
     // MARK: - User Bubble (Right-aligned pill)
     private var userBubble: some View {
-        Text(message.content)
-            .font(Typography.font(.body))
-            .foregroundColor(.white)
-            .multilineTextAlignment(.leading)
-            .fixedSize(horizontal: false, vertical: true)
-            .textSelection(.enabled)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(
-                        LinearGradient(
-                            colors: Colors.accentPrimary(for: colorScheme),
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            )
-            .contextMenu {
-                Button(action: {
-                    clipboardManager.copyToClipboard(message.content)
-                }) {
-                    Label("Copy", systemImage: "doc.on.doc")
-                }
-                
-                Button(action: {
-                    shareMessage()
-                }) {
-                    Label("Share", systemImage: "square.and.arrow.up")
-                }
+        VStack(alignment: .trailing, spacing: 8) {
+            // Attachments (if any)
+            if let attachments = getAttachments() {
+                MessageAttachmentList(
+                    attachments: attachments,
+                    onTap: { attachment in
+                        handleAttachmentTap(attachment)
+                    }
+                )
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
             }
-    }
-    
-    // MARK: - AI Bubble (Left card with terminal styling)
-    private var aiBubble: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if hasCodeBlock {
-                // Parse and render code blocks
-                renderFormattedContent()
-            } else {
-                // Regular text content
+            
+            // Message text (if any)
+            if !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Text(message.content)
                     .font(Typography.font(.body))
-                    .foregroundColor(Colors.textPrimary(for: colorScheme))
+                    .foregroundColor(.white)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20)
+                            .fill(
+                                LinearGradient(
+                                    colors: Colors.accentPrimary(for: colorScheme),
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    )
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Colors.bgCard(for: colorScheme))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Colors.strokeLight, lineWidth: 1)
-                )
-        )
         .contextMenu {
             Button(action: {
                 clipboardManager.copyToClipboard(message.content)
             }) {
                 Label("Copy", systemImage: "doc.on.doc")
-            }
-            
-            if hasCodeBlock {
-                Button(action: {
-                    clipboardManager.copyToClipboard(extractPlainText(from: message.content))
-                }) {
-                    Label("Copy as Plain Text", systemImage: "doc.plaintext")
-                }
-                
-                Button(action: {
-                    clipboardManager.copyToClipboard(message.content)
-                }) {
-                    Label("Copy as Markdown", systemImage: "doc.richtext")
-                }
             }
             
             Button(action: {
@@ -135,18 +97,136 @@ struct MessageBubble: View {
         }
     }
     
-    // MARK: - Markdown Detection
-    private var hasCodeBlock: Bool {
-        // Check for any markdown formatting
-        return message.content.contains("```") ||
-               message.content.contains("`") ||
-               message.content.contains("**") ||
-               message.content.contains("*") ||
-               message.content.contains("#") ||
-               message.content.contains("[") ||
-               message.content.contains("- ") ||
-               message.content.contains("* ") ||
-               message.content.range(of: "^\\d+\\. ", options: .regularExpression) != nil
+    // MARK: - AI Bubble (Left card with terminal styling)
+    private var aiBubble: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Message content
+            VStack(alignment: .leading, spacing: 0) {
+                // Render formatted content
+                Text(parseMarkdown(message.content))
+                    .font(Typography.font(.body))
+                    .foregroundColor(Colors.textPrimary(for: colorScheme))
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Colors.bgCard(for: colorScheme))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Colors.strokeLight, lineWidth: 1)
+                    )
+            )
+            
+            // Attachments (if any)
+            if let attachments = getAttachments() {
+                MessageAttachmentList(
+                    attachments: attachments,
+                    onTap: { attachment in
+                        handleAttachmentTap(attachment)
+                    }
+                )
+                .padding(.horizontal, 16)
+            }
+        }
+        .contextMenu {
+            Button(action: {
+                clipboardManager.copyToClipboard(message.content)
+            }) {
+                Label("Copy", systemImage: "doc.on.doc")
+            }
+            
+            // Always show both copy options for any message
+            Button(action: {
+                clipboardManager.copyToClipboard(extractPlainText(from: message.content))
+            }) {
+                Label("Copy as Plain Text", systemImage: "doc.plaintext")
+            }
+            
+            Button(action: {
+                clipboardManager.copyToClipboard(message.content)
+            }) {
+                Label("Copy as Raw Text", systemImage: "doc.richtext")
+            }
+            
+            Button(action: {
+                shareMessage()
+            }) {
+                Label("Share", systemImage: "square.and.arrow.up")
+            }
+        }
+    }
+    
+    // MARK: - Markdown Parsing
+    private func parseMarkdown(_ text: String) -> AttributedString {
+        var result = text
+        var formattingRanges: [(Range<String.Index>, FormattingType)] = []
+        
+        // Handle headers first (###, ##, #)
+        let headerPattern = #"^(#{1,3})\s+(.+)$"#
+        if let headerRegex = try? NSRegularExpression(pattern: headerPattern, options: [.anchorsMatchLines]) {
+            let matches = headerRegex.matches(in: result, options: [], range: NSRange(location: 0, length: result.count))
+            
+            for match in matches.reversed() {
+                if let fullRange = Range(match.range, in: result),
+                   let hashRange = Range(match.range(at: 1), in: result),
+                   let contentRange = Range(match.range(at: 2), in: result) {
+                    let hashCount = result[hashRange].count
+                    let headerText = String(result[contentRange])
+                    let newStart = fullRange.lowerBound
+                    result.replaceSubrange(fullRange, with: headerText)
+                    let newEnd = result.index(newStart, offsetBy: headerText.count)
+                    
+                    let headerType: FormattingType = hashCount == 1 ? .header1 : hashCount == 2 ? .header2 : .header3
+                    formattingRanges.append((newStart..<newEnd, headerType))
+                }
+            }
+        }
+        
+        // Handle **bold** text
+        let boldPattern = #"\*\*(.*?)\*\*"#
+        if let boldRegex = try? NSRegularExpression(pattern: boldPattern, options: []) {
+            let matches = boldRegex.matches(in: result, options: [], range: NSRange(location: 0, length: result.count))
+            
+            for match in matches.reversed() {
+                if let swiftRange = Range(match.range, in: result),
+                   let contentRange = Range(match.range(at: 1), in: result) {
+                    let boldText = String(result[contentRange])
+                    let newStart = swiftRange.lowerBound
+                    result.replaceSubrange(swiftRange, with: boldText)
+                    let newEnd = result.index(newStart, offsetBy: boldText.count)
+                    formattingRanges.append((newStart..<newEnd, .bold))
+                }
+            }
+        }
+        
+        // Create attributed string and apply all formatting
+        var attributedString = AttributedString(result)
+        
+        for (range, formatType) in formattingRanges {
+            if let attrStart = AttributedString.Index(range.lowerBound, within: attributedString),
+               let attrEnd = AttributedString.Index(range.upperBound, within: attributedString) {
+                switch formatType {
+                case .header1:
+                    attributedString[attrStart..<attrEnd].font = Typography.font(.heading1).bold()
+                case .header2:
+                    attributedString[attrStart..<attrEnd].font = Typography.font(.heading2).bold()
+                case .header3:
+                    attributedString[attrStart..<attrEnd].font = Typography.font(.heading3).bold()
+                case .bold:
+                    attributedString[attrStart..<attrEnd].font = Typography.font(.body).bold()
+                }
+            }
+        }
+        
+        return attributedString
+    }
+    
+    private enum FormattingType {
+        case header1, header2, header3, bold
     }
     
     // MARK: - Formatted Content Rendering
@@ -227,6 +307,21 @@ struct MessageBubble: View {
                             .fixedSize(horizontal: false, vertical: true)
                             .textSelection(.enabled)
                     }
+                    
+                case .listItemNumbered(let text, let number):
+                    HStack(alignment: .top, spacing: 8) {
+                        Text("\(number).")
+                            .font(Typography.font(.body))
+                            .foregroundColor(Colors.textSecondary(for: colorScheme))
+                            .frame(width: 20, alignment: .leading)
+                        
+                        Text(text)
+                            .font(Typography.font(.body))
+                            .foregroundColor(Colors.textPrimary(for: colorScheme))
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .textSelection(.enabled)
+                    }
                 }
             }
         }
@@ -237,7 +332,7 @@ struct MessageBubble: View {
         case 1: return Typography.font(.heading1)
         case 2: return Typography.font(.heading2)
         case 3: return Typography.font(.heading3)
-        default: return Typography.font(.headline)
+        default: return Typography.font(.heading3)
         }
     }
     
@@ -326,10 +421,11 @@ struct MessageBubble: View {
             return .listItem(String(trimmed.dropFirst(2)), ordered: false)
         }
         
-        // Ordered list (simple check for now)
+        // Ordered list - extract the actual number
         if let firstChar = trimmed.first, firstChar.isNumber, trimmed.dropFirst().hasPrefix(". ") {
+            let numberPart = trimmed.prefix(while: { $0.isNumber })
             let content = trimmed.drop(while: { $0.isNumber }).dropFirst(2)
-            return .listItem(String(content), ordered: true)
+            return .listItemNumbered(String(content), number: String(numberPart))
         }
         
         return nil
@@ -499,6 +595,87 @@ struct MessageBubble: View {
         #endif
     }
     
+    // MARK: - Attachment Methods
+    
+    private func getAttachments() -> [AttachmentData]? {
+        guard let richContent = message.richContent,
+              case .attachments(let attachmentsData) = richContent.data else {
+            return nil
+        }
+        
+        // Convert AttachmentInfo to AttachmentData
+        return attachmentsData.attachments.compactMap { attachmentInfo in
+            guard let base64Data = attachmentInfo.base64Data,
+                  let data = Data(base64Encoded: base64Data) else {
+                return nil
+            }
+            
+            return AttachmentData(
+                id: attachmentInfo.id,
+                type: attachmentTypeFromMimeType(attachmentInfo.mimeType),
+                name: attachmentInfo.name,
+                data: data,
+                mimeType: attachmentInfo.mimeType,
+                size: attachmentInfo.size
+            )
+        }
+    }
+    
+    private func attachmentTypeFromMimeType(_ mimeType: String) -> AttachmentType {
+        if mimeType.starts(with: "image/") {
+            return .image
+        } else if mimeType.contains("code") || mimeType.contains("text/") {
+            return .code
+        } else {
+            return .document
+        }
+    }
+    
+    private func handleAttachmentTap(_ attachment: AttachmentData) {
+        if attachment.isImage {
+            showImageViewer(attachment)
+        } else {
+            shareAttachment(attachment)
+        }
+    }
+    
+    private func showImageViewer(_ attachment: AttachmentData) {
+        // TODO: Implement image viewer
+        print("🖼️ Opening image viewer for: \(attachment.name)")
+    }
+    
+    private func shareAttachment(_ attachment: AttachmentData) {
+        #if os(iOS)
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first,
+              let rootViewController = window.rootViewController else { return }
+        
+        // Create a temporary file
+        let tempDir = FileManager.default.temporaryDirectory
+        let tempFile = tempDir.appendingPathComponent(attachment.name)
+        
+        do {
+            try attachment.data.write(to: tempFile)
+            
+            let activityVC = UIActivityViewController(
+                activityItems: [tempFile],
+                applicationActivities: nil
+            )
+            
+            if let popover = activityVC.popoverPresentationController {
+                popover.sourceView = window
+                popover.sourceRect = CGRect(x: window.bounds.midX, y: window.bounds.midY, width: 0, height: 0)
+                popover.permittedArrowDirections = []
+            }
+            
+            rootViewController.present(activityVC, animated: true)
+        } catch {
+            print("❌ Failed to share attachment: \(error)")
+        }
+        #endif
+    }
+    
+    
     private func extractPlainText(from markdown: String) -> String {
         var plainText = markdown
         
@@ -541,6 +718,7 @@ private enum ContentPart {
     case italic(String)
     case link(text: String, url: String)
     case listItem(String, ordered: Bool)
+    case listItemNumbered(String, number: String)
 }
 
 // MARK: - Code Block View

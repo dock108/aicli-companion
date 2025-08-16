@@ -12,6 +12,10 @@ export class ClaudeStreamParser {
     this.codeBlockLanguage = '';
     this.jsonBuffer = '';
     this.lastStatusMessage = null;
+    // Thinking indicator tracking
+    this.thinkingStartTime = null;
+    this.currentActivity = null;
+    this.tokenCount = 0;
   }
 
   /**
@@ -63,9 +67,49 @@ export class ClaudeStreamParser {
           // Process tool_use messages for activity updates
           else if (parsed.type === 'tool_use' && parsed.tool_name) {
             console.log('🔧 Found tool use:', parsed.tool_name);
+
+            // Track activity for thinking indicator
+            this.currentActivity = this.mapToolToActivity(parsed.tool_name);
+            if (!this.thinkingStartTime) {
+              this.thinkingStartTime = Date.now();
+            }
+
             chunks.push(
               this.createChunk('tool_use', '', {
-                metadata: { toolName: parsed.tool_name },
+                metadata: {
+                  toolName: parsed.tool_name,
+                  activity: this.currentActivity,
+                  thinkingDuration: this.getThinkingDuration(),
+                },
+              })
+            );
+          }
+          // Process thinking/progress messages
+          else if (parsed.type === 'thinking' || parsed.type === 'progress') {
+            console.log('🤔 Found thinking indicator:', parsed);
+
+            if (!this.thinkingStartTime) {
+              this.thinkingStartTime = Date.now();
+            }
+
+            // Update token count if provided
+            if (parsed.token_count) {
+              this.tokenCount = parsed.token_count;
+            }
+
+            // Update activity if provided
+            if (parsed.activity) {
+              this.currentActivity = parsed.activity;
+            }
+
+            chunks.push(
+              this.createChunk('thinking', '', {
+                metadata: {
+                  activity: this.currentActivity || 'Thinking',
+                  duration: this.getThinkingDuration(),
+                  tokenCount: this.tokenCount,
+                  isThinking: true,
+                },
               })
             );
           }
@@ -393,6 +437,42 @@ export class ClaudeStreamParser {
     }
 
     return parseInt(cleanStr) || null;
+  }
+
+  /**
+   * Map tool names to activity descriptions
+   */
+  mapToolToActivity(toolName) {
+    const activityMap = {
+      Read: 'Reading',
+      Write: 'Writing',
+      Edit: 'Editing',
+      Bash: 'Executing',
+      Search: 'Searching',
+      Grep: 'Searching',
+      TodoWrite: 'Planning',
+      Task: 'Processing',
+      WebFetch: 'Fetching',
+      WebSearch: 'Searching',
+    };
+    return activityMap[toolName] || 'Processing';
+  }
+
+  /**
+   * Get the current thinking duration in seconds
+   */
+  getThinkingDuration() {
+    if (!this.thinkingStartTime) return 0;
+    return Math.floor((Date.now() - this.thinkingStartTime) / 1000);
+  }
+
+  /**
+   * Reset thinking indicator state
+   */
+  resetThinkingState() {
+    this.thinkingStartTime = null;
+    this.currentActivity = null;
+    this.tokenCount = 0;
   }
 
   /**

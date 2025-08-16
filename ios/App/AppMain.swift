@@ -8,7 +8,7 @@ struct AppMain: App {
     @UIApplicationDelegateAdaptor(AICLICompanion.AppDelegate.self) var appDelegate
     #endif
     
-    @StateObject private var aicliService = AICLICompanion.HTTPAICLIService()
+    @StateObject private var aicliService = AICLICompanion.AICLIService.shared
     @StateObject private var settingsManager = AICLICompanion.SettingsManager()
     @StateObject private var pushNotificationService = AICLICompanion.PushNotificationService.shared
     
@@ -16,7 +16,7 @@ struct AppMain: App {
         // Request enhanced push notification authorization on app launch
         Task {
             do {
-                _ = try await AICLICompanion.EnhancedPushNotificationService.shared.requestAuthorizationWithOptions()
+                _ = try await AICLICompanion.PushNotificationService.shared.requestAuthorizationWithOptions()
             } catch {
                 print("Failed to request notification authorization: \(error)")
             }
@@ -35,7 +35,7 @@ struct AppMain: App {
                     UIApplication.shared.applicationIconBadgeNumber = 0
                     #endif
                     // Also reset the notification service's badge tracking
-                    AICLICompanion.EnhancedPushNotificationService.shared.resetBadgeCount()
+                    AICLICompanion.PushNotificationService.shared.resetBadgeCount()
                     print("📱 App became active - cleared badge count")
                 }
         }

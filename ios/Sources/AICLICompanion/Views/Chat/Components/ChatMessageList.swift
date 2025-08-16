@@ -15,6 +15,14 @@ struct ChatMessageList: View {
     @Binding var scrollViewHeight: CGFloat
     @Binding var contentHeight: CGFloat
     
+    // Enhanced scroll state management
+    @State private var hasInitiallyScrolled: Bool = false
+    @State private var isScrollingProgrammatically: Bool = false
+    @State private var isUserScrolling: Bool = false
+    @State private var scrollDebounceTask: Task<Void, Never>?
+    @State private var lastReadMessageId: UUID?
+    @State private var userScrollTimer: Timer?
+    
     // Callbacks
     let onScrollPositionChanged: (CGFloat) -> Void
     
@@ -34,7 +42,9 @@ struct ChatMessageList: View {
                         }
                         
                         if isLoading {
-                            ChatLoadingView(progressInfo: progressInfo, colorScheme: colorScheme)
+                            // Use ThinkingIndicator with enhanced progress info
+                            ThinkingIndicator(progressInfo: progressInfo)
+                                .padding(.horizontal, 4)
                                 .id("loading-indicator")
                         }
                     }
@@ -49,14 +59,21 @@ struct ChatMessageList: View {
                 }
                 .onAppear {
                     scrollViewHeight = geometry.size.height
-                    // Scroll to bottom when conversation opens
-                    scrollToBottomReliably(proxy: proxy)
+                    initializeScrollPosition(proxy: proxy)
                 }
                 .onChange(of: geometry.size.height) { _, newHeight in
                     scrollViewHeight = newHeight
                 }
                 .onPreferenceChange(ContentHeightPreferenceKey.self) { value in
+                    let previousContentHeight = contentHeight
                     contentHeight = value
+                    
+                    // Only auto-scroll for keyboard appearance, not general content changes
+                    // This prevents scrolling issues when reviewing history
+                    let isKeyboardRelatedChange = abs(value - previousContentHeight) > 200
+                    if hasInitiallyScrolled && isKeyboardRelatedChange && isNearBottom && !isScrollingProgrammatically {
+                        scrollToBottomSmooth(proxy: proxy)
+                    }
                 }
                 .background(
                     GeometryReader { scrollGeometry in
@@ -69,8 +86,7 @@ struct ChatMessageList: View {
                 )
                 .coordinateSpace(name: "scroll")
                 .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
-                    lastScrollPosition = -value
-                    onScrollPositionChanged(-value)
+                    handleScrollPositionChange(-value)
                 }
                 .onChange(of: messages.count) { oldCount, newCount in
                     // Handle all message count increases (including initial load)
@@ -78,84 +94,216 @@ struct ChatMessageList: View {
                         handleMessageCountChange(oldCount: oldCount, newCount: newCount, proxy: proxy)
                     }
                 }
-                .onChange(of: messages.isEmpty) { wasEmpty, isEmpty in
+                .onChange(of: messages.isEmpty) { _, isEmpty in
                     // Handle when messages array changes from empty to populated
-                    if wasEmpty && !isEmpty {
+                    if !isEmpty {
                         // Messages just loaded, scroll to bottom
                         scrollToBottomReliably(proxy: proxy)
                     }
                 }
+                .onChange(of: isLoading) { newLoading in
                 .onChange(of: isLoading) { oldLoading, newLoading in
                     handleLoadingStateChange(oldLoading: oldLoading, newLoading: newLoading, proxy: proxy)
                 }
+                .onReceive(NotificationCenter.default.publisher(for: .scrollToBottom)) { _ in
+                    scrollToBottomSmooth(proxy: proxy)
+                }
             }
+        }
+    }
+    
+    // MARK: - Enhanced Scroll Management
+    
+    private func initializeScrollPosition(proxy: ScrollViewProxy) {
+        // Load the last read message from UserDefaults
+        loadLastReadMessage()
+        
+        // Determine initial scroll position
+        if messages.isEmpty {
+            hasInitiallyScrolled = true
+            return
+        }
+        
+        // If we have a saved last read message, try to scroll to it
+        if let lastReadId = lastReadMessageId,
+           messages.contains(where: { $0.id == lastReadId }) {
+            scrollToSavedPosition(messageId: lastReadId, proxy: proxy)
+        } else {
+            // Default to scrolling to bottom
+            scrollToBottomReliably(proxy: proxy)
+        }
+    }
+    
+    private func handleScrollPositionChange(_ newPosition: CGFloat) {
+        // Cancel any pending debounce task
+        scrollDebounceTask?.cancel()
+        
+        // Track user scrolling state
+        if !isScrollingProgrammatically {
+            isUserScrolling = true
+            userScrollTimer?.invalidate()
+            userScrollTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
+                self.isUserScrolling = false
+            }
+        }
+        
+        // Debounce rapid scroll changes to prevent performance issues
+        scrollDebounceTask = Task {
+            try? await Task.sleep(nanoseconds: 50_000_000) // 50ms debounce
+            
+            await MainActor.run {
+                guard !Task.isCancelled else { return }
+                
+                lastScrollPosition = newPosition
+                updateNearBottomStatus()
+                onScrollPositionChanged(newPosition)
+                
+                // Save scroll position periodically
+                saveScrollPosition()
+            }
+        }
+    }
+    
+    private func updateNearBottomStatus() {
+        let threshold: CGFloat = 100
+        let maxScroll = max(0, contentHeight - scrollViewHeight)
+        let isCurrentlyNearBottom = lastScrollPosition >= maxScroll - threshold
+        
+        if isCurrentlyNearBottom != isNearBottom {
+            isNearBottom = isCurrentlyNearBottom
         }
     }
     
     private func handleMessageCountChange(oldCount: Int, newCount: Int, proxy: ScrollViewProxy) {
         guard newCount > oldCount else { return }
         
-        // Determine if we should auto-scroll to the newest message
+        // Don't auto-scroll if user is actively scrolling or reviewing history
+        guard !isScrollingProgrammatically else { return }
+        
         let shouldScroll: Bool
         
         if oldCount == 0 {
-            // Initial load - always scroll to bottom
+            // Initial load - scroll to saved position or bottom
             shouldScroll = true
         } else if let lastMessage = messages.last {
-            // New message added - check scroll behavior
             if lastMessage.sender == .user {
                 // Always scroll for user messages (they just sent it)
                 shouldScroll = true
             } else {
-                // For assistant messages, only scroll if user is near bottom
-                shouldScroll = isNearBottom
+                // For assistant messages, only scroll if already near bottom
+                // This allows users to review history without interruption
+                shouldScroll = isNearBottom && !isUserScrolling
             }
         } else {
             shouldScroll = false
         }
         
         if shouldScroll {
-            if let lastMessage = messages.last {
-                scrollToMessage(lastMessage.id, proxy: proxy, animated: oldCount > 0 && lastMessage.sender == .assistant)
+            if oldCount == 0 {
+                // Initial load - use saved position or go to bottom
+                initializeScrollPosition(proxy: proxy)
+            } else if let lastMessage = messages.last {
+                scrollToMessage(lastMessage.id, proxy: proxy, animated: lastMessage.sender == .assistant)
             }
+        }
+        
+        // Update last read message
+        if let lastMessage = messages.last {
+            lastReadMessageId = lastMessage.id
+            saveLastReadMessage()
         }
     }
     
     private func handleLoadingStateChange(oldLoading: Bool, newLoading: Bool, proxy: ScrollViewProxy) {
-        // When loading starts (thinking indicator appears)
         if !oldLoading && newLoading && isNearBottom {
             scrollToLoadingIndicator(proxy: proxy)
         }
     }
     
     private func scrollToMessage(_ messageId: UUID, proxy: ScrollViewProxy, animated: Bool = true) {
-        if animated {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                proxy.scrollTo(messageId, anchor: .bottom)
-            }
-        } else {
+        isScrollingProgrammatically = true
+        
+        let action = {
             proxy.scrollTo(messageId, anchor: .bottom)
         }
+        
+        if animated {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                action()
+            }
+        } else {
+            action()
+        }
+        
+        // Reset programmatic flag after animation
+        DispatchQueue.main.asyncAfter(deadline: .now() + (animated ? 0.5 : 0.1)) {
+            isScrollingProgrammatically = false
+        }
+    }
+    
+    private func scrollToSavedPosition(messageId: UUID, proxy: ScrollViewProxy) {
+        // Scroll to saved message without animation to restore position
+        proxy.scrollTo(messageId, anchor: .center)
+        hasInitiallyScrolled = true
     }
     
     private func scrollToLoadingIndicator(proxy: ScrollViewProxy) {
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+        isScrollingProgrammatically = true
+        
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
             proxy.scrollTo("loading-indicator", anchor: .bottom)
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            isScrollingProgrammatically = false
         }
     }
     
-    private func scrollToBottomReliably(proxy: ScrollViewProxy) {
+    private func scrollToBottomSmooth(proxy: ScrollViewProxy) {
         guard let lastMessage = messages.last else { return }
-        
-        // Multiple attempts with increasing delays to handle render timing
-        DispatchQueue.main.async {
-            proxy.scrollTo(lastMessage.id, anchor: .bottom)
+        scrollToMessage(lastMessage.id, proxy: proxy, animated: true)
+    }
+    
+    private func scrollToBottomReliably(proxy: ScrollViewProxy) {
+        guard let lastMessage = messages.last else {
+            hasInitiallyScrolled = true
+            return
         }
+        
+        // Use a more reliable approach with proper timing
+        isScrollingProgrammatically = true
+        
+        // Immediate scroll (no animation for reliability)
+        proxy.scrollTo(lastMessage.id, anchor: .bottom)
+        
+        // Follow-up scroll after a short delay to handle render timing
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             proxy.scrollTo(lastMessage.id, anchor: .bottom)
+            self.hasInitiallyScrolled = true
+            self.isScrollingProgrammatically = false
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            proxy.scrollTo(lastMessage.id, anchor: .bottom)
+    }
+    
+    // MARK: - Persistence
+    
+    private func loadLastReadMessage() {
+        if let savedId = UserDefaults.standard.string(forKey: "lastReadMessageId") {
+            lastReadMessageId = UUID(uuidString: savedId)
+        }
+    }
+    
+    private func saveLastReadMessage() {
+        UserDefaults.standard.set(lastReadMessageId?.uuidString, forKey: "lastReadMessageId")
+    }
+    
+    private func saveScrollPosition() {
+        // Only save if we're not programmatically scrolling
+        guard !isScrollingProgrammatically else { return }
+        
+        // Save the current message that's visible at the top
+        if let visibleMessage = messages.last {
+            lastReadMessageId = visibleMessage.id
+            UserDefaults.standard.set(visibleMessage.id.uuidString, forKey: "lastReadMessageId")
         }
     }
 }

@@ -7,11 +7,10 @@ import UIKit
 @available(iOS 16.0, macOS 13.0, *)
 struct ChatView: View {
     // MARK: - Environment & State
-    @EnvironmentObject var aicliService: HTTPAICLIService
+    @EnvironmentObject var aicliService: AICLIService
     @EnvironmentObject var settings: SettingsManager
-    @StateObject private var viewModel: ChatViewModel
+    @ObservedObject private var viewModel = ChatViewModel.shared
     @StateObject private var sessionManager = ChatSessionManager.shared
-    @StateObject private var queueManager = MessageQueueManager.shared
     
     @State private var messageText = ""
     @State private var keyboardHeight: CGFloat = 0
@@ -24,6 +23,7 @@ struct ChatView: View {
     @State private var lastScrollPosition: CGFloat = 0
     @State private var scrollViewHeight: CGFloat = 0
     @State private var contentHeight: CGFloat = 0
+    @State private var unreadMessageCount: Int = 0
     
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
@@ -46,10 +46,6 @@ struct ChatView: View {
         self.selectedProject = selectedProject
         self.session = session
         self.onSwitchProject = onSwitchProject
-        
-        // ViewModule will be created lazily when environment objects are available
-        // We'll initialize it in body where we have access to environment objects
-        self._viewModel = StateObject(wrappedValue: ChatViewModel(aicliService: HTTPAICLIService.shared, settings: SettingsManager.shared))
     }
     
     // MARK: - Body
@@ -71,17 +67,16 @@ struct ChatView: View {
                     )
                 }
                 
-                // Message queue indicator
-                MessageQueueIndicator(
-                    queuedMessageCount: queueManager.queuedMessageCount,
-                    isReceivingQueued: queueManager.isReceivingQueued,
-                    oldestQueuedTimestamp: queueManager.oldestQueuedTimestamp
-                )
+                
+                // FEATURE FLAG: Auto-response controls (currently hidden)
+                if FeatureFlags.showAutoModeUI {
+                    AutoResponseControls()
+                }
                 
                 // Message list
                 ChatMessageList(
                     messages: viewModel.messages,
-                    isLoading: viewModel.isLoading,
+                    isLoading: viewModel.isLoadingForProject(selectedProject?.path ?? ""),
                     progressInfo: viewModel.progressInfo,
                     isIPad: isIPad,
                     horizontalSizeClass: horizontalSizeClass,
@@ -92,18 +87,56 @@ struct ChatView: View {
                     contentHeight: $contentHeight,
                     onScrollPositionChanged: checkIfNearBottom
                 )
+                #if os(iOS)
+                .refreshable {
+                    // WhatsApp/iMessage pattern: Just reload local conversation
+                    print("🔄 User triggered pull-to-refresh - reloading conversation")
+                    
+                    // Reload messages from local database (instant)
+                    if let project = selectedProject, let sessionId = viewModel.currentSessionId {
+                        viewModel.loadMessages(for: project, sessionId: sessionId)
+                    }
+                    
+                    // Small delay for visual feedback
+                    try? await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
+                }
+                #endif
+                
+                // FEATURE FLAG: Queue status indicator (currently hidden)
+                if FeatureFlags.showQueueUI && viewModel.hasQueuedMessages {
+                    HStack {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.system(size: 14))
+                            .foregroundColor(Colors.accentWarning)
+                        
+                        Text("\(viewModel.queuedMessageCount) message\(viewModel.queuedMessageCount == 1 ? "" : "s") queued • Max \(viewModel.maxQueueSize)")
+                            .font(Typography.font(.caption))
+                            .foregroundColor(Colors.textSecondary(for: colorScheme))
+                        
+                        Spacer()
+                    }
+                    .padding(.horizontal, isIPad && horizontalSizeClass == .regular ? 40 : 16)
+                    .padding(.vertical, 8)
+                    .background(Colors.bgCard(for: colorScheme).opacity(0.8))
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
                 
                 // Input bar
                 ChatInputBar(
                     messageText: $messageText,
-                    isLoading: viewModel.isLoading,
+                    isLoading: viewModel.isLoadingForProject(selectedProject?.path ?? ""),
                     isIPad: isIPad,
                     horizontalSizeClass: horizontalSizeClass,
                     colorScheme: colorScheme,
-                    onSendMessage: sendMessage
+                    onSendMessage: { attachments in
+                        sendMessage(with: attachments)
+                    },
+                    isSendBlocked: selectedProject.map { viewModel.shouldBlockSending(for: $0) } ?? true
                 )
                 .offset(y: inputBarOffset)
             }
+            
+            // Scroll to bottom FAB - Removed per user request
         }
         .copyConfirmationOverlay()
         .onAppear {
@@ -113,11 +146,6 @@ struct ChatView: View {
         .onDisappear {
             cleanupView()
         }
-        #if os(iOS)
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-            refreshMessagesOnActivation()
-        }
-        #endif
         .onChange(of: selectedProject?.path) { oldPath, newPath in
             if let oldPath = oldPath, let newPath = newPath, oldPath != newPath {
                 // Save messages for the old project before switching
@@ -129,6 +157,9 @@ struct ChatView: View {
                 viewModel.currentProject = selectedProject
                 handleProjectChange()
             }
+        }
+        .onChange(of: viewModel.messages.count) { oldCount, newCount in
+            handleMessageCountChange(oldCount: oldCount, newCount: newCount)
         }
         .alert("Permission Required", isPresented: $showingPermissionAlert) {
             if let request = permissionRequest {
@@ -179,22 +210,45 @@ struct ChatView: View {
                     
                     print("🔷 ChatView: Loaded \(self.viewModel.messages.count) messages for restored session")
                     
-                    // Check for any new messages that may have been saved while in a different project
-                    self.refreshMessagesAfterProjectSwitch()
+                    // Clear loading state now that session is fully restored
+                    self.viewModel.clearLoadingState(for: project.path)
+                    
+                    // WhatsApp/iMessage pattern: Messages loaded from local database only
+                    // Push notifications will deliver any new messages automatically
                     
                 case .failure(let error):
-                    // No existing session, user can start one when ready
-                    print("ℹ️ No existing session (\(error.localizedDescription)), waiting for user to start")
+                    // No existing session, but check if we have saved messages for this project
+                    print("ℹ️ No existing session (\(error.localizedDescription)), checking for saved conversations")
                     
                     // Clear any stale session data
                     self.viewModel.setActiveSession(nil)
                     self.viewModel.currentSessionId = nil
-                    self.viewModel.messages.removeAll()
                     
-                    // Check for pending messages that might have been saved without a session ID
-                    if let pendingMessages = BackgroundSessionCoordinator.shared.retrievePendingMessages(for: project.path) {
-                        print("🔄 ChatView: Found \(pendingMessages.count) pending messages for project")
-                        self.viewModel.messages = pendingMessages
+                    // Clear any stuck loading state when no session exists
+                    self.viewModel.clearLoadingState(for: project.path)
+                    
+                    // WhatsApp/iMessage pattern: Check if we have any saved conversations for this project
+                    let persistenceService = MessagePersistenceService.shared
+                    if let metadata = persistenceService.getSessionMetadata(for: project.path),
+                       let sessionId = metadata.aicliSessionId {
+                        print("🔄 ChatView: Found saved conversation with session \(sessionId), loading messages")
+                        
+                        // Load the saved conversation
+                        self.viewModel.loadMessages(for: project, sessionId: sessionId)
+                        
+                        // Set the session ID for future messages
+                        self.viewModel.currentSessionId = sessionId
+                        
+                        print("✅ ChatView: Loaded \(self.viewModel.messages.count) messages from saved conversation")
+                        
+                        // Clear loading state now that saved conversation is loaded
+                        self.viewModel.clearLoadingState(for: project.path)
+                    } else {
+                        // Truly no conversation exists yet
+                        print("ℹ️ ChatView: No saved conversation found for \(project.name)")
+                        self.viewModel.messages.removeAll()
+                        // Clear any stuck loading state when there's no conversation
+                        self.viewModel.clearLoadingState(for: project.path)
                     }
                 }
             }
@@ -206,6 +260,9 @@ struct ChatView: View {
         
         // Save messages
         viewModel.saveMessages(for: project)
+        
+        // Stop polling (will resume if needed when returning)
+        viewModel.onDisappear()
         
         // Clean up keyboard observers
         // swiftlint:disable:next notification_center_detachment
@@ -219,14 +276,14 @@ struct ChatView: View {
         
         print("🔄 ChatView: Project changed to '\(project.name)'")
         
-        // Note: At this point, selectedProject is already the NEW project
-        // We can't save messages for the old project here because we don't have a reference to it
-        // Messages should have been saved in cleanupView() when leaving the old project
+        // The currentProject setter will handle saving old messages and loading new ones
+        // Just update the currentProject and it will switch contexts
+        viewModel.currentProject = project
         
-        // Clear current state
-        viewModel.messages.removeAll()
-        viewModel.activeSession = nil
-        viewModel.currentSessionId = nil  // Clear Claude's session ID to prevent cross-project contamination
+        // Clear loading state for old project
+        viewModel.isLoading = false  // Clear loading state
+        viewModel.progressInfo = nil  // Clear progress info
+        // Polling removed - using APNS delivery
         messageText = ""
         
         // Set up for new project
@@ -234,7 +291,7 @@ struct ChatView: View {
     }
     
     // MARK: - Actions
-    private func sendMessage() {
+    private func sendMessage(with attachments: [AttachmentData] = []) {
         guard let project = selectedProject else { return }
         
         let text = messageText
@@ -254,7 +311,7 @@ struct ChatView: View {
         // Send message directly - let Claude handle session creation
         // For fresh chats: currentSessionId will be nil
         // For continued chats: currentSessionId will have Claude's session ID
-        viewModel.sendMessage(text, for: project)
+        viewModel.sendMessage(text, for: project, attachments: attachments)
     }
     
     private func clearCurrentSession() {
@@ -264,21 +321,14 @@ struct ChatView: View {
         // Just clear the local session ID so next message starts fresh
         if let currentSessionId = viewModel.currentSessionId {
             print("🗑️ Clearing local session: \(currentSessionId)")
-            viewModel.currentSessionId = nil
         }
         
-        // Clear messages from UI
-        viewModel.messages.removeAll()
-        
-        // Clear active session
-        viewModel.setActiveSession(nil)
+        // Use the new comprehensive clear function
+        viewModel.clearSession()
         
         // Clear persisted messages and session data
         let persistenceService = MessagePersistenceService.shared
         persistenceService.clearMessages(for: project.path)
-        
-        // Clear current session ID - next message will be a fresh chat
-        viewModel.currentSessionId = nil
         
         // HTTP doesn't maintain active sessions - they're request-scoped
     }
@@ -293,9 +343,9 @@ struct ChatView: View {
         
         let httpURL = "http://\(connection.address):\(connection.port)"
         print("🔗 ChatView: Checking HTTP connection to \(httpURL)")
-        print("   Current connection state: \(HTTPAICLIService.shared.isConnected)")
+        print("   Current connection state: \(AICLIService.shared.isConnected)")
         
-        if HTTPAICLIService.shared.isConnected {
+        if AICLIService.shared.isConnected {
             print("✅ ChatView: HTTP service already connected")
             completion()
             return
@@ -303,10 +353,10 @@ struct ChatView: View {
         
         print("🔗 ChatView: Starting HTTP connection...")
         print("   aicliService instance: \(ObjectIdentifier(aicliService))")
-        print("   HTTPAICLIService.shared instance: \(ObjectIdentifier(HTTPAICLIService.shared))")
+        print("   AICLIService.shared instance: \(ObjectIdentifier(AICLIService.shared))")
         
         // Use the shared instance for connection to ensure consistency
-        HTTPAICLIService.shared.connect(
+        AICLIService.shared.connect(
             to: connection.address,
             port: connection.port,
             authToken: connection.authToken
@@ -396,89 +446,42 @@ struct ChatView: View {
     private func checkIfNearBottom(_ position: CGFloat) {
         let threshold: CGFloat = 100
         let maxScrollPosition = max(0, contentHeight - scrollViewHeight)
+        let wasNearBottom = isNearBottom
         isNearBottom = (maxScrollPosition - position) <= threshold
-    }
-    
-    // MARK: - Message Refresh
-    private func refreshMessagesAfterProjectSwitch() {
-        guard let project = selectedProject,
-              let sessionId = viewModel.currentSessionId else {
-            print("🔄 No active session to refresh after project switch")
-            return
-        }
         
-        print("🔄 ChatView: Checking for new messages after switching to project '\(project.name)'")
-        print("🔄 Current state: \(viewModel.messages.count) messages in memory")
-        
-        // Reload messages from persistence to get any that were saved while in different project
-        let savedMessages = MessagePersistenceService.shared.loadMessages(for: project.path, sessionId: sessionId)
-        print("🔄 Found \(savedMessages.count) messages in persistence")
-        
-        // Use the deduplication method to safely merge messages
-        let newMessageCount = viewModel.mergePersistedMessages(savedMessages)
-        
-        if newMessageCount > 0 {
-            print("✅ ChatView: Successfully merged \(newMessageCount) new messages after project switch")
-        } else {
-            print("🔄 No new messages found after switching to project '\(project.name)'")
+        // Reset unread count when user scrolls to bottom
+        if isNearBottom && !wasNearBottom {
+            unreadMessageCount = 0
         }
     }
     
-    private func refreshMessagesOnActivation() {
-        guard let project = selectedProject,
-              let sessionId = viewModel.currentSessionId else {
-            print("🔄 No active session to refresh")
-            return
-        }
+    private func scrollToBottom() {
+        // Trigger scroll to bottom via a notification that ChatMessageList can listen to
+        NotificationCenter.default.post(
+            name: .scrollToBottom,
+            object: nil
+        )
         
-        print("🔄 ChatView: Refreshing messages after returning from background")
-        print("🔄 Current state: \(viewModel.messages.count) messages in memory")
+        // Reset unread count
+        unreadMessageCount = 0
         
-        // Reload messages from persistence to get any that were saved while backgrounded
-        let savedMessages = MessagePersistenceService.shared.loadMessages(for: project.path, sessionId: sessionId)
-        print("🔄 Found \(savedMessages.count) messages in persistence")
-        
-        // Use the new deduplication method to safely merge messages
-        let newMessageCount = viewModel.mergePersistedMessages(savedMessages)
-        
-        if newMessageCount > 0 {
-            print("✅ ChatView: Successfully merged \(newMessageCount) new messages after returning from background")
-        } else {
-            print("📝 ChatView: No new messages found in persistence")
-            
-            // No new messages found locally - check server for completed long-running responses
-            print("🔄 Polling server for any completed responses...")
-            pollForCompletedResponses()
+        // Update near bottom status
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            isNearBottom = true
         }
     }
     
-    private func pollForCompletedResponses() {
-        guard let project = selectedProject,
-              let sessionId = viewModel.currentSessionId else {
-            return
+    private func handleMessageCountChange(oldCount: Int, newCount: Int) {
+        // Only track new messages from assistant when user is not near bottom
+        if newCount > oldCount, !isNearBottom {
+            let newMessages = Array(viewModel.messages.suffix(newCount - oldCount))
+            let assistantMessages = newMessages.filter { $0.sender == .assistant }
+            unreadMessageCount += assistantMessages.count
         }
         
-        print("🔍 Polling server for completed responses for session: \(sessionId)")
-        
-        // Use the HTTP service to make a lightweight status check
-        HTTPAICLIService.shared.checkSessionStatus(sessionId: sessionId) { result in
-            Task { @MainActor in
-                switch result {
-                case .success(let hasNewMessages):
-                    if hasNewMessages {
-                        print("✅ Server indicates new messages available - refreshing")
-                        // Reload messages from server/persistence
-                        let newMessages = MessagePersistenceService.shared.loadMessages(for: project.path, sessionId: sessionId)
-                        if newMessages.count > self.viewModel.messages.count {
-                            self.viewModel.messages = newMessages
-                        }
-                    } else {
-                        print("ℹ️ No new messages on server")
-                    }
-                case .failure(let error):
-                    print("⚠️ Failed to poll server for completed responses: \(error)")
-                }
-            }
+        // Reset count when switching projects or loading initial messages
+        if oldCount == 0 {
+            unreadMessageCount = 0
         }
     }
 }
@@ -491,6 +494,6 @@ struct ChatView: View {
         session: nil,
         onSwitchProject: {}
     )
-    .environmentObject(AICLIService())
+    .environmentObject(AICLIService.shared)
     .environmentObject(SettingsManager())
 }

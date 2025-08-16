@@ -46,6 +46,15 @@ class SessionStatePersistenceService: ObservableObject {
         }
         
         var formattedExpiry: String {
+            if #available(macOS 10.15, iOS 13.0, *) {
+                let formatter = RelativeDateTimeFormatter()
+                formatter.unitsStyle = .short
+                return formatter.localizedString(for: expiresAt, relativeTo: Date())
+            } else {
+                let formatter = DateFormatter()
+                formatter.dateStyle = .short
+                formatter.timeStyle = .short
+                return formatter.string(from: expiresAt)
             let formatter = RelativeDateTimeFormatter()
             formatter.unitsStyle = .short
             return formatter.localizedString(for: expiresAt, relativeTo: Date())
@@ -240,35 +249,6 @@ class SessionStatePersistenceService: ObservableObject {
         if timeSinceLastCleanup > cleanupInterval {
             print("🧹 Performing startup session cleanup")
             cleanupExpiredSessions()
-        }
-    }
-}
-
-// MARK: - Extensions
-
-extension SessionStatePersistenceService {
-    /// Migrate session data from old format if needed
-    func migrateFromLegacyStorage() {
-        // Check if we have old session data in MessagePersistenceService format
-        let messagePersistence = MessagePersistenceService.shared
-        
-        for (projectId, metadata) in messagePersistence.savedSessions {
-            // Check if we already have this session
-            // swiftlint:disable:next for_where
-            if getSessionState(for: projectId) == nil {
-                // Migrate the session
-                saveSessionState(
-                    sessionId: metadata.sessionId,
-                    projectId: projectId,
-                    projectName: metadata.projectName,
-                    projectPath: metadata.projectPath,
-                    messageCount: metadata.messageCount,
-                    aicliSessionId: metadata.aicliSessionId,
-                    metadata: ["migrated": "true", "migratedAt": ISO8601DateFormatter().string(from: Date())]
-                )
-                
-                print("📦 Migrated session for project: \(metadata.projectName)")
-            }
         }
     }
 }

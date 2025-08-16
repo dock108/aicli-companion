@@ -1,7 +1,7 @@
 import { describe, it, beforeEach, mock } from 'node:test';
 import assert from 'node:assert';
 import express from 'express';
-import { setupRoutes } from '../../routes/index.js';
+import { setupRoutes } from '../../routes/api-routes.js';
 
 // Create a test app with route capturing
 function createTestApp() {
@@ -395,7 +395,6 @@ describe('Routes Coverage Tests', () => {
       assert.strictEqual(response.version, '1.0.0');
       assert.strictEqual(response.aicliCodeAvailable, true);
       assert.ok(response.endpoints);
-      assert.strictEqual(response.websocket, '/ws');
     });
   });
 });

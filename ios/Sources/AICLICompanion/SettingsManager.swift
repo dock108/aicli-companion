@@ -10,8 +10,22 @@ public class SettingsManager: ObservableObject {
     @Published var autoScroll: Bool = true
     @Published var showTypingIndicators: Bool = true
     @Published var hapticFeedback: Bool = true
-    @Published var storeChatHistory: Bool = false
+    @Published var storeChatHistory: Bool = true
     @Published var isPremium: Bool = false
+    
+    // Connection status
+    @Published var isConnected: Bool = false
+    @Published var currentSessionId: String?
+    
+    // Additional settings for EnhancedSettingsView
+    @Published var showMarkdownPreview: Bool = true
+    @Published var showThinkingIndicator: Bool = true
+    @Published var enableNotifications: Bool = true
+    @Published var notificationSound: Bool = true
+    @Published var notificationVibration: Bool = true
+    @Published var notificationPreview: Bool = true
+    @Published var debugMode: Bool = false
+    @Published var showNetworkActivity: Bool = false
 
     private let userDefaults = UserDefaults.standard
     private let keychain = KeychainManager()
@@ -191,6 +205,51 @@ public class SettingsManager: ObservableObject {
         }
     }
 
+    // MARK: - Additional Methods for EnhancedSettingsView
+    
+    func reconnect() {
+        // Implementation for reconnect functionality
+        print("🔄 Attempting to reconnect to server")
+        // This would trigger reconnection logic
+        isConnected = false
+        // Actual reconnection logic would go here
+    }
+    
+    func clearCache() {
+        // Clear app cache
+        let cacheURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        do {
+            let cacheContents = try FileManager.default.contentsOfDirectory(atPath: cacheURL.path)
+            for file in cacheContents {
+                let filePath = cacheURL.appendingPathComponent(file)
+                try FileManager.default.removeItem(at: filePath)
+            }
+            print("🧹 Cache cleared successfully")
+        } catch {
+            print("❌ Failed to clear cache: \(error)")
+        }
+    }
+    
+    func getCacheSize() -> Int {
+        let cacheURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        var cacheSize = 0
+        
+        do {
+            let cacheContents = try FileManager.default.contentsOfDirectory(atPath: cacheURL.path)
+            for file in cacheContents {
+                let filePath = cacheURL.appendingPathComponent(file)
+                let attributes = try FileManager.default.attributesOfItem(atPath: filePath.path)
+                if let fileSize = attributes[.size] as? Int {
+                    cacheSize += fileSize
+                }
+            }
+        } catch {
+            print("❌ Failed to calculate cache size: \(error)")
+        }
+        
+        return cacheSize
+    }
+
     // MARK: - Reset
 
     func resetToDefaults() {
@@ -211,6 +270,18 @@ public class SettingsManager: ObservableObject {
         hapticFeedback = defaultSettings.hapticFeedback
         storeChatHistory = defaultSettings.storeChatHistory
         isPremium = defaultSettings.isPremium
+        
+        // Reset additional properties
+        showMarkdownPreview = true
+        showThinkingIndicator = true
+        enableNotifications = true
+        notificationSound = true
+        notificationVibration = true
+        notificationPreview = true
+        debugMode = false
+        showNetworkActivity = false
+        isConnected = false
+        currentSessionId = nil
     }
 }
 

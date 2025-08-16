@@ -2,7 +2,7 @@
 
 # Paths to include
 included:
-  - ClaudeCompanionHost
+  - AICLICompanionHost
 
 # Paths to exclude
 excluded:
@@ -13,10 +13,8 @@ excluded:
 
 # Rules configuration
 disabled_rules:
-  - line_length
   - file_length
   - type_body_length
-  - function_body_length
   - todo
 
 opt_in_rules:
@@ -44,8 +42,12 @@ opt_in_rules:
   - yoda_condition
 
 # Rule configuration
+line_length: 120
+
+function_body_length: 50
+
 cyclomatic_complexity:
-  warning: 15
+  warning: 10
   error: 40
   ignores_case_statements: true
 

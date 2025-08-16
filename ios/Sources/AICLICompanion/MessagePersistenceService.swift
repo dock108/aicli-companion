@@ -15,9 +15,16 @@ struct PersistedSessionMetadata: Codable {
     let createdAt: Date
     
     var formattedLastUsed: String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .short
-        return formatter.localizedString(for: lastMessageDate, relativeTo: Date())
+        if #available(macOS 10.15, iOS 13.0, *) {
+            let formatter = RelativeDateTimeFormatter()
+            formatter.unitsStyle = .short
+            return formatter.localizedString(for: lastMessageDate, relativeTo: Date())
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .short
+            formatter.timeStyle = .short
+            return formatter.string(from: lastMessageDate)
+        }
     }
 }
 
@@ -64,8 +71,10 @@ class MessagePersistenceService: ObservableObject {
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
     private let fileManager = FileManager.default
+    private let logger = LoggingManager.shared
     
     @Published var savedSessions: [String: PersistedSessionMetadata] = [:]
+    private var isInitialized = false
     
     private init() {
         // Setup directories
@@ -79,33 +88,107 @@ class MessagePersistenceService: ObservableObject {
         encoder.dateEncodingStrategy = .iso8601
         decoder.dateDecodingStrategy = .iso8601
         
-        // Load existing session metadata from disk
-        loadAllSessionMetadata()
+        // Load metadata asynchronously to avoid blocking UI
+        Task {
+            await loadAllSessionMetadataAsync()
+        }
     }
     
     // MARK: - Public Methods
+    
+    /// WhatsApp/iMessage pattern: Simple append single message to conversation
+    func appendMessage(_ message: Message, to projectId: String, sessionId: String, project: Project) {
+        let projectDir = sessionsDirectory.appendingPathComponent(sanitizeFilename(projectId))
+        try? fileManager.createDirectory(at: projectDir, withIntermediateDirectories: true)
+        
+        let messagesFile = projectDir.appendingPathComponent("\(sessionId)_messages.json")
+        
+        // Load existing messages (or empty array if none)
+        var allMessages: [Message] = []
+        if fileManager.fileExists(atPath: messagesFile.path) {
+            do {
+                let existingData = try Data(contentsOf: messagesFile)
+                let existingPersisted = try decoder.decode([PersistedMessage].self, from: existingData)
+                allMessages = existingPersisted.map { $0.toMessage() }
+            } catch {
+                print("⚠️ MessagePersistence: Failed to load existing messages: \(error)")
+                allMessages = []
+            }
+        }
+        
+        // Simple append (check for duplicate by ID)
+        if !allMessages.contains(where: { $0.id == message.id }) {
+            allMessages.append(message)
+            allMessages.sort { $0.timestamp < $1.timestamp }
+            
+            // Save updated conversation
+            let persistedMessages = allMessages.map { PersistedMessage(from: $0) }
+            if let data = try? encoder.encode(persistedMessages) {
+                try? data.write(to: messagesFile)
+                print("📝 MessagePersistence: Appended message, total: \(allMessages.count)")
+            }
+            
+            // Update metadata
+            updateMetadata(for: projectId, sessionId: sessionId, project: project, messageCount: allMessages.count, lastMessage: message)
+        } else {
+            print("📝 MessagePersistence: Message already exists, skipping append")
+        }
+    }
     
     func saveMessages(for projectId: String, messages: [Message], sessionId: String, project: Project) {
         let projectDir = sessionsDirectory.appendingPathComponent(sanitizeFilename(projectId))
         try? fileManager.createDirectory(at: projectDir, withIntermediateDirectories: true)
         
-        // Convert messages to persisted format
-        let persistedMessages = messages.map { PersistedMessage(from: $0) }
-        
-        // Save messages
         let messagesFile = projectDir.appendingPathComponent("\(sessionId)_messages.json")
-        if let data = try? encoder.encode(persistedMessages) {
-            try? data.write(to: messagesFile)
+        
+        // CRITICAL FIX: Load existing messages first to preserve conversation history
+        var allMessages: [Message] = []
+        
+        if fileManager.fileExists(atPath: messagesFile.path) {
+            // Load existing messages from disk
+            do {
+                let existingData = try Data(contentsOf: messagesFile)
+                let existingPersisted = try decoder.decode([PersistedMessage].self, from: existingData)
+                let existingMessages = existingPersisted.map { $0.toMessage() }
+                
+                print("🗂️ MessagePersistence: Loaded \(existingMessages.count) existing messages for merge")
+                allMessages = existingMessages
+            } catch {
+                print("⚠️ MessagePersistence: Failed to load existing messages, starting fresh: \(error)")
+                allMessages = []
+            }
         }
         
-        // Update metadata
+        // Merge new messages with existing ones, avoiding duplicates
+        let existingIds = Set(allMessages.map { $0.id })
+        let newMessages = messages.filter { !existingIds.contains($0.id) }
+        
+        if !newMessages.isEmpty {
+            allMessages.append(contentsOf: newMessages)
+            // Sort by timestamp to maintain chronological order
+            allMessages.sort { $0.timestamp < $1.timestamp }
+            print("🗂️ MessagePersistence: Added \(newMessages.count) new messages, total: \(allMessages.count)")
+        } else {
+            print("🗂️ MessagePersistence: No new messages to add (all \(messages.count) were duplicates)")
+        }
+        
+        // Convert all messages to persisted format
+        let persistedMessages = allMessages.map { PersistedMessage(from: $0) }
+        
+        // Save complete conversation (not just new messages)
+        if let data = try? encoder.encode(persistedMessages) {
+            try? data.write(to: messagesFile)
+            print("🗂️ MessagePersistence: Saved complete conversation (\(allMessages.count) messages) to disk")
+        }
+        
+        // Update metadata with complete conversation info
         let metadata = PersistedSessionMetadata(
             sessionId: sessionId,
             projectId: projectId,
             projectName: project.name,
             projectPath: project.path,
-            lastMessageDate: messages.last?.timestamp ?? Date(),
-            messageCount: messages.count,
+            lastMessageDate: allMessages.last?.timestamp ?? Date(),
+            messageCount: allMessages.count, // Use complete message count, not just new ones
             aicliSessionId: sessionId,
             createdAt: savedSessions[projectId]?.createdAt ?? Date()
         )
@@ -138,9 +221,13 @@ class MessagePersistenceService: ObservableObject {
             print("🗂️ MessagePersistence: Successfully decoded \(persistedMessages.count) messages for '\(projectId)'")
             
             let messages = persistedMessages.map { $0.toMessage() }
-            print("🗂️ MessagePersistence: Converted to \(messages.count) Message objects for '\(projectId)'")
+            print("🗂️ MessagePersistenceService: Converted to \(messages.count) Message objects for '\(projectId)'")
             
-            return messages
+            // Ensure chronological order (defensive)
+            let sortedMessages = messages.sorted { $0.timestamp < $1.timestamp }
+            print("🗂️ MessagePersistenceService: Messages sorted chronologically")
+            
+            return sortedMessages
         } catch {
             print("❌ MessagePersistence: Failed to load messages for project '\(projectId)': \(error)")
             print("❌ MessagePersistence: Error details: \(error.localizedDescription)")
@@ -217,6 +304,28 @@ class MessagePersistenceService: ObservableObject {
         savedSessions.removeValue(forKey: projectId)
     }
     
+    /// Helper method to update metadata after message operations
+    private func updateMetadata(for projectId: String, sessionId: String, project: Project, messageCount: Int, lastMessage: Message) {
+        let metadata = PersistedSessionMetadata(
+            sessionId: sessionId,
+            projectId: projectId,
+            projectName: project.name,
+            projectPath: project.path,
+            lastMessageDate: lastMessage.timestamp,
+            messageCount: messageCount,
+            aicliSessionId: sessionId,
+            createdAt: savedSessions[projectId]?.createdAt ?? Date()
+        )
+        
+        let projectDir = sessionsDirectory.appendingPathComponent(sanitizeFilename(projectId))
+        let metadataFile = projectDir.appendingPathComponent("metadata.json")
+        
+        if let data = try? encoder.encode(metadata) {
+            try? data.write(to: metadataFile)
+            savedSessions[projectId] = metadata
+        }
+    }
+    
     func updateSessionMetadata(for projectId: String, aicliSessionId: String) {
         guard let metadata = savedSessions[projectId] else {
             print("❌ MessagePersistence: No metadata to update for project '\(projectId)'")
@@ -277,25 +386,44 @@ class MessagePersistenceService: ObservableObject {
     
     // MARK: - Private Methods
     
-    private func loadAllSessionMetadata() {
-        print("🗂️ MessagePersistence: Loading all session metadata from disk")
-        
-        guard let projectDirs = try? fileManager.contentsOfDirectory(at: sessionsDirectory, includingPropertiesForKeys: nil) else {
-            print("   ❌ Failed to list sessions directory")
-            return
-        }
-        
-        for projectDir in projectDirs {
-            let metadataFile = projectDir.appendingPathComponent("metadata.json")
-            if let data = try? Data(contentsOf: metadataFile),
-               let metadata = try? decoder.decode(PersistedSessionMetadata.self, from: data) {
-                // Store by projectPath for consistency with getSessionMetadata
-                savedSessions[metadata.projectPath] = metadata
-                print("   ✅ Loaded metadata for project: \(metadata.projectName) - Last message: \(metadata.formattedLastUsed)")
+    private func loadAllSessionMetadataAsync() async {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .background).async { [weak self] in
+                guard let self = self else {
+                    continuation.resume()
+                    return
+                }
+                
+                print("🗂️ MessagePersistence: Loading all session metadata from disk")
+                
+                guard let projectDirs = try? self.fileManager.contentsOfDirectory(at: self.sessionsDirectory, includingPropertiesForKeys: nil) else {
+                    print("   ❌ Failed to list sessions directory")
+                    continuation.resume()
+                    return
+                }
+                
+                var loadedSessions: [String: PersistedSessionMetadata] = [:]
+                
+                for projectDir in projectDirs {
+                    let metadataFile = projectDir.appendingPathComponent("metadata.json")
+                    if let data = try? Data(contentsOf: metadataFile),
+                       let metadata = try? self.decoder.decode(PersistedSessionMetadata.self, from: data) {
+                        // Store by projectPath for consistency with getSessionMetadata
+                        loadedSessions[metadata.projectPath] = metadata
+                        print("   ✅ Loaded metadata for project: \(metadata.projectName) - Last message: \(metadata.formattedLastUsed)")
+                    }
+                }
+                
+                print("   📊 Loaded metadata for \(loadedSessions.count) projects")
+                
+                // Update on main thread
+                DispatchQueue.main.async {
+                    self.savedSessions = loadedSessions
+                    self.isInitialized = true
+                    continuation.resume()
+                }
             }
         }
-        
-        print("   📊 Loaded metadata for \(savedSessions.count) projects")
     }
     
     private func sanitizeFilename(_ filename: String) -> String {

@@ -50,9 +50,14 @@ struct ProjectSelectionView: View {
     @Binding var isProjectSelected: Bool
     let onDisconnect: (() -> Void)?
     @State private var projects: [Project] = []
-    @State private var isLoading = true
+    @StateObject private var loadingStateCoordinator = LoadingStateCoordinator.shared
+    
+    private var isLoading: Bool {
+        loadingStateCoordinator.isLoading(.projectSelection)
+    }
     @State private var errorMessage: String?
     @State private var lastSelectionTime: Date = .distantPast
+    @State private var sessionMetadataCache: [String: PersistedSessionMetadata?] = [:]
     
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject var settings: SettingsManager
@@ -68,10 +73,7 @@ struct ProjectSelectionView: View {
         VStack(spacing: 0) {
             // Header
             NavigationTopBar(title: "Select Project") {
-                Button("Disconnect") {
-                    disconnectFromServer()
-                }
-                .foregroundColor(Colors.accentPrimaryEnd)
+                SettingsView()
             }
             
             if isLoading {
@@ -103,8 +105,19 @@ struct ProjectSelectionView: View {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
                     
-                    SecondaryButton("Retry") {
-                        loadProjects()
+                    // Show different buttons based on error type
+                    if errorMessage.contains("not configured") || errorMessage.contains("No server") {
+                        PrimaryButton("Setup Connection") {
+                            // Trigger navigation back to ConnectionView
+                            settings.clearConnection()
+                            if let onDisconnect = onDisconnect {
+                                onDisconnect()
+                            }
+                        }
+                    } else {
+                        SecondaryButton("Retry") {
+                            loadProjects()
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -137,8 +150,8 @@ struct ProjectSelectionView: View {
                         ForEach(projects) { project in
                             ProjectRowView(
                                 project: project,
-                                hasSession: persistenceService.hasSession(for: project.path),
-                                sessionMetadata: persistenceService.getSessionMetadata(for: project.path)
+                                hasSession: sessionMetadataCache[project.path] != nil,
+                                sessionMetadata: sessionMetadataCache[project.path] ?? nil
                             ) {
                                 selectProject(project)
                             }
@@ -158,17 +171,18 @@ struct ProjectSelectionView: View {
     // MARK: - Private Methods
     
     private func loadProjects() {
-        isLoading = true
+        loadingStateCoordinator.startLoading(.projectSelection, timeout: 10.0)
         errorMessage = nil
         
         guard let serverURL = settings.serverURL else {
             errorMessage = "Server connection not configured"
-            isLoading = false
+            loadingStateCoordinator.stopLoading(.projectSelection)
             return
         }
         
         let url = serverURL.appendingPathComponent("api/projects")
         var request = URLRequest(url: url)
+        request.timeoutInterval = 10.0 // Add timeout to prevent hanging
         
         print("Loading projects from: \(url.absoluteString)")
         
@@ -179,10 +193,27 @@ struct ProjectSelectionView: View {
         
         URLSession.shared.dataTask(with: request) { data, response, error in
             DispatchQueue.main.async {
-                isLoading = false
+                loadingStateCoordinator.stopLoading(.projectSelection)
                 
                 if let error = error {
-                    errorMessage = "Network error: \(error.localizedDescription)"
+                    // Handle specific network errors more gracefully
+                    let nsError = error as NSError
+                    if nsError.domain == NSURLErrorDomain {
+                        switch nsError.code {
+                        case NSURLErrorNotConnectedToInternet:
+                            errorMessage = "No internet connection available"
+                        case NSURLErrorTimedOut:
+                            errorMessage = "Request timed out. Please try again."
+                        case NSURLErrorCannotFindHost, NSURLErrorCannotConnectToHost:
+                            errorMessage = "Cannot connect to server. Please check your connection."
+                        case NSURLErrorNetworkConnectionLost:
+                            errorMessage = "Network connection was lost. Please try again."
+                        default:
+                            errorMessage = "Network error: \(error.localizedDescription)"
+                        }
+                    } else {
+                        errorMessage = "Network error: \(error.localizedDescription)"
+                    }
                     return
                 }
                 
@@ -217,6 +248,18 @@ struct ProjectSelectionView: View {
                     projects = response.projects
                     errorMessage = nil  // Clear any previous error
                     print("Successfully loaded \(projects.count) projects")
+                    
+                    // Populate session metadata cache once for all projects
+                    sessionMetadataCache.removeAll()
+                    for project in projects {
+                        let metadata = persistenceService.getSessionMetadata(for: project.path)
+                        sessionMetadataCache[project.path] = metadata
+                        if let metadata = metadata {
+                            print("📊 Found session metadata for \(project.name): \(metadata.formattedLastUsed)")
+                        } else {
+                            print("📊 No session metadata found for \(project.name)")
+                        }
+                    }
                 } catch let decodingError {
                     print("Decoding error: \(decodingError)")
                     errorMessage = "Failed to parse server response: \(decodingError.localizedDescription)"
@@ -267,11 +310,19 @@ struct ProjectRowView: View {
     var body: some View {
         Button(action: {
             guard !isProcessing else { return }
-            isProcessing = true
+            
+            // Brief visual feedback
+            withAnimation(.easeInOut(duration: 0.1)) {
+                isProcessing = true
+            }
+            
             onTap()
-            // Reset after a delay to allow for the view transition
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                isProcessing = false
+            
+            // Reset immediately after the action
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                withAnimation(.easeInOut(duration: 0.1)) {
+                    isProcessing = false
+                }
             }
         }) {
             HStack(spacing: Spacing.md) {

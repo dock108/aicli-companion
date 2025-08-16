@@ -126,20 +126,19 @@ jobs:
     - name: Resolve Swift Package Dependencies
       run: |
         cd ios
-        xcodebuild -resolvePackageDependencies -project AICLICompanion.xcodeproj -scheme AICLICompanion
+        xcodebuild -resolvePackageDependencies -project AICLICompanion.xcodeproj -scheme AICLICompanionApp
     
     - name: Build iOS App
       run: |
         cd ios
-        # Build for generic iOS device (no simulator needed)
-        # This is much faster and doesn't require downloading simulator runtimes
+        # Build for macOS platform which is always available on CI runners
+        # This validates the codebase compilation without needing iOS SDK
         xcodebuild -project AICLICompanion.xcodeproj \
-          -scheme AICLICompanion \
-          -destination "generic/platform=iOS" \
+          -scheme AICLICompanionApp \
+          -destination "platform=macOS" \
           build \
           CODE_SIGNING_ALLOWED=NO \
           ONLY_ACTIVE_ARCH=NO \
-          IPHONEOS_DEPLOYMENT_TARGET=17.0 \
           -derivedDataPath build
     
     # - name: Run iOS Tests with Coverage

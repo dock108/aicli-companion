@@ -94,7 +94,7 @@ struct ChatMessageList: View {
                         handleMessageCountChange(oldCount: oldCount, newCount: newCount, proxy: proxy)
                     }
                 }
-                .onChange(of: messages.isEmpty) { isEmpty in
+                .onChange(of: messages.isEmpty) { _, isEmpty in
                     // Handle when messages array changes from empty to populated
                     if !isEmpty {
                         // Messages just loaded, scroll to bottom

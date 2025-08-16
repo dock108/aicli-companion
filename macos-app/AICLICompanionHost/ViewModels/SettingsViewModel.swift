@@ -92,7 +92,8 @@ class SettingsViewModel: ObservableObject {
     private func setupBindings() {
         // Watch for changes and validation - combine all monitored properties
         Publishers.CombineLatest4($serverPort, $autoStartServer, $requireAuthentication, $enableTunnel)
-            .combineLatest(Publishers.CombineLatest4($tunnelProvider, $ngrokAuthToken, $defaultProjectDirectory, $serverCommand))
+            .combineLatest(Publishers.CombineLatest4($tunnelProvider, $ngrokAuthToken,
+                                                      $defaultProjectDirectory, $serverCommand))
             .combineLatest($maxLogEntries)
             .sink { [weak self] _ in
                 self?.checkForChanges()

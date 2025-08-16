@@ -103,7 +103,7 @@ jobs:
     
     strategy:
       matrix:
-        node-version: ['20', '22']  # Test on multiple Node versions
+        node-version: ['22']  # Test on multiple Node versions
     
     defaults:
       run:

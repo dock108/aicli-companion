@@ -102,7 +102,7 @@ struct AttachmentPicker: View {
             selection: $selectedPhotoItem,
             matching: .images
         )
-        .onChange(of: selectedPhotoItem) { _, newItem in
+        .onChange(of: selectedPhotoItem) { newItem in
             handlePhotoSelection(newItem)
         }
         .sheet(isPresented: $showingDocumentPicker) {

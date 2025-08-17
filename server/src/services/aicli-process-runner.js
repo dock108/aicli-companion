@@ -408,13 +408,22 @@ export class AICLIProcessRunner extends EventEmitter {
     // Include --print flag as required by AICLI CLI for stdin input
     const args = ['--print', '--output-format', 'stream-json', '--verbose'];
 
+    // CURRENT BROKEN SESSION FLOW:
+    // 1. Client sends message with optional sessionId
+    // 2. Server spawns NEW Claude process with --session-id flag
+    // 3. Claude REJECTS duplicate session IDs with "Session ID already in use" error
+    // 4. This is WRONG - needs interactive sessions instead (persistent processes)
+    //
+    // The --session-id flag is meant to CREATE a new session with that ID,
+    // not resume an existing one. Each message spawns a new process which
+    // can't access the context from previous processes.
+    
     // Only add session arguments if we have a valid sessionId
     if (sessionId) {
-      // Use --resume to continue an existing Claude conversation
-      // Claude will remember the context if the session is still active
-      args.push('--resume');
+      // PROBLEM: This tries to create a NEW session with this ID, not resume
+      args.push('--session-id');
       args.push(sessionId);
-      sessionLogger.info('Using --resume with session ID', { sessionId });
+      sessionLogger.info('Using --session-id with session ID', { sessionId });
     } else {
       // For fresh chats (no sessionId), let Claude CLI create its own session ID
       sessionLogger.info('Starting new conversation (no session ID)');

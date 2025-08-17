@@ -174,19 +174,16 @@ router.post('/', async (req, res) => {
         sessionIdValue: sessionId || 'new conversation',
       });
 
-      // Get AICLI service from app instance
-      const aicliService = req.app.get('aicliService');
-
-      // Process Claude request - pass original sessionId (null for new conversations)
-      const result = await aicliService.sendPrompt(message, {
-        sessionId, // null for new conversations, Claude will generate one
+      // Import the interactive service
+      const { aicliInteractiveService } = await import('../services/aicli-interactive.js');
+      const aicliService = req.app.get('aicliService'); // Keep for session manager
+      
+      // Use the interactive service for sending prompts
+      const result = await aicliInteractiveService.sendPrompt(message, {
+        sessionId,
         requestId,
-        streaming: true, // Use streaming to maintain conversation context
         workingDirectory: projectPath || process.cwd(),
-        skipPermissions: true,
-        format: 'text',
-        attachments, // Pass attachments to AICLI service
-        autoResponse, // Pass auto-response metadata
+        attachments,
       });
 
       // Log the full result structure for debugging
@@ -204,7 +201,7 @@ router.post('/', async (req, res) => {
 
       // Extract Claude's response and session ID
       let content = '';
-      // The AICLI service returns { sessionId, success, response }
+      // The interactive service returns { sessionId, success, response }
       // where response contains the actual Claude response
       let claudeSessionId = result?.sessionId || sessionId;
 

@@ -24,56 +24,38 @@ final class DependencyContainer: ObservableObject {
     
     // MARK: - Initialization
     init() {
-        // Initialize core services first
-        self.loggingManager = LoggingManager()
+        // Use existing shared instances instead of creating new ones
+        self.loggingManager = LoggingManager.shared
         self.settingsManager = SettingsManager()
-        self.hapticManager = HapticManager()
-        self.performanceMonitor = PerformanceMonitor()
+        self.hapticManager = HapticManager.shared
+        self.performanceMonitor = PerformanceMonitor.shared
         
-        // Initialize data services
-        self.messagePersistenceService = MessagePersistenceService()
-        self.projectStateManager = ProjectStateManager()
-        self.sessionStatePersistence = SessionStatePersistenceService()
+        // Initialize data services using shared instances
+        self.messagePersistenceService = MessagePersistenceService.shared
+        self.projectStateManager = ProjectStateManager.shared
+        self.sessionStatePersistence = SessionStatePersistenceService.shared
         
         // Initialize network services
         self.aicliService = AICLIService()
-        self.messageFetchService = MessageFetchService()
-        self.connectionReliabilityManager = ConnectionReliabilityManager()
-        self.claudeStatusManager = ClaudeStatusManager()
-        self.pushNotificationService = PushNotificationService()
+        self.messageFetchService = MessageFetchService.shared
+        self.connectionReliabilityManager = ConnectionReliabilityManager.shared
+        self.claudeStatusManager = ClaudeStatusManager.shared
+        self.pushNotificationService = PushNotificationService.shared
         
         // Initialize UI services
-        self.messageQueueManager = MessageQueueManager()
-        self.loadingStateCoordinator = LoadingStateCoordinator()
-        self.clipboardManager = ClipboardManager()
+        self.messageQueueManager = MessageQueueManager.shared
+        self.loadingStateCoordinator = LoadingStateCoordinator.shared
+        self.clipboardManager = ClipboardManager.shared
         
-        // Inject dependencies where needed
-        injectDependencies()
+        // Note: Dependencies are already wired in the singletons
+        // No need to inject them again
     }
     
-    // MARK: - Dependency Injection
-    private func injectDependencies() {
-        // Inject logger into services that need it
-        messagePersistenceService.logger = loggingManager
-        aicliService.logger = loggingManager
-        projectStateManager.logger = loggingManager
-        
-        // Inject persistence into services that need it
-        aicliService.persistenceService = messagePersistenceService
-        messageFetchService.aicliService = aicliService
-        
-        // Inject haptics
-        clipboardManager.hapticManager = hapticManager
-        
-        // Inject performance monitoring
-        aicliService.performanceMonitor = performanceMonitor
-        messagePersistenceService.performanceMonitor = performanceMonitor
-    }
 }
 
 // MARK: - Environment Key
 private struct DependencyContainerKey: EnvironmentKey {
-    static let defaultValue = DependencyContainer()
+    @MainActor static let defaultValue = DependencyContainer()
 }
 
 extension EnvironmentValues {

@@ -772,7 +772,7 @@ export class AICLIService extends EventEmitter {
 
   async executeAICLICommand(session, prompt, attachmentPaths = []) {
     try {
-      // Delegate to process runner - will use --resume if sessionId provided
+      // Delegate to process runner
       return await this.processRunner.executeAICLICommand(session, prompt, attachmentPaths);
     } catch (error) {
       // If session not found, Claude's session expired - retry without session ID

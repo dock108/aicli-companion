@@ -60,24 +60,6 @@ public class ProjectStateManager: ObservableObject {
         return currentProject?.name
     }
     
-    // MARK: - Conversion Utilities
-    
-    /// Convert Project to ProjectContext
-    internal func projectContext(for project: Project) -> ProjectContext? {
-        // Create a minimal ProjectContext from Project
-        return ProjectContext(
-            type: .unknown,
-            language: nil,
-            framework: nil,
-            buildSystem: nil,
-            packageManager: nil,
-            configFiles: [],
-            suggestions: [],
-            workingDirectory: project.path,
-            detectedFiles: []
-        )
-    }
-    
     // MARK: - Debug Support
     
     private func setupDebugLogging() {

@@ -1,4 +1,7 @@
 import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
 
 /// Optimized message list with lazy loading and virtualization
 @available(iOS 16.0, *)
@@ -156,8 +159,8 @@ private struct LoadingIndicator: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                 
-                if let detail = info.detail {
-                    Text(detail)
+                if let activity = info.activity {
+                    Text(activity)
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }
@@ -166,7 +169,11 @@ private struct LoadingIndicator: View {
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color(.systemBackground))
+                #if os(iOS)
+                .fill(Color(UIColor.systemBackground))
+                #else
+                .fill(Color(NSColor.windowBackgroundColor))
+                #endif
                 .shadow(radius: 2)
         )
     }

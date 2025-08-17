@@ -27,6 +27,7 @@ struct ChatView: View {
     
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    @Environment(\.scenePhase) var scenePhase
     
     // Project information
     let selectedProject: Project?
@@ -145,6 +146,16 @@ struct ChatView: View {
         }
         .onDisappear {
             cleanupView()
+        }
+        .onChange(of: scenePhase) { oldPhase, newPhase in
+            // Check for new messages when app returns from background
+            if newPhase == .active && oldPhase == .background {
+                print("📱 App returning from background - checking for new messages")
+                if let project = selectedProject {
+                    // Sync only new messages that arrived while backgrounded
+                    viewModel.syncNewMessagesIfNeeded(for: project)
+                }
+            }
         }
         .onChange(of: selectedProject?.path) { oldPath, newPath in
             if let oldPath = oldPath, let newPath = newPath, oldPath != newPath {

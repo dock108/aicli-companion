@@ -365,6 +365,43 @@ class ChatViewModel: ObservableObject {
     }
     
     // MARK: - Message Management
+    
+    /// Efficiently sync only new messages that arrived while backgrounded
+    func syncNewMessagesIfNeeded(for project: Project) {
+        guard let sessionId = currentSessionId ?? getSessionId(for: project) else {
+            print("ℹ️ No session to sync for project \(project.name)")
+            return
+        }
+        
+        // Get current message IDs in memory
+        let currentMessageIds = Set(messages.map { $0.id })
+        
+        // Load messages from persistence
+        let persistedMessages = persistenceService.loadMessages(for: project.path, sessionId: sessionId)
+        
+        // Find messages that are in persistence but not in memory
+        let newMessages = persistedMessages.filter { !currentMessageIds.contains($0.id) }
+        
+        if !newMessages.isEmpty {
+            print("📥 Found \(newMessages.count) new messages to sync")
+            
+            // Add new messages to the conversation
+            for message in newMessages {
+                // Validate message before adding
+                if MessageValidator.shouldDisplayMessage(message) {
+                    messages.append(message)
+                    print("➕ Added message: \(String(message.content.prefix(50)))...")
+                }
+            }
+            
+            // Sort messages by timestamp to maintain order
+            messages.sort { $0.timestamp < $1.timestamp }
+            print("✅ Synced \(newMessages.count) new messages, total: \(messages.count)")
+        } else {
+            print("✅ No new messages to sync")
+        }
+    }
+    
     func sendMessage(_ text: String, for project: Project, attachments: [AttachmentData] = []) {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty else { return }
         
@@ -1706,6 +1743,9 @@ class ChatViewModel: ObservableObject {
                 state.persistentThinkingInfo = nil
                 state.cancelTimers()
             }
+            
+            // Clear from loading coordinator - THIS IS CRITICAL!
+            loadingStateCoordinator.stopProjectLoading(project.path)
             
             isLoading = false
             isWaitingForClaudeResponse = false

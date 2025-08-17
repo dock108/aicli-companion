@@ -303,4 +303,179 @@ router.get('/:sessionId/expired', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/sessions/keep-alive - Keep an interactive session alive with optional recap
+ * New endpoint for interactive session pool
+ */
+router.post('/keep-alive', async (req, res) => {
+  const { sessionId, action = 'extend' } = req.body;
+  const pool = req.app.get('sessionPool');
+  
+  if (!sessionId) {
+    return res.status(400).json({ 
+      success: false,
+      error: 'Session ID is required' 
+    });
+  }
+  
+  if (!pool.hasSession(sessionId)) {
+    return res.status(404).json({ 
+      success: false,
+      error: 'Session not found' 
+    });
+  }
+  
+  try {
+    if (action === 'recap') {
+      // Send recap prompt to Claude
+      logger.info('Sending recap prompt to interactive session', { sessionId });
+      const result = await pool.sendMessage(
+        sessionId, 
+        "Please provide a brief summary of our conversation so far."
+      );
+      await pool.extendSession(sessionId);
+      
+      return res.json({ 
+        success: true, 
+        sessionId,
+        extended: true,
+        recap: result.result || result 
+      });
+    } else {
+      // Just extend the session
+      await pool.extendSession(sessionId);
+      logger.info('Extended interactive session timeout', { sessionId });
+      
+      return res.json({ 
+        success: true,
+        sessionId,
+        extended: true 
+      });
+    }
+  } catch (error) {
+    logger.error('Failed to keep session alive', { 
+      sessionId, 
+      action,
+      error: error.message 
+    });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to keep session alive'
+    });
+  }
+});
+
+/**
+ * GET /api/sessions/active - Get all active interactive sessions
+ * New endpoint for interactive session pool
+ */
+router.get('/active', async (req, res) => {
+  const pool = req.app.get('sessionPool');
+  
+  try {
+    const sessions = pool.getActiveSessions();
+    const stats = {
+      totalSessions: sessions.length,
+      maxSessions: pool.maxSessions,
+      availableSlots: pool.maxSessions - sessions.length,
+      memoryUsage: process.memoryUsage(),
+    };
+    
+    logger.info('Retrieved active interactive sessions', { 
+      count: sessions.length 
+    });
+    
+    res.json({
+      success: true,
+      sessions,
+      stats
+    });
+  } catch (error) {
+    logger.error('Failed to get active sessions', { 
+      error: error.message 
+    });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve active sessions'
+    });
+  }
+});
+
+/**
+ * GET /api/sessions/interactive/:sessionId/status - Get interactive session status
+ * New endpoint for interactive session pool
+ */
+router.get('/interactive/:sessionId/status', async (req, res) => {
+  const { sessionId } = req.params;
+  const pool = req.app.get('sessionPool');
+  
+  try {
+    const status = pool.getSessionStatus(sessionId);
+    
+    if (!status) {
+      return res.status(404).json({
+        success: false,
+        error: 'Interactive session not found'
+      });
+    }
+    
+    logger.info('Retrieved interactive session status', { 
+      sessionId,
+      isActive: status.active 
+    });
+    
+    res.json({
+      success: true,
+      sessionId,
+      ...status
+    });
+  } catch (error) {
+    logger.error('Failed to get interactive session status', { 
+      sessionId,
+      error: error.message 
+    });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve session status'
+    });
+  }
+});
+
+/**
+ * DELETE /api/sessions/interactive/:sessionId - Kill an interactive session
+ * New endpoint for interactive session pool
+ */
+router.delete('/interactive/:sessionId', async (req, res) => {
+  const { sessionId } = req.params;
+  const pool = req.app.get('sessionPool');
+  
+  try {
+    const killed = await pool.killSession(sessionId);
+    
+    if (!killed) {
+      return res.status(404).json({
+        success: false,
+        error: 'Interactive session not found'
+      });
+    }
+    
+    logger.info('Killed interactive session', { sessionId });
+    
+    res.json({
+      success: true,
+      message: 'Interactive session terminated',
+      sessionId
+    });
+  } catch (error) {
+    logger.error('Failed to kill interactive session', { 
+      sessionId,
+      error: error.message 
+    });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to terminate session'
+    });
+  }
+});
+
 export default router;

@@ -51,13 +51,6 @@ struct Message: Identifiable, Codable {
         } else {
             self.richContent = richContent
         }
-        
-        // Local storage only
-        self.cloudKitRecordID = nil
-        self.readByDevices = []
-        self.deletedByDevices = []
-        self.syncedAt = nil
-        self.needsSync = true
     }
 }
 

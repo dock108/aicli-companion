@@ -62,12 +62,11 @@ public class ProjectStateManager: ObservableObject {
     
     // MARK: - Conversion Utilities
     
-    /// Convert Project to ProjectContext (for ProjectAwarenessService compatibility)
+    /// Convert Project to ProjectContext
     internal func projectContext(for project: Project) -> ProjectContext? {
         // Create a minimal ProjectContext from Project
-        // This is used when ProjectAwarenessService needs context information
         return ProjectContext(
-            type: .unknown, // ProjectAwarenessService will analyze this
+            type: .unknown,
             language: nil,
             framework: nil,
             buildSystem: nil,

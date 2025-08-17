@@ -862,7 +862,7 @@ private func exportFile(url: URL) {
         savePanel.allowedContentTypes = [.plainText]
     } else {
         savePanel.allowedFileTypes = ["txt", "log"]
-    savePanel.allowedContentTypes = [.plainText]
+    }
     savePanel.nameFieldStringValue = url.lastPathComponent
     savePanel.begin { result in
         if result == .OK, let destination = savePanel.url {

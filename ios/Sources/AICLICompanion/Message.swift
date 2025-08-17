@@ -1,5 +1,4 @@
 import Foundation
-import CloudKit
 
 struct Message: Identifiable, Codable {
     let id: UUID
@@ -12,7 +11,7 @@ struct Message: Identifiable, Codable {
     let requestId: String?
     let richContent: RichContent?
     
-    var cloudKitRecordID: CKRecord.ID?
+    // CloudKit removed - local storage only
     var readByDevices: [String] = []
     var deletedByDevices: [String] = []
     var syncedAt: Date?
@@ -53,7 +52,7 @@ struct Message: Identifiable, Codable {
             self.richContent = richContent
         }
         
-        // Initialize CloudKit properties
+        // Local storage only
         self.cloudKitRecordID = nil
         self.readByDevices = []
         self.deletedByDevices = []
@@ -1215,66 +1214,5 @@ struct DeviceRegisteredResponse: Codable {
     let message: String?
 }
 
-// MARK: - CloudKit Extensions
-
-extension Message {
-    func toCKRecord() -> CKRecord {
-        let recordID = cloudKitRecordID ?? CKRecord.ID(recordName: id.uuidString)
-        let record = CKRecord(recordType: CKRecordType.message, recordID: recordID)
-        
-        record[CKField.messageId] = id.uuidString
-        record[CKField.content] = content
-        record[CKField.sender] = sender.rawValue
-        record[CKField.timestamp] = timestamp
-        record[CKField.messageType] = type.rawValue
-        record[CKField.readByDevices] = readByDevices as CKRecordValue
-        record[CKField.deletedByDevices] = deletedByDevices as CKRecordValue
-        
-        // Add session/project info if available
-        if let sessionId = metadata?.sessionId {
-            record[CKField.sessionId] = sessionId
-        }
-        
-        return record
-    }
-    
-    static func from(record: CKRecord) -> Message? {
-        guard let messageId = record[CKField.messageId] as? String,
-              let content = record[CKField.content] as? String,
-              let senderRaw = record[CKField.sender] as? String,
-              let sender = MessageSender(rawValue: senderRaw),
-              let timestamp = record[CKField.timestamp] as? Date else {
-            return nil
-        }
-        
-        let messageTypeRaw = record[CKField.messageType] as? String ?? "text"
-        let messageType = MessageType(rawValue: messageTypeRaw) ?? .text
-        
-        var message = Message(
-            id: UUID(uuidString: messageId) ?? UUID(),
-            content: content,
-            sender: sender,
-            timestamp: timestamp,
-            type: messageType
-        )
-        
-        message.cloudKitRecordID = record.recordID
-        message.readByDevices = (record[CKField.readByDevices] as? [String]) ?? []
-        message.deletedByDevices = (record[CKField.deletedByDevices] as? [String]) ?? []
-        message.syncedAt = Date()
-        message.needsSync = false
-        
-        // Reconstruct metadata if sessionId exists in CloudKit record
-        // This preserves the session across devices for project continuity
-        if let sessionId = record[CKField.sessionId] as? String {
-            message.metadata = AICLIMessageMetadata(
-                sessionId: sessionId,
-                duration: 0,
-                cost: nil,
-                tools: nil
-            )
-        }
-        
-        return message
-    }
-}
+// MARK: - CloudKit Extensions Removed
+// Local storage only - no cloud sync

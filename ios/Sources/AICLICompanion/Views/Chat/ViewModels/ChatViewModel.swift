@@ -260,7 +260,7 @@ class ChatViewModel: ObservableObject {
     private let performanceMonitor = PerformanceMonitor.shared
     private let aicliService = AICLIService.shared
     private let settings = SettingsManager.shared
-    private let cloudKitManager = CloudKitSyncManager.shared
+    // CloudKit removed - local storage only
     
     // MARK: - Project Reference
     var currentProject: Project? {

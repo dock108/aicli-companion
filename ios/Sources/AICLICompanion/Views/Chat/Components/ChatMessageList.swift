@@ -101,7 +101,6 @@ struct ChatMessageList: View {
                         scrollToBottomReliably(proxy: proxy)
                     }
                 }
-                .onChange(of: isLoading) { newLoading in
                 .onChange(of: isLoading) { oldLoading, newLoading in
                     handleLoadingStateChange(oldLoading: oldLoading, newLoading: newLoading, proxy: proxy)
                 }

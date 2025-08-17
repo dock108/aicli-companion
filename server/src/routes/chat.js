@@ -1,6 +1,7 @@
 import express from 'express';
 import { randomUUID } from 'crypto';
 import { createLogger } from '../utils/logger.js';
+import { messageOptimizer } from '../utils/message-optimizer.js';
 
 const logger = createLogger('ChatAPI');
 // TODO: Check what validation middleware exists

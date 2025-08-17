@@ -2,7 +2,7 @@ import { spawn } from 'child_process';
 import { EventEmitter } from 'events';
 import { processMonitor } from '../utils/process-monitor.js';
 import { InputValidator, MessageProcessor } from './aicli-utils.js';
-import { ClaudeStreamParser } from './stream-parser.js';
+import { UnifiedMessageParser } from './message-parser.js';
 import { createLogger } from '../utils/logger.js';
 import { commandSecurity } from './command-security.js';
 import { permissionManager } from './permission-manager.js';
@@ -97,7 +97,7 @@ export class AICLIProcessRunner extends EventEmitter {
       sessionLogger.info('Interactive process started', { pid: claudeProcess.pid });
 
       // Set up stream parser for this session
-      const streamParser = new ClaudeStreamParser();
+      const streamParser = new UnifiedMessageParser();
 
       // Handle stdout - parse initial response to get session ID
       claudeProcess.stdout.on('data', (data) => {
@@ -665,7 +665,7 @@ export class AICLIProcessRunner extends EventEmitter {
     const stderrBuffers = [];
 
     // Initialize stream parser for this command
-    const streamParser = new ClaudeStreamParser();
+    const streamParser = new UnifiedMessageParser();
 
     aicliProcess.stdout.on('data', (data) => {
       // Store raw buffer to prevent encoding truncation
@@ -687,7 +687,7 @@ export class AICLIProcessRunner extends EventEmitter {
 
       // Parse the chunk into structured messages
       try {
-        const parsedChunks = streamParser.parseData(chunk, false);
+        const parsedChunks = streamParser.parseStreamData(chunk, false);
 
         // Emit each parsed chunk as a separate stream event
         for (const parsedChunk of parsedChunks) {
@@ -780,7 +780,7 @@ export class AICLIProcessRunner extends EventEmitter {
 
         // Emit any remaining chunks with final flag
         try {
-          const finalChunks = streamParser.parseData('', true); // Pass empty string with isComplete=true
+          const finalChunks = streamParser.parseStreamData('', true); // Pass empty string with isComplete=true
           for (const chunk of finalChunks) {
             this.emit('streamChunk', {
               sessionId,

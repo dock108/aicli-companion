@@ -65,13 +65,14 @@ describe('ActivityMonitor', () => {
       smallMonitor.destroy();
     });
 
-    it('should emit activity events', (t, done) => {
+    it('should emit activity events', () => {
+      let activityReceived = null;
       monitor.once('activity', (activity) => {
-        assert.strictEqual(activity.type, 'test');
-        done();
+        activityReceived = activity;
       });
 
       monitor.trackActivity({ type: 'test' });
+      assert.strictEqual(activityReceived.type, 'test');
     });
   });
 
@@ -130,21 +131,23 @@ describe('ActivityMonitor', () => {
   });
 
   describe('Security Violation Tracking', () => {
-    it('should track security violations', (t, done) => {
+    it('should track security violations', () => {
       const violation = {
         type: 'unauthorized_access',
         details: { path: '/etc/passwd' },
         severity: 'high',
       };
 
+      let alertReceived = null;
       monitor.once('securityAlert', (alert) => {
-        assert.strictEqual(alert.violation.type, 'unauthorized_access');
-        assert.strictEqual(alert.violation.severity, 'high');
-        done();
+        alertReceived = alert;
       });
 
       const activityId = monitor.trackSecurityViolation(violation, 'session1');
       assert.ok(activityId);
+      assert.ok(alertReceived);
+      assert.strictEqual(alertReceived.violation.type, 'unauthorized_access');
+      assert.strictEqual(alertReceived.violation.severity, 'high');
 
       const activity = monitor.activities[0];
       assert.strictEqual(activity.type, 'security_violation');
@@ -179,11 +182,10 @@ describe('ActivityMonitor', () => {
   });
 
   describe('Suspicious Activity Detection', () => {
-    it('should detect rapid command execution', (t, done) => {
+    it('should detect rapid command execution', () => {
+      let alertReceived = null;
       monitor.once('suspiciousActivity', (alert) => {
-        assert.strictEqual(alert.type, 'rapid_commands');
-        assert.strictEqual(alert.severity, 'low');
-        done();
+        alertReceived = alert;
       });
 
       // Create rapid commands
@@ -191,13 +193,16 @@ describe('ActivityMonitor', () => {
       for (let i = 0; i < 11; i++) {
         monitor.trackCommand(`command${i}`, { allowed: true }, sessionId);
       }
+      
+      assert.ok(alertReceived);
+      assert.strictEqual(alertReceived.type, 'rapid_commands');
+      assert.strictEqual(alertReceived.severity, 'low');
     });
 
-    it('should detect excessive failed commands', (t, done) => {
+    it('should detect excessive failed commands', () => {
+      let alertReceived = null;
       monitor.once('suspiciousActivity', (alert) => {
-        assert.strictEqual(alert.type, 'excessive_failures');
-        assert.strictEqual(alert.severity, 'medium');
-        done();
+        alertReceived = alert;
       });
 
       // Create failed commands
@@ -205,13 +210,16 @@ describe('ActivityMonitor', () => {
       for (let i = 0; i < 6; i++) {
         monitor.trackCommand(`command${i}`, { allowed: false, reason: 'Blocked' }, sessionId);
       }
+      
+      assert.ok(alertReceived);
+      assert.strictEqual(alertReceived.type, 'excessive_failures');
+      assert.strictEqual(alertReceived.severity, 'medium');
     });
 
-    it('should detect excessive deletions', (t, done) => {
+    it('should detect excessive deletions', () => {
+      let alertReceived = null;
       monitor.once('suspiciousActivity', (alert) => {
-        assert.strictEqual(alert.type, 'excessive_deletions');
-        assert.strictEqual(alert.severity, 'high');
-        done();
+        alertReceived = alert;
       });
 
       // Create deletion commands
@@ -219,13 +227,16 @@ describe('ActivityMonitor', () => {
       for (let i = 0; i < 4; i++) {
         monitor.trackCommand(`rm file${i}`, { allowed: true }, sessionId);
       }
+      
+      assert.ok(alertReceived);
+      assert.strictEqual(alertReceived.type, 'excessive_deletions');
+      assert.strictEqual(alertReceived.severity, 'high');
     });
 
-    it('should detect large file operations', (t, done) => {
+    it('should detect large file operations', () => {
+      let alertReceived = null;
       monitor.once('suspiciousActivity', (alert) => {
-        assert.strictEqual(alert.type, 'large_file_operations');
-        assert.strictEqual(alert.severity, 'medium');
-        done();
+        alertReceived = alert;
       });
 
       // Create large file operations
@@ -234,6 +245,10 @@ describe('ActivityMonitor', () => {
       for (let i = 0; i < 4; i++) {
         monitor.trackFileOperation('write', `/tmp/large${i}.bin`, largeSize, sessionId);
       }
+      
+      assert.ok(alertReceived);
+      assert.strictEqual(alertReceived.type, 'large_file_operations');
+      assert.strictEqual(alertReceived.severity, 'medium');
     });
 
     it('should avoid duplicate alerts within time window', () => {
@@ -554,18 +569,21 @@ describe('ActivityMonitor', () => {
   });
 
   describe('Event Emission', () => {
-    it('should emit analysis complete events', (t, done) => {
+    it('should emit analysis complete events', () => {
+      let analysisReceived = null;
       monitor.once('analysisComplete', (analysis) => {
-        assert.ok(analysis.timestamp);
-        assert.ok(analysis.stats);
-        assert.ok(typeof analysis.activeSessions === 'number');
-        assert.ok(Array.isArray(analysis.recentAlerts));
-        assert.ok(analysis.trends);
-        done();
+        analysisReceived = analysis;
       });
 
       // Manually trigger analysis
       monitor.analyzePatterns();
+      
+      assert.ok(analysisReceived);
+      assert.ok(analysisReceived.timestamp);
+      assert.ok(analysisReceived.stats);
+      assert.ok(typeof analysisReceived.activeSessions === 'number');
+      assert.ok(Array.isArray(analysisReceived.recentAlerts));
+      assert.ok(analysisReceived.trends);
     });
   });
 });

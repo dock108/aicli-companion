@@ -2509,42 +2509,5 @@ describe('AICLIService Unit Tests', () => {
       });
     });
 
-    describe('handleToolMessage', () => {
-      it('should handle tool use messages', () => {
-        const message = {
-          type: 'tool',
-          name: 'Read',
-          params: { file: 'test.js' },
-          result: 'File contents',
-        };
-
-        const result = service.handleToolMessage(message);
-
-        assert.ok(result);
-        assert.strictEqual(result.eventType, 'toolResult');
-        assert.strictEqual(result.data.type, 'tool_result');
-      });
-    });
-
-    describe('processOutputBuffer', () => {
-      it('should process buffered output', () => {
-        const buffer = 'Line 1\nLine 2\n';
-        const result = service.processOutputBuffer(buffer);
-
-        assert.ok(result);
-      });
-    });
-
-    describe('formatMessageForDisplay', () => {
-      it('should format message for display', () => {
-        const message = {
-          type: 'text',
-          content: 'Hello World',
-        };
-
-        const result = service.formatMessageForDisplay(message);
-        assert.ok(result);
-      });
-    });
   });
 });

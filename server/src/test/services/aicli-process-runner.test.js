@@ -328,13 +328,14 @@ describe('AICLI Process Runner - Basic Tests', () => {
       assert.ok(processRunner instanceof EventEmitter);
     });
 
-    it('should emit and handle events', (done) => {
+    it('should emit and handle events', () => {
+      let received = null;
       processRunner.once('test-event', (data) => {
-        assert.strictEqual(data, 'test-data');
-        done();
+        received = data;
       });
 
       processRunner.emit('test-event', 'test-data');
+      assert.strictEqual(received, 'test-data');
     });
   });
 });

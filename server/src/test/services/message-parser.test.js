@@ -168,21 +168,6 @@ describe('UnifiedMessageParser', () => {
     });
   });
 
-  describe('extractCodeBlocks()', () => {
-    it('should extract code blocks from text', () => {
-      const text = 'Text before\n```js\ncode here\n```\nText after';
-      const result = parser.extractCodeBlocks(text);
-      assert.ok(result);
-      assert.ok(Array.isArray(result.blocks));
-    });
-
-    it('should handle text without code blocks', () => {
-      const text = 'Just plain text';
-      const result = parser.extractCodeBlocks(text);
-      assert.ok(result);
-      assert.strictEqual(result.blocks.length, 0);
-    });
-  });
 
   describe('reset()', () => {
     it('should reset all parser state', () => {

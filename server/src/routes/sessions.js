@@ -304,9 +304,11 @@ router.get('/:sessionId/expired', async (req, res) => {
 });
 
 /**
- * POST /api/sessions/keep-alive - Keep an interactive session alive with optional recap
- * New endpoint for interactive session pool
+ * DISABLED: Interactive session pool endpoints are no longer needed
+ * We use --resume flag with per-message spawning instead
  */
+
+/* DISABLED - Interactive session pool endpoints
 router.post('/keep-alive', async (req, res) => {
   const { sessionId, action = 'extend' } = req.body;
   const pool = req.app.get('sessionPool');
@@ -477,5 +479,6 @@ router.delete('/interactive/:sessionId', async (req, res) => {
     });
   }
 });
+// END DISABLED interactive session pool endpoints */
 
 export default router;

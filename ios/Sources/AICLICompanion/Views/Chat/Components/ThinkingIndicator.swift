@@ -16,14 +16,11 @@ struct ThinkingIndicator: View {
     ) {
         if isVisible {
             self.progressInfo = ProgressInfo(
-                stage: activity,
-                progress: nil,
                 message: activity,
-                startTime: Date(),
-                duration: duration,
-                tokenCount: tokenCount,
-                activity: activity,
-                canInterrupt: duration > 10
+                progress: nil,
+                stage: activity,
+                estimatedTimeRemaining: duration > 0 ? TimeInterval(duration) : nil,
+                isIndeterminate: duration == 0
             )
         } else {
             self.progressInfo = nil
@@ -44,7 +41,7 @@ struct ThinkingIndicator: View {
                     .tint(Colors.accentPrimaryEnd)
                 
                 // Just the 2-word message
-                Text(info.activity ?? info.stage)
+                Text(info.stage ?? info.message)
                     .font(Typography.font(.body))
                     .foregroundColor(Colors.textPrimary(for: colorScheme))
                     .animation(.easeInOut(duration: 0.3), value: info.stage)

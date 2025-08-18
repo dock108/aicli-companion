@@ -159,8 +159,8 @@ private struct LoadingIndicator: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                 
-                if let activity = info.activity {
-                    Text(activity)
+                if let stage = info.stage {
+                    Text(stage)
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }

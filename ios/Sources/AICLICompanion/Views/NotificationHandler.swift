@@ -78,11 +78,8 @@ struct NotificationHandler: ViewModifier {
             self.selectedProject = finalProject
             self.isProjectSelected = true
             
-            // Store session ID if provided
-            if let sessionId = userInfo["sessionId"] as? String {
-                print("📱 Restoring session: \(sessionId)")
-                ChatViewModel.shared.currentSessionId = sessionId
-            }
+            // Session IDs are now managed internally by the server
+            // No need to track them in the iOS app
         }
         
         // Clear badge for this project

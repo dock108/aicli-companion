@@ -15,7 +15,6 @@ final class DependencyContainer: ObservableObject {
     @Published var loadingStateCoordinator: LoadingStateCoordinator
     @Published var clipboardManager: ClipboardManager
     @Published var connectionReliabilityManager: ConnectionReliabilityManager
-    @Published var sessionStatePersistence: SessionStatePersistenceService
     @Published var claudeStatusManager: ClaudeStatusManager
     @Published var settingsManager: SettingsManager
     @Published var hapticManager: HapticManager
@@ -33,7 +32,6 @@ final class DependencyContainer: ObservableObject {
         // Initialize data services using shared instances
         self.messagePersistenceService = MessagePersistenceService.shared
         self.projectStateManager = ProjectStateManager.shared
-        self.sessionStatePersistence = SessionStatePersistenceService.shared
         
         // Initialize network services
         self.aicliService = AICLIService()

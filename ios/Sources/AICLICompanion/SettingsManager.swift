@@ -99,6 +99,7 @@ public class SettingsManager: ObservableObject {
 
     func saveConnection(address: String, port: Int, token: String?) {
         let connection = ServerConnection(
+            name: "Manual Server",
             address: address,
             port: port,
             authToken: token,
@@ -127,7 +128,8 @@ public class SettingsManager: ObservableObject {
     }
     
     var serverURL: URL? {
-        return currentConnection?.url
+        guard let urlString = currentConnection?.url else { return nil }
+        return URL(string: urlString)
     }
     
     var authToken: String? {

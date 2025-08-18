@@ -10,7 +10,6 @@ struct ChatView: View {
     @EnvironmentObject var aicliService: AICLIService
     @EnvironmentObject var settings: SettingsManager
     @ObservedObject private var viewModel = ChatViewModel.shared
-    @StateObject private var sessionManager = ChatSessionManager.shared
     
     @State private var messageText = ""
     @State private var keyboardHeight: CGFloat = 0
@@ -61,7 +60,7 @@ struct ChatView: View {
                 if let project = selectedProject {
                     ProjectContextHeader(
                         project: project,
-                        session: sessionManager.activeSession ?? session,
+                        session: session,
                         messageCount: viewModel.messages.count,
                         onSwitchProject: onSwitchProject,
                         onClearSession: clearCurrentSession
@@ -94,8 +93,8 @@ struct ChatView: View {
                     print("🔄 User triggered pull-to-refresh - reloading conversation")
                     
                     // Reload messages from local database (instant)
-                    if let project = selectedProject, let sessionId = viewModel.currentSessionId {
-                        viewModel.loadMessages(for: project, sessionId: sessionId)
+                    if let project = selectedProject {
+                        viewModel.loadMessages(for: project)
                     }
                     
                     // Small delay for visual feedback
@@ -193,6 +192,9 @@ struct ChatView: View {
         
         print("🔷 ChatView: Setting up for project '\(project.name)'")
         
+        // Set the current project in the view model
+        viewModel.setCurrentProject(project)
+        
         // Set up keyboard observers
         setupKeyboardObservers()
         
@@ -202,67 +204,18 @@ struct ChatView: View {
         // Connect HTTP service if needed  
         print("🔗 ChatView: Connecting HTTP service for project '\(project.name)'")
         connectHTTPIfNeeded {
-            print("🔗 ChatView: HTTP service connected, handling session for project '\(project.name)'")
-            // Handle session after connection
-            self.sessionManager.handleSessionAfterConnection(
-                for: project,
-                passedSession: self.session
-            ) { result in
-                switch result {
-                case .success(let session):
-                    print("🔷 ChatView: Session restored: \(session.sessionId)")
-                    
-                    // Set the active session and current session ID for message persistence
-                    self.viewModel.setActiveSession(session)
-                    self.viewModel.currentSessionId = session.sessionId
-                    
-                    // Load messages from persistence using the session ID
-                    self.viewModel.loadMessages(for: project, sessionId: session.sessionId)
-                    
-                    print("🔷 ChatView: Loaded \(self.viewModel.messages.count) messages for restored session")
-                    
-                    // Clear loading state now that session is fully restored
-                    self.viewModel.clearLoadingState(for: project.path)
-                    
-                    // WhatsApp/iMessage pattern: Messages loaded from local database only
-                    // Push notifications will deliver any new messages automatically
-                    
-                case .failure(let error):
-                    // No existing session, but check if we have saved messages for this project
-                    print("ℹ️ No existing session (\(error.localizedDescription)), checking for saved conversations")
-                    
-                    // Clear any stale session data
-                    self.viewModel.setActiveSession(nil)
-                    self.viewModel.currentSessionId = nil
-                    
-                    // Clear any stuck loading state when no session exists
-                    self.viewModel.clearLoadingState(for: project.path)
-                    
-                    // WhatsApp/iMessage pattern: Check if we have any saved conversations for this project
-                    let persistenceService = MessagePersistenceService.shared
-                    if let metadata = persistenceService.getSessionMetadata(for: project.path),
-                       let sessionId = metadata.aicliSessionId {
-                        print("🔄 ChatView: Found saved conversation with session \(sessionId), loading messages")
-                        
-                        // Load the saved conversation
-                        self.viewModel.loadMessages(for: project, sessionId: sessionId)
-                        
-                        // Set the session ID for future messages
-                        self.viewModel.currentSessionId = sessionId
-                        
-                        print("✅ ChatView: Loaded \(self.viewModel.messages.count) messages from saved conversation")
-                        
-                        // Clear loading state now that saved conversation is loaded
-                        self.viewModel.clearLoadingState(for: project.path)
-                    } else {
-                        // Truly no conversation exists yet
-                        print("ℹ️ ChatView: No saved conversation found for \(project.name)")
-                        self.viewModel.messages.removeAll()
-                        // Clear any stuck loading state when there's no conversation
-                        self.viewModel.clearLoadingState(for: project.path)
-                    }
-                }
-            }
+            print("🔗 ChatView: HTTP service connected for project '\(project.name)'")
+            
+            // Load messages from persistence
+            viewModel.loadMessages(for: project)
+            
+            print("🔷 ChatView: Loaded \(viewModel.messages.count) messages")
+            
+            // Clear loading state now that messages are loaded
+            viewModel.clearLoadingState(for: project.path)
+            
+            // WhatsApp/iMessage pattern: Messages loaded from local database only
+            // Push notifications will deliver any new messages automatically
         }
     }
     
@@ -319,20 +272,15 @@ struct ChatView: View {
             return
         }
         
-        // Send message directly - let Claude handle session creation
-        // For fresh chats: currentSessionId will be nil
-        // For continued chats: currentSessionId will have Claude's session ID
+        // Send message directly - sessions are managed by the server
         viewModel.sendMessage(text, for: project, attachments: attachments)
     }
     
     private func clearCurrentSession() {
         guard let project = selectedProject else { return }
         
-        // HTTP doesn't need to send clearChat to server - sessions are stateless
-        // Just clear the local session ID so next message starts fresh
-        if let currentSessionId = viewModel.currentSessionId {
-            print("🗑️ Clearing local session: \(currentSessionId)")
-        }
+        // HTTP doesn't need to send clearChat to server - sessions are managed by the server
+        // Just clear the local messages
         
         // Use the new comprehensive clear function
         viewModel.clearSession()

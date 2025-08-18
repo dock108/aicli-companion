@@ -48,7 +48,6 @@
     "morgan": "^1.10.0",
     "node-forge": "^1.3.1",
     "qrcode": "^1.5.4",
-    "uuid": "^9.0.1",
     "ws": "^8.18.3",
     "lodash": "^4.17.21",
     "lodash.escaperegexp": "^4.1.2",
@@ -70,5 +69,11 @@
   },
   "bin": {
     "aicli-companion-server": "src/index.js"
+  },
+  "lint-staged": {
+    "src/**/*.js": [
+      "npm run lint:fix",
+      "npm run format"
+    ]
   }
 }

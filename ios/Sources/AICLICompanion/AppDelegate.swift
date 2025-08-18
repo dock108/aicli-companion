@@ -11,6 +11,18 @@ public class AppDelegate: NSObject, UIApplicationDelegate {
         // Local-first pattern: No background session coordination needed
         print("🎯 AppDelegate initialized with local-first message storage")
         
+        // Check if app was launched from a notification while terminated
+        if let remoteNotification = launchOptions?[.remoteNotification] as? [AnyHashable: Any] {
+            print("🚀 App launched from notification while terminated")
+            // Don't process just this notification - we'll process ALL pending ones below
+        }
+        
+        // Process ALL pending notifications that weren't delivered while app was terminated
+        // This ensures we don't miss any messages, not just the one that was tapped
+        Task {
+            await PushNotificationService.shared.processPendingNotifications()
+        }
+        
         // Perform async initialization tasks in background
         Task {
             // Perform session cleanup on app launch
@@ -29,24 +41,13 @@ public class AppDelegate: NSObject, UIApplicationDelegate {
     private func performSessionCleanupAsync() async {
         await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .background).async {
-                print("🚀 App launched - performing session cleanup")
+                print("🚀 App launched - performing cleanup")
                 
-                // Clean up expired sessions
-                SessionStatePersistenceService.shared.cleanupExpiredSessions()
-                
-                // Clean up stale session deduplication entries
-                SessionDeduplicationManager.shared.cleanupExpiredSessions()
+                // Sessions are no longer tracked in iOS app
+                // All session management is handled by the server
                 
                 // Local-first pattern: Message persistence handled by MessagePersistenceService
-                // No pending message cleanup needed
-                
-                // Log active sessions
-                let activeSessions = SessionStatePersistenceService.shared.getActiveSessions()
-                print("📊 Active sessions: \(activeSessions.count)")
-                
-                for session in activeSessions {
-                    print("  - \(session.projectName): expires \(session.formattedExpiry)")
-                }
+                // No cleanup needed as messages are stored per project
                 
                 continuation.resume()
             }
@@ -79,12 +80,18 @@ public class AppDelegate: NSObject, UIApplicationDelegate {
     
     public func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any], fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
         print("📨 === BACKGROUND NOTIFICATION RECEIVED ===")
-        print("📨 UserInfo: \(userInfo)")
+        print("📨 UserInfo keys: \(Array(userInfo.keys))")
         
         // Process APNS message through unified pipeline when app is backgrounded
         Task {
             // Check if this is a Claude message that needs processing
-            if userInfo["sessionId"] != nil || userInfo["message"] != nil || userInfo["requiresFetch"] != nil {
+            let isClaudeMessage = userInfo["sessionId"] != nil || 
+                                 userInfo["message"] != nil || 
+                                 userInfo["requiresFetch"] != nil ||
+                                 userInfo["messageId"] != nil ||
+                                 userInfo["projectPath"] != nil
+            
+            if isClaudeMessage {
                 print("📨 Processing Claude message in background...")
                 
                 // Process through PushNotificationService unified pipeline

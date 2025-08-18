@@ -14,6 +14,7 @@ import pushNotificationRoutes from './routes/push-notifications.js';
 import chatRoutes from './routes/chat.js';
 import devicesRoutes from './routes/devices.js';
 import authRoutes from './routes/auth.js';
+import { router as messagesRouter } from './routes/messages.js';
 import { errorHandler } from './middleware/error.js';
 import { AICLIService } from './services/aicli.js';
 import { ServerConfig } from './config/server-config.js';
@@ -22,7 +23,6 @@ import { TLSConfig } from './config/tls-config.js';
 import { ServerStartup } from './config/server-startup.js';
 import { pushNotificationService } from './services/push-notification.js';
 import { tunnelService } from './services/tunnel.js';
-import { sessionPool } from './services/interactive-session-pool.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -33,7 +33,6 @@ class AICLICompanionServer {
     this.config = new ServerConfig();
     this.aicliService = new AICLIService();
     this.aicliService.safeRootDirectory = this.config.configPath; // Set project directory as safe root
-    this.sessionPool = sessionPool; // Interactive session pool
 
     // Configure AICLI permission settings from environment or config
     if (process.env.AICLI_PERMISSION_MODE) {
@@ -116,10 +115,10 @@ class AICLICompanionServer {
 
     // New HTTP + APNS routes
     this.app.set('aicliService', this.aicliService); // Make available to route handlers
-    this.app.set('sessionPool', this.sessionPool); // Make session pool available to routes
     this.app.use('/api/chat', chatRoutes);
     this.app.use('/api/devices', devicesRoutes);
     this.app.use('/api/sessions', sessionRoutes);
+    this.app.use('/api/messages', messagesRouter);
 
     // Static files (for web interface if needed)
     this.app.use('/static', express.static(join(__dirname, '../public')));
@@ -212,10 +211,6 @@ class AICLICompanionServer {
 
       // Verify AICLI Code is available
       const isAvailable = await ServerStartup.checkAICLIAvailability(this.aicliService);
-      
-      // Start interactive session pool health monitoring
-      this.sessionPool.startHealthMonitoring();
-      console.log('🏊 Interactive session pool started');
 
       // Start server
       this.server.listen(this.config.port, this.config.host, async () => {
@@ -278,9 +273,6 @@ class AICLICompanionServer {
     if (tunnelService.isTunnelActive()) {
       await tunnelService.stopTunnel();
     }
-
-    // Shutdown interactive session pool
-    await this.sessionPool.shutdown();
     
     // Shutdown AICLI service
     this.aicliService.shutdown();

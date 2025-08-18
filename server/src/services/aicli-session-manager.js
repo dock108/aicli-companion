@@ -17,6 +17,7 @@ export class AICLISessionManager extends EventEmitter {
     this.sessionMessageBuffers = new Map();
     this.interactiveSessions = new Map(); // Track running Claude processes (not used in --print mode)
     this.claudeSessions = new Map(); // Track Claude session IDs and their last activity
+    this.projectSessions = new Map(); // Track project path → latest session ID mapping
 
     // Configuration
     this.sessionTimeout = options.sessionTimeout || 24 * 60 * 60 * 1000; // 24 hours
@@ -190,9 +191,33 @@ export class AICLISessionManager extends EventEmitter {
   /**
    * Track a session temporarily for response routing only
    * This is used when iOS sends a session ID that we don't know about
+   * IMPORTANT: Updates project → session mapping as Claude returns NEW session IDs
    */
   async trackSessionForRouting(sessionId, workingDirectory) {
     if (!sessionId) return;
+
+    // Update project → session mapping
+    // Claude returns a new session ID with each response when using --resume
+    if (workingDirectory) {
+      const oldSessionId = this.projectSessions.get(workingDirectory);
+      if (oldSessionId && oldSessionId !== sessionId) {
+        console.log(`🔄 Project ${workingDirectory} session ID changed`);
+        console.log(`   Old: ${oldSessionId}`);
+        console.log(`   New: ${sessionId}`);
+        
+        // Clean up old session entry if it exists
+        const oldSession = this.activeSessions.get(oldSessionId);
+        if (oldSession && oldSession.isTemporary) {
+          this.activeSessions.delete(oldSessionId);
+          this.sessionMessageBuffers.delete(oldSessionId);
+          console.log(`   Cleaned up old temporary session ${oldSessionId}`);
+        }
+      }
+      
+      // Update the mapping
+      this.projectSessions.set(workingDirectory, sessionId);
+      console.log(`📌 Project ${workingDirectory} → Session ${sessionId}`);
+    }
 
     // Check if session already exists
     const existingSession = this.activeSessions.get(sessionId);
@@ -604,14 +629,32 @@ export class AICLISessionManager extends EventEmitter {
    * @returns {Object|null} Session object if found
    */
   async findSessionByWorkingDirectory(workingDirectory) {
-    // First check active sessions in memory
-    for (const [, session] of this.activeSessions) {
-      if (session.workingDirectory === workingDirectory) {
+    // Use the projectSessions Map for project → session mapping
+    // This tracks the latest session ID for each project (updated as Claude returns new IDs)
+    const sessionId = this.projectSessions.get(workingDirectory);
+    
+    if (sessionId) {
+      // Look up the actual session object
+      const session = this.activeSessions.get(sessionId);
+      if (session) {
+        console.log(`✅ Found session ${sessionId} for project ${workingDirectory}`);
         return session;
+      } else {
+        console.log(`⚠️ Session ${sessionId} mapped to ${workingDirectory} but not in activeSessions`);
+        // Clean up stale mapping
+        this.projectSessions.delete(workingDirectory);
       }
     }
 
-    // Server is stateless - no persisted sessions
+    // Fallback: check active sessions in memory (shouldn't happen with proper mapping)
+    for (const [, session] of this.activeSessions) {
+      if (session.workingDirectory === workingDirectory) {
+        console.log(`📌 Found session via fallback search: ${session.sessionId}`);
+        // Update the mapping for next time
+        this.projectSessions.set(workingDirectory, session.sessionId);
+        return session;
+      }
+    }
 
     return null;
   }
@@ -914,6 +957,7 @@ export class AICLISessionManager extends EventEmitter {
     this.activeSessions.clear();
     this.claudeSessions.clear();
     this.interactiveSessions.clear();
+    this.projectSessions.clear();
 
     console.log('✅ AICLI Session Manager shut down complete');
   }

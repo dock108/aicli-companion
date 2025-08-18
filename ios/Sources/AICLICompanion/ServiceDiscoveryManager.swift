@@ -304,6 +304,7 @@ struct ManualServerConfiguration {
 
     func toServerConnection() -> ServerConnection {
         return ServerConnection(
+            name: "Manual Server",  // Default name for manual configuration
             address: address,
             port: port,
             authToken: authToken,
@@ -328,7 +329,7 @@ extension ServiceDiscoveryManager {
 
         URLSession.shared.dataTask(with: request) { _, response, error in
             if let error = error {
-                completion(.failure(.networkError(error)))
+                completion(.failure(AICLICompanionError.networkError(error.localizedDescription)))
                 return
             }
 
@@ -339,6 +340,7 @@ extension ServiceDiscoveryManager {
 
             if httpResponse.statusCode == 200 {
                 let connection = ServerConnection(
+                    name: server.name,
                     address: server.address,
                     port: server.port,
                     authToken: nil, // Will be set later if required
@@ -346,14 +348,14 @@ extension ServiceDiscoveryManager {
                 )
                 completion(.success(connection))
             } else {
-                completion(.failure(.connectionFailed("HTTP \(httpResponse.statusCode)")))
+                completion(.failure(AICLICompanionError.serverError("HTTP \(httpResponse.statusCode)")))
             }
         }.resume()
     }
 
     func validateManualConfiguration(_ config: ManualServerConfiguration, completion: @escaping (Result<ServerConnection, AICLICompanionError>) -> Void) {
         guard let url = config.url else {
-            completion(.failure(.connectionFailed("Invalid server address format")))
+            completion(.failure(AICLICompanionError.serverError("Invalid server address format")))
             return
         }
 
@@ -369,13 +371,13 @@ extension ServiceDiscoveryManager {
             if let error = error {
                 // Provide more specific error messages
                 if (error as NSError).code == NSURLErrorCannotConnectToHost {
-                    completion(.failure(.connectionFailed("Cannot connect to server at \(config.address):\(config.port). Make sure the server is running.")))
+                    completion(.failure(AICLICompanionError.serverError("Cannot connect to server at \(config.address):\(config.port). Make sure the server is running.")))
                 } else if (error as NSError).code == NSURLErrorTimedOut {
-                    completion(.failure(.connectionFailed("Connection timed out. Please check your network.")))
+                    completion(.failure(AICLICompanionError.connectionTimeout))
                 } else if (error as NSError).code == NSURLErrorAppTransportSecurityRequiresSecureConnection {
-                    completion(.failure(.connectionFailed("App Transport Security error. Try disabling secure connection.")))
+                    completion(.failure(AICLICompanionError.serverError("App Transport Security error. Try disabling secure connection.")))
                 } else {
-                    completion(.failure(.networkError(error)))
+                    completion(.failure(AICLICompanionError.networkError(error.localizedDescription)))
                 }
                 return
             }
@@ -391,9 +393,9 @@ extension ServiceDiscoveryManager {
             case 401:
                 completion(.failure(.authenticationFailed))
             case 404:
-                completion(.failure(.connectionFailed("Server found but AICLI Companion endpoint not available. Is this an AICLI Companion server?")))
+                completion(.failure(AICLICompanionError.serverError("Server found but AICLI Companion endpoint not available. Is this an AICLI Companion server?")))
             default:
-                completion(.failure(.connectionFailed("Server returned HTTP \(httpResponse.statusCode)")))
+                completion(.failure(AICLICompanionError.serverError("Server returned HTTP \(httpResponse.statusCode)")))
             }
         }.resume()
     }

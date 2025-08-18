@@ -5,7 +5,6 @@ import Combine
 @available(iOS 16.0, macOS 13.0, *)
 @MainActor
 final class ChatMessageManager: ObservableObject {
-    
     // MARK: - Dependencies
     private let persistenceService: MessagePersistenceService
     

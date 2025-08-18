@@ -19,6 +19,7 @@ class ConversationPersistenceService: ObservableObject {
         } catch {
             print("Failed to initialize ConversationStorage: \(error)")
             // Create a temporary storage that will fail gracefully
+            // swiftlint:disable:next force_try
             self.storage = try! ConversationStorage()
         }
     }

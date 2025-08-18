@@ -6,7 +6,6 @@ import Combine
 @available(iOS 16.0, macOS 13.0, *)
 @MainActor
 final class ChatViewModel: ObservableObject {
-    
     // MARK: - Singleton
     static let shared = ChatViewModel()
     

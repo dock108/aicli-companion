@@ -33,9 +33,10 @@ class MessageOptimizer {
       timestamp: message.timestamp || Date.now(),
       sender: message.sender,
       // Only include metadata if present and non-empty
-      ...(message.metadata && Object.keys(message.metadata).length > 0 && {
-        metadata: this.optimizeMetadata(message.metadata)
-      })
+      ...(message.metadata &&
+        Object.keys(message.metadata).length > 0 && {
+          metadata: this.optimizeMetadata(message.metadata),
+        }),
     };
 
     // Add to cache
@@ -58,7 +59,7 @@ class MessageOptimizer {
     // Truncate very long messages (streaming will handle full content)
     const maxLength = 10000;
     if (compressed.length > maxLength) {
-      compressed = compressed.substring(0, maxLength) + '... [truncated]';
+      compressed = `${compressed.substring(0, maxLength)}... [truncated]`;
     }
 
     return compressed;
@@ -69,10 +70,10 @@ class MessageOptimizer {
    */
   optimizeMetadata(metadata) {
     const optimized = {};
-    
+
     // Only keep essential metadata
     const essentialFields = ['sessionId', 'requestId', 'projectPath', 'isFinal'];
-    
+
     for (const field of essentialFields) {
       if (metadata[field] !== undefined && metadata[field] !== null) {
         optimized[field] = metadata[field];
@@ -91,7 +92,7 @@ class MessageOptimizer {
     }
 
     // Process in parallel for better performance
-    return messages.map(msg => this.optimizeMessage(msg));
+    return messages.map((msg) => this.optimizeMessage(msg));
   }
 
   /**
@@ -130,7 +131,7 @@ class MessageOptimizer {
       size: this.messageCache.size,
       hits: this.cacheHits,
       misses: this.cacheMisses,
-      hitRate: total > 0 ? (this.cacheHits / total * 100).toFixed(2) + '%' : '0%'
+      hitRate: total > 0 ? `${((this.cacheHits / total) * 100).toFixed(2)}%` : '0%',
     };
   }
 
@@ -150,7 +151,7 @@ class MessageOptimizer {
     let buffer = '';
     let chunkCount = 0;
     const maxBufferSize = 1000;
-    const flushInterval = 50; // ms
+    const _flushInterval = 50; // ms
 
     return {
       addChunk: (chunk) => {
@@ -176,7 +177,7 @@ class MessageOptimizer {
           return optimized;
         }
         return null;
-      }
+      },
     };
   }
 
@@ -187,7 +188,7 @@ class MessageOptimizer {
     return {
       content: this.compressContent(chunk),
       timestamp: Date.now(),
-      type: 'stream'
+      type: 'stream',
     };
   }
 }

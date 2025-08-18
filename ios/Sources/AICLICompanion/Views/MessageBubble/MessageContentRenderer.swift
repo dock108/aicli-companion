@@ -5,7 +5,6 @@ import Foundation
 
 @available(iOS 17.0, macOS 14.0, *)
 struct MessageContentRenderer {
-    
     // MARK: - User Bubble Rendering
     
     static func userBubble(for message: Message, colorScheme: ColorScheme, clipboardManager: ClipboardManager) -> some View {

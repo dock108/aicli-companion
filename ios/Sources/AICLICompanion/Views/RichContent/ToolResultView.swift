@@ -167,13 +167,13 @@ struct ToolResultView: View {
                 .padding(.bottom, 8)
             }
         }
-        .background(toolData.success ? 
-                   Color.blue.opacity(0.05) : 
+        .background(toolData.success ?
+                   Color.blue.opacity(0.05) :
                    Color.orange.opacity(0.05))
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke(toolData.success ? 
-                       Color.blue.opacity(0.3) : 
+                .stroke(toolData.success ?
+                       Color.blue.opacity(0.3) :
                        Color.orange.opacity(0.3), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 10))

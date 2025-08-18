@@ -204,7 +204,7 @@ export class AICLISessionManager extends EventEmitter {
         console.log(`🔄 Project ${workingDirectory} session ID changed`);
         console.log(`   Old: ${oldSessionId}`);
         console.log(`   New: ${sessionId}`);
-        
+
         // Clean up old session entry if it exists
         const oldSession = this.activeSessions.get(oldSessionId);
         if (oldSession && oldSession.isTemporary) {
@@ -213,7 +213,7 @@ export class AICLISessionManager extends EventEmitter {
           console.log(`   Cleaned up old temporary session ${oldSessionId}`);
         }
       }
-      
+
       // Update the mapping
       this.projectSessions.set(workingDirectory, sessionId);
       console.log(`📌 Project ${workingDirectory} → Session ${sessionId}`);
@@ -632,7 +632,7 @@ export class AICLISessionManager extends EventEmitter {
     // Use the projectSessions Map for project → session mapping
     // This tracks the latest session ID for each project (updated as Claude returns new IDs)
     const sessionId = this.projectSessions.get(workingDirectory);
-    
+
     if (sessionId) {
       // Look up the actual session object
       const session = this.activeSessions.get(sessionId);
@@ -640,7 +640,9 @@ export class AICLISessionManager extends EventEmitter {
         console.log(`✅ Found session ${sessionId} for project ${workingDirectory}`);
         return session;
       } else {
-        console.log(`⚠️ Session ${sessionId} mapped to ${workingDirectory} but not in activeSessions`);
+        console.log(
+          `⚠️ Session ${sessionId} mapped to ${workingDirectory} but not in activeSessions`
+        );
         // Clean up stale mapping
         this.projectSessions.delete(workingDirectory);
       }

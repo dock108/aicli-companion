@@ -61,7 +61,7 @@ public class AICLIPushNotificationManager: ObservableObject {
         if connectionManager.hasValidConnection {
             registerDeviceForPushNotifications(deviceToken: token) { result in
                 switch result {
-                case .success():
+                case .success:
                     print("Device successfully registered for push notifications")
                 case .failure(let error):
                     print("Failed to register device for push notifications: \(error)")

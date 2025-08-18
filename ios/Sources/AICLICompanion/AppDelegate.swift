@@ -85,8 +85,8 @@ public class AppDelegate: NSObject, UIApplicationDelegate {
         // Process APNS message through unified pipeline when app is backgrounded
         Task {
             // Check if this is a Claude message that needs processing
-            let isClaudeMessage = userInfo["sessionId"] != nil || 
-                                 userInfo["message"] != nil || 
+            let isClaudeMessage = userInfo["sessionId"] != nil ||
+                                 userInfo["message"] != nil ||
                                  userInfo["requiresFetch"] != nil ||
                                  userInfo["messageId"] != nil ||
                                  userInfo["projectPath"] != nil

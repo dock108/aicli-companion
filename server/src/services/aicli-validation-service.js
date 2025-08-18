@@ -1,7 +1,6 @@
 import { resolve } from 'path';
 import { access, constants } from 'fs/promises';
 import { FORBIDDEN_PATHS } from '../constants/index.js';
-import { MessageProcessor } from './aicli-utils.js';
 
 /**
  * Unified validation service for AICLI
@@ -292,10 +291,13 @@ export class AICLIValidationService {
     }
 
     // Remove potentially dangerous characters while preserving formatting
-    return content
-      .replace(/\0/g, '') // Remove null bytes
-      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Remove control characters except \t, \n, \r
-      .substring(0, 100000); // Limit length to 100KB
+    return (
+      content
+        .replace(/\0/g, '') // Remove null bytes
+        // eslint-disable-next-line no-control-regex
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Remove control characters except \t, \n, \r
+        .substring(0, 100000)
+    ); // Limit length to 100KB
   }
 
   /**

@@ -36,7 +36,7 @@ public class AICLIConnectionManager: ObservableObject {
         testConnection { [weak self] result in
             DispatchQueue.main.async {
                 switch result {
-                case .success():
+                case .success:
                     self?.isConnected = true
                     self?.connectionStatus = ConnectionStatus.connected
                     completion(.success(()))
@@ -82,7 +82,7 @@ public class AICLIConnectionManager: ObservableObject {
             request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
         }
         
-        let task = urlSession.dataTask(with: request) { data, response, error in
+        let task = urlSession.dataTask(with: request) { _, response, error in
             if let error = error {
                 completion(.failure(AICLICompanionError.networkError(error.localizedDescription)))
                 return

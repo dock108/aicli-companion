@@ -4,7 +4,6 @@ import Foundation
 // MARK: - Markdown Parsing Utilities
 
 struct MarkdownParser {
-    
     // MARK: - Content Part Types
     
     enum ContentPart {
@@ -288,6 +287,7 @@ struct MarkdownParser {
         let linkMatch = String(text[linkRange])
         
         // Extract text and URL using regex groups
+        // swiftlint:disable:next force_try
         let regex = try! NSRegularExpression(pattern: "\\[([^\\]]+)\\]\\(([^)]+)\\)")
         let nsRange = NSRange(linkRange, in: text)
         

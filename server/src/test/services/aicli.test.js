@@ -2476,4 +2476,75 @@ describe('AICLIService Unit Tests', () => {
       });
     });
   });
+
+  describe('Additional Coverage Methods', () => {
+    describe('handleResultMessage', () => {
+      it('should handle result messages', () => {
+        const message = {
+          type: 'result',
+          result: 'Success',
+          session_id: 'test-session',
+          is_error: false,
+        };
+
+        const result = service.handleResultMessage(message);
+
+        assert.ok(result);
+        assert.strictEqual(result.eventType, 'conversationResult');
+        assert.strictEqual(result.data.type, 'final_result');
+      });
+
+      it('should handle error results', () => {
+        const message = {
+          type: 'result',
+          result: 'Error occurred',
+          session_id: 'test-session',
+          is_error: true,
+        };
+
+        const result = service.handleResultMessage(message);
+
+        assert.ok(result);
+        assert.strictEqual(result.data.isError, true);
+      });
+    });
+
+    describe('handleToolMessage', () => {
+      it('should handle tool use messages', () => {
+        const message = {
+          type: 'tool',
+          name: 'Read',
+          params: { file: 'test.js' },
+          result: 'File contents',
+        };
+
+        const result = service.handleToolMessage(message);
+
+        assert.ok(result);
+        assert.strictEqual(result.eventType, 'toolResult');
+        assert.strictEqual(result.data.type, 'tool_result');
+      });
+    });
+
+    describe('processOutputBuffer', () => {
+      it('should process buffered output', () => {
+        const buffer = 'Line 1\nLine 2\n';
+        const result = service.processOutputBuffer(buffer);
+
+        assert.ok(result);
+      });
+    });
+
+    describe('formatMessageForDisplay', () => {
+      it('should format message for display', () => {
+        const message = {
+          type: 'text',
+          content: 'Hello World',
+        };
+
+        const result = service.formatMessageForDisplay(message);
+        assert.ok(result);
+      });
+    });
+  });
 });

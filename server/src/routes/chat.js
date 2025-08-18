@@ -1,7 +1,6 @@
 import express from 'express';
 import { randomUUID } from 'crypto';
 import { createLogger } from '../utils/logger.js';
-import { messageOptimizer } from '../utils/message-optimizer.js';
 
 const logger = createLogger('ChatAPI');
 // TODO: Check what validation middleware exists
@@ -24,14 +23,15 @@ router.post('/', async (req, res) => {
   } = req.body;
   const requestId =
     req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  
+
   // Look up existing session for this project path if client didn't send a sessionId
   const aicliService = req.app.get('aicliService');
   let sessionId = clientSessionId;
-  
+
   if (!sessionId && projectPath) {
     // Try to find an existing session for this project
-    const existingSession = await aicliService.sessionManager.findSessionByWorkingDirectory(projectPath);
+    const existingSession =
+      await aicliService.sessionManager.findSessionByWorkingDirectory(projectPath);
     if (existingSession) {
       sessionId = existingSession.sessionId;
       logger.info('Found existing session for project', {
@@ -348,7 +348,7 @@ router.post('/', async (req, res) => {
           requestId,
           sessionId: claudeSessionId,
         });
-        
+
         // Still send success response to client to avoid timeout
         res.json({
           success: true,

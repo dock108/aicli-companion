@@ -201,15 +201,15 @@ public class PushNotificationService: NSObject, ObservableObject {
             // Check if this is a Claude message that needs processing
             // Note: Check for non-empty message content, not just presence
             let hasValidMessage = (userInfo["message"] as? String)?.isEmpty == false
-            let isClaudeMessage = hasValidMessage || 
+            let isClaudeMessage = hasValidMessage ||
                                  userInfo["requiresFetch"] != nil ||
                                  userInfo["messageId"] != nil
             
             if isClaudeMessage {
                 // Check if we've already processed this notification
                 let notificationId = extractNotificationId(from: userInfo)
-                let alreadyProcessed = processedMessageQueue.sync { 
-                    processedMessageIds.contains(notificationId) 
+                let alreadyProcessed = processedMessageQueue.sync {
+                    processedMessageIds.contains(notificationId)
                 }
                 
                 if !alreadyProcessed {

@@ -9,7 +9,6 @@ import AppKit
 // MARK: - Message Attachment Handling
 
 struct MessageAttachmentHandler {
-    
     // MARK: - Attachment Extraction
     
     static func getAttachments(from message: Message) -> [AttachmentData]? {

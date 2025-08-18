@@ -63,13 +63,11 @@ struct ConversationMetadata: Codable {
     var tags: [String] = []
     var isFavorite: Bool = false
     var lastActiveAt: Date = Date()
-    
-    init() {}
 }
 
 enum ExportFormat: String, Codable, CaseIterable {
     case json = "json"
-    case markdown = "md" 
+    case markdown = "md"
     case text = "txt"
     case html = "html"
     case pdf = "pdf"

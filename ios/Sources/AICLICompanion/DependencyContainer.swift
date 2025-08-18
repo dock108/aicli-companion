@@ -48,7 +48,6 @@ final class DependencyContainer: ObservableObject {
         // Note: Dependencies are already wired in the singletons
         // No need to inject them again
     }
-    
 }
 
 // MARK: - Environment Key

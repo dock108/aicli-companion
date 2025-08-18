@@ -273,7 +273,7 @@ class AICLICompanionServer {
     if (tunnelService.isTunnelActive()) {
       await tunnelService.stopTunnel();
     }
-    
+
     // Shutdown AICLI service
     this.aicliService.shutdown();
 

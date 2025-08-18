@@ -292,7 +292,7 @@ public class AICLIMessageOperations {
             // Try to parse as a simple success response
             if let jsonObject = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
                 // Handle APNS delivery acknowledgment response
-                if let success = jsonObject["success"] as? Bool, 
+                if let success = jsonObject["success"] as? Bool,
                    success,
                    let deliveryMethod = jsonObject["deliveryMethod"] as? String,
                    deliveryMethod == "apns" {

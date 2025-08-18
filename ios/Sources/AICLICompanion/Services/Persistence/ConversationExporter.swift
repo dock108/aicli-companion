@@ -3,7 +3,6 @@ import Foundation
 // MARK: - Conversation Export Operations
 
 class ConversationExporter {
-    
     // MARK: - Single Conversation Export
     
     func export(_ conversation: Conversation, to format: ExportFormat) throws -> Data {

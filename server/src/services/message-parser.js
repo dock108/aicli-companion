@@ -43,7 +43,7 @@ export class UnifiedMessageParser {
    */
   parseStreamData(data, isComplete = false) {
     this.buffer += data;
-    const chunks = [];
+    const _chunks = [];
 
     // Check if this is stream-json format (newline-delimited JSON)
     if (this.looksLikeStreamJson(this.buffer)) {
@@ -83,7 +83,7 @@ export class UnifiedMessageParser {
             id: this.chunkId++,
             type: 'text',
             content: trimmedLine,
-            timestamp: Date.now()
+            timestamp: Date.now(),
           });
         }
       }
@@ -97,7 +97,7 @@ export class UnifiedMessageParser {
    */
   parseTextStream(isComplete) {
     const chunks = [];
-    
+
     // Process buffer looking for natural break points
     while (this.buffer.length > 0 || isComplete) {
       const chunk = this.extractNextChunk(isComplete);
@@ -125,7 +125,7 @@ export class UnifiedMessageParser {
         type: 'code',
         language: language || 'plaintext',
         content: code.trim(),
-        timestamp: Date.now()
+        timestamp: Date.now(),
       };
     }
 
@@ -138,7 +138,7 @@ export class UnifiedMessageParser {
         id: this.chunkId++,
         type: 'progress',
         content: fullMatch.trim(),
-        timestamp: Date.now()
+        timestamp: Date.now(),
       };
     }
 
@@ -152,7 +152,7 @@ export class UnifiedMessageParser {
           id: this.chunkId++,
           type: 'text',
           content,
-          timestamp: Date.now()
+          timestamp: Date.now(),
         };
       }
     }
@@ -165,7 +165,7 @@ export class UnifiedMessageParser {
         id: this.chunkId++,
         type: 'text',
         content,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       };
     }
 
@@ -183,7 +183,7 @@ export class UnifiedMessageParser {
         type: 'system',
         content: parsed.message || parsed.system_message,
         sessionId: parsed.session_id,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       };
     }
 
@@ -194,7 +194,7 @@ export class UnifiedMessageParser {
         content: parsed.message || parsed.progress.message,
         activity: parsed.progress?.activity,
         percentage: parsed.progress?.percentage,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       };
     }
 
@@ -204,7 +204,7 @@ export class UnifiedMessageParser {
         type: 'thinking',
         content: parsed.content || parsed.thinking,
         duration: parsed.duration,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       };
     }
 
@@ -214,7 +214,7 @@ export class UnifiedMessageParser {
         type: 'content',
         content: parsed.result || parsed.content,
         sessionId: parsed.session_id,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       };
     }
 
@@ -223,7 +223,7 @@ export class UnifiedMessageParser {
       id: this.chunkId++,
       type: 'data',
       content: JSON.stringify(parsed),
-      timestamp: Date.now()
+      timestamp: Date.now(),
     };
   }
 
@@ -260,7 +260,7 @@ export class UnifiedMessageParser {
               hasThinking: !!parsed.thinking,
               hasToolUse: !!(parsed.tool_calls || parsed.tools_used),
             },
-            timestamp: Date.now()
+            timestamp: Date.now(),
           };
         }
       } catch (e) {
@@ -295,7 +295,7 @@ export class UnifiedMessageParser {
     if (parsed.content) return parsed.content;
     if (parsed.text) return parsed.text;
     if (parsed.message) return parsed.message;
-    
+
     // For tool use, format nicely
     if (parsed.tool_calls || parsed.tools_used) {
       return this.formatToolUse(parsed.tool_calls || parsed.tools_used);
@@ -309,15 +309,18 @@ export class UnifiedMessageParser {
    * Format tool use for display
    */
   formatToolUse(tools) {
-    if (!Array.isArray(tools)) {
-      tools = [tools];
+    let toolsArray = tools;
+    if (!Array.isArray(toolsArray)) {
+      toolsArray = [toolsArray];
     }
 
-    return tools.map(tool => {
-      const name = tool.name || tool.tool_name || 'Unknown Tool';
-      const params = tool.parameters || tool.inputs || {};
-      return `Using ${name}: ${JSON.stringify(params, null, 2)}`;
-    }).join('\n\n');
+    return toolsArray
+      .map((tool) => {
+        const name = tool.name || tool.tool_name || 'Unknown Tool';
+        const params = tool.parameters || tool.inputs || {};
+        return `Using ${name}: ${JSON.stringify(params, null, 2)}`;
+      })
+      .join('\n\n');
   }
 
   /**
@@ -329,7 +332,7 @@ export class UnifiedMessageParser {
     for (const line of lines) {
       const trimmed = line.trim();
       if (!trimmed) continue;
-      
+
       try {
         JSON.parse(trimmed);
         return true;
@@ -387,7 +390,7 @@ export function parseClaudeOutput(text) {
     return {
       isJson: true,
       content: result.content,
-      metadata: result.metadata
+      metadata: result.metadata,
     };
   }
   return null;

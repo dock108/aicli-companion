@@ -202,13 +202,13 @@ export class AICLIProcessRunner extends EventEmitter {
       let responseComplete = false;
       const responses = [];
       let accumulatedText = ''; // Collect text content from tool use sequences
-      let lastResponseTime = Date.now();
+      let _lastResponseTime = Date.now();
       let hasToolUse = false;
 
       // Set up one-time listeners for this message
       const dataHandler = (data) => {
         const chunk = data.toString();
-        lastResponseTime = Date.now();
+        _lastResponseTime = Date.now();
 
         // Parse each line as stream JSON
         const lines = chunk.split('\n');
@@ -478,7 +478,7 @@ export class AICLIProcessRunner extends EventEmitter {
     // The --session-id flag is meant to CREATE a new session with that ID,
     // not resume an existing one. Each message spawns a new process which
     // can't access the context from previous processes.
-    
+
     // Only add session arguments if we have a valid sessionId
     if (sessionId) {
       // Use --resume to continue an existing conversation

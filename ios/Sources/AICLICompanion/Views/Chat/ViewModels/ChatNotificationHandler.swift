@@ -5,7 +5,6 @@ import Combine
 @available(iOS 16.0, macOS 13.0, *)
 @MainActor
 final class ChatNotificationHandler: ObservableObject {
-    
     // MARK: - Dependencies
     private let messageManager: ChatMessageManager
     private let loadingStateManager: ChatLoadingStateManager

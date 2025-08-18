@@ -136,13 +136,13 @@ struct CommandOutputView: View {
                 .padding(.bottom, 8)
             }
         }
-        .background(commandData.exitCode == 0 ? 
-                   Color.green.opacity(0.05) : 
+        .background(commandData.exitCode == 0 ?
+                   Color.green.opacity(0.05) :
                    Color.red.opacity(0.05))
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke(commandData.exitCode == 0 ? 
-                       Color.green.opacity(0.3) : 
+                .stroke(commandData.exitCode == 0 ?
+                       Color.green.opacity(0.3) :
                        Color.red.opacity(0.3), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 10))

@@ -24,7 +24,6 @@ struct ProjectState {
 @available(iOS 16.0, macOS 13.0, *)
 @MainActor
 final class ChatProjectStateManager: ObservableObject {
-    
     // MARK: - Published Properties
     @Published var currentProject: Project?
     @Published var projectStates: [String: ProjectState] = [:]
@@ -32,41 +31,44 @@ final class ChatProjectStateManager: ObservableObject {
     // MARK: - Project Operations
     
     func setCurrentProject(_ project: Project?) {
-        print("🏗️ ProjectStateManager: Setting current project to: \(project?.name ?? "nil")")
         currentProject = project
+        
+        // Ensure state exists for new project
+        if let project = project, projectStates[project.path] == nil {
+            projectStates[project.path] = ProjectState(projectPath: project.path)
+        }
     }
     
-    func getOrCreateProjectState(for project: Project) -> ProjectState {
-        if let existingState = projectStates[project.path] {
-            return existingState
+    func updateProjectState(for path: String, update: (inout ProjectState) -> Void) {
+        if projectStates[path] == nil {
+            projectStates[path] = ProjectState(projectPath: path)
         }
         
-        let newState = ProjectState(projectPath: project.path)
-        projectStates[project.path] = newState
-        print("🏗️ ProjectStateManager: Created new state for project: \(project.name)")
-        return newState
-    }
-    
-    func updateProjectState(for project: Project, update: (ProjectState) -> Void) {
-        let state = getOrCreateProjectState(for: project)
-    func updateProjectState(for project: Project, update: (inout ProjectState) -> Void) {
-        if projectStates[project.path] == nil {
-            projectStates[project.path] = ProjectState(projectPath: project.path)
-            print("🏗️ ProjectStateManager: Created new state for project: \(project.name)")
+        if var state = projectStates[path] {
+            update(&state)
+            projectStates[path] = state
         }
-        update(&projectStates[project.path]!)
-        print("🏗️ ProjectStateManager: Updated state for project: \(project.name)")
     }
     
-    func clearProjectState(for projectPath: String) {
-        projectStates.removeValue(forKey: projectPath)
-        print("🏗️ ProjectStateManager: Cleared state for project: \(projectPath)")
+    func clearAllProjects() {
+        // Cancel any active timers
+        for (_, var state) in projectStates {
+            state.cancelTimers()
+        }
+        
+        projectStates.removeAll()
+        currentProject = nil
     }
     
-    // MARK: - State Queries
+    // MARK: - Convenience Getters
     
-    func isLoadingForProject(_ projectPath: String) -> Bool {
-        return projectStates[projectPath]?.isLoading ?? false
+    var currentProjectState: ProjectState? {
+        guard let project = currentProject else { return nil }
+        return projectStates[project.path]
+    }
+    
+    func state(for project: Project) -> ProjectState? {
+        return projectStates[project.path]
     }
     
     func shouldBlockSending(for project: Project) -> Bool {

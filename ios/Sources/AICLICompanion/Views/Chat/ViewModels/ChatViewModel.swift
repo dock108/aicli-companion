@@ -125,7 +125,7 @@ final class ChatViewModel: ObservableObject {
         messageManager.appendMessage(userMessage, for: project)
         
         // Send to server
-        AICLIService.shared.sendMessage(
+        aicliService.sendMessage(
             text,
             projectPath: project.path,
             attachments: attachments

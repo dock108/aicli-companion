@@ -22,7 +22,7 @@ struct MessageAttachmentHandler {
                     id: info.id,
                     type: attachmentTypeFromMimeType(info.mimeType),
                     name: info.name,
-                    data: info.base64Data?.data(using: .utf8) ?? Data(),
+                    data: info.base64Data.flatMap { Data(base64Encoded: $0) } ?? Data(),
                     mimeType: info.mimeType,
                     size: info.size
                 )

@@ -49,7 +49,12 @@ final class ChatProjectStateManager: ObservableObject {
     
     func updateProjectState(for project: Project, update: (ProjectState) -> Void) {
         let state = getOrCreateProjectState(for: project)
-        update(state)
+    func updateProjectState(for project: Project, update: (inout ProjectState) -> Void) {
+        if projectStates[project.path] == nil {
+            projectStates[project.path] = ProjectState(projectPath: project.path)
+            print("🏗️ ProjectStateManager: Created new state for project: \(project.name)")
+        }
+        update(&projectStates[project.path]!)
         print("🏗️ ProjectStateManager: Updated state for project: \(project.name)")
     }
     

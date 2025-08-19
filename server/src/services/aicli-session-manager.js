@@ -17,6 +17,7 @@ export class AICLISessionManager extends EventEmitter {
     this.sessionMessageBuffers = new Map();
     this.interactiveSessions = new Map(); // Track running Claude processes (not used in --print mode)
     this.claudeSessions = new Map(); // Track Claude session IDs and their last activity
+    this.projectSessions = new Map(); // Track project path → latest session ID mapping
 
     // Configuration
     this.sessionTimeout = options.sessionTimeout || 24 * 60 * 60 * 1000; // 24 hours
@@ -54,16 +55,16 @@ export class AICLISessionManager extends EventEmitter {
   async checkSessionTimeouts() {
     const now = Date.now();
 
-    // Check Claude sessions (--print mode with --resume)
+    // Check Claude sessions
     for (const [sessionId, sessionData] of this.claudeSessions) {
       const timeSinceActivity = now - sessionData.lastActivity;
       const timeUntilTimeout = this.sessionTimeout - timeSinceActivity;
 
-      // Send warning at 20 hours of inactivity
+      // Send warning when approaching timeout (within the warning window)
       if (
-        timeUntilTimeout <= 4 * 60 * 60 * 1000 &&
+        timeSinceActivity >= this.sessionWarningTime &&
         timeUntilTimeout > 0 &&
-        !sessionData.warningsSent?.includes('20hr')
+        !sessionData.warningsSent?.includes('timeout_warning')
       ) {
         const hoursInactive = Math.floor(timeSinceActivity / (60 * 60 * 1000));
         const minutesInactive = Math.floor((timeSinceActivity % (60 * 60 * 1000)) / (60 * 1000));
@@ -74,7 +75,7 @@ export class AICLISessionManager extends EventEmitter {
 
         // Mark warning as sent
         if (!sessionData.warningsSent) sessionData.warningsSent = [];
-        sessionData.warningsSent.push('20hr');
+        sessionData.warningsSent.push('timeout_warning');
 
         // Emit event for push notification
         this.emit('sessionWarning', {
@@ -106,13 +107,17 @@ export class AICLISessionManager extends EventEmitter {
       const sessionAge = now - session.createdAt;
       const timeUntilTimeout = this.sessionTimeout - sessionAge;
 
-      // Send warning at 20 hours
-      if (timeUntilTimeout <= 4 * 60 * 60 * 1000 && !session.warningsSent?.includes('20hr')) {
+      // Send warning when approaching timeout
+      if (
+        sessionAge >= this.sessionWarningTime &&
+        timeUntilTimeout > 0 &&
+        !session.warningsSent?.includes('timeout_warning')
+      ) {
         console.log(`⏰ Interactive session ${sessionId} approaching 24hr timeout (4 hours left)`);
 
         // Mark warning as sent
         if (!session.warningsSent) session.warningsSent = [];
-        session.warningsSent.push('20hr');
+        session.warningsSent.push('timeout_warning');
 
         // Emit event for push notification
         this.emit('sessionWarning', {
@@ -190,9 +195,33 @@ export class AICLISessionManager extends EventEmitter {
   /**
    * Track a session temporarily for response routing only
    * This is used when iOS sends a session ID that we don't know about
+   * IMPORTANT: Updates project → session mapping as Claude returns NEW session IDs
    */
   async trackSessionForRouting(sessionId, workingDirectory) {
     if (!sessionId) return;
+
+    // Update project → session mapping
+    // Claude returns a new session ID with each response when using --resume
+    if (workingDirectory) {
+      const oldSessionId = this.projectSessions.get(workingDirectory);
+      if (oldSessionId && oldSessionId !== sessionId) {
+        console.log(`🔄 Project ${workingDirectory} session ID changed`);
+        console.log(`   Old: ${oldSessionId}`);
+        console.log(`   New: ${sessionId}`);
+
+        // Clean up old session entry if it exists
+        const oldSession = this.activeSessions.get(oldSessionId);
+        if (oldSession && oldSession.isTemporary) {
+          this.activeSessions.delete(oldSessionId);
+          this.sessionMessageBuffers.delete(oldSessionId);
+          console.log(`   Cleaned up old temporary session ${oldSessionId}`);
+        }
+      }
+
+      // Update the mapping
+      this.projectSessions.set(workingDirectory, sessionId);
+      console.log(`📌 Project ${workingDirectory} → Session ${sessionId}`);
+    }
 
     // Check if session already exists
     const existingSession = this.activeSessions.get(sessionId);
@@ -326,92 +355,13 @@ export class AICLISessionManager extends EventEmitter {
   }
 
   /**
-   * Initialize session persistence (disabled - sessions should be client-managed)
+   * Initialize session persistence (disabled - server is stateless)
    */
   async initializePersistence() {
-    // DISABLED: Session persistence should be managed by clients
-    // Server should start fresh without loading old sessions
-    // try {
-    //   await sessionPersistence.initialize();
-    //
-    //   // Also initialize message queue service
-    //   const messageQueueService = getMessageQueueService();
-    //   await messageQueueService.initialize();
-    //
-    //   await this.restorePersistedSessions();
-    // } catch (error) {
-    //   console.error('❌ Failed to initialize session persistence:', error);
-    // }
-    // Server is stateless - no message queue needed
+    // Server is stateless - no persistence needed
   }
 
-  /**
-   * Restore sessions from persistent storage (disabled)
-   */
-  async restorePersistedSessions() {
-    // Server is stateless - no session restoration
-    console.log('✅ Server starting fresh (stateless mode)');
-    return;
-  }
-
-  /**
-   * Create or get an interactive Claude session
-   */
-  async getOrCreateInteractiveSession(workingDirectory, existingSessionId = null) {
-    // Check if we have an existing session with this ID
-    if (existingSessionId && this.interactiveSessions.has(existingSessionId)) {
-      const session = this.interactiveSessions.get(existingSessionId);
-      session.lastActivity = Date.now();
-      console.log(`♻️ Reusing existing interactive session ${existingSessionId}`);
-      return session;
-    }
-
-    // Check resource limits before creating new session
-    if (this.interactiveSessions.size >= this.maxConcurrentSessions) {
-      throw new Error(`Maximum concurrent sessions (${this.maxConcurrentSessions}) reached`);
-    }
-
-    // Create new interactive session
-    const processRunner = (await import('./aicli-process-runner.js')).AICLIProcessRunner;
-    const runner = new processRunner();
-
-    try {
-      console.log(`🚀 Creating new interactive Claude session for ${workingDirectory}`);
-      const sessionInfo = await runner.createInteractiveSession(workingDirectory);
-
-      // Store session info
-      const session = {
-        ...sessionInfo,
-        createdAt: Date.now(),
-        lastActivity: Date.now(),
-        messageCount: 0,
-        warningsSent: [],
-      };
-
-      this.interactiveSessions.set(sessionInfo.sessionId, session);
-
-      // Set up process exit handler
-      sessionInfo.process.on('exit', (code) => {
-        console.log(
-          `💀 Interactive session ${sessionInfo.sessionId} process exited with code ${code}`
-        );
-        this.interactiveSessions.delete(sessionInfo.sessionId);
-
-        // Emit event for client notification
-        this.emit('sessionClosed', {
-          sessionId: sessionInfo.sessionId,
-          reason: 'process_exit',
-          code,
-        });
-      });
-
-      console.log(`✅ Created interactive session ${sessionInfo.sessionId}`);
-      return session;
-    } catch (error) {
-      console.error(`❌ Failed to create interactive session: ${error.message}`);
-      throw error;
-    }
-  }
+  // NOTE: Interactive session methods will be added in Phase 2
 
   /**
    * Kill an interactive session
@@ -420,7 +370,7 @@ export class AICLISessionManager extends EventEmitter {
     const session = this.interactiveSessions.get(sessionId);
     if (!session) {
       console.log(`⚠️ Session ${sessionId} not found`);
-      return false;
+      return { success: false, message: 'Session not found' };
     }
 
     console.log(`🔪 Killing session ${sessionId}`);
@@ -448,7 +398,7 @@ export class AICLISessionManager extends EventEmitter {
       reason: 'manual_kill',
     });
 
-    return true;
+    return { success: true, message: 'Session killed successfully' };
   }
 
   /**
@@ -571,21 +521,6 @@ export class AICLISessionManager extends EventEmitter {
 
     this.activeSessions.set(sanitizedSessionId, session);
 
-    // DISABLED: Session persistence
-    // if (process.env.NODE_ENV !== 'test') {
-    //   try {
-    //     await sessionPersistence.setSession(sanitizedSessionId, {
-    //       workingDirectory: validatedWorkingDir,
-    //       conversationStarted: false,
-    //       initialPrompt: sanitizedPrompt,
-    //       skipPermissions,
-    //     });
-    //     console.log(`💾 Session ${sanitizedSessionId} persisted to disk`);
-    //   } catch (error) {
-    //     console.error('❌ Failed to persist session %s:', sanitizedSessionId, error);
-    //   }
-    // }
-
     // Initialize message buffer for this session
     this.sessionMessageBuffers.set(sanitizedSessionId, AICLIMessageHandler.createSessionBuffer());
 
@@ -637,16 +572,6 @@ export class AICLISessionManager extends EventEmitter {
       // Remove from active sessions and clean up message buffer
       this.activeSessions.delete(sessionId);
       this.sessionMessageBuffers.delete(sessionId);
-
-      // DISABLED: Session persistence removal
-      // if (process.env.NODE_ENV !== 'test') {
-      //   try {
-      //     await sessionPersistence.removeSession(sessionId);
-      //     console.log(`💾 Session ${sessionId} removed from persistent storage`);
-      //   } catch (error) {
-      //     console.error('❌ Failed to remove session %s from persistence:', sessionId, error);
-      //   }
-      // }
 
       // Emit session cleaned event for other components to handle cleanup
       this.emit('sessionCleaned', {
@@ -708,14 +633,34 @@ export class AICLISessionManager extends EventEmitter {
    * @returns {Object|null} Session object if found
    */
   async findSessionByWorkingDirectory(workingDirectory) {
-    // First check active sessions in memory
-    for (const [, session] of this.activeSessions) {
-      if (session.workingDirectory === workingDirectory) {
+    // Use the projectSessions Map for project → session mapping
+    // This tracks the latest session ID for each project (updated as Claude returns new IDs)
+    const sessionId = this.projectSessions.get(workingDirectory);
+
+    if (sessionId) {
+      // Look up the actual session object
+      const session = this.activeSessions.get(sessionId);
+      if (session) {
+        console.log(`✅ Found session ${sessionId} for project ${workingDirectory}`);
         return session;
+      } else {
+        console.log(
+          `⚠️ Session ${sessionId} mapped to ${workingDirectory} but not in activeSessions`
+        );
+        // Clean up stale mapping
+        this.projectSessions.delete(workingDirectory);
       }
     }
 
-    // Server is stateless - no persisted sessions
+    // Fallback: check active sessions in memory (shouldn't happen with proper mapping)
+    for (const [, session] of this.activeSessions) {
+      if (session.workingDirectory === workingDirectory) {
+        console.log(`📌 Found session via fallback search: ${session.sessionId}`);
+        // Update the mapping for next time
+        this.projectSessions.set(workingDirectory, session.sessionId);
+        return session;
+      }
+    }
 
     return null;
   }
@@ -743,17 +688,6 @@ export class AICLISessionManager extends EventEmitter {
     const session = this.activeSessions.get(sessionId);
     if (session) {
       session.lastActivity = Date.now();
-
-      // DISABLED: Session persistence update
-      // if (process.env.NODE_ENV !== 'test') {
-      //   try {
-      //     await sessionPersistence.updateSession(sessionId, {
-      //       lastActivity: session.lastActivity,
-      //     });
-      //   } catch (error) {
-      //     console.warn(`⚠️ Failed to update session activity in persistence:`, error.message);
-      //   }
-      // }
     }
 
     // Also track Claude session activity if we have a session ID
@@ -780,28 +714,11 @@ export class AICLISessionManager extends EventEmitter {
     const session = this.activeSessions.get(sessionId);
     if (session) {
       session.conversationStarted = true;
-
-      // DISABLED: Session persistence update
-      // if (process.env.NODE_ENV !== 'test') {
-      //   try {
-      //     await sessionPersistence.updateSession(sessionId, {
-      //       conversationStarted: true,
-      //     });
-      //     console.log(`💾 Session ${sessionId} conversation start persisted`);
-      //   } catch (error) {
-      //     console.warn(
-      //       '⚠️ Failed to persist conversation start for session %s: %s',
-      //       sessionId,
-      //       error.message
-      //     );
-      //   }
-      // }
     }
   }
 
   /**
    * Check if Claude CLI has an active session with this ID
-   * This is used to determine whether to use --session-id or --resume
    */
   isClaudeSessionActive(sessionId) {
     const session = this.activeSessions.get(sessionId);
@@ -1012,20 +929,6 @@ export class AICLISessionManager extends EventEmitter {
       this.activeSessions.delete(sessionId);
       this.sessionMessageBuffers.delete(sessionId);
 
-      // DISABLED: Session persistence removal
-      // if (process.env.NODE_ENV !== 'test') {
-      //   try {
-      //     await sessionPersistence.removeSession(sessionId);
-      //     console.log(`💾 Dead session ${sessionId} removed from persistent storage`);
-      //   } catch (error) {
-      //     console.warn(
-      //       '⚠️ Failed to remove dead session %s from persistence:',
-      //       sessionId,
-      //       error.message
-      //     );
-      //   }
-      // }
-
       this.emit('sessionCleaned', {
         sessionId,
         reason: 'process_died',
@@ -1060,6 +963,7 @@ export class AICLISessionManager extends EventEmitter {
     this.activeSessions.clear();
     this.claudeSessions.clear();
     this.interactiveSessions.clear();
+    this.projectSessions.clear();
 
     console.log('✅ AICLI Session Manager shut down complete');
   }

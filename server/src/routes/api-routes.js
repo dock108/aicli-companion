@@ -1,5 +1,5 @@
 import express from 'express';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import path from 'path';
 import { ServerConfig } from '../config/server-config.js';
 
@@ -83,7 +83,7 @@ export function setupRoutes(app, aicliService) {
   router.post('/stream/start', async (req, res) => {
     try {
       const { prompt, workingDirectory } = req.body;
-      const sessionId = uuidv4();
+      const sessionId = randomUUID();
 
       if (!prompt) {
         return res.status(400).json({

@@ -57,7 +57,7 @@ struct ProjectSelectionView: View {
     }
     @State private var errorMessage: String?
     @State private var lastSelectionTime: Date = .distantPast
-    @State private var sessionMetadataCache: [String: PersistedSessionMetadata?] = [:]
+    @State private var hasMessagesCache: [String: Bool] = [:]
     
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject var settings: SettingsManager
@@ -150,8 +150,7 @@ struct ProjectSelectionView: View {
                         ForEach(projects) { project in
                             ProjectRowView(
                                 project: project,
-                                hasSession: sessionMetadataCache[project.path] != nil,
-                                sessionMetadata: sessionMetadataCache[project.path] ?? nil
+                                hasSession: hasMessagesCache[project.path] ?? false
                             ) {
                                 selectProject(project)
                             }
@@ -249,15 +248,15 @@ struct ProjectSelectionView: View {
                     errorMessage = nil  // Clear any previous error
                     print("Successfully loaded \(projects.count) projects")
                     
-                    // Populate session metadata cache once for all projects
-                    sessionMetadataCache.removeAll()
+                    // Check which projects have messages
+                    hasMessagesCache.removeAll()
                     for project in projects {
-                        let metadata = persistenceService.getSessionMetadata(for: project.path)
-                        sessionMetadataCache[project.path] = metadata
-                        if let metadata = metadata {
-                            print("📊 Found session metadata for \(project.name): \(metadata.formattedLastUsed)")
+                        let messages = persistenceService.loadMessages(for: project.path)
+                        hasMessagesCache[project.path] = !messages.isEmpty
+                        if !messages.isEmpty {
+                            print("📊 Found \(messages.count) messages for \(project.name)")
                         } else {
-                            print("📊 No session metadata found for \(project.name)")
+                            print("📊 No messages found for \(project.name)")
                         }
                     }
                 } catch let decodingError {
@@ -301,11 +300,14 @@ struct ProjectSelectionView: View {
 struct ProjectRowView: View {
     let project: Project
     let hasSession: Bool
-    let sessionMetadata: PersistedSessionMetadata?
     let onTap: () -> Void
     
     @Environment(\.colorScheme) var colorScheme
     @State private var isProcessing = false
+    @StateObject private var persistenceService = MessagePersistenceService.shared
+    @State private var timeRemaining: String = ""
+    @State private var hasUnreadMessages: Bool = false
+    @State private var timer: Timer?
     
     var body: some View {
         Button(action: {
@@ -326,29 +328,63 @@ struct ProjectRowView: View {
             }
         }) {
             HStack(spacing: Spacing.md) {
-                // Project icon
-                Image(systemName: "folder.fill")
-                    .font(.title2)
-                    .foregroundColor(Colors.accentPrimaryEnd)
-                    .frame(width: 40, height: 40)
-                    .background(
+                // Project icon with unread indicator
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: "folder.fill")
+                        .font(.title2)
+                        .foregroundColor(Colors.accentPrimaryEnd)
+                        .frame(width: 40, height: 40)
+                        .background(
+                            Circle()
+                                .fill(Colors.accentPrimaryEnd.opacity(0.1))
+                        )
+                    
+                    // Commented out - Unread indicator not working correctly for beta
+                    /*
+                    // Unread indicator dot
+                    if hasUnreadMessages {
                         Circle()
-                            .fill(Colors.accentPrimaryEnd.opacity(0.1))
-                    )
+                            .fill(Color.blue)
+                            .frame(width: 10, height: 10)
+                            .offset(x: 5, y: -5)
+                    }
+                    */
+                }
                 
                 // Project info
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(project.name)
-                        .font(Typography.font(.heading3))
-                        .foregroundColor(Colors.textPrimary(for: colorScheme))
-                        .lineLimit(1)
+                    HStack {
+                        Text(project.name)
+                            .font(Typography.font(.heading3))
+                            .foregroundColor(Colors.textPrimary(for: colorScheme))
+                            .lineLimit(1)
+                        
+                        // Commented out - New badges not working correctly for beta
+                        /*
+                        if hasUnreadMessages {
+                            Text("New")
+                                .font(Typography.font(.caption))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(
+                                    Capsule()
+                                        .fill(Color.blue)
+                                )
+                        }
+                        */
+                    }
                     
-                    if let metadata = sessionMetadata {
-                        Text(metadata.formattedLastUsed)
+                    // Commented out - Countdown timers not working correctly for beta
+                    /*
+                    // Show time remaining instead of path
+                    if !timeRemaining.isEmpty {
+                        Text(timeRemaining)
                             .font(Typography.font(.caption))
                             .foregroundColor(Colors.textSecondary(for: colorScheme))
                             .lineLimit(1)
                     }
+                    */
                 }
                 
                 Spacer()
@@ -372,6 +408,69 @@ struct ProjectRowView: View {
         .opacity(isProcessing ? 0.6 : 1.0)
         .disabled(isProcessing)
         .animation(.easeInOut(duration: 0.2), value: isProcessing)
+        // Commented out - Timer functionality not working correctly for beta
+        /*
+        .onAppear {
+            updateTimeRemaining()
+            checkUnreadMessages()
+            startTimer()
+        }
+        .onDisappear {
+            timer?.invalidate()
+        }
+        */
+    }
+    
+    private func updateTimeRemaining() {
+        let messages = persistenceService.loadMessages(for: project.path)
+        guard let lastMessage = messages.last else {
+            timeRemaining = ""
+            return
+        }
+        
+        let lastMessageDate = lastMessage.timestamp
+        let resetDate = lastMessageDate.addingTimeInterval(24 * 60 * 60) // 24 hours
+        let now = Date()
+        
+        if now >= resetDate {
+            timeRemaining = "Session expired"
+        } else {
+            let remaining = resetDate.timeIntervalSince(now)
+            timeRemaining = formatTimeRemaining(remaining)
+        }
+    }
+    
+    private func formatTimeRemaining(_ seconds: TimeInterval) -> String {
+        let hours = Int(seconds) / 3600
+        let minutes = (Int(seconds) % 3600) / 60
+        
+        if hours > 0 {
+            return "\(hours)h \(minutes)m until reset"
+        } else if minutes > 0 {
+            return "\(minutes)m until reset"
+        } else {
+            return "Less than 1m until reset"
+        }
+    }
+    
+    private func checkUnreadMessages() {
+        // Check if there are unread messages
+        // For now, we'll check if the last message is from assistant and was recent
+        let messages = persistenceService.loadMessages(for: project.path)
+        if let lastMessage = messages.last,
+           lastMessage.sender == .assistant {
+            // Consider it unread if it's less than 5 minutes old
+            let fiveMinutesAgo = Date().addingTimeInterval(-5 * 60)
+            hasUnreadMessages = lastMessage.timestamp > fiveMinutesAgo
+        } else {
+            hasUnreadMessages = false
+        }
+    }
+    
+    private func startTimer() {
+        timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in
+            updateTimeRemaining()
+        }
     }
 }
 
@@ -391,17 +490,7 @@ struct ProjectRowView: View {
 #Preview("Project Row") {
     ProjectRowView(
         project: Project(name: "my-awesome-app", path: "/path/to/project", type: "folder"),
-        hasSession: true,
-        sessionMetadata: PersistedSessionMetadata(
-            sessionId: "test-session",
-            projectId: "my-awesome-app",
-            projectName: "my-awesome-app",
-            projectPath: "/path/to/project",
-            lastMessageDate: Date().addingTimeInterval(-3600),
-            messageCount: 42,
-            aicliSessionId: "aicli-123",
-            createdAt: Date().addingTimeInterval(-86400)
-        )
+        hasSession: true
     ) {
         print("Project tapped")
     }

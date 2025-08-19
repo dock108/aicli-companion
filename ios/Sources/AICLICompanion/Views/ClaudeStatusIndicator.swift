@@ -211,17 +211,17 @@ class ClaudeStatusManager: ObservableObject {
 // MARK: - Claude Status Model
 
 /// Represents the current Claude CLI status
-struct ClaudeStatus: Identifiable, Equatable {
-    let id = UUID()
-    let statusType: String // "progress", "tools", "completion", "interruption"
-    let stage: String? // "creating", "thinking", "working", "completed", etc.
-    let duration: Double? // Duration in seconds
-    let tokens: Int? // Token count
-    let tools: [String]? // Tools being used
-    let canInterrupt: Bool // Whether the operation can be interrupted
-    let originalText: String // Original status text from Claude CLI
-    let sessionId: String
-    let timestamp = Date()
+public struct ClaudeStatus: Identifiable, Equatable {
+    public let id = UUID()
+    public let statusType: String // "progress", "tools", "completion", "interruption"
+    public let stage: String? // "creating", "thinking", "working", "completed", etc.
+    public let duration: Double? // Duration in seconds
+    public let tokens: Int? // Token count
+    public let tools: [String]? // Tools being used
+    public let canInterrupt: Bool // Whether the operation can be interrupted
+    public let originalText: String // Original status text from Claude CLI
+    public let sessionId: String
+    public let timestamp = Date()
     
     // MARK: - Display Properties
     
@@ -268,7 +268,7 @@ struct ClaudeStatus: Identifiable, Equatable {
     
     // MARK: - Equatable
     
-    static func == (lhs: ClaudeStatus, rhs: ClaudeStatus) -> Bool {
+    public static func == (lhs: ClaudeStatus, rhs: ClaudeStatus) -> Bool {
         return lhs.id == rhs.id
     }
 }

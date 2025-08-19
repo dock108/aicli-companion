@@ -28,7 +28,7 @@ public class SettingsManager: ObservableObject {
     @Published var showNetworkActivity: Bool = false
 
     private let userDefaults = UserDefaults.standard
-    private let keychain = KeychainManager()
+    private let keychain = KeychainManager.shared
 
     var currentConnection: ServerConnection? {
         get {
@@ -99,6 +99,7 @@ public class SettingsManager: ObservableObject {
 
     func saveConnection(address: String, port: Int, token: String?) {
         let connection = ServerConnection(
+            name: "Manual Server",
             address: address,
             port: port,
             authToken: token,
@@ -109,14 +110,14 @@ public class SettingsManager: ObservableObject {
 
         // Save auth token securely in keychain if provided
         if let token = token, !token.isEmpty {
-            keychain.save(token, forKey: "auth_token_\(address)_\(port)")
+            keychain.save(token, for: "auth_token_\(address)_\(port)")
         }
     }
 
     func clearConnection() {
         if let connection = currentConnection {
             // Remove auth token from keychain
-            keychain.delete(forKey: "auth_token_\(connection.address)_\(connection.port)")
+            keychain.delete(for: "auth_token_\(connection.address)_\(connection.port)")
         }
 
         currentConnection = nil
@@ -127,7 +128,8 @@ public class SettingsManager: ObservableObject {
     }
     
     var serverURL: URL? {
-        return currentConnection?.url
+        guard let urlString = currentConnection?.url else { return nil }
+        return URL(string: urlString)
     }
     
     var authToken: String? {
@@ -135,7 +137,7 @@ public class SettingsManager: ObservableObject {
         
         // Try to get token from keychain first
         let keychainKey = "auth_token_\(connection.address)_\(connection.port)"
-        if let token = keychain.load(forKey: keychainKey), !token.isEmpty {
+        if let token = keychain.retrieveString(for: keychainKey), !token.isEmpty {
             return token
         }
         

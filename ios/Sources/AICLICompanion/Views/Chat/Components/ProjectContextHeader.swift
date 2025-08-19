@@ -44,13 +44,18 @@ struct ProjectContextHeader: View {
             
             Spacer()
             
-            // Session menu
-            ChatSessionMenu(
-                sessionId: session?.sessionId,
-                projectName: project.name,
-                messageCount: messageCount,
-                onClearSession: onClearSession
-            )
+            // Clear chat menu
+            Menu {
+                Button(role: .destructive) {
+                    onClearSession()
+                } label: {
+                    Label("Clear Chat", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.system(size: 18))
+                    .foregroundColor(Colors.textSecondary(for: colorScheme))
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)

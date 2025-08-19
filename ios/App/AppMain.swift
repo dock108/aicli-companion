@@ -37,6 +37,12 @@ struct AppMain: App {
                     // Also reset the notification service's badge tracking
                     AICLICompanion.PushNotificationService.shared.resetBadgeCount()
                     print("📱 App became active - cleared badge count")
+                    
+                    // Process any pending notifications that arrived while app was terminated
+                    // This catches messages that weren't delivered via background fetch
+                    Task {
+                        await AICLICompanion.PushNotificationService.shared.processPendingNotifications()
+                    }
                 }
         }
     }

@@ -2,6 +2,7 @@ import apn from '@parse/node-apn';
 import fs from 'fs';
 import { randomUUID } from 'crypto';
 import { getTelemetryService } from './telemetry.js';
+import { storeMessage } from '../routes/messages.js';
 
 class PushNotificationService {
   constructor() {
@@ -251,7 +252,7 @@ class PushNotificationService {
    * Send a push notification for a Claude response
    * @param {string} clientId - The WebSocket client ID
    * @param {Object} data - Notification data
-   * @param {string} data.sessionId - The session ID
+   * @param {string} data.projectPath - The project path
    * @param {string} data.projectName - The project name
    * @param {string} data.message - The message content
    * @param {number} data.totalChunks - Total number of chunks
@@ -317,7 +318,8 @@ class PushNotificationService {
       notification.category = 'CLAUDE_RESPONSE';
 
       // Determine if message requires fetching (iMessage-style)
-      const MESSAGE_FETCH_THRESHOLD = 3000; // Characters
+      // Lower threshold to ensure we stay well under 4KB APNS limit
+      const MESSAGE_FETCH_THRESHOLD = 1500; // Characters (more conservative to account for metadata)
       const requiresFetch = data.message && data.message.length > MESSAGE_FETCH_THRESHOLD;
 
       // Generate message ID for large messages
@@ -329,24 +331,29 @@ class PushNotificationService {
 
       // Build payload based on message size
       if (requiresFetch) {
-        // Large message - send only metadata and preview (iMessage-style)
+        // Store the full message in the message store
+        storeMessage(messageId, data.message, {
+          projectPath: data.projectPath,
+          projectName: data.projectName,
+          requestId: data.requestId,
+        });
+
+        // Large message - send only minimal metadata and preview (iMessage-style)
+        // Keep payload minimal to stay under 4KB APNS limit
         notification.payload = {
           messageId, // ID for fetching full content
-          sessionId: data.sessionId,
           projectName: data.projectName,
           projectPath: data.projectPath,
           preview: this.truncateMessage(data.message, 100), // Short preview only
           messageLength: data.message.length,
           requiresFetch: true, // Flag for iOS to fetch full content
           timestamp: new Date().toISOString(),
-          isLongRunningCompletion: data.isLongRunningCompletion || false,
           requestId: data.requestId,
-          deepLink: `claude-companion://session/${data.sessionId}`,
           deliveryMethod: 'apns_signal', // Signal-only delivery
-          // Include metadata but not full content
-          attachmentInfo: data.attachmentInfo || null,
-          autoResponse: data.autoResponse || null,
-          thinkingMetadata: data.thinkingMetadata || null,
+          // Don't include these in large message payloads - they add unnecessary size
+          // attachmentInfo: data.attachmentInfo || null,
+          // autoResponse: data.autoResponse || null,
+          // thinkingMetadata: data.thinkingMetadata || null,
         };
 
         console.log(
@@ -355,28 +362,25 @@ class PushNotificationService {
       } else {
         // Small message - include full content (backwards compatible)
         notification.payload = {
-          sessionId: data.sessionId,
           projectName: data.projectName,
           projectPath: data.projectPath,
           message: data.message, // Full Claude response content
-          originalMessage: data.originalMessage, // Original user message for context
+          // Don't include originalMessage - it can double the payload size
+          // originalMessage: data.originalMessage, // REMOVED to keep under 4KB
           totalChunks: data.totalChunks,
           timestamp: new Date().toISOString(),
           isLongRunningCompletion: data.isLongRunningCompletion || false,
           requestId: data.requestId,
-          deepLink: `claude-companion://session/${data.sessionId}`,
           deliveryMethod: 'apns_primary', // Full delivery
-          // Include attachment metadata if present
+          // Minimize metadata to keep payload small
           attachmentInfo: data.attachmentInfo || null,
-          // Include auto-response metadata if present
           autoResponse: data.autoResponse || null,
-          // Include thinking metadata if present
           thinkingMetadata: data.thinkingMetadata || null,
         };
       }
 
-      // Set thread ID for conversation grouping
-      notification.threadId = data.sessionId;
+      // Set thread ID for conversation grouping (use project path as thread ID)
+      notification.threadId = data.projectPath || 'default';
 
       // Add action buttons for long-running completions
       if (data.isLongRunningCompletion) {
@@ -405,7 +409,7 @@ class PushNotificationService {
    * Send a push notification for thinking/progress updates
    * @param {string} clientId - The device token or client ID
    * @param {Object} data - Progress data
-   * @param {string} data.sessionId - The session ID
+   * @param {string} data.projectPath - The project path
    * @param {string} data.activity - Current activity (Thinking, Creating, etc)
    * @param {number} data.duration - Duration in seconds
    * @param {number} data.tokenCount - Token count
@@ -441,7 +445,7 @@ class PushNotificationService {
           : `${data.tokenCount} tokens`;
 
       notification.payload = {
-        sessionId: data.sessionId,
+        projectPath: data.projectPath,
         activity: data.activity,
         duration: data.duration,
         tokenCount: data.tokenCount,
@@ -452,7 +456,7 @@ class PushNotificationService {
         isThinking: true,
       };
 
-      notification.threadId = data.sessionId;
+      notification.threadId = data.projectPath || 'default';
 
       // Send the notification
       const result = await this.sendNotification(device.token, notification);
@@ -471,7 +475,7 @@ class PushNotificationService {
    * Send a push notification for auto-response control actions
    * @param {string} clientId - The device token or client ID
    * @param {Object} data - Control action data
-   * @param {string} data.sessionId - The session ID
+   * @param {string} data.projectPath - The project path
    * @param {string} data.action - The action (pause, resume, stop)
    * @param {string} data.reason - Optional reason for stop action
    * @param {string} data.requestId - Request ID for tracking
@@ -502,7 +506,7 @@ class PushNotificationService {
 
       notification.alert = {
         title: actionText[data.action] || 'Auto-Response Update',
-        body: data.reason ? `Reason: ${data.reason}` : `Session: ${data.sessionId}`,
+        body: data.reason ? `Reason: ${data.reason}` : `Project: ${data.projectPath || 'Default'}`,
       };
 
       notification.topic = this.bundleId || process.env.APNS_BUNDLE_ID || 'com.claude.companion';
@@ -510,7 +514,7 @@ class PushNotificationService {
       notification.category = 'AUTO_RESPONSE_CONTROL';
 
       notification.payload = {
-        sessionId: data.sessionId,
+        projectPath: data.projectPath,
         action: data.action,
         reason: data.reason,
         requestId: data.requestId,
@@ -518,7 +522,7 @@ class PushNotificationService {
         type: 'autoResponseControl',
       };
 
-      notification.threadId = data.sessionId;
+      notification.threadId = data.projectPath || 'default';
 
       // Send the notification
       const result = await this.sendNotification(device.token, notification);
@@ -560,7 +564,6 @@ class PushNotificationService {
       };
       notification.topic = this.bundleId || process.env.APNS_BUNDLE_ID || 'com.claude.companion';
       notification.payload = {
-        sessionId: data.sessionId,
         projectName: data.projectName,
         projectPath: data.projectPath,
         error: true,

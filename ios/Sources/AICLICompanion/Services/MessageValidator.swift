@@ -7,7 +7,7 @@ struct MessageValidator {
     static func isValidStreamChunk(_ chunk: StreamChunk) -> Bool {
         // Filter empty content chunks
         if chunk.type == "content" || chunk.type == "text" {
-            let trimmedContent = chunk.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmedContent = chunk.content?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             if trimmedContent.isEmpty {
                 print("🚫 Filtering empty content chunk")
                 return false
@@ -26,7 +26,7 @@ struct MessageValidator {
         switch chunk.type {
         case "content", "text", "code", "header", "section", "list":
             // These types use the main content field
-            return !chunk.content.isEmpty
+            return !(chunk.content?.isEmpty ?? true)
             
         case "tool_use":
             // Must have tool name in metadata
@@ -34,7 +34,7 @@ struct MessageValidator {
             
         case "tool_result":
             // Tool results should have content
-            return !chunk.content.isEmpty
+            return !(chunk.content?.isEmpty ?? true)
             
         case "complete", "divider":
             // These chunk types don't require content
@@ -69,11 +69,11 @@ struct MessageValidator {
             
         case .toolUse(let tool):
             // Tool use must have a name
-            return !tool.toolName.isEmpty
+            return !tool.name.isEmpty
             
         case .toolResult(let result):
-            // Tool results must have result or error
-            return result.result != nil || result.error != nil
+            // Tool results must have content
+            return !result.content.isEmpty
             
         case .error(let error):
             // Errors must have a message

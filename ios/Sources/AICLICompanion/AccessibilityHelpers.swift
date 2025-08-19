@@ -164,23 +164,6 @@ struct AccessibleButton: ViewModifier {
     }
 }
 
-@available(iOS 16.0, macOS 13.0, *)
-struct AccessibleFileItem: ViewModifier {
-    let file: FileItem
-
-    func body(content: Content) -> some View {
-        content
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(AccessibilityLabels.fileItem(
-                file.name,
-                type: file.type.rawValue,
-                size: file.size != nil ? ByteCountFormatter.string(fromByteCount: file.size!, countStyle: .file) : nil
-            ))
-            .accessibilityHint(file.type == .directory ? AccessibilityHints.navigateDirectory : AccessibilityHints.selectFile)
-            .accessibilityIdentifier(file.type == .directory ? AccessibilityIdentifiers.directoryRow : AccessibilityIdentifiers.fileRow)
-            .accessibilityAddTraits(file.type == .directory ? .isButton : .isButton)
-    }
-}
 
 @available(iOS 16.0, macOS 13.0, *)
 struct AccessibleConversation: ViewModifier {
@@ -213,9 +196,6 @@ extension View {
         self.modifier(AccessibleButton(label: label, hint: hint, identifier: identifier))
     }
 
-    func accessibleFileItem(_ file: FileItem) -> some View {
-        self.modifier(AccessibleFileItem(file: file))
-    }
 
     func accessibleConversation(_ conversation: Conversation, isSelectMode: Bool = false) -> some View {
         self.modifier(AccessibleConversation(conversation: conversation, isSelectMode: isSelectMode))

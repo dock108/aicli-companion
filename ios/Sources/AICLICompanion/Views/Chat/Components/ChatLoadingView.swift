@@ -44,10 +44,12 @@ struct ChatLoadingView: View {
             // Progress info if available
             if let progress = progressInfo {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(progress.stage)
-                        .font(Typography.font(.caption))
-                        .fontWeight(.medium)
-                        .foregroundColor(Colors.textPrimary(for: colorScheme))
+                    if let stage = progress.stage {
+                        Text(stage)
+                            .font(Typography.font(.caption))
+                            .fontWeight(.medium)
+                            .foregroundColor(Colors.textPrimary(for: colorScheme))
+                    }
                     
                     Text(progress.message)
                         .font(Typography.font(.caption))

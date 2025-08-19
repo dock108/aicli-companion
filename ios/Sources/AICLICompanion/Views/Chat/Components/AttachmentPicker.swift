@@ -310,30 +310,32 @@ struct AttachmentOptionView: View {
 // MARK: - Supporting Types
 
 @available(iOS 16.0, macOS 13.0, *)
-struct AttachmentData: Identifiable, Codable {
-    let id: UUID
-    let type: AttachmentType
-    let name: String
-    let data: Data
-    let mimeType: String
-    let size: Int
+public struct AttachmentData: Identifiable, Codable {
+    public let id: UUID
+    public let type: AttachmentType
+    public let name: String
+    public let data: Data
+    public let mimeType: String
+    public let size: Int
     
-    var formattedSize: String {
+    public var formattedSize: String {
         ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
     }
     
-    var isImage: Bool {
+    public var isImage: Bool {
         type == .image
     }
     
-    var isDocument: Bool {
+    public var isDocument: Bool {
         type == .document
     }
 }
 
 @available(iOS 16.0, macOS 13.0, *)
-enum AttachmentType: String, Codable {
+public enum AttachmentType: String, Codable {
     case image
+    case video
+    case audio
     case document
     case code
 }

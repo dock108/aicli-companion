@@ -475,7 +475,7 @@ jobs:
           artifacts/**/*.xml
           artifacts/**/*.xcresult
         check_name: 'Test Results'
-        comment_mode: always
+        comment_mode: off
       continue-on-error: true
     
     - name: Generate coverage summary

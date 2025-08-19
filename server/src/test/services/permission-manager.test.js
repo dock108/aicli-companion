@@ -160,7 +160,7 @@ describe('PermissionManager', () => {
       assert.strictEqual(result, false);
     });
 
-    it('should emit approval event', (t, done) => {
+    it('should emit approval event', () => {
       const request = {
         id: 'test-request',
         operation: 'test operation',
@@ -170,13 +170,16 @@ describe('PermissionManager', () => {
 
       manager.pendingRequests.set('test-request', request);
 
+      let approvedRequestReceived = null;
       manager.once('permissionApproved', (approvedRequest) => {
-        assert.strictEqual(approvedRequest.id, 'test-request');
-        assert.strictEqual(approvedRequest.status, 'approved');
-        done();
+        approvedRequestReceived = approvedRequest;
       });
 
       manager.approveRequest('test-request');
+
+      assert.ok(approvedRequestReceived);
+      assert.strictEqual(approvedRequestReceived.id, 'test-request');
+      assert.strictEqual(approvedRequestReceived.status, 'approved');
     });
   });
 
@@ -216,7 +219,7 @@ describe('PermissionManager', () => {
       assert.strictEqual(result, false);
     });
 
-    it('should emit denial event', (t, done) => {
+    it('should emit denial event', () => {
       const request = {
         id: 'test-request',
         operation: 'test operation',
@@ -226,13 +229,16 @@ describe('PermissionManager', () => {
 
       manager.pendingRequests.set('test-request', request);
 
+      let deniedRequestReceived = null;
       manager.once('permissionDenied', (deniedRequest) => {
-        assert.strictEqual(deniedRequest.id, 'test-request');
-        assert.strictEqual(deniedRequest.status, 'denied');
-        done();
+        deniedRequestReceived = deniedRequest;
       });
 
       manager.denyRequest('test-request');
+
+      assert.ok(deniedRequestReceived);
+      assert.strictEqual(deniedRequestReceived.id, 'test-request');
+      assert.strictEqual(deniedRequestReceived.status, 'denied');
     });
   });
 
@@ -402,7 +408,7 @@ describe('PermissionManager', () => {
       assert.strictEqual(notificationSent, true);
     });
 
-    it('should emit notification sent event when using original method', (t, done) => {
+    it('should emit notification sent event when using original method', async () => {
       const request = {
         id: 'test-request',
         operation: 'test operation',
@@ -416,12 +422,15 @@ describe('PermissionManager', () => {
         return Promise.resolve();
       };
 
+      let sentRequestReceived = null;
       manager.once('notificationSent', (sentRequest) => {
-        assert.strictEqual(sentRequest.id, 'test-request');
-        done();
+        sentRequestReceived = sentRequest;
       });
 
-      manager.notifyApps(request);
+      await manager.notifyApps(request);
+
+      assert.ok(sentRequestReceived);
+      assert.strictEqual(sentRequestReceived.id, 'test-request');
     });
   });
 

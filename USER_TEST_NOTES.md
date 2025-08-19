@@ -117,7 +117,36 @@ Expected behavior: Long messages show a brief summary with key points, expandabl
 - `server/src/services/summarization.js` (to be created if server-side)
 - Consider Core ML integration for on-device processing
 
-### Issue #6: Enhanced Claude Environment Details Display
+### Issue #6: Chat Scroll Position Resets to Top
+**Priority**: High  
+**Component**: iOS App - Chat View Scroll Management  
+**Beta Blocker**: Yes - UX critical  
+**Discovered**: 2025-08-19
+
+**Prompt for AI Investigation**:
+Fix the chat view scroll position resetting to the top of the conversation when users navigate away and return. Users report having to scroll back down to see new messages, which is especially annoying in long conversations. The issue occurs when:
+- Switching between projects and returning to a conversation  
+- Leaving the app and coming back (app backgrounding/foregrounding)
+- Possibly when new messages arrive
+
+Check and fix:
+1. Investigate scroll position preservation in ChatView when view disappears/reappears
+2. Check if MessageListView properly maintains scroll state during view lifecycle
+3. Verify scroll-to-bottom behavior when loading persisted messages
+4. Review how the app handles scroll position during app state transitions (background/foreground)
+5. Ensure new messages trigger proper auto-scroll to bottom
+6. Check if message list ID tracking is causing view refresh issues
+
+Expected behavior: Chat should maintain scroll position when navigating away, or automatically scroll to the bottom to show the most recent messages when returning to a conversation. Follow standard messaging app patterns (WhatsApp/iMessage).
+
+**Files to investigate**:
+- `ios/Sources/AICLICompanion/Views/Chat/ChatView.swift`
+- `ios/Sources/AICLICompanion/Views/Chat/Components/MessageListView.swift`
+- `ios/Sources/AICLICompanion/ViewModels/ChatViewModel.swift`
+- Check for ScrollViewReader usage and scroll anchoring
+- Look for onAppear/onDisappear handlers that might reset state
+
+### Issue #7: Enhanced Claude Environment Details Display
 **Priority**: Low  
 **Component**: iOS App - Debug/Info Panel  
 **Beta Blocker**: No  
@@ -175,4 +204,4 @@ When discovering issues during user testing, add them using this format:
 ---
 
 **Document Created**: 2025-08-19  
-**Last Updated**: 2025-08-19
+**Last Updated**: 2025-08-19 (Added Issue #6: Chat scroll position reset)

@@ -66,21 +66,22 @@ Ensure server doesn't crash and recovers gracefully.
 ### Phase 3: Essential UX Polish (Day 2)
 Fix the most jarring user experience issues.
 
-#### TODO 3.1: Fix iOS Project Status Indicator
-**Critical UX Bug**: The status indicator for waiting/processing projects is not working.
-- Status indicator fails to show when project is processing a request
-- Users don't know if their message is being handled
-- Check WebSocket message handling for status updates in iOS
-- Verify server sends proper status events for project state changes
-- Fix ChatViewModel status update processing
-- Ensure UI properly binds to status state changes
-- Test indicator lifecycle: initial load → processing → completion
+#### TODO 3.1: Fix Chat Scroll UX Issues
+**Critical UX Bug**: Chat scrolling behavior is problematic and disrupts user experience.
+- Chat doesn't auto-scroll to bottom when new messages arrive
+- Scroll position jumps unexpectedly during Claude's streaming responses
+- User loses their reading position when responses are updating
+- Keyboard appearance doesn't adjust scroll properly
+- Fix auto-scroll to latest message on send/receive
+- Maintain user scroll position when they're reading history
+- Smooth scroll animations during streaming responses
+- Ensure keyboard doesn't obscure latest messages
+- Test with long conversations and streaming responses
 
 Files to investigate:
-- `ios/Sources/AICLICompanion/ViewModels/ChatViewModel.swift`
 - `ios/Sources/AICLICompanion/Views/Chat/ChatView.swift`
-- `ios/Sources/AICLICompanion/Services/WebSocketService.swift`
-- `server/src/services/websocket-*.js`
+- `ios/Sources/AICLICompanion/Views/Chat/Components/MessageList.swift`
+- `ios/Sources/AICLICompanion/ViewModels/ChatViewModel.swift`
 
 #### TODO 3.2: Message Send Reliability
 Ensure messages are never lost and users know what's happening.

@@ -16,13 +16,37 @@ router.post('/', async (req, res) => {
   const {
     message,
     projectPath,
-    sessionId,
+    sessionId: clientSessionId,
     deviceToken,
     attachments,
     autoResponse, // Auto-response metadata
   } = req.body;
   const requestId =
     req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+  // Look up existing session for this project path if client didn't send a sessionId
+  const aicliService = req.app.get('aicliService');
+  let sessionId = clientSessionId;
+
+  if (!sessionId && projectPath) {
+    // Try to find an existing session for this project
+    const existingSession =
+      await aicliService.sessionManager.findSessionByWorkingDirectory(projectPath);
+    if (existingSession) {
+      sessionId = existingSession.sessionId;
+      logger.info('Found existing session for project', {
+        requestId,
+        projectPath,
+        sessionId,
+      });
+    } else {
+      logger.info('No existing session found for project', {
+        requestId,
+        projectPath,
+        activeSessions: aicliService.sessionManager.getActiveSessions().length,
+      });
+    }
+  }
 
   if (!message) {
     return res.status(400).json({
@@ -129,7 +153,6 @@ router.post('/', async (req, res) => {
 
   // If we have an existing session, immediately add the user message to the buffer
   if (sessionId) {
-    const aicliService = req.app.get('aicliService');
     await aicliService.sessionManager.trackSessionForRouting(sessionId, projectPath);
     const buffer = aicliService.sessionManager.getSessionBuffer(sessionId);
     if (buffer) {
@@ -173,19 +196,14 @@ router.post('/', async (req, res) => {
         sessionIdValue: sessionId || 'new conversation',
       });
 
-      // Get AICLI service from app instance
-      const aicliService = req.app.get('aicliService');
-
-      // Process Claude request - pass original sessionId (null for new conversations)
+      // Use the regular AICLI service for sending prompts
+      // IMPORTANT: Set streaming: true to use the processRunner with --resume fix
       const result = await aicliService.sendPrompt(message, {
-        sessionId, // null for new conversations, Claude will generate one
+        sessionId,
         requestId,
-        streaming: true, // Use streaming to maintain conversation context
         workingDirectory: projectPath || process.cwd(),
-        skipPermissions: true,
-        format: 'text',
-        attachments, // Pass attachments to AICLI service
-        autoResponse, // Pass auto-response metadata
+        attachments,
+        streaming: true, // Use streaming to get processRunner with --resume
       });
 
       // Log the full result structure for debugging
@@ -199,6 +217,11 @@ router.post('/', async (req, res) => {
         responseKeys: result?.response ? Object.keys(result.response) : [],
         responseHasResult: !!result?.response?.result,
         responseResultType: typeof result?.response?.result,
+        // New fields for enhanced text accumulation
+        resultSource: result?.source || 'unknown',
+        directResult: !!result?.result,
+        directResultType: typeof result?.result,
+        directResultLength: typeof result?.result === 'string' ? result.result.length : 0,
       });
 
       // Extract Claude's response and session ID
@@ -208,17 +231,26 @@ router.post('/', async (req, res) => {
       let claudeSessionId = result?.sessionId || sessionId;
 
       // Extract content from the response structure
-      // The actual Claude response is in result.response (from AICLI service)
-      // and the text content is in result.response.result (from Claude CLI)
-      if (result?.response?.result) {
+      // Enhanced extraction to handle new text accumulation from tool use
+      if (result?.result && typeof result.result === 'string') {
+        // New: Direct result from enhanced streaming (tool use text accumulation)
+        content = result.result;
+        logger.info('Using direct result from enhanced streaming', {
+          requestId,
+          source: result.source || 'direct',
+          contentLength: content.length,
+        });
+      } else if (result?.response?.result) {
+        // Original: The actual Claude response is in result.response.result (from Claude CLI)
         content = result.response.result;
+        logger.info('Using nested response result', {
+          requestId,
+          contentLength: content.length,
+        });
       } else if (result?.response?.session_id) {
         // Also check if session_id is in the response object
         claudeSessionId = result.response.session_id || claudeSessionId;
         content = result.response.result || '';
-      } else if (result?.result) {
-        // Fallback to direct result field
-        content = result.result;
       } else if (typeof result?.response === 'string') {
         // Fallback if response is a plain string
         content = result.response;
@@ -310,6 +342,23 @@ router.post('/', async (req, res) => {
         });
       }
 
+      // Skip sending notification if content is empty
+      if (!content || content.trim().length === 0) {
+        logger.warn('Skipping APNS delivery - Claude returned empty content', {
+          requestId,
+          sessionId: claudeSessionId,
+        });
+
+        // Still send success response to client to avoid timeout
+        res.json({
+          success: true,
+          sessionId: claudeSessionId,
+          deliveryMethod: 'skipped_empty',
+          requestId,
+        });
+        return;
+      }
+
       // Send Claude response via APNS
       // Use deviceToken as deviceId since that's how we registered it
       await pushNotificationService.sendClaudeResponseNotification(deviceToken, {
@@ -321,7 +370,8 @@ router.post('/', async (req, res) => {
         totalChunks: 1,
         requestId,
         isLongRunningCompletion: true, // All APNS deliveries are treated as completions
-        originalMessage: message, // Include original user message for context
+        // Don't include originalMessage in payload - it can make payload too large
+        // originalMessage: message, // REMOVED - can exceed 4KB limit
         attachmentInfo: attachments?.map((att) => ({
           name: att.name,
           mimeType: att.mimeType,

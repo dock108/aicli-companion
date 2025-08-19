@@ -43,13 +43,13 @@ public struct Typography {
         case .heading3:
             return .custom("SFMono-Medium", size: 17)
 
-        // Body text - SF Pro
+        // Body text - SF Pro (slightly smaller for mobile readability)
         case .body:
-            return .system(size: 17)
+            return .system(size: 16)
         case .bodyLarge:
-            return .system(size: 19)
+            return .system(size: 18)
         case .bodySmall:
-            return .system(size: 15)
+            return .system(size: 14)
         case .caption:
             return .system(size: 12)
         case .footnote:
@@ -59,24 +59,25 @@ public struct Typography {
         case .code:
             return .custom("SFMono-Regular", size: 14)
         case .terminal:
-            return .custom("SFMono-Medium", size: 16)
+            return .custom("SFMono-Medium", size: 15)
         }
     }
 
     // MARK: - Line Heights
     public static func lineHeight(for style: FontStyle) -> CGFloat {
         switch style {
-        case .hero: return 34
-        case .heading1: return 28
-        case .heading2: return 24
-        case .heading3: return 22
+        case .hero: return 36
+        case .heading1: return 32
+        case .heading2: return 28
+        case .heading3: return 24
         case .navTitle: return 22
-        case .body, .terminal: return 22
-        case .bodyLarge: return 24
-        case .bodySmall: return 20
-        case .caption: return 16
-        case .footnote: return 18
-        case .code: return 20
+        case .body: return 24
+        case .terminal: return 22
+        case .bodyLarge: return 28
+        case .bodySmall: return 22
+        case .caption: return 18
+        case .footnote: return 20
+        case .code: return 22
         }
     }
 }

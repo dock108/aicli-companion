@@ -105,36 +105,7 @@ extension View {
 
 // MARK: - Test Data Generators
 
-struct TestDataGenerator {
-
-    static func createTestSession(id: String = UUID().uuidString) -> Session {
-        return Session(
-            sessionId: id,
-            deviceName: "Test Device \(id)",
-            connectedAt: Date(),
-            signalStrength: 100.0
-        )
-    }
-
-    static func createTestLogEntry(level: LogLevel = .info) -> LogEntry {
-        return LogEntry(
-            level: level,
-            message: "Test log message at \(Date())"
-        )
-    }
-
-    static func createTestLogs(count: Int, withErrors: Bool = false) -> [LogEntry] {
-        var logs: [LogEntry] = []
-        for i in 0..<count {
-            let level: LogLevel = withErrors && i % 3 == 0 ? .error : .info
-            logs.append(LogEntry(
-                level: level,
-                message: "Log entry \(i)"
-            ))
-        }
-        return logs
-    }
-}
+// TestDataGenerator removed - use SharedTestUtils.MockFactory instead
 
 // MARK: - Assertion Helpers
 

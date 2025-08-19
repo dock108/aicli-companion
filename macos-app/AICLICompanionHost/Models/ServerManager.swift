@@ -222,7 +222,7 @@ class ServerManager: ObservableObject {
 
     private func loadSettings() {
         port = SettingsManager.shared.serverPort
-        authToken = KeychainManager.shared.loadAuthToken()
+        authToken = KeychainManager.shared.getAuthToken()
 
         if authToken == nil && SettingsManager.shared.requireAuthentication {
             generateAuthToken()

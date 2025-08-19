@@ -772,7 +772,7 @@ export class AICLIService extends EventEmitter {
 
   async executeAICLICommand(session, prompt, attachmentPaths = []) {
     try {
-      // Delegate to process runner - will use --resume if sessionId provided
+      // Delegate to process runner
       return await this.processRunner.executeAICLICommand(session, prompt, attachmentPaths);
     } catch (error) {
       // If session not found, Claude's session expired - retry without session ID
@@ -812,22 +812,6 @@ export class AICLIService extends EventEmitter {
 
   parseStreamJsonOutput(output) {
     return AICLIValidationService.parseStreamJsonOutput(output);
-  }
-
-  extractCompleteObjectsFromLine(line) {
-    return AICLIValidationService.extractCompleteObjectsFromLine(line);
-  }
-
-  extractLastCompleteJSON(truncatedJSON) {
-    return AICLIValidationService.extractLastCompleteJSON(truncatedJSON);
-  }
-
-  findLastCompleteJSONStart(text) {
-    return AICLIValidationService.findLastCompleteJSONStart(text);
-  }
-
-  extractCompleteObjectsFromArray(arrayText) {
-    return AICLIValidationService.extractCompleteObjectsFromArray(arrayText);
   }
 
   async emitAICLIResponse(sessionId, response, _isComplete = false, options = {}) {

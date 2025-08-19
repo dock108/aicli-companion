@@ -206,11 +206,10 @@ extension Message {
             metadata = AICLIMessageMetadata(
                 sessionId: meta.sessionId,
                 duration: meta.duration,
-                cost: meta.cost,
-                tools: meta.tools,
+                additionalInfo: meta.additionalInfo,
+                statusMetadata: meta.statusMetadata,
                 queuedAt: meta.queuedAt,
-                deliveredAt: Date(),
-                queuePriority: meta.queuePriority
+                deliveredAt: Date()
             )
         }
     }

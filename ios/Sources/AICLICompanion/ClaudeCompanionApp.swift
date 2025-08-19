@@ -4,13 +4,16 @@ import SwiftUI
 // This file is kept for the library target
 @available(iOS 16.0, macOS 13.0, *)
 public struct AICLICompanionApp: App {
+    @StateObject private var dependencies = DependencyContainer()
+    
     public init() {}
     
     public var body: some Scene {
         WindowGroup {
             ContentView()
-                .environmentObject(AICLIService.shared)
-                .environmentObject(SettingsManager())
+                .withDependencies(dependencies)
+                .environmentObject(dependencies.aicliService)
+                .environmentObject(dependencies.settingsManager)
         }
     }
 }

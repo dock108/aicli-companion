@@ -10,12 +10,11 @@ import { setupRoutes } from './routes/api-routes.js';
 import { setupProjectRoutes } from './routes/projects.js';
 import { setupAICLIStatusRoutes } from './routes/aicli-status.js';
 import sessionRoutes from './routes/sessions.js';
-import telemetryRoutes from './routes/telemetry-api.js';
 import pushNotificationRoutes from './routes/push-notifications.js';
 import chatRoutes from './routes/chat.js';
 import devicesRoutes from './routes/devices.js';
 import authRoutes from './routes/auth.js';
-import securityRoutes from './routes/security.js';
+import { router as messagesRouter } from './routes/messages.js';
 import { errorHandler } from './middleware/error.js';
 import { AICLIService } from './services/aicli.js';
 import { ServerConfig } from './config/server-config.js';
@@ -108,14 +107,10 @@ class AICLICompanionServer {
     // Auth routes (QR code generation, etc.)
     this.app.use('/api/auth', authRoutes);
 
-    // Security routes
-    this.app.use('/api/security', securityRoutes);
-
     // API routes
     setupRoutes(this.app, this.aicliService);
     setupProjectRoutes(this.app, this.aicliService);
     setupAICLIStatusRoutes(this.app, this.aicliService);
-    this.app.use(telemetryRoutes);
     this.app.use(pushNotificationRoutes);
 
     // New HTTP + APNS routes
@@ -123,6 +118,7 @@ class AICLICompanionServer {
     this.app.use('/api/chat', chatRoutes);
     this.app.use('/api/devices', devicesRoutes);
     this.app.use('/api/sessions', sessionRoutes);
+    this.app.use('/api/messages', messagesRouter);
 
     // Static files (for web interface if needed)
     this.app.use('/static', express.static(join(__dirname, '../public')));

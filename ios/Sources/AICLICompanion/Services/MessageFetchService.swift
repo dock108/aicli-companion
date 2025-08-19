@@ -69,10 +69,7 @@ class MessageFetchService: ObservableObject {
         print("🌐 Fetching message from server: \(messageId)")
         
         // Use AICLIService to fetch the message
-        let message = try await AICLIService.shared.fetchMessage(
-            sessionId: sessionId,
-            messageId: messageId
-        )
+        let message = try await AICLIService.shared.fetchMessage(messageId: messageId)
         
         // Cache the message
         cacheMessage(message, key: cacheKey)

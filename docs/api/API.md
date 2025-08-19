@@ -2,7 +2,7 @@
 
 ## Overview
 
-The AICLI Companion Server provides a RESTful API for iOS clients to interact with AI assistants through Claude CLI. The server uses HTTP endpoints with Apple Push Notification Service (APNS) for message delivery.
+The AICLI Companion Server provides a RESTful API for iOS clients to interact with AI assistants through Claude Code CLI. The server uses HTTP endpoints with Apple Push Notification Service (APNS) for message delivery.
 
 **Base URL**: `http://localhost:3001`
 
@@ -28,7 +28,7 @@ The auth token is configured via the `AUTH_TOKEN` environment variable.
 
 ### Health Check
 
-Check server health and Claude CLI availability.
+Check server health and Claude Code CLI availability.
 
 **Endpoint**: `GET /health`  
 **Authentication**: None required
@@ -38,7 +38,7 @@ Check server health and Claude CLI availability.
 {
   "status": "healthy",
   "version": "1.0.0",
-  "aicliCodeAvailable": true,
+  "claudeCodeAvailable": true,
   "timestamp": "2025-08-09T10:00:00.000Z"
 }
 ```
@@ -62,9 +62,14 @@ Send messages to Claude and receive responses via APNS.
 
 **Parameters**:
 - `message` (required): The message to send to Claude
-- `projectPath` (optional): Working directory for Claude
-- `sessionId` (optional): Existing session ID to continue conversation
+- `projectPath` (required): Working directory for the project (used to maintain conversation context)
+- `sessionId` (optional): Session ID from previous response (usually not needed - server tracks this)
 - `deviceToken` (required): APNS device token for push notifications
+
+**Session Handling**:
+- For new conversations: Don't send sessionId, Claude will generate one
+- For continuing conversations: Server automatically uses the correct session for the project
+- iOS clients can simply send projectPath and let the server handle session management
 
 **Response**:
 ```json
@@ -79,9 +84,25 @@ Send messages to Claude and receive responses via APNS.
 
 ## Session Management
 
+### How Sessions Work
+
+The server automatically manages Claude session IDs behind the scenes:
+
+1. **First Message**: When a client sends a message without a session ID, Claude generates a new session ID
+2. **Subsequent Messages**: The server tracks the latest session ID per project and uses `--resume` to continue conversations
+3. **Session ID Changes**: Claude returns a new session ID with each response, which the server automatically tracks
+4. **Client Simplicity**: iOS clients don't need to manage session IDs - just send the project path
+
+### Session Architecture
+
+- **Server-Managed**: The server maintains a `projectPath → sessionId` mapping
+- **Transparent Updates**: Session IDs change with each Claude response, handled automatically
+- **Per-Project Context**: Each project maintains its own conversation context
+- **Stateless Requests**: Each message is processed independently using `claude --print`
+
 ### Get All Sessions
 
-Retrieve all active sessions.
+Retrieve metadata about active sessions (primarily for debugging).
 
 **Endpoint**: `GET /api/sessions`  
 **Authentication**: Required
@@ -91,7 +112,7 @@ Retrieve all active sessions.
 {
   "sessions": [
     {
-      "sessionId": "session-123",
+      "sessionId": "current-session-id", 
       "workingDirectory": "/path/to/project",
       "createdAt": "2025-08-09T10:00:00.000Z",
       "lastActivity": "2025-08-09T10:05:00.000Z",
@@ -101,57 +122,11 @@ Retrieve all active sessions.
 }
 ```
 
-### Get Session Status
-
-Check the status of a specific session.
-
-**Endpoint**: `GET /api/sessions/:sessionId/status`  
-**Authentication**: Required
-
-**Response**:
-```json
-{
-  "sessionId": "session-123",
-  "status": "active",
-  "lastActivity": "2025-08-09T10:05:00.000Z"
-}
-```
-
-### Keep Session Alive
-
-Prevent a session from timing out.
-
-**Endpoint**: `POST /api/sessions/:sessionId/keepalive`  
-**Authentication**: Required
-
-**Response**:
-```json
-{
-  "success": true,
-  "sessionId": "session-123",
-  "expiresAt": "2025-08-09T11:00:00.000Z"
-}
-```
-
-### Check Session Expiry
-
-Check if a session has expired.
-
-**Endpoint**: `GET /api/sessions/:sessionId/expired`  
-**Authentication**: Required
-
-**Response**:
-```json
-{
-  "expired": false,
-  "sessionId": "session-123",
-  "expiresAt": "2025-08-09T11:00:00.000Z"
-}
-```
+**Note**: Session IDs change frequently as Claude generates new ones. This endpoint shows current mappings.
 
 ### Get Claude Sessions
 
-Get all sessions managed by Claude CLI.
+Get information about Claude CLI's internal sessions.
 
 **Endpoint**: `GET /api/sessions/claude`  
 **Authentication**: Required
@@ -169,21 +144,13 @@ Get all sessions managed by Claude CLI.
 }
 ```
 
-### Cleanup Claude Sessions
+### Deprecated Endpoints
 
-Clean up expired or orphaned Claude sessions.
-
-**Endpoint**: `POST /api/sessions/claude/cleanup`  
-**Authentication**: Required
-
-**Response**:
-```json
-{
-  "success": true,
-  "cleaned": 3,
-  "message": "Cleaned up 3 expired sessions"
-}
-```
+The following endpoints are deprecated as sessions are now managed automatically:
+- `GET /api/sessions/:sessionId/status` - Session status tracked internally
+- `POST /api/sessions/:sessionId/keepalive` - Not needed with per-message spawning
+- `GET /api/sessions/:sessionId/expired` - Expiry handled by Claude CLI
+- `POST /api/sessions/claude/cleanup` - Cleanup automatic
 
 ## Project Management
 
@@ -266,9 +233,9 @@ Remove a device from push notifications.
 
 ### Get Claude Status
 
-Check Claude CLI availability and configuration.
+Check Claude Code CLI availability and configuration.
 
-**Endpoint**: `GET /api/aicli/status`  
+**Endpoint**: `GET /api/claude/status`  
 **Authentication**: Required
 
 **Response**:
@@ -405,7 +372,7 @@ Server configuration via environment variables:
 
 - `PORT`: Server port (default: 3001)
 - `AUTH_TOKEN`: Authentication token (required)
-- `CLAUDE_EXECUTABLE_PATH`: Path to Claude CLI (default: auto-detect)
+- `CLAUDE_EXECUTABLE_PATH`: Path to Claude Code CLI (default: auto-detect)
 - `SESSION_TIMEOUT`: Session timeout in milliseconds (default: 3600000)
 - `MESSAGE_QUEUE_MAX_SIZE`: Max queued messages per session (default: 100)
 - `APNS_CERT_PATH`: Path to APNS certificate
@@ -414,5 +381,5 @@ Server configuration via environment variables:
 
 ---
 
-**Last Updated**: 2025-08-09  
+**Last Updated**: 2025-08-18  
 **API Version**: 1.0.0

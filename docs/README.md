@@ -21,14 +21,20 @@ Welcome to the AICLI Companion documentation! This guide covers everything you n
 - [Testing Guide](./development/testing.md) - All testing documentation (unit, integration, UAT)
 - [Contributing](./development/contributing.md) - Contribution guidelines
 - [Host App Guide](./development/hostapp-guide.md) - Tauri/desktop app development
+- [Build Scripts](./development/build-scripts.md) - Build automation and scripts
+- [Coverage Summary](./development/coverage-summary.md) - Test coverage analysis
+- [Testing Analysis](./development/testing-analysis.md) - Detailed testing strategy
 
 ### 📱 Platform Guides
 - [iOS Guide](./platform-guides/ios-guide.md) - iOS app development and integration
 - [macOS Guide](./platform-guides/macos-guide.md) - macOS app documentation
 - [Server Guide](./platform-guides/server-guide.md) - Server implementation and logging
+- [Bundle Server](./platform-guides/bundle-server.md) - Server bundling and distribution
 
-### 🚀 Deployment
+### 🚀 Deployment & Operations
 - [Deployment Guide](./deployment.md) - Production deployment and operations
+- [Build Guide](./operations/build-readme.md) - Build processes and automation
+- [Ngrok Setup](./operations/ngrok-setup.md) - Tunnel setup for development
 
 ## 🎯 Quick Links
 
@@ -51,7 +57,7 @@ Welcome to the AICLI Companion documentation! This guide covers everything you n
 - **Project Management**: Switch between coding projects seamlessly
 
 ### Server Capabilities
-- **Claude Code Integration**: Direct integration with Anthropic's CLI
+- **Claude Code Integration**: Direct integration with Anthropic's Claude Code CLI
 - **WebSocket Support**: Real-time bidirectional communication
 - **Service Discovery**: Automatic server detection via Bonjour
 - **Security**: TLS encryption and token authentication
@@ -68,7 +74,7 @@ Before you begin, ensure you have:
 - **iOS Device**: iPhone or iPad running iOS 17.0+
 - **Mac**: For development and running the companion server
 - **Node.js**: Version 18 or later
-- **Claude Code CLI**: Version 1.0.55+
+- **Claude Code CLI**: Latest version
 - **Xcode**: Version 15+ (for iOS development)
 
 ## 🤝 Getting Help
@@ -80,5 +86,5 @@ Before you begin, ensure you have:
 
 ---
 
-**Last Updated**: 2025-08-09  
+**Last Updated**: 2025-08-18  
 **Documentation Version**: 2.0.0

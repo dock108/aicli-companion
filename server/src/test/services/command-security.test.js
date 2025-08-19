@@ -285,13 +285,14 @@ describe('CommandSecurityService', () => {
       assert.strictEqual(securityService.config.maxFileSize, 1024);
     });
 
-    it('should emit config update event', (t, done) => {
+    it('should emit config update event', () => {
+      let configReceived = null;
       securityService.once('configUpdated', (config) => {
-        assert.strictEqual(config.readOnlyMode, true);
-        done();
+        configReceived = config;
       });
 
       securityService.updateConfig({ readOnlyMode: true });
+      assert.strictEqual(configReceived.readOnlyMode, true);
     });
   });
 

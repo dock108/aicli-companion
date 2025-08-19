@@ -275,6 +275,7 @@ struct ConnectionView: View {
         print("✅ Parsed - host: \(host), port: \(port), token: \(token ?? "none"), secure: \(isSecure)")
         
         return ServerConnection(
+            name: "Manual Server",
             address: host,
             port: port,
             authToken: token,
@@ -396,6 +397,7 @@ struct ManualSetupSheet: View {
         let isSecure = (url.scheme == "https")
         
         return ServerConnection(
+            name: "Manual Server",
             address: host,
             port: port,
             authToken: finalToken,

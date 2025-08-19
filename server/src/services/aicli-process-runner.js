@@ -2,7 +2,7 @@ import { spawn } from 'child_process';
 import { EventEmitter } from 'events';
 import { processMonitor } from '../utils/process-monitor.js';
 import { InputValidator, MessageProcessor } from './aicli-utils.js';
-import { ClaudeStreamParser } from './stream-parser.js';
+import { UnifiedMessageParser } from './message-parser.js';
 import { createLogger } from '../utils/logger.js';
 import { commandSecurity } from './command-security.js';
 import { permissionManager } from './permission-manager.js';
@@ -97,7 +97,7 @@ export class AICLIProcessRunner extends EventEmitter {
       sessionLogger.info('Interactive process started', { pid: claudeProcess.pid });
 
       // Set up stream parser for this session
-      const streamParser = new ClaudeStreamParser();
+      const streamParser = new UnifiedMessageParser();
 
       // Handle stdout - parse initial response to get session ID
       claudeProcess.stdout.on('data', (data) => {
@@ -201,10 +201,14 @@ export class AICLIProcessRunner extends EventEmitter {
     return new Promise((resolve, reject) => {
       let responseComplete = false;
       const responses = [];
+      let accumulatedText = ''; // Collect text content from tool use sequences
+      let _lastResponseTime = Date.now();
+      let hasToolUse = false;
 
       // Set up one-time listeners for this message
       const dataHandler = (data) => {
         const chunk = data.toString();
+        _lastResponseTime = Date.now();
 
         // Parse each line as stream JSON
         const lines = chunk.split('\n');
@@ -215,7 +219,26 @@ export class AICLIProcessRunner extends EventEmitter {
             const parsed = JSON.parse(line);
             responses.push(parsed);
 
-            // Check if this is the final result
+            // Track if we've seen tool use in this conversation
+            if (parsed.type === 'tool_use') {
+              hasToolUse = true;
+              sessionLogger.info('Tool use detected in stream', {
+                toolName: parsed.tool_name,
+                sessionId,
+              });
+            }
+
+            // Accumulate text content from text messages (common after tool use)
+            if (parsed.type === 'text' && parsed.text) {
+              accumulatedText += parsed.text;
+              sessionLogger.info('Accumulated text content', {
+                textLength: parsed.text.length,
+                totalAccumulated: accumulatedText.length,
+                sessionId,
+              });
+            }
+
+            // Check if this is the final result (preferred)
             if (parsed.type === 'result') {
               responseComplete = true;
               claudeProcess.stdout.removeListener('data', dataHandler);
@@ -223,9 +246,10 @@ export class AICLIProcessRunner extends EventEmitter {
               // Extract session ID from result
               const resultSessionId = parsed.session_id || sessionId;
 
-              sessionLogger.info('Got complete response', {
+              sessionLogger.info('Got complete response with result type', {
                 responseCount: responses.length,
                 sessionId: resultSessionId,
+                hasAccumulatedText: accumulatedText.length > 0,
               });
 
               // Return the final result with all responses
@@ -245,8 +269,51 @@ export class AICLIProcessRunner extends EventEmitter {
       const errorHandler = (data) => {
         const error = data.toString();
         sessionLogger.error('Error during message send', { error });
-        claudeProcess.stderr.removeListener('data', errorHandler);
+        claudeProcess.stdout.removeListener('data', errorHandler);
         reject(new Error(`Claude error: ${error}`));
+      };
+
+      // Enhanced timeout that can resolve with accumulated text for tool use
+      const timeoutHandler = () => {
+        if (!responseComplete) {
+          claudeProcess.stdout.removeListener('data', dataHandler);
+          claudeProcess.stderr.removeListener('data', errorHandler);
+
+          // Check if we have accumulated text content (tool use pattern)
+          if (accumulatedText.trim().length > 0) {
+            sessionLogger.info('Timeout reached but found accumulated text content', {
+              responseCount: responses.length,
+              accumulatedLength: accumulatedText.length,
+              hasToolUse,
+              sessionId,
+            });
+
+            // Find session ID from any response that has it
+            let foundSessionId = sessionId;
+            for (const response of responses) {
+              if (response.session_id) {
+                foundSessionId = response.session_id;
+                break;
+              }
+            }
+
+            // Return accumulated text as the result
+            resolve({
+              result: accumulatedText.trim(),
+              sessionId: foundSessionId,
+              responses,
+              success: true,
+              source: 'accumulated_text', // Flag to indicate this came from text accumulation
+            });
+          } else {
+            sessionLogger.error('Timeout waiting for Claude response with no accumulated content', {
+              responseCount: responses.length,
+              hasToolUse,
+              sessionId,
+            });
+            reject(new Error('Timeout waiting for Claude response'));
+          }
+        }
       };
 
       // Attach handlers
@@ -267,14 +334,8 @@ export class AICLIProcessRunner extends EventEmitter {
         }
       });
 
-      // Set a timeout for response
-      setTimeout(() => {
-        if (!responseComplete) {
-          claudeProcess.stdout.removeListener('data', dataHandler);
-          claudeProcess.stderr.removeListener('data', errorHandler);
-          reject(new Error('Timeout waiting for Claude response'));
-        }
-      }, 120000); // 2 minute timeout per message
+      // Set a timeout for response with enhanced handling
+      setTimeout(timeoutHandler, 120000); // 2 minute timeout per message
     });
   }
 
@@ -408,10 +469,19 @@ export class AICLIProcessRunner extends EventEmitter {
     // Include --print flag as required by AICLI CLI for stdin input
     const args = ['--print', '--output-format', 'stream-json', '--verbose'];
 
+    // CURRENT BROKEN SESSION FLOW:
+    // 1. Client sends message with optional sessionId
+    // 2. Server spawns NEW Claude process with --session-id flag
+    // 3. Claude REJECTS duplicate session IDs with "Session ID already in use" error
+    // 4. This is WRONG - needs interactive sessions instead (persistent processes)
+    //
+    // The --session-id flag is meant to CREATE a new session with that ID,
+    // not resume an existing one. Each message spawns a new process which
+    // can't access the context from previous processes.
+
     // Only add session arguments if we have a valid sessionId
     if (sessionId) {
-      // Use --resume to continue an existing Claude conversation
-      // Claude will remember the context if the session is still active
+      // Use --resume to continue an existing conversation
       args.push('--resume');
       args.push(sessionId);
       sessionLogger.info('Using --resume with session ID', { sessionId });
@@ -665,7 +735,7 @@ export class AICLIProcessRunner extends EventEmitter {
     const stderrBuffers = [];
 
     // Initialize stream parser for this command
-    const streamParser = new ClaudeStreamParser();
+    const streamParser = new UnifiedMessageParser();
 
     aicliProcess.stdout.on('data', (data) => {
       // Store raw buffer to prevent encoding truncation
@@ -687,7 +757,7 @@ export class AICLIProcessRunner extends EventEmitter {
 
       // Parse the chunk into structured messages
       try {
-        const parsedChunks = streamParser.parseData(chunk, false);
+        const parsedChunks = streamParser.parseStreamData(chunk, false);
 
         // Emit each parsed chunk as a separate stream event
         for (const parsedChunk of parsedChunks) {
@@ -780,7 +850,7 @@ export class AICLIProcessRunner extends EventEmitter {
 
         // Emit any remaining chunks with final flag
         try {
-          const finalChunks = streamParser.parseData('', true); // Pass empty string with isComplete=true
+          const finalChunks = streamParser.parseStreamData('', true); // Pass empty string with isComplete=true
           for (const chunk of finalChunks) {
             this.emit('streamChunk', {
               sessionId,

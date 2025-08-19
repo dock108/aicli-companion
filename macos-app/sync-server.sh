@@ -45,31 +45,34 @@ elif [ "$DEST_TIME" -gt "$SOURCE_TIME" ]; then
     TO_DIR="$SOURCE_SERVER"
 else
     echo "✅ Servers are in sync"
-    exit 0
+    # Don't exit - still need to copy to bundle if in Xcode build
 fi
 
-echo "📂 Syncing from $FROM_DIR to $TO_DIR"
-
-# Use rsync to copy, excluding unnecessary files
-rsync -av --delete \
-  --exclude='node_modules' \
-  --exclude='coverage' \
-  --exclude='.nyc_output' \
-  --exclude='*.log' \
-  --exclude='test-*.js' \
-  --exclude='src/test*' \
-  --exclude='.git' \
-  --exclude='.gitignore' \
-  --exclude='*.test.js' \
-  --exclude='hostapp' \
-  --exclude='server_log.txt' \
-  --exclude='.DS_Store' \
-  "$FROM_DIR/" "$TO_DIR/"
-
-echo "✅ Server synced successfully"
+# Only sync if directories are different
+if [ -n "$FROM_DIR" ] && [ -n "$TO_DIR" ]; then
+    echo "📂 Syncing from $FROM_DIR to $TO_DIR"
+    
+    # Use rsync to copy, INCLUDING node_modules (single source of truth)
+    rsync -av --delete \
+      --exclude='coverage' \
+      --exclude='.nyc_output' \
+      --exclude='*.log' \
+      --exclude='test-*.js' \
+      --exclude='src/test*' \
+      --exclude='.git' \
+      --exclude='.gitignore' \
+      --exclude='*.test.js' \
+      --exclude='server_log.txt' \
+      --exclude='.DS_Store' \
+      "$FROM_DIR/" "$TO_DIR/"
+    
+    echo "✅ Server synced successfully"
+fi
 
 # Ensure the server has correct permissions
-chmod -R 755 "$TO_DIR"
+if [ -n "$TO_DIR" ] && [ -d "$TO_DIR" ]; then
+    chmod -R 755 "$TO_DIR"
+fi
 
 # If we synced back to main, remind to commit changes
 if [ "$FROM_DIR" = "$DEST_SERVER" ]; then
@@ -79,3 +82,46 @@ if [ "$FROM_DIR" = "$DEST_SERVER" ]; then
 fi
 
 echo "✅ Sync complete"
+
+# Also copy to the build output if we're in a build context
+if [ -n "${BUILT_PRODUCTS_DIR}" ] && [ -n "${UNLOCALIZED_RESOURCES_FOLDER_PATH}" ]; then
+    echo "📦 Copying server to app bundle..."
+    BUNDLE_DEST="${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/server"
+    
+    # Use the appropriate source directory
+    if [ -n "${TO_DIR}" ]; then
+        BUNDLE_SOURCE="${TO_DIR}"
+    else
+        BUNDLE_SOURCE="${SOURCE_SERVER}"
+    fi
+    
+    # Remove old server directory if it exists
+    if [ -d "${BUNDLE_DEST}" ]; then
+        rm -rf "${BUNDLE_DEST}"
+    fi
+    
+    # Create destination directory
+    mkdir -p "${BUNDLE_DEST}"
+    
+    # Copy server files INCLUDING node_modules (single source of truth)
+    # Note: Don't exclude 'dist' as some npm packages need it (e.g., express-rate-limit)
+    rsync -av --exclude='.git' \
+              --exclude='*.log' \
+              --exclude='.env' \
+              --exclude='coverage' \
+              --exclude='.nyc_output' \
+              --exclude='test' \
+              --exclude='*.test.js' \
+              --exclude='test-*.js' \
+              --exclude='src/test*' \
+              "${BUNDLE_SOURCE}/" "${BUNDLE_DEST}/"
+    
+    # Verify node_modules was copied
+    if [ -d "${BUNDLE_DEST}/node_modules" ]; then
+        echo "✅ Server node_modules successfully included in bundle"
+    else
+        echo "⚠️ Warning: node_modules not found in bundle!"
+    fi
+    
+    echo "✅ Server bundled in app with all dependencies"
+fi

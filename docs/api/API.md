@@ -2,7 +2,7 @@
 
 ## Overview
 
-The AICLI Companion Server provides a RESTful API for iOS clients to interact with AI assistants through Claude CLI. The server uses HTTP endpoints with Apple Push Notification Service (APNS) for message delivery.
+The AICLI Companion Server provides a RESTful API for iOS clients to interact with AI assistants through Claude Code CLI. The server uses HTTP endpoints with Apple Push Notification Service (APNS) for message delivery.
 
 **Base URL**: `http://localhost:3001`
 
@@ -28,7 +28,7 @@ The auth token is configured via the `AUTH_TOKEN` environment variable.
 
 ### Health Check
 
-Check server health and Claude CLI availability.
+Check server health and Claude Code CLI availability.
 
 **Endpoint**: `GET /health`  
 **Authentication**: None required
@@ -38,7 +38,7 @@ Check server health and Claude CLI availability.
 {
   "status": "healthy",
   "version": "1.0.0",
-  "aicliCodeAvailable": true,
+  "claudeCodeAvailable": true,
   "timestamp": "2025-08-09T10:00:00.000Z"
 }
 ```
@@ -233,9 +233,9 @@ Remove a device from push notifications.
 
 ### Get Claude Status
 
-Check Claude CLI availability and configuration.
+Check Claude Code CLI availability and configuration.
 
-**Endpoint**: `GET /api/aicli/status`  
+**Endpoint**: `GET /api/claude/status`  
 **Authentication**: Required
 
 **Response**:
@@ -372,7 +372,7 @@ Server configuration via environment variables:
 
 - `PORT`: Server port (default: 3001)
 - `AUTH_TOKEN`: Authentication token (required)
-- `CLAUDE_EXECUTABLE_PATH`: Path to Claude CLI (default: auto-detect)
+- `CLAUDE_EXECUTABLE_PATH`: Path to Claude Code CLI (default: auto-detect)
 - `SESSION_TIMEOUT`: Session timeout in milliseconds (default: 3600000)
 - `MESSAGE_QUEUE_MAX_SIZE`: Max queued messages per session (default: 100)
 - `APNS_CERT_PATH`: Path to APNS certificate
@@ -381,5 +381,5 @@ Server configuration via environment variables:
 
 ---
 
-**Last Updated**: 2025-08-09  
+**Last Updated**: 2025-08-18  
 **API Version**: 1.0.0

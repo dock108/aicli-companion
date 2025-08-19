@@ -138,6 +138,12 @@ All TODOs must be marked with specific tags:
 
 When you see a TODO tag, check if there's a plan.md that addresses it.
 
+### Using TodoWrite Tool
+- **ALWAYS use TodoWrite** for complex multi-step tasks
+- **Update status immediately** when starting/completing tasks
+- **Don't batch status updates** - mark complete as you go
+- **Use for planning** documentation work, refactoring, or any task with 3+ steps
+
 ## Quality Standards
 
 ### Code Quality Requirements
@@ -197,9 +203,9 @@ When you see a TODO tag, check if there's a plan.md that addresses it.
    - Doesn't cache responses or maintain session state
    - No message buffering or persistence
 
-### Claude CLI as Session Authority  
-- Claude generates and owns session IDs
-- Claude maintains internal context and memory
+### Claude Code CLI as Session Authority  
+- Claude Code CLI generates and owns session IDs
+- Claude Code CLI maintains internal context and memory
 - Server passes through Claude responses unchanged
 - No modification of Claude responses by server
 
@@ -228,9 +234,9 @@ When you see a TODO tag, check if there's a plan.md that addresses it.
 7. Track project selections
 
 ### What Server MUST Do
-1. Route messages between iOS and Claude CLI
+1. Route messages between iOS and Claude Code CLI
 2. Provide directory listing via `/api/projects`
-3. Execute Claude CLI commands faithfully
+3. Execute Claude Code CLI commands faithfully
 4. Pass through session IDs unchanged
 5. Use requestId for response routing
 6. Deliver responses via APNS
@@ -448,8 +454,42 @@ When in doubt:
 - **ALWAYS check for plan.md before starting any work**
 - **ALWAYS update plan.md progress if working from it**
 
+## Critical Naming Conventions
+
+- **App Name**: AICLI Companion (the product name)
+- **CLI Tool**: Claude Code CLI (only when referring to the Anthropic CLI tool)
+- **NEVER** use "Claude Code Companion" or "AICLI" alone
+- **NEVER** use "Claude CLI" - it's always "Claude Code CLI"
+
+## Documentation Organization
+
+### Documentation Structure
+- **ALL documentation** must be in `/docs/` directory
+- **Root directory** should only contain: README.md, CHANGELOG.md, CLAUDE.md, LICENSE
+- **No archive folders** during beta - we're iterating rapidly
+- **Consolidate related docs** - avoid scattered documentation across subdirectories
+
+### When Moving/Organizing Documentation
+1. Check for duplicates and remove them
+2. Update all cross-references and links
+3. Maintain clear subdirectory structure in `/docs/`
+4. Verify all links work after reorganization
+
+## Testing and Linting Discipline
+
+### Before Marking Work Complete
+1. **Run linting** (ESLint for server, SwiftLint for iOS/macOS)
+2. **Fix all linting errors** - use `--fix` when available
+3. **Run tests** to ensure nothing broke
+4. **Verify documentation** links if docs were changed
+
+### ESLint/Prettier Integration
+- Server uses both ESLint and Prettier
+- Always run `npx eslint . --fix` in server directory
+- Formatting issues are errors, not warnings
+
 ---
 
-**Document Version**: 2.0.0  
-**Last Updated**: 2025-08-09  
+**Document Version**: 2.1.0  
+**Last Updated**: 2025-08-18  
 **Status**: Active Development Guidelines

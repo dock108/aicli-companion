@@ -92,7 +92,7 @@ final class ChatViewModel: ObservableObject {
     }
     
     func isLoadingForProject(_ projectPath: String) -> Bool {
-        return projectStateManager.isLoadingForProject(projectPath)
+        return projectStateManager.projectStates[projectPath]?.isLoading ?? false
     }
     
     func shouldBlockSending(for project: Project) -> Bool {

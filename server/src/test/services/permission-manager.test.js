@@ -176,7 +176,7 @@ describe('PermissionManager', () => {
       });
 
       manager.approveRequest('test-request');
-      
+
       assert.ok(approvedRequestReceived);
       assert.strictEqual(approvedRequestReceived.id, 'test-request');
       assert.strictEqual(approvedRequestReceived.status, 'approved');
@@ -235,7 +235,7 @@ describe('PermissionManager', () => {
       });
 
       manager.denyRequest('test-request');
-      
+
       assert.ok(deniedRequestReceived);
       assert.strictEqual(deniedRequestReceived.id, 'test-request');
       assert.strictEqual(deniedRequestReceived.status, 'denied');
@@ -428,7 +428,7 @@ describe('PermissionManager', () => {
       });
 
       await manager.notifyApps(request);
-      
+
       assert.ok(sentRequestReceived);
       assert.strictEqual(sentRequestReceived.id, 'test-request');
     });

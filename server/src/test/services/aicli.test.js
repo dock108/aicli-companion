@@ -1648,37 +1648,19 @@ describe('AICLIService Unit Tests', () => {
       });
     });
 
-    describe('extractCompleteObjectsFromLine', () => {
-      it('should delegate to AICLIMessageHandler', () => {
+    describe('isValidCompleteJSON', () => {
+      it('should delegate to AICLIValidationService', () => {
         const testService = createMockAICLIService();
-        const result = testService.extractCompleteObjectsFromLine('{"type": "test"}');
+        const result = testService.isValidCompleteJSON('{"type": "test"}');
 
-        assert.ok(Array.isArray(result));
+        assert.strictEqual(typeof result, 'boolean');
       });
     });
 
-    describe('extractLastCompleteJSON', () => {
-      it('should delegate to AICLIMessageHandler', () => {
+    describe('parseStreamJsonOutput', () => {
+      it('should delegate to AICLIValidationService', () => {
         const testService = createMockAICLIService();
-        const result = testService.extractLastCompleteJSON('{"partial": "json');
-
-        assert.ok(result !== undefined);
-      });
-    });
-
-    describe('findLastCompleteJSONStart', () => {
-      it('should delegate to AICLIMessageHandler', () => {
-        const testService = createMockAICLIService();
-        const result = testService.findLastCompleteJSONStart('some text {"json": true}');
-
-        assert.strictEqual(typeof result, 'number');
-      });
-    });
-
-    describe('extractCompleteObjectsFromArray', () => {
-      it('should delegate to AICLIMessageHandler', () => {
-        const testService = createMockAICLIService();
-        const result = testService.extractCompleteObjectsFromArray('[{"test": true}]');
+        const result = testService.parseStreamJsonOutput('{"type": "test"}');
 
         assert.ok(Array.isArray(result));
       });
@@ -2505,9 +2487,8 @@ describe('AICLIService Unit Tests', () => {
         const result = service.handleResultMessage(message);
 
         assert.ok(result);
-        assert.strictEqual(result.data.isError, true);
+        assert.strictEqual(result.data.success, false); // success is !is_error, so false when is_error is true
       });
     });
-
   });
 });

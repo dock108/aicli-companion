@@ -181,10 +181,13 @@ describe('MessageOptimizer', () => {
 
   describe('optimizeBatch', () => {
     it('should optimize multiple messages', () => {
+      // Clear cache before this test to avoid interference
+      optimizer.clearCache();
+
       const messages = [
-        { content: 'Message 1', sender: 'user' },
-        { content: 'Message 2', sender: 'assistant' },
-        { content: 'Message 3', sender: 'user' },
+        { id: 'msg1', content: 'Message 1', sender: 'user', timestamp: 1001 },
+        { id: 'msg2', content: 'Message 2', sender: 'assistant', timestamp: 1002 },
+        { id: 'msg3', content: 'Message 3', sender: 'user', timestamp: 1003 },
       ];
 
       const optimized = optimizer.optimizeBatch(messages);

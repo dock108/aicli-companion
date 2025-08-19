@@ -60,11 +60,11 @@ export class AICLISessionManager extends EventEmitter {
       const timeSinceActivity = now - sessionData.lastActivity;
       const timeUntilTimeout = this.sessionTimeout - timeSinceActivity;
 
-      // Send warning at 20 hours of inactivity
+      // Send warning when approaching timeout (within the warning window)
       if (
-        timeUntilTimeout <= 4 * 60 * 60 * 1000 &&
+        timeSinceActivity >= this.sessionWarningTime &&
         timeUntilTimeout > 0 &&
-        !sessionData.warningsSent?.includes('20hr')
+        !sessionData.warningsSent?.includes('timeout_warning')
       ) {
         const hoursInactive = Math.floor(timeSinceActivity / (60 * 60 * 1000));
         const minutesInactive = Math.floor((timeSinceActivity % (60 * 60 * 1000)) / (60 * 1000));
@@ -75,7 +75,7 @@ export class AICLISessionManager extends EventEmitter {
 
         // Mark warning as sent
         if (!sessionData.warningsSent) sessionData.warningsSent = [];
-        sessionData.warningsSent.push('20hr');
+        sessionData.warningsSent.push('timeout_warning');
 
         // Emit event for push notification
         this.emit('sessionWarning', {
@@ -107,13 +107,17 @@ export class AICLISessionManager extends EventEmitter {
       const sessionAge = now - session.createdAt;
       const timeUntilTimeout = this.sessionTimeout - sessionAge;
 
-      // Send warning at 20 hours
-      if (timeUntilTimeout <= 4 * 60 * 60 * 1000 && !session.warningsSent?.includes('20hr')) {
+      // Send warning when approaching timeout
+      if (
+        sessionAge >= this.sessionWarningTime &&
+        timeUntilTimeout > 0 &&
+        !session.warningsSent?.includes('timeout_warning')
+      ) {
         console.log(`⏰ Interactive session ${sessionId} approaching 24hr timeout (4 hours left)`);
 
         // Mark warning as sent
         if (!session.warningsSent) session.warningsSent = [];
-        session.warningsSent.push('20hr');
+        session.warningsSent.push('timeout_warning');
 
         // Emit event for push notification
         this.emit('sessionWarning', {
@@ -366,7 +370,7 @@ export class AICLISessionManager extends EventEmitter {
     const session = this.interactiveSessions.get(sessionId);
     if (!session) {
       console.log(`⚠️ Session ${sessionId} not found`);
-      return false;
+      return { success: false, message: 'Session not found' };
     }
 
     console.log(`🔪 Killing session ${sessionId}`);
@@ -394,7 +398,7 @@ export class AICLISessionManager extends EventEmitter {
       reason: 'manual_kill',
     });
 
-    return true;
+    return { success: true, message: 'Session killed successfully' };
   }
 
   /**

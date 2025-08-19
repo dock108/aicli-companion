@@ -76,8 +76,6 @@ describe('AICLISessionManager', () => {
     });
   });
 
-
-
   describe('cleanupExpiredClaudeSessions', () => {
     it('should cleanup expired sessions', async () => {
       // Set up Claude session tracking
@@ -196,10 +194,10 @@ describe('AICLISessionManager', () => {
 
   describe('getSessionStatus', () => {
     it('should get status for interactive session', () => {
-      // Add an interactive session
+      // Add an interactive session (created recently to ensure positive timeRemaining)
       sessionManager.interactiveSessions.set('test-session', {
         sessionId: 'test-session',
-        createdAt: Date.now() - 1000,
+        createdAt: Date.now() - 500, // 500ms ago, within the 1000ms timeout
         lastActivity: Date.now(),
         messageCount: 5,
         workingDirectory: process.cwd(),
@@ -339,10 +337,11 @@ describe('AICLISessionManager', () => {
 
   describe('checkSessionTimeouts', () => {
     it('should emit warning for sessions approaching timeout', async () => {
-      // Add a Claude session close to timeout
+      // Use the sessionTimeout from test config (1000ms) and warning time (800ms)
+      // Set last activity to trigger warning (900ms ago - within warning window)
       sessionManager.claudeSessions.set('test-session', {
         sessionId: 'test-session',
-        lastActivity: Date.now() - 20 * 60 * 60 * 1000, // 20 hours ago
+        lastActivity: Date.now() - 900, // 900ms ago - should trigger warning
         workingDirectory: process.cwd(),
       });
 
@@ -358,10 +357,10 @@ describe('AICLISessionManager', () => {
     });
 
     it('should mark expired sessions', async () => {
-      // Add an expired session
+      // Add an expired session (beyond the 1000ms sessionTimeout)
       sessionManager.claudeSessions.set('expired-session', {
         sessionId: 'expired-session',
-        lastActivity: Date.now() - 25 * 60 * 60 * 1000, // 25 hours ago
+        lastActivity: Date.now() - 1100, // 1100ms ago - beyond timeout
         workingDirectory: process.cwd(),
       });
 
@@ -374,11 +373,11 @@ describe('AICLISessionManager', () => {
 
   describe('checkResourceUsage', () => {
     it('should emit warning for session limit', async () => {
-      // Add sessions up to the limit
+      // Add sessions up to the limit (without PIDs to avoid memory warnings)
       for (let i = 0; i < 5; i++) {
         sessionManager.interactiveSessions.set(`session-${i}`, {
           sessionId: `session-${i}`,
-          pid: 1000 + i,
+          // Don't include pid to avoid memory monitoring
         });
       }
 
@@ -419,10 +418,10 @@ describe('AICLISessionManager', () => {
 
   describe('shutdown', () => {
     it('should close all sessions and clear data', async () => {
-      // Create multiple sessions
-      await sessionManager.createInteractiveSession('session1', 'Hello', '/dir1');
-      await sessionManager.createInteractiveSession('session2', 'Hello', '/dir2');
-      await sessionManager.trackSessionForRouting('claude-session', '/dir3');
+      // Create multiple sessions using existing directories
+      await sessionManager.createInteractiveSession('session1', 'Hello', process.cwd());
+      await sessionManager.createInteractiveSession('session2', 'Hello', process.cwd());
+      await sessionManager.trackSessionForRouting('claude-session', process.cwd());
 
       await sessionManager.shutdown();
 

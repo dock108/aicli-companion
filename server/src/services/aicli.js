@@ -814,22 +814,6 @@ export class AICLIService extends EventEmitter {
     return AICLIValidationService.parseStreamJsonOutput(output);
   }
 
-  extractCompleteObjectsFromLine(line) {
-    return AICLIValidationService.extractCompleteObjectsFromLine(line);
-  }
-
-  extractLastCompleteJSON(truncatedJSON) {
-    return AICLIValidationService.extractLastCompleteJSON(truncatedJSON);
-  }
-
-  findLastCompleteJSONStart(text) {
-    return AICLIValidationService.findLastCompleteJSONStart(text);
-  }
-
-  extractCompleteObjectsFromArray(arrayText) {
-    return AICLIValidationService.extractCompleteObjectsFromArray(arrayText);
-  }
-
   async emitAICLIResponse(sessionId, response, _isComplete = false, options = {}) {
     // In stateless architecture, handle null sessionId for first messages
     if (!sessionId) {

@@ -193,7 +193,7 @@ describe('ActivityMonitor', () => {
       for (let i = 0; i < 11; i++) {
         monitor.trackCommand(`command${i}`, { allowed: true }, sessionId);
       }
-      
+
       assert.ok(alertReceived);
       assert.strictEqual(alertReceived.type, 'rapid_commands');
       assert.strictEqual(alertReceived.severity, 'low');
@@ -210,7 +210,7 @@ describe('ActivityMonitor', () => {
       for (let i = 0; i < 6; i++) {
         monitor.trackCommand(`command${i}`, { allowed: false, reason: 'Blocked' }, sessionId);
       }
-      
+
       assert.ok(alertReceived);
       assert.strictEqual(alertReceived.type, 'excessive_failures');
       assert.strictEqual(alertReceived.severity, 'medium');
@@ -227,7 +227,7 @@ describe('ActivityMonitor', () => {
       for (let i = 0; i < 4; i++) {
         monitor.trackCommand(`rm file${i}`, { allowed: true }, sessionId);
       }
-      
+
       assert.ok(alertReceived);
       assert.strictEqual(alertReceived.type, 'excessive_deletions');
       assert.strictEqual(alertReceived.severity, 'high');
@@ -245,7 +245,7 @@ describe('ActivityMonitor', () => {
       for (let i = 0; i < 4; i++) {
         monitor.trackFileOperation('write', `/tmp/large${i}.bin`, largeSize, sessionId);
       }
-      
+
       assert.ok(alertReceived);
       assert.strictEqual(alertReceived.type, 'large_file_operations');
       assert.strictEqual(alertReceived.severity, 'medium');
@@ -577,7 +577,7 @@ describe('ActivityMonitor', () => {
 
       // Manually trigger analysis
       monitor.analyzePatterns();
-      
+
       assert.ok(analysisReceived);
       assert.ok(analysisReceived.timestamp);
       assert.ok(analysisReceived.stats);

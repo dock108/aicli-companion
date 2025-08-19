@@ -101,11 +101,6 @@ describe('AICLIValidationService', () => {
     });
   });
 
-
-
-
-
-
   describe('sanitizePrompt', () => {
     it('should sanitize valid string prompt', () => {
       const prompt = 'Hello Claude';

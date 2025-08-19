@@ -22,6 +22,29 @@ Prepare AICLI Companion for beta release by addressing critical bugs, ensuring c
 
 ## Implementation Plan
 
+### Phase 0: Enable Folder Creation from iOS ✅
+Allow users to create new folders in their project path directly from the iOS app.
+
+#### TODO 0.1: Implement Create Folder Feature in iOS ✅
+**Requirement**: Users should be able to create new folders within their project directory from iOS.
+**Implementation**: Add UI and server endpoint to create directories in the project path.
+
+**Completed Tasks**:
+- ✅ Added "New Folder" button to each project row in ProjectSelectionView
+- ✅ Created server endpoint `/api/projects/:name/folders` with proper validation
+- ✅ Implemented path validation and security checks (directory traversal protection)
+- ✅ Added FolderCreationSheet UI for entering folder name
+- ✅ Added error handling for permission issues and invalid paths
+- ✅ Integrated with AICLIService for API calls
+- ✅ Successfully built iOS app with new feature
+
+Files modified:
+- `ios/Sources/AICLICompanion/ProjectSelectionView.swift` (added UI and sheet)
+- `server/src/routes/projects.js` (added folder creation endpoint)
+- `ios/Sources/AICLICompanion/Services/AICLI/ProjectManager.swift` (added API call)
+- `ios/Sources/AICLICompanion/AICLIService.swift` (exposed createFolder method)
+- `ios/Sources/AICLICompanion/Models/ServerModels.swift` (added error cases)
+
 ### Phase 1: Critical Bug Fixes (Day 1)
 Focus on showstopper bugs that prevent basic usage.
 
@@ -220,7 +243,7 @@ Remember: The goal is a stable beta, not a perfect app. Fix only what prevents u
 
 ---
 
-**Current Status**: Plan created, ready to begin Phase 1  
-**Next Step**: TODO 1.1 - Fix Session Timeout Handling  
+**Current Status**: Phase 0 Complete - Folder creation from iOS implemented ✅  
+**Next Step**: Phase 1 - TODO 1.1 - Fix Session Timeout Handling  
 **Last Updated**: 2025-08-19  
 **Target Beta Date**: 3 days from plan start

@@ -173,6 +173,73 @@ Expected behavior: Users can access a detailed debug view showing all available 
 - `server/src/services/aicli-telemetry.js` (enhance existing)
 - `server/src/routes/debug.js` (to be created for debug endpoints)
 
+### Issue #8: Initial App Load Freezing with Input Queue Behavior
+**Priority**: High  
+**Component**: iOS App - Initial Load Performance  
+**Beta Blocker**: Potentially (Poor first impression)  
+**Discovered**: 2025-08-19
+
+**Prompt for AI Investigation**:
+Investigate and fix the iOS app freezing during initial load, followed by rapid processing of queued user input. The app appears to freeze for several seconds on launch, becoming unresponsive to user interaction. Once it unfreezes, it rapidly cycles through any input received during the frozen period. This may be an Xcode development build issue but needs investigation. Check:
+
+1. Analyze app launch sequence in AppDelegate/Scene delegate for blocking operations
+2. Profile the initial WebSocket connection establishment for synchronous blocking calls
+3. Check if MessagePersistenceService initialization is performing heavy I/O on main thread
+4. Review project list loading and any synchronous network calls during startup
+5. Investigate if this is specific to debug builds or occurs in release builds too
+6. Check for main thread blocking during Core Data/SwiftData initialization
+7. Profile with Instruments to identify the exact freeze source
+8. Review any synchronous authentication or configuration loading
+
+Expected behavior: App should launch smoothly with responsive UI immediately. Any heavy initialization should happen asynchronously with appropriate loading indicators. User input should either be properly queued or the UI should indicate it's not ready for input.
+
+**Files to investigate**:
+- `ios/Sources/AICLICompanion/AICLICompanionApp.swift` (app launch sequence)
+- `ios/Sources/AICLICompanion/Services/WebSocketService.swift` (connection init)
+- `ios/Sources/AICLICompanion/Services/MessagePersistenceService.swift` (data loading)
+- `ios/Sources/AICLICompanion/ViewModels/ProjectListViewModel.swift` (initial project load)
+- Check for any `.onAppear` modifiers doing synchronous work
+- Profile with Time Profiler instrument to identify bottlenecks
+
+**Testing notes**:
+- Test in both Debug and Release configurations
+- Test on actual device vs simulator
+- Monitor console for any timeout warnings
+- Check if issue persists after first launch (cold vs warm start)
+
+### Issue #9: Create New Project Folder In-App
+**Priority**: High  
+**Component**: iOS App - Project Management  
+**Beta Blocker**: Possibly (Significant UX friction)  
+**Discovered**: 2025-08-19
+
+**Prompt for AI Investigation**:
+Implement ability to create new project folders directly from within the iOS app. Currently users must leave the app to create folders in Finder/Terminal before they appear in the project list, creating significant friction for new users. Implement:
+
+1. Add "New Project" or "+" button in project selection view
+2. Present sheet/dialog for project name and optional parent directory selection
+3. Create server API endpoint to safely create new directories
+4. Validate project names (no special chars that break filesystems)
+5. Set sensible default location (Desktop? Documents? User-configurable in settings?)
+6. Handle permissions and error cases (folder exists, no write permission, etc.)
+7. Auto-refresh project list after creation
+8. Automatically select and navigate to newly created project
+9. Consider template support (create with README, .gitignore, etc.)
+
+Expected behavior: User taps "New Project", enters a name, and the folder is created and immediately available for use without leaving the app. Should work seamlessly on both iOS and macOS.
+
+**Files to investigate/modify**:
+- `ios/Sources/AICLICompanion/Views/Projects/ProjectSelectionView.swift` (add creation UI)
+- `ios/Sources/AICLICompanion/ViewModels/ProjectListViewModel.swift` (creation logic)
+- `server/src/routes/projects.js` (add POST endpoint for folder creation)
+- `server/src/services/project-manager.js` (safe folder creation service)
+- Similar changes needed in macOS app
+
+**Security considerations**:
+- Sanitize folder names to prevent path traversal attacks
+- Restrict creation to allowed base directories only
+- Validate user has permissions for target location
+
 ---
 
 ## Testing Protocol
@@ -204,4 +271,4 @@ When discovering issues during user testing, add them using this format:
 ---
 
 **Document Created**: 2025-08-19  
-**Last Updated**: 2025-08-19 (Added Issue #6: Chat scroll position reset)
+**Last Updated**: 2025-08-19 (Added Issue #8: Initial app load freezing)

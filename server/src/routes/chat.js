@@ -240,7 +240,7 @@ router.post('/', async (req, res) => {
 
       // Use the regular AICLI service for sending prompts
       // IMPORTANT: Set streaming: true to use the processRunner with --resume fix
-      const resultPromise = aicliService.sendPrompt(messageValidation.message || message, {
+      const resultPromise = aicliService.sendPrompt(messageValidation.message ?? message, {
         sessionId,
         requestId,
         workingDirectory: projectPath || process.cwd(),

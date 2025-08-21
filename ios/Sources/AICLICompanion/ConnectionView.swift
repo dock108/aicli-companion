@@ -2,11 +2,26 @@ import SwiftUI
 
 /// Connection state for the view
 @available(iOS 16.0, macOS 13.0, *)
-enum ConnectionState {
+enum ConnectionState: Equatable {
     case `default`
     case scanning
+    case connecting
     case connected
-    case error
+    case error(String?)
+    
+    static func == (lhs: ConnectionState, rhs: ConnectionState) -> Bool {
+        switch (lhs, rhs) {
+        case (.default, .default),
+             (.scanning, .scanning),
+             (.connecting, .connecting),
+             (.connected, .connected):
+            return true
+        case (.error(_), .error(_)):
+            return true
+        default:
+            return false
+        }
+    }
 }
 
 /// Dark-Slate Terminal style connection screen
@@ -18,6 +33,8 @@ struct ConnectionView: View {
     @State private var showManualSetup = false
     @State private var showQRScanner = false
     @StateObject private var loadingStateCoordinator = LoadingStateCoordinator.shared
+    @State private var lastAttemptedConnection: ServerConnection?
+    @State private var connectionTimer: Timer?
     
     private var isLoadingQR: Bool {
         loadingStateCoordinator.isLoading(.qrScanning)
@@ -107,6 +124,30 @@ struct ConnectionView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Colors.bgBase(for: colorScheme))
+        .overlay {
+            // Show loading overlay when connecting
+            if connectionState == .connecting {
+                ZStack {
+                    Color.black.opacity(0.5)
+                        .ignoresSafeArea()
+                    
+                    VStack(spacing: Spacing.md) {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle())
+                            .scaleEffect(1.5)
+                            .tint(Colors.accentPrimaryStart)
+                        
+                        Text("Connecting to server...")
+                            .font(Typography.font(.body))
+                            .foregroundColor(.white)
+                    }
+                    .padding(Spacing.xl)
+                    .background(Colors.bgCard(for: colorScheme))
+                    .cornerRadius(12)
+                }
+                .transition(.opacity)
+            }
+        }
         .overlay(alignment: .topTrailing) {
             // Settings button
             Button(action: {
@@ -124,6 +165,7 @@ struct ConnectionView: View {
         }
         .onAppear {
             animateHero()
+            checkExistingConnection()
         }
         .sheet(isPresented: $showQRScanner, onDismiss: {
             // Reset loading state when sheet is dismissed
@@ -139,7 +181,7 @@ struct ConnectionView: View {
                             handleScanResult(url.absoluteString)
                         case .failure(let error):
                             withAnimation {
-                                connectionState = .error
+                                connectionState = .error(error.localizedDescription)
                                 errorMessage = error.localizedDescription
                             }
                         }
@@ -181,7 +223,12 @@ struct ConnectionView: View {
             }
         }
         .alert("Connection Error", isPresented: Binding(
-            get: { connectionState == .error },
+            get: {
+                if case .error = connectionState {
+                    return true
+                }
+                return false
+            },
             set: { _ in
                 withAnimation {
                     connectionState = .default
@@ -189,7 +236,10 @@ struct ConnectionView: View {
                 }
             }
         )) {
-            Button("OK") {
+            Button("Retry") {
+                retryLastConnection()
+            }
+            Button("OK", role: .cancel) {
                 withAnimation {
                     connectionState = .default
                     errorMessage = nil
@@ -223,7 +273,7 @@ struct ConnectionView: View {
             saveConnection(connection)
         } else {
             withAnimation {
-                connectionState = .error
+                connectionState = .error("Invalid QR code format")
                 errorMessage = "Invalid QR code format"
             }
         }
@@ -235,16 +285,87 @@ struct ConnectionView: View {
     }
     
     private func saveConnection(_ connection: ServerConnection) {
+        // Store for retry
+        lastAttemptedConnection = connection
+        
+        // Show connecting state
         withAnimation {
-            connectionState = .connected
+            connectionState = .connecting
         }
         
-        settings.saveConnection(address: connection.address, port: connection.port, token: connection.authToken)
+        // Cancel any existing timer
+        connectionTimer?.invalidate()
         
-        // Delay before transitioning
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            withAnimation(.easeInOut(duration: 0.3)) {
-                isConnected = true
+        // Set a timeout for connection attempt
+        connectionTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: false) { _ in
+            if connectionState == .connecting {
+                withAnimation {
+                    connectionState = .error("Connection timeout - server not responding")
+                    errorMessage = "Connection timeout - server not responding"
+                }
+            }
+        }
+        
+        // Attempt to connect
+        AICLIService.shared.connect(to: connection.address, port: connection.port, authToken: connection.authToken) { result in
+            // Cancel the timer
+            connectionTimer?.invalidate()
+            connectionTimer = nil
+            
+            switch result {
+            case .success:
+                withAnimation {
+                    connectionState = .connected
+                }
+                
+                // Save to settings on success
+                settings.saveConnection(address: connection.address, port: connection.port, token: connection.authToken)
+                
+                // Delay before transitioning
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        isConnected = true
+                    }
+                }
+                
+            case .failure(let error):
+                withAnimation {
+                    let errorMsg = error.localizedDescription
+                    connectionState = .error(errorMsg)
+                    errorMessage = errorMsg
+                }
+            }
+        }
+    }
+    
+    private func retryLastConnection() {
+        guard let connection = lastAttemptedConnection else {
+            // Try to use saved connection if available
+            if let saved = settings.currentConnection {
+                saveConnection(saved)
+            }
+            return
+        }
+        
+        // Clear error state
+        withAnimation {
+            connectionState = .default
+            errorMessage = nil
+        }
+        
+        // Retry the connection
+        saveConnection(connection)
+    }
+    
+    private func checkExistingConnection() {
+        // Check if we have a saved connection and try to connect automatically
+        if let savedConnection = settings.currentConnection {
+            // Don't auto-connect if we just disconnected
+            if connectionState == .default {
+                // Give a small delay for UI to settle
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    saveConnection(savedConnection)
+                }
             }
         }
     }

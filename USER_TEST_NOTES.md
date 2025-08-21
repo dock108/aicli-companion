@@ -213,40 +213,6 @@ Expected behavior: User sees "Modified src/components/Header.jsx:156" in Claude'
 - UX: Show loading state while fetching file content
 - Support common path formats: relative, absolute, with line numbers
 
-### Issue #15: Attachment UI Gets Cut Off at Top
-**Priority**: High  
-**Component**: iOS App - Attachment View UI  
-**Beta Blocker**: Yes - Visual bug affecting core functionality  
-**Discovered**: 2025-08-21
-
-**Prompt for AI Investigation**:
-Fix the UI bug where the top portion of attachments and the close button get cut off when adding an attachment to a chat message. The attachment preview/display is being clipped at the top, making it difficult or impossible to close the attachment or see the full content. Investigate and fix:
-
-1. Check the attachment view's frame and safe area constraints
-2. Verify proper spacing from top safe area or navigation bar
-3. Review the attachment sheet/modal presentation style and sizing
-4. Ensure close button is properly positioned within safe area bounds
-5. Test on different device sizes (iPhone SE, iPhone Pro Max, iPad)
-6. Check if issue occurs in both portrait and landscape orientations
-7. Verify z-index/layer ordering isn't causing overlap issues
-8. Review any custom presentation controllers or transitions
-
-Expected behavior: When adding an attachment, the entire attachment preview should be visible with the close button fully accessible at the top, properly respecting safe area insets.
-
-**Files to investigate**:
-- `ios/Sources/AICLICompanion/Views/Chat/AttachmentView.swift`
-- `ios/Sources/AICLICompanion/Views/Chat/Components/AttachmentPreview.swift`
-- `ios/Sources/AICLICompanion/Views/Chat/ChatView.swift` (attachment presentation logic)
-- Check for any custom sheet modifiers or presentation styles
-- Look for hardcoded offsets or frames that might not account for safe areas
-
-**Testing Requirements**:
-- Test on various iPhone models (including notched and non-notched)
-- Test on iPad if supported
-- Verify in both light and dark mode
-- Check with different attachment types (images, documents, etc.)
-- Test with keyboard visible and hidden
-
 ### Issue #16: Root Directory Chat Assistant
 **Priority**: Low  
 **Component**: Server/iOS Integration  

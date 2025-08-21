@@ -19,84 +19,77 @@ struct AttachmentPicker: View {
     @State private var selectedPhotoItem: PhotosPickerItem?
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            HStack {
-                Button("Cancel") {
-                    isPresented = false
-                }
-                .font(Typography.font(.body))
-                .foregroundColor(Colors.textSecondary(for: colorScheme))
-                
-                Spacer()
-                
-                Text("Add Attachment")
-                    .font(Typography.font(.heading3))
-                    .foregroundColor(Colors.textPrimary(for: colorScheme))
-                
-                Spacer()
-                
-                // Invisible button for layout balance
-                Button("Cancel") {
-                    isPresented = false
-                }
-                .opacity(0)
-                .disabled(true)
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
-            .background(Colors.bgCard(for: colorScheme))
-            
-            Divider()
-            
-            // Options Grid
-            LazyVGrid(columns: [
-                GridItem(.flexible()),
-                GridItem(.flexible())
-            ], spacing: 20) {
-                // Photo Library
-                AttachmentOptionView(
-                    icon: "photo.on.rectangle",
-                    title: "Photo Library",
-                    description: "Choose from photos"
-                ) {
-                    showingImagePicker = true
-                }
-                
-                // Camera
-                #if os(iOS)
-                AttachmentOptionView(
-                    icon: "camera.fill",
-                    title: "Camera",
-                    description: "Take a photo"
-                ) {
-                    showingCamera = true
-                }
-                #endif
-                
-                // Documents
-                AttachmentOptionView(
-                    icon: "doc.text.fill",
-                    title: "Documents",
-                    description: "Browse files"
-                ) {
-                    showingDocumentPicker = true
-                }
-                
-                // Code Files
-                AttachmentOptionView(
-                    icon: "chevron.left.forwardslash.chevron.right",
-                    title: "Code Files",
-                    description: "Source code"
-                ) {
-                    showDocumentPickerForCodeFiles()
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 0) {
+                    LazyVGrid(columns: [
+                        GridItem(.flexible()),
+                        GridItem(.flexible())
+                    ], spacing: 20) {
+                        // Photo Library
+                        AttachmentOptionView(
+                            icon: "photo.on.rectangle",
+                            title: "Photo Library",
+                            description: "Choose from photos"
+                        ) {
+                            showingImagePicker = true
+                        }
+                        
+                        // Camera
+                        #if os(iOS)
+                        AttachmentOptionView(
+                            icon: "camera.fill",
+                            title: "Camera",
+                            description: "Take a photo"
+                        ) {
+                            showingCamera = true
+                        }
+                        #endif
+                        
+                        // Documents
+                        AttachmentOptionView(
+                            icon: "doc.text.fill",
+                            title: "Documents",
+                            description: "Browse files"
+                        ) {
+                            showingDocumentPicker = true
+                        }
+                        
+                        // Code Files
+                        AttachmentOptionView(
+                            icon: "chevron.left.forwardslash.chevron.right",
+                            title: "Code Files",
+                            description: "Source code"
+                        ) {
+                            showDocumentPickerForCodeFiles()
+                        }
+                    }
+                    .padding(20)
+                    .padding(.top, 10) // Add some top padding for visual breathing room
                 }
             }
-            .padding(20)
-            
-            Spacer()
+            .background(Colors.bgBase(for: colorScheme))
+            .navigationTitle("Add Attachment")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        isPresented = false
+                    }
+                    .font(Typography.font(.body))
+                    .foregroundColor(Colors.textSecondary(for: colorScheme))
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: { isPresented = false }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 22))
+                            .foregroundColor(Color.gray.opacity(0.6))
+                            .background(Circle().fill(Color.white.opacity(0.01))) // Invisible background for better tap target
+                    }
+                }
+            }
         }
-        .background(Colors.bgBase(for: colorScheme))
         .photosPicker(
             isPresented: $showingImagePicker,
             selection: $selectedPhotoItem,

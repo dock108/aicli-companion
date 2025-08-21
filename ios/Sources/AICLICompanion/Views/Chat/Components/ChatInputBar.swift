@@ -109,6 +109,10 @@ struct ChatInputBar: View {
                 isPresented: $showingAttachmentPicker,
                 onAttachmentSelected: addAttachment
             )
+            #if os(iOS)
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.hidden) // We have our own drag indicator
+            #endif
         }
     }
     

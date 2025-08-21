@@ -40,19 +40,11 @@ struct ProjectContextHeader: View {
             }
             #endif
             
-            // Project path info (smaller, secondary)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(project.name)
-                    .font(Typography.font(.caption))
-                    .fontWeight(.medium)
-                    .foregroundColor(Colors.textPrimary(for: colorScheme))
-                
-                Text(project.path)
-                    .font(Typography.font(.footnote))
-                    .foregroundColor(Colors.textSecondary(for: colorScheme))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
+            // Project name only (cleaner UI)
+            Text(project.name)
+                .font(Typography.font(.body))
+                .fontWeight(.medium)
+                .foregroundColor(Colors.textPrimary(for: colorScheme))
             
             Spacer()
             

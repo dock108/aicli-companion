@@ -213,6 +213,115 @@ Expected behavior: User sees "Modified src/components/Header.jsx:156" in Claude'
 - UX: Show loading state while fetching file content
 - Support common path formats: relative, absolute, with line numbers
 
+### Issue #17: Settings Connection Status Stuck on "Connecting..."
+**Priority**: High  
+**Component**: iOS App - Settings/Connection Status  
+**Beta Blocker**: No  
+**Discovered**: 2025-08-21
+**Status**: Active
+
+**Prompt for AI Investigation**:
+Fix the connection status indicator in Settings that remains stuck on "Connecting..." spinner even when successfully connected. The app is functioning correctly and messages are being sent/received, but the Settings tab shows an incorrect connection state. Investigate:
+
+1. Check WebSocketService connection state management and publishing
+2. Review SettingsView connection status binding and observation
+3. Verify connection state updates are propagating to UI correctly
+4. Check if there's a race condition during initial connection
+5. Ensure status updates when switching between tabs
+6. Add proper state transitions (disconnected → connecting → connected)
+7. Implement timeout for "connecting" state to show error if stuck
+
+Expected behavior: Settings should show "Connected" with a green indicator when WebSocket is established and working. Should show "Connecting..." only during actual connection attempts, and "Disconnected" with retry option when connection is lost.
+
+**Files to investigate**:
+- `ios/Sources/AICLICompanion/Views/Settings/SettingsView.swift`
+- `ios/Sources/AICLICompanion/Services/WebSocketService.swift`
+- `ios/Sources/AICLICompanion/ViewModels/ConnectionStateViewModel.swift`
+- `ios/Sources/AICLICompanion/Views/Settings/ConnectionStatusView.swift`
+
+### Issue #18: Logout/Disconnect/Reconnect Flow Issues
+**Priority**: High  
+**Component**: iOS App - Connection Management  
+**Beta Blocker**: Yes (Poor UX)  
+**Discovered**: 2025-08-21
+**Status**: Active
+
+**Prompt for AI Investigation**:
+Fix the clunky logout, disconnect, and reconnect state logic that makes it difficult to get back to the setup page. Users report difficulty with the retry button and overall connection state management. Investigate and improve:
+
+1. Analyze the complete logout flow and ensure clean state reset
+2. Fix disconnect handling to properly clear connection state
+3. Improve retry button logic to handle various failure scenarios
+4. Ensure clean navigation back to setup page when needed
+5. Add clear state indicators during each transition
+6. Implement proper error recovery without requiring app restart
+7. Review session cleanup on disconnect/logout
+8. Add timeout handling for stuck states
+9. Ensure WebSocket properly closes and can reconnect cleanly
+
+Expected behavior: 
+- Logout should cleanly return to setup page
+- Disconnect should show clear status with working retry option
+- Reconnect should work reliably without getting stuck
+- State transitions should be smooth and predictable
+- User should never need to force-quit app to recover
+
+**Files to investigate**:
+- `ios/Sources/AICLICompanion/Views/Settings/SettingsView.swift`
+- `ios/Sources/AICLICompanion/Services/WebSocketService.swift`
+- `ios/Sources/AICLICompanion/ViewModels/AuthenticationViewModel.swift`
+- `ios/Sources/AICLICompanion/Views/Setup/SetupView.swift`
+- `ios/Sources/AICLICompanion/Services/ConnectionManager.swift`
+- `ios/Sources/AICLICompanion/Navigation/AppCoordinator.swift`
+
+**Testing scenarios**:
+- Logout from settings → Should return to setup
+- Server disconnect → Retry should reconnect
+- Invalid auth token → Should allow re-entering credentials
+- Network interruption → Should auto-reconnect when network returns
+- Manual disconnect → Reconnect button should work
+
+### Issue #19: QR Code Scanner Not Working with Ngrok URLs
+**Priority**: High  
+**Component**: iOS App - QR Code Scanner / Server QR Generation  
+**Beta Blocker**: Yes (Setup friction)  
+**Discovered**: 2025-08-21
+**Status**: Active
+
+**Prompt for AI Investigation**:
+Fix QR code scanner that appears stuck on local URLs or keeps falling back to local even when scanning Ngrok URLs. Users cannot scan Ngrok QR codes and must manually type the entire URL including auth token. Investigate:
+
+1. Check QR code generation on server for Ngrok URLs with auth tokens
+2. Verify iOS QR scanner properly parses Ngrok URLs with query parameters
+3. Ensure auth token from QR code is properly extracted and stored
+4. Check if scanner is incorrectly validating or rejecting Ngrok domains
+5. Verify URL scheme handling (http vs https) for tunneled connections
+6. Test QR payload format for special characters in auth tokens
+7. Check if scanner has hardcoded localhost fallback logic
+8. Ensure proper URL encoding in QR code generation
+9. Verify scanner handles long URLs (Ngrok URLs can be lengthy)
+
+Expected behavior: 
+- QR code should contain full Ngrok URL with auth token if AUTH_REQUIRED=true
+- Scanner should successfully parse and connect to Ngrok URLs
+- Auth token from QR should be automatically configured
+- No fallback to localhost when valid Ngrok URL is scanned
+
+**Files to investigate**:
+- `server/src/routes/index.js` (QR code generation endpoint)
+- `server/src/utils/qr-generator.js` (QR payload creation)
+- `ios/Sources/AICLICompanion/Views/Setup/QRScannerView.swift`
+- `ios/Sources/AICLICompanion/Services/QRCodeParser.swift`
+- `ios/Sources/AICLICompanion/Models/ConnectionConfig.swift`
+- `ios/Sources/AICLICompanion/ViewModels/SetupViewModel.swift`
+
+**Testing scenarios**:
+- Generate QR with `ENABLE_TUNNEL=true TUNNEL_PROVIDER=ngrok`
+- Scan QR with AUTH_REQUIRED=true and AUTH_TOKEN set
+- Verify scanned URL matches server's tunnel URL
+- Test with various auth token formats (special chars, length)
+
+
 ### Issue #16: Root Directory Chat Assistant
 **Priority**: Low  
 **Component**: Server/iOS Integration  

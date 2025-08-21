@@ -189,7 +189,13 @@ export function setupProjectRoutes(app, _aicliService) {
         sanitizedFolderName.includes('..') ||
         sanitizedFolderName.includes('/') ||
         sanitizedFolderName.includes('\\') ||
-        sanitizedFolderName.startsWith('.') ||
+      const normalizedProjectPath = path.normalize(projectPath);
+
+      // Ensure the new folder is strictly within the project directory (not equal to it or outside)
+      if (
+        normalizedPath === normalizedProjectPath ||
+        !normalizedPath.startsWith(normalizedProjectPath + path.sep)
+      ) {
         sanitizedFolderName.length > 255
       ) {
         return res.status(400).json({

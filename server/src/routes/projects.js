@@ -139,6 +139,23 @@ export function setupProjectRoutes(app, _aicliService) {
       const { name } = req.params;
       const { folderName } = req.body;
 
+      // Validate project name
+      if (
+        !name ||
+        typeof name !== 'string' ||
+        name.includes('..') ||
+        name.includes('/') ||
+        name.includes('\\') ||
+        name.startsWith('.') ||
+        name.length > 255 ||
+        !/^[a-zA-Z0-9_-]+$/.test(name)
+      ) {
+        return res.status(400).json({
+          error: 'Invalid project name',
+          message: 'Project name contains invalid characters or is too long',
+        });
+      }
+
       // Validate folder name
       if (!folderName || typeof folderName !== 'string') {
         return res.status(400).json({
@@ -169,11 +186,18 @@ export function setupProjectRoutes(app, _aicliService) {
       const projectPath = path.join(projectsDir, name);
       const newFolderPath = path.join(projectPath, sanitizedFolderName);
 
-      // Security check - prevent directory traversal
-      const normalizedPath = path.normalize(newFolderPath);
-      const normalizedBase = path.normalize(projectsDir);
+      // Security check - prevent directory traversal for both projectPath and newFolderPath
+      const normalizedBase = path.resolve(projectsDir);
+      const normalizedProjectPath = path.resolve(projectPath);
+      const normalizedNewFolderPath = path.resolve(newFolderPath);
 
-      if (!normalizedPath.startsWith(normalizedBase)) {
+      if (!normalizedProjectPath.startsWith(normalizedBase)) {
+        return res.status(403).json({
+          error: 'Access denied',
+          message: 'Invalid project path',
+        });
+      }
+      if (!normalizedNewFolderPath.startsWith(normalizedBase)) {
         return res.status(403).json({
           error: 'Access denied',
           message: 'Invalid folder path',
@@ -182,7 +206,7 @@ export function setupProjectRoutes(app, _aicliService) {
 
       // Check if project exists
       try {
-        const stat = await fs.stat(projectPath);
+        const stat = await fs.stat(normalizedProjectPath);
         if (!stat.isDirectory()) {
           throw new Error('Not a directory');
         }

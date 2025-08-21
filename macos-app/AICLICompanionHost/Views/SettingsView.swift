@@ -10,51 +10,70 @@ import UniformTypeIdentifiers
 import ServiceManagement
 
 struct SettingsView: View {
+    @State private var selectedTab: Tabs = .general
     @EnvironmentObject private var serverManager: ServerManager
     @EnvironmentObject private var settingsManager: SettingsManager
-    @State private var selectedTab: Tabs = .general
-
-    private enum Tabs: Hashable {
-        case general
-        case server
-        case security
-        case logs
-        case advanced
+    
+    enum Tabs: String, CaseIterable {
+        case general = "general"
+        case server = "server"
+        case security = "security"
+        case logs = "logs"
+        case advanced = "advanced"
     }
 
     var body: some View {
         TabView(selection: $selectedTab) {
             GeneralSettingsView()
                 .tabItem {
-                    Label("General", systemImage: "gearshape")
+                    VStack {
+                        Image(systemName: "gearshape")
+                            .renderingMode(.template)
+                        Text("General")
+                    }
                 }
                 .tag(Tabs.general)
 
             ServerSettingsView()
                 .tabItem {
-                    Label("Server", systemImage: "server.rack")
+                    VStack {
+                        Image(systemName: "server.rack")
+                            .renderingMode(.template)
+                        Text("Server")
+                    }
                 }
                 .tag(Tabs.server)
 
             SecuritySettingsView()
                 .tabItem {
-                    Label("Security", systemImage: "lock.shield")
+                    VStack {
+                        Image(systemName: "lock.shield")
+                            .renderingMode(.template)
+                        Text("Security")
+                    }
                 }
                 .tag(Tabs.security)
 
             LogsView()
                 .tabItem {
-                    Label("Logs", systemImage: "doc.text")
+                    VStack {
+                        Image(systemName: "doc.text")
+                            .renderingMode(.template)
+                        Text("Logs")
+                    }
                 }
                 .tag(Tabs.logs)
 
             AdvancedSettingsView()
                 .tabItem {
-                    Label("Advanced", systemImage: "wrench.and.screwdriver")
+                    VStack {
+                        Image(systemName: "wrench.and.screwdriver")
+                            .renderingMode(.template)
+                        Text("Advanced")
+                    }
                 }
                 .tag(Tabs.advanced)
         }
-        .tabViewStyle(.automatic)
         .frame(minWidth: 600, idealWidth: 700, minHeight: 500, idealHeight: 550)
     }
 }

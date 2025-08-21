@@ -81,6 +81,78 @@ public class AICLIProjectManager {
         task.resume()
     }
     
+    // MARK: - Folder Creation
+    
+    func createFolder(in projectName: String, folderName: String, completion: @escaping (Result<FolderCreationResponse, AICLICompanionError>) -> Void) {
+        guard let createFolderURL = connectionManager.buildURL(path: "/api/projects/\(projectName)/folders") else {
+            completion(.failure(.invalidURL))
+            return
+        }
+        
+        var request = connectionManager.createAuthenticatedRequest(url: createFolderURL, method: "POST")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let requestBody = ["folderName": folderName]
+        
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+        } catch {
+            completion(.failure(.invalidInput("Failed to encode folder creation request")))
+            return
+        }
+        
+        let task = urlSession.dataTask(with: request) { data, response, error in
+            if let error = error {
+                completion(.failure(.networkError(error.localizedDescription)))
+                return
+            }
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                completion(.failure(.invalidResponse))
+                return
+            }
+            
+            guard let data = data else {
+                completion(.failure(.invalidResponse))
+                return
+            }
+            
+            switch httpResponse.statusCode {
+            case 200...299:
+                do {
+                    let response = try self.decoder.decode(FolderCreationResponse.self, from: data)
+                    completion(.success(response))
+                } catch {
+                    completion(.failure(.invalidResponse))
+                }
+            case 400:
+                if let errorResponse = try? self.decoder.decode(FolderErrorResponse.self, from: data) {
+                    completion(.failure(.invalidInput(errorResponse.message)))
+                } else {
+                    completion(.failure(.invalidInput("Invalid folder name")))
+                }
+            case 401:
+                completion(.failure(.authenticationFailed))
+            case 403:
+                completion(.failure(.permissionDenied))
+            case 404:
+                completion(.failure(.notFound("Project not found")))
+            case 409:
+                if let errorResponse = try? self.decoder.decode(FolderErrorResponse.self, from: data) {
+                    completion(.failure(.alreadyExists(errorResponse.message)))
+                } else {
+                    completion(.failure(.alreadyExists("Folder already exists")))
+                }
+            case 500...599:
+                completion(.failure(.serverError("Server error")))
+            default:
+                completion(.failure(.serverError("Unexpected status code: \(httpResponse.statusCode)")))
+            }
+        }
+        
+        task.resume()
+    }
+    
     // MARK: - Project Validation
     
     func validateProjectPath(_ path: String, completion: @escaping (Result<Bool, AICLICompanionError>) -> Void) {
@@ -148,4 +220,19 @@ struct ProjectData: Codable {
     let path: String
     let type: String?
     let lastModified: Date?
+}
+
+public struct FolderCreationResponse: Codable {
+    public let message: String
+    public let folder: FolderInfo
+}
+
+public struct FolderInfo: Codable {
+    public let name: String
+    public let path: String
+}
+
+struct FolderErrorResponse: Codable {
+    let error: String
+    let message: String
 }

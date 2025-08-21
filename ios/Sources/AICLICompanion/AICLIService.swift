@@ -134,6 +134,10 @@ public class AICLIService: ObservableObject {
         projectManager.validateProjectPath(path, completion: completion)
     }
     
+    public func createFolder(in projectName: String, folderName: String, completion: @escaping (Result<FolderCreationResponse, AICLICompanionError>) -> Void) {
+        projectManager.createFolder(in: projectName, folderName: folderName, completion: completion)
+    }
+    
     // MARK: - Service State
     
     public var hasValidConnection: Bool {

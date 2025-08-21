@@ -16,27 +16,58 @@ export class AICLIMessageHandler {
    * Pure function - no side effects, only returns processing results
    */
   static processResponse(response, buffer, options = {}) {
-    if (!buffer) {
-      return { action: 'error', reason: 'No message buffer provided' };
-    }
+    try {
+      if (!buffer) {
+        return {
+          action: 'error',
+          reason: 'No message buffer provided',
+          error: new Error('Message buffer is required for processing'),
+        };
+      }
 
-    // Process different types of AICLI CLI responses
-    switch (response.type) {
-      case 'system':
-        return this.processSystemResponse(response, buffer);
+      if (!response) {
+        return {
+          action: 'error',
+          reason: 'No response to process',
+          error: new Error('Response object is required'),
+        };
+      }
 
-      case 'assistant':
-        return this.processAssistantResponse(response, buffer);
+      // Validate response structure
+      if (typeof response !== 'object') {
+        return {
+          action: 'error',
+          reason: 'Invalid response format',
+          error: new Error(`Response must be an object, got ${typeof response}`),
+        };
+      }
 
-      case 'user':
-        // User messages are tool results - don't send to iOS
-        return { action: 'buffer', reason: 'User/tool result message' };
+      // Process different types of AICLI CLI responses
+      switch (response.type) {
+        case 'system':
+          return this.processSystemResponse(response, buffer);
 
-      case 'result':
-        return this.processFinalResult(response, buffer, options);
+        case 'assistant':
+          return this.processAssistantResponse(response, buffer);
 
-      default:
-        return { action: 'skip', reason: `Unknown message type: ${response.type}` };
+        case 'user':
+          // User messages are tool results - don't send to iOS
+          return { action: 'buffer', reason: 'User/tool result message' };
+
+        case 'result':
+          return this.processFinalResult(response, buffer, options);
+
+        default:
+          console.warn(`Unknown response type: ${response.type}`, { response });
+          return { action: 'skip', reason: `Unknown message type: ${response.type}` };
+      }
+    } catch (error) {
+      console.error('Error processing response:', error);
+      return {
+        action: 'error',
+        reason: `Processing failed: ${error.message}`,
+        error,
+      };
     }
   }
 
@@ -63,61 +94,92 @@ export class AICLIMessageHandler {
    * Process assistant response messages
    */
   static processAssistantResponse(response, buffer) {
-    if (!response.message || !response.message.content) {
-      return { action: 'skip', reason: 'Assistant message has no content' };
-    }
+    try {
+      if (!response.message || !response.message.content) {
+        return { action: 'skip', reason: 'Assistant message has no content' };
+      }
 
-    // Check if this contains permission requests or immediate action items
-    const hasPermissionRequest = this.containsPermissionRequest(response.message.content);
-    const hasToolUse = this.containsToolUse(response.message.content);
-    const codeBlocks = this.extractCodeBlocks(response.message.content);
+      // Validate content is an array
+      if (!Array.isArray(response.message.content)) {
+        console.warn('Assistant message content is not an array:', typeof response.message.content);
+        // Try to convert to array format
+        if (typeof response.message.content === 'string') {
+          console.warn(
+            'Automatically converting assistant message content from string to array format. Original content:',
+            response.message.content
+          );
+          response.message.content = [{ type: 'text', text: response.message.content }];
+        } else {
+          return {
+            action: 'error',
+            reason: 'Invalid assistant message content format',
+            error: new Error('Assistant message content must be an array'),
+          };
+        }
+      }
 
-    if (hasPermissionRequest) {
-      // Permission requests should be sent immediately
-      buffer.permissionRequestSent = true;
+      // Check if this contains permission requests or immediate action items
+      const hasPermissionRequest = this.containsPermissionRequest(response.message.content);
+      const hasToolUse = this.containsToolUse(response.message.content);
+      const codeBlocks = this.extractCodeBlocks(response.message.content);
 
-      // Extract the permission prompt text
-      const permissionPrompt = this.extractPermissionPrompt(
-        response.message.content.map((c) => c.text || '').join(' ')
-      );
+      if (hasPermissionRequest) {
+        // Permission requests should be sent immediately
+        buffer.permissionRequestSent = true;
 
+        // Extract the permission prompt text safely
+        const textContent = response.message.content
+          .filter((c) => c && typeof c === 'object')
+          .map((c) => c.text || '')
+          .join(' ');
+
+        const permissionPrompt = this.extractPermissionPrompt(textContent);
+
+        return {
+          action: 'permission_request',
+          data: {
+            sessionId: response.session_id,
+            prompt: permissionPrompt,
+            options: ['y', 'n'],
+            default: 'n',
+            messageId: response.message.id,
+            content: response.message.content,
+            model: response.message.model,
+            usage: response.message.usage,
+          },
+        };
+      }
+
+      // Add to buffer for aggregation
+      buffer.assistantMessages.push(response.message);
+
+      if (codeBlocks.length > 0) {
+        buffer.deliverables = buffer.deliverables || [];
+        buffer.deliverables.push(...codeBlocks);
+      }
+
+      if (hasToolUse) {
+        buffer.toolUseInProgress = true;
+        return {
+          action: 'tool_use',
+          data: {
+            messageId: response.message.id,
+            content: response.message.content,
+            model: response.message.model,
+            usage: response.message.usage,
+          },
+        };
+      }
+
+      return { action: 'buffer', reason: 'Assistant message buffered for aggregation' };
+    } catch (error) {
+      console.error('Error processing assistant response:', error);
       return {
-        action: 'permission_request',
-        data: {
-          sessionId: response.session_id,
-          prompt: permissionPrompt,
-          options: ['y', 'n'],
-          default: 'n',
-          messageId: response.message.id,
-          content: response.message.content,
-          model: response.message.model,
-          usage: response.message.usage,
-        },
+        action: 'error',
+        reason: `Failed to process assistant response: ${error.message}`,
+        error,
       };
     }
-
-    // Add to buffer for aggregation
-    buffer.assistantMessages.push(response.message);
-
-    if (codeBlocks.length > 0) {
-      buffer.deliverables = buffer.deliverables || [];
-      buffer.deliverables.push(...codeBlocks);
-    }
-
-    if (hasToolUse) {
-      buffer.toolUseInProgress = true;
-      return {
-        action: 'tool_use',
-        data: {
-          messageId: response.message.id,
-          content: response.message.content,
-          model: response.message.model,
-          usage: response.message.usage,
-        },
-      };
-    }
-
-    return { action: 'buffer', reason: 'Assistant message buffered for aggregation' };
   }
 
   /**

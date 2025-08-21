@@ -26,9 +26,49 @@ struct SettingsView: View {
         #endif
     }
     
+    private var connectionStatusText: String {
+        switch httpService.connectionStatus {
+        case .disconnected:
+            return "Disconnected"
+        case .connecting:
+            return "Connecting..."
+        case .connected:
+            return "Connected"
+        case .reconnecting:
+            return "Reconnecting..."
+        case .authenticating:
+            return "Authenticating..."
+        case .unauthorized:
+            return "Unauthorized"
+        case .error(let message):
+            return "Error: \(message)"
+        }
+    }
+    
+    private var connectionStatusColor: Color {
+        switch httpService.connectionStatus {
+        case .connected:
+            return Color.green
+        case .connecting, .reconnecting, .authenticating:
+            return Colors.accentWarning
+        case .disconnected, .unauthorized, .error:
+            return Color.red
+        }
+    }
+    
+    private var shouldAnimateIndicator: Bool {
+        switch httpService.connectionStatus {
+        case .connecting, .reconnecting, .authenticating:
+            return true
+        default:
+            return false
+        }
+    }
+    
     enum SettingsTab: String, CaseIterable {
         case connection = "Connection"
-        case security = "Security"
+        // TODO: [BETA] Re-enable Security tab after thorough testing
+        // case security = "Security"
         case autoResponse = "Auto Mode"
         case appearance = "Appearance"
         case behavior = "Behavior"
@@ -40,7 +80,8 @@ struct SettingsView: View {
         var icon: String {
             switch self {
             case .connection: return "network"
-            case .security: return "shield"
+            // TODO: [BETA] Re-enable when Security tab is restored
+            // case .security: return "shield"
             case .autoResponse: return "play.circle"
             case .appearance: return "paintbrush"
             case .behavior: return "gearshape"
@@ -86,6 +127,16 @@ struct SettingsView: View {
         }
         .onAppear {
             loadAutoResponseSettings()
+            // Force a refresh of connection status when settings appears
+            // This ensures we always show the current state
+            if settings.currentConnection != nil {
+                // Connection manager will already have the correct state
+                // Just ensure UI updates by triggering a small state change
+                DispatchQueue.main.async {
+                    // This will cause the UI to re-evaluate the connection status
+                    _ = httpService.connectionStatus
+                }
+            }
         }
     }
     
@@ -144,8 +195,9 @@ struct SettingsView: View {
         switch tab {
         case .connection:
             connectionSection
-        case .security:
-            SecuritySettingsView()
+        // TODO: [BETA] Re-enable Security settings after thorough testing
+        // case .security:
+        //     SecuritySettingsView()
         case .autoResponse:
             autoResponseSection
         case .appearance:
@@ -176,11 +228,11 @@ struct SettingsView: View {
                         
                         HStack(spacing: Spacing.xs) {
                             Circle()
-                                .fill(httpService.isConnected ? Color.green : Colors.accentWarning)
+                                .fill(connectionStatusColor)
                                 .frame(width: 8, height: 8)
-                                .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: httpService.isConnected)
+                                .animation(shouldAnimateIndicator ? .easeInOut(duration: 0.5).repeatForever(autoreverses: true) : .default, value: httpService.connectionStatus)
                             
-                            Text(httpService.isConnected ? "Connected" : "Connecting...")
+                            Text(connectionStatusText)
                                 .font(Typography.font(.body))
                                 .foregroundColor(Colors.textPrimary(for: colorScheme))
                         }
@@ -188,7 +240,10 @@ struct SettingsView: View {
                     
                     Spacer()
                     
-                    if !httpService.isConnected {
+                    if case .connecting = httpService.connectionStatus {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                    } else if case .reconnecting = httpService.connectionStatus {
                         ProgressView()
                             .scaleEffect(0.8)
                     }
@@ -226,7 +281,7 @@ struct SettingsView: View {
                 // Actions
                 VStack(spacing: Spacing.sm) {
                     // Reconnect button
-                    if !httpService.isConnected {
+                    if httpService.connectionStatus != .connected && httpService.connectionStatus != .connecting {
                         Button(action: { reconnect() }) {
                             HStack {
                                 Image(systemName: "arrow.clockwise")
@@ -480,18 +535,21 @@ struct SettingsView: View {
         isDisconnecting = true
         disconnectSuccess = false
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            // Disconnect the HTTP service first
-            httpService.disconnect()
-            // Then clear the connection settings
-            settings.clearConnection()
-            isDisconnecting = false
-            disconnectSuccess = true
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                disconnectSuccess = false
-                dismiss()
-            }
+        // Disconnect immediately without delay
+        httpService.disconnect()
+        settings.clearConnection()
+        
+        // Reset all session state
+        ProjectStateManager.shared.setCurrentProject(nil)
+        
+        // Mark as disconnected
+        isDisconnecting = false
+        disconnectSuccess = true
+        
+        // Dismiss settings view immediately to return to ConnectionView
+        // The ContentView will handle navigation based on connection state
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            dismiss()
         }
     }
     

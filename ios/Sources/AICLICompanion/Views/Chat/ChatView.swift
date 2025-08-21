@@ -56,8 +56,8 @@ struct ChatView: View {
                 .ignoresSafeArea()
             
             VStack(spacing: 0) {
-                // Project header
-                if let project = selectedProject {
+                // Project header (only on iPhone, iPad uses navigation bar)
+                if let project = selectedProject, !isIPad {
                     ProjectContextHeader(
                         project: project,
                         session: session,
@@ -81,6 +81,7 @@ struct ChatView: View {
                     isIPad: isIPad,
                     horizontalSizeClass: horizontalSizeClass,
                     colorScheme: colorScheme,
+                    projectPath: selectedProject?.path, // Pass project path for project-specific scroll storage
                     isNearBottom: $isNearBottom,
                     lastScrollPosition: $lastScrollPosition,
                     scrollViewHeight: $scrollViewHeight,
@@ -115,7 +116,7 @@ struct ChatView: View {
                         
                         Spacer()
                     }
-                    .padding(.horizontal, isIPad && horizontalSizeClass == .regular ? 40 : 16)
+                    .padding(.horizontal, isIPad && horizontalSizeClass == .regular ? 20 : 16)
                     .padding(.vertical, 8)
                     .background(Colors.bgCard(for: colorScheme).opacity(0.8))
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -139,9 +140,41 @@ struct ChatView: View {
             // Scroll to bottom FAB - Removed per user request
         }
         .copyConfirmationOverlay()
+        .navigationTitle(selectedProject?.name ?? "Chat")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(isIPad ? .inline : .large)
+        #endif
+        .toolbar {
+            #if os(iOS)
+            if isIPad {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Menu {
+                        Button(role: .destructive) {
+                            clearCurrentSession()
+                        } label: {
+                            Label("Clear Chat", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .font(.system(size: 18))
+                            .foregroundColor(Colors.textSecondary(for: colorScheme))
+                    }
+                }
+            }
+            #endif
+        }
         .onAppear {
-            viewModel.currentProject = selectedProject
-            setupView()
+            // Ensure proper setup on view appearance
+            if let project = selectedProject {
+                // Only setup if project is different or not yet set
+                if viewModel.currentProject?.path != project.path {
+                    viewModel.currentProject = project
+                    handleProjectChange()
+                } else {
+                    // Project already set, just ensure view is ready
+                    setupView()
+                }
+            }
         }
         .onDisappear {
             cleanupView()
@@ -153,18 +186,20 @@ struct ChatView: View {
                 if let project = selectedProject {
                     // Sync only new messages that arrived while backgrounded
                     viewModel.syncNewMessagesIfNeeded(for: project)
+                    // Scroll position will be preserved by ChatMessageList
                 }
             }
         }
-        .onChange(of: selectedProject?.path) { oldPath, newPath in
-            if let oldPath = oldPath, let newPath = newPath, oldPath != newPath {
-                // Save messages for the old project before switching
-                if let currentProject = viewModel.currentProject {
-                    viewModel.saveMessages(for: currentProject)
+        .onChange(of: selectedProject) { oldProject, newProject in
+            // Handle project changes including initial selection
+            if let newProject = newProject {
+                // Save messages for the old project if it's different
+                if let oldProject = oldProject, oldProject.path != newProject.path {
+                    viewModel.saveMessages(for: oldProject)
                 }
                 
-                // Update to new project
-                viewModel.currentProject = selectedProject
+                // Update to new project (handles both initial and subsequent selections)
+                viewModel.currentProject = newProject
                 handleProjectChange()
             }
         }
@@ -224,6 +259,8 @@ struct ChatView: View {
         
         // Save messages
         viewModel.saveMessages(for: project)
+        
+        // Scroll position is now saved by ChatMessageList's onDisappear
         
         // Stop polling (will resume if needed when returning)
         viewModel.onDisappear()

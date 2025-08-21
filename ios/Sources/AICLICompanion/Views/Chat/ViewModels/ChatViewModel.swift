@@ -92,7 +92,7 @@ final class ChatViewModel: ObservableObject {
     }
     
     func isLoadingForProject(_ projectPath: String) -> Bool {
-        return projectStateManager.isLoadingForProject(projectPath)
+        return projectStateManager.projectStates[projectPath]?.isLoading ?? false
     }
     
     func shouldBlockSending(for project: Project) -> Bool {
@@ -117,7 +117,8 @@ final class ChatViewModel: ObservableObject {
             content: text,
             sender: .user,
             type: .text,
-            requestId: requestId
+            requestId: requestId,
+            attachments: attachments  // Include attachments in the local message
         )
         
         // Add to UI immediately (local-first pattern)

@@ -62,6 +62,7 @@ struct ProjectSelectionView: View {
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject var settings: SettingsManager
     @StateObject private var persistenceService = MessagePersistenceService.shared
+    @StateObject private var aicliService = AICLIService.shared
     
     init(selectedProject: Binding<Project?>, isProjectSelected: Binding<Bool>, onDisconnect: (() -> Void)? = nil) {
         self._selectedProject = selectedProject
@@ -150,10 +151,11 @@ struct ProjectSelectionView: View {
                         ForEach(projects) { project in
                             ProjectRowView(
                                 project: project,
-                                hasSession: hasMessagesCache[project.path] ?? false
-                            ) {
-                                selectProject(project)
-                            }
+                                hasSession: hasMessagesCache[project.path] ?? false,
+                                onSelect: {
+                                    selectProject(project)
+                                }
+                            )
                         }
                     }
                     .padding(Spacing.md)
@@ -270,19 +272,21 @@ struct ProjectSelectionView: View {
     private func selectProject(_ project: Project) {
         print("🔵 ProjectSelection: Selecting project '\(project.name)' at path: \(project.path)")
         
-        // Debounce rapid selections (500ms)
+        // Reduce debounce to 100ms to prevent accidental double-clicks only
         let now = Date()
         let timeSinceLastSelection = now.timeIntervalSince(lastSelectionTime)
-        if timeSinceLastSelection < 0.5 {
+        if timeSinceLastSelection < 0.1 {
             print("⚠️ ProjectSelection: Ignoring rapid selection for '\(project.name)' (only \(Int(timeSinceLastSelection * 1000))ms since last selection)")
             return
         }
         lastSelectionTime = now
         
-        // Simply select the project - no server notification needed
-        selectedProject = project
+        // Set both values atomically to avoid race conditions
+        withAnimation(.easeInOut(duration: 0.2)) {
+            selectedProject = project
+            isProjectSelected = true
+        }
         print("🟢 ProjectSelection: Selected project '\(project.name)', navigating to chat")
-        isProjectSelected = true
     }
     
     private func disconnectFromServer() {
@@ -292,6 +296,7 @@ struct ProjectSelectionView: View {
             settings.clearConnection()
         }
     }
+    
 }
 
 // MARK: - Project Row View
@@ -300,7 +305,7 @@ struct ProjectSelectionView: View {
 struct ProjectRowView: View {
     let project: Project
     let hasSession: Bool
-    let onTap: () -> Void
+    let onSelect: () -> Void
     
     @Environment(\.colorScheme) var colorScheme
     @State private var isProcessing = false
@@ -310,24 +315,25 @@ struct ProjectRowView: View {
     @State private var timer: Timer?
     
     var body: some View {
-        Button(action: {
-            guard !isProcessing else { return }
-            
-            // Brief visual feedback
-            withAnimation(.easeInOut(duration: 0.1)) {
-                isProcessing = true
-            }
-            
-            onTap()
-            
-            // Reset immediately after the action
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+        HStack(spacing: 0) {
+            Button(action: {
+                guard !isProcessing else { return }
+                
+                // Brief visual feedback
                 withAnimation(.easeInOut(duration: 0.1)) {
-                    isProcessing = false
+                    isProcessing = true
                 }
-            }
-        }) {
-            HStack(spacing: Spacing.md) {
+                
+                onSelect()
+                
+                // Reset immediately after the action
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    withAnimation(.easeInOut(duration: 0.1)) {
+                        isProcessing = false
+                    }
+                }
+            }) {
+                HStack(spacing: Spacing.md) {
                 // Project icon with unread indicator
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: "folder.fill")
@@ -403,8 +409,9 @@ struct ProjectRowView: View {
                             .stroke(hasSession ? Color.green.opacity(0.3) : Colors.strokeLight, lineWidth: 1)
                     )
             )
+            }
+            .buttonStyle(PlainButtonStyle())
         }
-        .buttonStyle(PlainButtonStyle())
         .opacity(isProcessing ? 0.6 : 1.0)
         .disabled(isProcessing)
         .animation(.easeInOut(duration: 0.2), value: isProcessing)
@@ -490,10 +497,11 @@ struct ProjectRowView: View {
 #Preview("Project Row") {
     ProjectRowView(
         project: Project(name: "my-awesome-app", path: "/path/to/project", type: "folder"),
-        hasSession: true
-    ) {
-        print("Project tapped")
-    }
+        hasSession: true,
+        onSelect: {
+            print("Project selected")
+        }
+    )
     .padding()
     .background(Color.black)
     .preferredColorScheme(ColorScheme.dark)

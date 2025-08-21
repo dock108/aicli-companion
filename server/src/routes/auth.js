@@ -1,6 +1,7 @@
 import express from 'express';
 import QRCode from 'qrcode';
 import { createLogger } from '../utils/logger.js';
+import { tunnelService } from '../services/tunnel.js';
 import os from 'os';
 
 const router = express.Router();
@@ -39,16 +40,43 @@ router.get('/setup', async (req, res) => {
     const port = req.app.locals.port || 3001;
     const enableTLS = req.app.locals.enableTLS || false;
 
-    // Get local IP addresses
+    let connectionUrl;
+    let primaryAddress;
+    let protocol;
+
+    // Get local addresses for fallback and alternative connections
     const addresses = getLocalIPAddresses();
-    const primaryAddress = addresses[0]?.address || 'localhost';
 
-    // Build connection URL
-    const protocol = enableTLS ? 'https' : 'http';
-    let connectionUrl = `${protocol}://${primaryAddress}:${port}`;
+    // Check if tunnel is active - PRIORITIZE TUNNEL URL
+    const tunnelUrl = tunnelService.getPublicUrl();
+    if (tunnelUrl) {
+      // Use tunnel URL when available
+      connectionUrl = tunnelUrl;
+      protocol = tunnelUrl.startsWith('https') ? 'https' : 'http';
 
+      // Extract host from tunnel URL for display
+      try {
+        const url = new URL(tunnelUrl);
+        primaryAddress = url.host;
+      } catch (e) {
+        primaryAddress = tunnelUrl.replace(/^https?:\/\//, '').split('/')[0];
+      }
+
+      logger.info('Using tunnel URL for QR code', { tunnelUrl, authRequired });
+    } else {
+      // Fall back to local IP addresses only if no tunnel
+      primaryAddress = addresses[0]?.address || 'localhost';
+      protocol = enableTLS ? 'https' : 'http';
+      connectionUrl = `${protocol}://${primaryAddress}:${port}`;
+
+      logger.info('Using local IP for QR code', { primaryAddress, port });
+    }
+
+    // Add auth token as query parameter if required
     if (authRequired && authToken) {
-      connectionUrl += `?token=${authToken}`;
+      // Properly handle existing query parameters in tunnel URLs
+      const separator = connectionUrl.includes('?') ? '&' : '?';
+      connectionUrl += `${separator}token=${authToken}`;
     }
 
     // Generate QR code
@@ -90,11 +118,19 @@ router.get('/setup', async (req, res) => {
         dataUrl: qrCodeDataUrl,
         svg: qrCodeSvg,
       },
-      availableAddresses: addresses.map((a) => ({
-        interface: a.name,
-        address: a.address,
-        url: `${protocol}://${a.address}:${port}${authRequired && authToken ? `?token=${authToken}` : ''}`,
-      })),
+      availableAddresses: tunnelUrl
+        ? [
+            {
+              interface: 'tunnel',
+              address: primaryAddress,
+              url: connectionUrl,
+            },
+          ]
+        : addresses.map((a) => ({
+            interface: a.name,
+            address: a.address,
+            url: `${protocol}://${a.address}:${port}${authRequired && authToken ? `?token=${authToken}` : ''}`,
+          })),
     });
   } catch (error) {
     logger.error('Failed to generate QR code', error);

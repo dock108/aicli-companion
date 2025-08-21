@@ -1,6 +1,7 @@
 import express from 'express';
 import { randomUUID } from 'crypto';
 import { createLogger } from '../utils/logger.js';
+import { ValidationUtils } from '../utils/validation.js';
 
 const logger = createLogger('ChatAPI');
 // TODO: Check what validation middleware exists
@@ -52,6 +53,32 @@ router.post('/', async (req, res) => {
     return res.status(400).json({
       success: false,
       error: 'Message is required',
+    });
+  }
+
+  // Validate message content and size
+  const messageValidation = ValidationUtils.validateMessageContent(message);
+  if (!messageValidation.valid) {
+    logger.error('Message validation failed', {
+      requestId,
+      errors: messageValidation.errors,
+      messageLength: message?.length,
+    });
+
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid message content',
+      details: messageValidation.errors,
+      requestId,
+    });
+  }
+
+  // Log warnings if any
+  if (messageValidation.warnings.length > 0) {
+    logger.warn('Message validation warnings', {
+      requestId,
+      warnings: messageValidation.warnings,
+      messageLength: message.length,
     });
   }
 
@@ -189,22 +216,40 @@ router.post('/', async (req, res) => {
 
   // Process Claude request asynchronously and deliver via APNS
   setImmediate(async () => {
+    // Set up timeout for long-running operations
+    const PROCESSING_TIMEOUT = parseInt(process.env.CLAUDE_PROCESSING_TIMEOUT || '300000'); // 5 minutes default
+    let timeoutHandle;
+    let processingCompleted = false;
+
     try {
       logger.info('Starting async Claude processing', {
         requestId,
         hasSessionId: !!sessionId,
         sessionIdValue: sessionId || 'new conversation',
+        timeout: PROCESSING_TIMEOUT,
+      });
+
+      // Create timeout promise
+      const timeoutPromise = new Promise((_, reject) => {
+        timeoutHandle = setTimeout(() => {
+          if (!processingCompleted) {
+            reject(new Error(`Claude processing timeout after ${PROCESSING_TIMEOUT}ms`));
+          }
+        }, PROCESSING_TIMEOUT);
       });
 
       // Use the regular AICLI service for sending prompts
       // IMPORTANT: Set streaming: true to use the processRunner with --resume fix
-      const result = await aicliService.sendPrompt(message, {
+      const resultPromise = aicliService.sendPrompt(messageValidation.message ?? message, {
         sessionId,
         requestId,
         workingDirectory: projectPath || process.cwd(),
         attachments,
         streaming: true, // Use streaming to get processRunner with --resume
       });
+
+      // Race between processing and timeout
+      const result = await Promise.race([resultPromise, timeoutPromise]);
 
       // Log the full result structure for debugging
       logger.info('Claude response structure', {
@@ -386,25 +431,66 @@ router.post('/', async (req, res) => {
         sessionId: claudeSessionId,
         contentLength: content.length,
       });
+
+      // Mark processing as completed and clear timeout
+      processingCompleted = true;
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
     } catch (error) {
+      // Clear timeout if still pending
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
+
+      // Determine error type and user-friendly message
+      let userErrorMessage = 'Failed to process message';
+      let errorType = 'PROCESSING_ERROR';
+
+      if (error.message?.includes('timeout')) {
+        userErrorMessage =
+          'Claude is taking longer than expected. Please try again or break your message into smaller parts.';
+        errorType = 'TIMEOUT';
+      } else if (error.message?.includes('ECONNREFUSED')) {
+        userErrorMessage = 'Unable to connect to Claude. Please check if the service is running.';
+        errorType = 'CONNECTION_ERROR';
+      } else if (error.message?.includes('ENOMEM')) {
+        userErrorMessage =
+          'Server ran out of memory processing your request. Please try a smaller message.';
+        errorType = 'MEMORY_ERROR';
+      } else if (error.message?.includes('rate limit')) {
+        userErrorMessage = 'Too many requests. Please wait a moment and try again.';
+        errorType = 'RATE_LIMIT';
+      } else if (error.code === 'ENOTFOUND') {
+        userErrorMessage = 'Claude CLI not found. Please ensure it is installed and configured.';
+        errorType = 'SERVICE_NOT_FOUND';
+      }
+
       logger.error('Async Claude processing failed', {
         requestId,
         error: error.message,
+        errorType,
+        stack: error.stack,
+        sessionId,
+        messageLength: message?.length,
       });
 
-      // Send error notification via APNS
+      // Send detailed error notification via APNS
       try {
         await pushNotificationService.sendErrorNotification(deviceToken, {
           sessionId: sessionId || 'error-no-session',
           projectName: projectPath?.split('/').pop() || 'Project',
           projectPath,
-          error: `Failed to process message: ${error.message}`,
+          error: userErrorMessage,
+          errorType,
+          technicalDetails: process.env.NODE_ENV === 'development' ? error.message : undefined,
           requestId,
         });
 
         logger.info('Error notification sent via APNS', {
           requestId,
           deviceId: `${deviceToken.substring(0, 16)}...`,
+          errorType,
         });
       } catch (pushError) {
         logger.error('Failed to send error notification via APNS', {

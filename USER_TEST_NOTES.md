@@ -178,62 +178,6 @@ Expected behavior: App should launch smoothly with responsive UI immediately. An
 - Monitor console for any timeout warnings
 - Check if issue persists after first launch (cold vs warm start)
 
-### Issue #9: Create New Project Folder In-App
-**Priority**: High  
-**Component**: iOS App - Project Management  
-**Beta Blocker**: Possibly (Significant UX friction)  
-**Discovered**: 2025-08-19
-
-**Prompt for AI Investigation**:
-Implement ability to create new project folders directly from within the iOS app. Currently users must leave the app to create folders in Finder/Terminal before they appear in the project list, creating significant friction for new users. Implement:
-
-1. Add "New Project" or "+" button in project selection view
-2. Present sheet/dialog for project name and optional parent directory selection
-3. Create server API endpoint to safely create new directories
-4. Validate project names (no special chars that break filesystems)
-5. Set sensible default location (Desktop? Documents? User-configurable in settings?)
-6. Handle permissions and error cases (folder exists, no write permission, etc.)
-7. Auto-refresh project list after creation
-8. Automatically select and navigate to newly created project
-9. Consider template support (create with README, .gitignore, etc.)
-
-Expected behavior: User taps "New Project", enters a name, and the folder is created and immediately available for use without leaving the app. Should work seamlessly on both iOS and macOS.
-
-**Files to investigate/modify**:
-- `ios/Sources/AICLICompanion/Views/Projects/ProjectSelectionView.swift` (add creation UI)
-- `ios/Sources/AICLICompanion/ViewModels/ProjectListViewModel.swift` (creation logic)
-- `server/src/routes/projects.js` (add POST endpoint for folder creation)
-- `server/src/services/project-manager.js` (safe folder creation service)
-- Similar changes needed in macOS app
-
-**Security considerations**:
-- Sanitize folder names to prevent path traversal attacks
-- Restrict creation to allowed base directories only
-- Validate user has permissions for target location
-
----
-
-## Testing Protocol
-
-### How to Document New Issues
-When discovering issues during user testing, add them using this format:
-
-```markdown
-### Issue #X: [Brief Title]
-**Priority**: [High/Medium/Low]
-**Component**: [iOS App/Server/macOS App/Integration]
-**Beta Blocker**: [Yes/No]
-**Discovered**: [Date]
-
-**Prompt for AI Investigation**:
-[Write a clear, action-oriented prompt that an AI can use to investigate and fix the issue. Include:
-- Specific problem description
-- Steps to reproduce if known
-- Expected vs actual behavior
-- Relevant files or components to check
-- Any error messages or logs]
-```
-
 ### Issue #10: Clickable File Links in Chat
 **Priority**: Medium  
 **Component**: iOS App - Message Display / Server Integration  
@@ -269,56 +213,98 @@ Expected behavior: User sees "Modified src/components/Header.jsx:156" in Claude'
 - UX: Show loading state while fetching file content
 - Support common path formats: relative, absolute, with line numbers
 
-### Issue #14: Message Processing Fails Silently with Large Messages or Special Characters
+### Issue #15: Attachment UI Gets Cut Off at Top
 **Priority**: High  
-**Component**: Server - Message Processing / Error Handling  
-**Beta Blocker**: Yes (Silent failures are unacceptable UX)  
+**Component**: iOS App - Attachment View UI  
+**Beta Blocker**: Yes - Visual bug affecting core functionality  
 **Discovered**: 2025-08-21
-**Status**: Awaiting error logs
 
 **Prompt for AI Investigation**:
-Investigate and fix silent failures when processing certain messages, potentially related to message size or special characters. When certain messages are sent, the server appears to fail processing but no error is returned to the iOS app, leaving users with no feedback about what went wrong. Issues to investigate:
+Fix the UI bug where the top portion of attachments and the close button get cut off when adding an attachment to a chat message. The attachment preview/display is being clipped at the top, making it difficult or impossible to close the attachment or see the full content. Investigate and fix:
 
-1. Check server message size limits and buffer handling for large messages
-2. Investigate special character encoding issues (Unicode, emojis, escape sequences)
-3. Review error handling pipeline - ensure ALL errors propagate back to client
-4. Add comprehensive error boundaries around message processing
-5. Implement proper error responses via APNS when processing fails
-6. Add detailed logging for message processing failures
-7. Check if Claude CLI has message size limits that aren't being handled
-8. Review JSON parsing/stringification for edge cases
-9. Ensure WebSocket and HTTP error responses reach the iOS app
-10. Add timeout handling with proper error messages
+1. Check the attachment view's frame and safe area constraints
+2. Verify proper spacing from top safe area or navigation bar
+3. Review the attachment sheet/modal presentation style and sizing
+4. Ensure close button is properly positioned within safe area bounds
+5. Test on different device sizes (iPhone SE, iPhone Pro Max, iPad)
+6. Check if issue occurs in both portrait and landscape orientations
+7. Verify z-index/layer ordering isn't causing overlap issues
+8. Review any custom presentation controllers or transitions
 
-Expected behavior: When message processing fails for any reason, the iOS app should receive a clear error message explaining what went wrong (e.g., "Message too large", "Invalid characters", "Processing timeout"). Never fail silently.
+Expected behavior: When adding an attachment, the entire attachment preview should be visible with the close button fully accessible at the top, properly respecting safe area insets.
 
 **Files to investigate**:
-- `server/src/services/aicli-message-handler.js` (message processing pipeline)
-- `server/src/services/push-notification.js` (error response delivery)
-- `server/src/middleware/error-handler.js` (global error handling)
-- `server/src/services/websocket-message-handlers.js` (WebSocket error paths)
-- `server/src/utils/validation.js` (input validation and sanitization)
-- `ios/Sources/AICLICompanion/Services/WebSocketService.swift` (client error handling)
+- `ios/Sources/AICLICompanion/Views/Chat/AttachmentView.swift`
+- `ios/Sources/AICLICompanion/Views/Chat/Components/AttachmentPreview.swift`
+- `ios/Sources/AICLICompanion/Views/Chat/ChatView.swift` (attachment presentation logic)
+- Check for any custom sheet modifiers or presentation styles
+- Look for hardcoded offsets or frames that might not account for safe areas
 
-**Error scenarios to test**:
-- Very large messages (>100KB)
-- Messages with special Unicode characters
-- Messages with unescaped quotes or backslashes
-- Rapid successive messages that might overflow buffers
-- Messages sent during server restart/reload
-- Network interruptions during message processing
+**Testing Requirements**:
+- Test on various iPhone models (including notched and non-notched)
+- Test on iPad if supported
+- Verify in both light and dark mode
+- Check with different attachment types (images, documents, etc.)
+- Test with keyboard visible and hidden
 
-**Required improvements**:
-- Add message size validation with clear limits
-- Implement proper character encoding/escaping
-- Add error telemetry to track failure patterns
-- Create error recovery mechanisms
-- Add user-facing error messages for all failure modes
+### Issue #16: Root Directory Chat Assistant
+**Priority**: Low  
+**Component**: Server/iOS Integration  
+**Beta Blocker**: No - Enhancement for post-beta  
+**Discovered**: 2025-08-21
 
-**Note**: Error logs to be added when available to help diagnose specific failure patterns.
+**Note**: This is an enhancement idea for post-beta development. Not required for beta release.
 
+**Concept**:
+Add the ability to have a conversation with Claude at the root directory level (parent of all projects) to perform cross-project operations and file management tasks. This would enable users to ask Claude to do things like:
+- Move files between projects
+- Create new project folders
+- Search across all projects
+- Organize files and directories
+- Perform batch operations across multiple projects
+- Get an overview of the entire workspace
+
+**Potential Implementation Ideas**:
+1. Add a special "Workspace" or "Root" option in project selection
+2. When selected, Claude operates at the parent directory level
+3. Could show a different UI indicator when in "workspace mode"
+4. Server would need to handle commands at the root level safely
+5. Additional security considerations for broader file system access
+
+**Use Cases**:
+- "Move all test files from project-a to project-b"
+- "Create a new project called 'my-new-app' with a basic folder structure"
+- "Find all TODO comments across all my projects"
+- "Show me which projects have package.json files"
+- "Archive old projects I haven't touched in 30 days"
+
+**Why Not Beta**: 
+This is a nice-to-have enhancement that adds complexity. The core chat functionality within individual projects is sufficient for beta. This can be explored based on user feedback about workflow needs.
+
+---
+
+## Testing Protocol
+
+### How to Document New Issues
+When discovering issues during user testing, add them using this format:
+
+```markdown
+### Issue #X: [Brief Title]
+**Priority**: [High/Medium/Low]
+**Component**: [iOS App/Server/macOS App/Integration]
+**Beta Blocker**: [Yes/No]
+**Discovered**: [Date]
+
+**Prompt for AI Investigation**:
+[Write a clear, action-oriented prompt that an AI can use to investigate and fix the issue. Include:
+- Specific problem description
+- Steps to reproduce if known
+- Expected vs actual behavior
+- Relevant files or components to check
+- Any error messages or logs]
+```
 
 ---
 
 **Document Created**: 2025-08-19  
-**Last Updated**: 2025-08-21
+**Last Updated**: 2025-08-21 (Reorganized structure, added Issue #16: Root directory chat concept)

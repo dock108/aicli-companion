@@ -28,6 +28,94 @@ export class ValidationUtils {
   }
 
   /**
+   * Validate message size and content
+   * @param {string} message - Message to validate
+   * @param {Object} options - Validation options
+   * @returns {Object} Validation result with sanitized message and warnings
+   */
+  static validateMessageContent(message, options = {}) {
+    const MAX_MESSAGE_SIZE = options.maxSize || parseInt(process.env.MAX_MESSAGE_SIZE || '100000');
+    const WARN_MESSAGE_SIZE =
+      options.warnSize || parseInt(process.env.WARN_MESSAGE_SIZE || '50000');
+
+    const result = {
+      valid: true,
+      message,
+      warnings: [],
+      errors: [],
+    };
+
+    // Check if message is a string
+    if (typeof message !== 'string') {
+      result.valid = false;
+      result.errors.push('Message must be a string');
+      return result;
+    }
+
+    // Check message size in bytes (not just character count)
+    const messageBytes = Buffer.byteLength(message, 'utf8');
+
+    if (messageBytes > MAX_MESSAGE_SIZE) {
+      result.valid = false;
+      result.errors.push(
+        `Message size (${messageBytes} bytes) exceeds maximum allowed size of ${MAX_MESSAGE_SIZE} bytes`
+      );
+      return result;
+    }
+
+    if (messageBytes > WARN_MESSAGE_SIZE) {
+      result.warnings.push(
+        `Large message detected: ${messageBytes} bytes. Consider breaking into smaller messages.`
+      );
+    }
+
+    // Check for null bytes and control characters
+    if (message.includes('\0')) {
+      result.message = message.replace(/\0/g, '');
+      result.warnings.push('Null bytes removed from message');
+    }
+
+    // Check for excessive control characters that might cause issues
+    // eslint-disable-next-line no-control-regex
+    const controlCharCount = (message.match(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g) || []).length;
+    if (controlCharCount > 10) {
+      result.warnings.push(
+        `Message contains ${controlCharCount} control characters which may cause display issues`
+      );
+    }
+
+    // Validate Unicode characters
+    try {
+      // Test if message can be properly encoded/decoded
+      const encoded = Buffer.from(message, 'utf8');
+      const decoded = encoded.toString('utf8');
+
+      if (decoded !== message) {
+        result.warnings.push('Message contains invalid UTF-8 sequences that were normalized');
+        result.message = decoded;
+      }
+    } catch (error) {
+      result.valid = false;
+      result.errors.push(`Invalid character encoding: ${error.message}`);
+      return result;
+    }
+
+    // Check for special characters that might break JSON encoding
+    if (message.includes('\\') || message.includes('"')) {
+      const unescapedBackslashes = (message.match(/(?<!\\)\\(?!["\\/bfnrt])/g) || []).length;
+      const unescapedQuotes = (message.match(/(?<!\\)"/g) || []).length;
+
+      if (unescapedBackslashes > 0 || unescapedQuotes > 0) {
+        result.warnings.push(
+          'Message contains unescaped special characters that may need escaping for JSON'
+        );
+      }
+    }
+
+    return result;
+  }
+
+  /**
    * Validate and normalize format parameter
    * @param {any} format - Format to validate
    * @returns {string} Validated format

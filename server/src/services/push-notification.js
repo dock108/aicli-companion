@@ -544,11 +544,14 @@ class PushNotificationService {
    */
   async sendErrorNotification(clientId, data) {
     if (!this.isConfigured) {
+      console.log('⚠️  Push notifications not configured - skipping error notification');
       return;
     }
 
-    const device = this.deviceTokens.get(clientId);
-    if (!device) {
+    // Support both token lookup and direct token usage
+    const device = this.deviceTokens.get(clientId) || { token: clientId };
+    if (!device.token) {
+      console.log(`⚠️  No device token found for client ${clientId}`);
       return;
     }
 
@@ -557,25 +560,53 @@ class PushNotificationService {
 
       notification.expiry = Math.floor(Date.now() / 1000) + 3600;
       notification.sound = 'default';
+      notification.contentAvailable = true; // Ensure app wakes up to handle error
+      notification.priority = 10; // High priority for errors
+
+      // Different alert styles based on error type
+      const errorTitle =
+        data.errorType === 'TIMEOUT'
+          ? '⏱️ Request Timeout'
+          : data.errorType === 'CONNECTION_ERROR'
+            ? '🔌 Connection Error'
+            : data.errorType === 'MEMORY_ERROR'
+              ? '💾 Memory Error'
+              : data.errorType === 'RATE_LIMIT'
+                ? '🚦 Rate Limited'
+                : data.errorType === 'SERVICE_NOT_FOUND'
+                  ? '❓ Service Not Found'
+                  : '❌ Processing Error';
+
       notification.alert = {
-        title: 'Claude Error',
-        subtitle: data.projectName,
-        body: data.error,
+        title: errorTitle,
+        subtitle: data.projectName || 'AICLI Companion',
+        body: data.error || 'An error occurred processing your message',
       };
+
       notification.topic = this.bundleId || process.env.APNS_BUNDLE_ID || 'com.claude.companion';
+      notification.category = 'ERROR_NOTIFICATION';
+
+      // Include detailed error information in payload
       notification.payload = {
         projectName: data.projectName,
         projectPath: data.projectPath,
+        sessionId: data.sessionId,
         error: true,
+        errorType: data.errorType || 'UNKNOWN',
         errorMessage: data.error,
+        technicalDetails: data.technicalDetails,
         requestId: data.requestId,
         timestamp: new Date().toISOString(),
-        deliveryMethod: 'apns_primary',
+        deliveryMethod: 'apns_error',
       };
+
+      notification.threadId = data.projectPath || 'error';
 
       const result = await this.sendNotification(device.token, notification);
 
-      if (!result.success) {
+      if (result.success) {
+        console.log(`✅ Error notification sent to client ${clientId} (${data.errorType})`);
+      } else {
         console.error('❌ Error notification failed for client %s:', clientId, result.error);
       }
     } catch (error) {

@@ -51,10 +51,6 @@ struct ProjectSelectionView: View {
     let onDisconnect: (() -> Void)?
     @State private var projects: [Project] = []
     @StateObject private var loadingStateCoordinator = LoadingStateCoordinator.shared
-    @State private var showingFolderCreation = false
-    @State private var selectedProjectForFolder: Project?
-    @State private var newFolderName = ""
-    @State private var folderCreationError: String?
     
     private var isLoading: Bool {
         loadingStateCoordinator.isLoading(.projectSelection)
@@ -158,12 +154,6 @@ struct ProjectSelectionView: View {
                                 hasSession: hasMessagesCache[project.path] ?? false,
                                 onSelect: {
                                     selectProject(project)
-                                },
-                                onCreateFolder: {
-                                    selectedProjectForFolder = project
-                                    newFolderName = ""
-                                    folderCreationError = nil
-                                    showingFolderCreation = true
                                 }
                             )
                         }
@@ -176,15 +166,6 @@ struct ProjectSelectionView: View {
         .background(Colors.bgBase(for: colorScheme))
         .onAppear {
             loadProjects()
-        }
-        .sheet(isPresented: $showingFolderCreation) {
-            FolderCreationSheet(
-                project: selectedProjectForFolder,
-                folderName: $newFolderName,
-                errorMessage: $folderCreationError,
-                isPresented: $showingFolderCreation,
-                onCreateFolder: createFolder
-            )
         }
     }
     
@@ -316,30 +297,6 @@ struct ProjectSelectionView: View {
         }
     }
     
-    private func createFolder() {
-        guard let project = selectedProjectForFolder,
-              !newFolderName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            folderCreationError = "Please enter a folder name"
-            return
-        }
-        
-        let trimmedName = newFolderName.trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        // Use the shared AICLIService which already has connection setup
-        aicliService.createFolder(in: project.name, folderName: trimmedName) { result in
-            DispatchQueue.main.async {
-                switch result {
-                case .success(let response):
-                    print("✅ Successfully created folder: \(response.folder.name)")
-                    showingFolderCreation = false
-                    // Optionally reload projects to show the new folder
-                    loadProjects()
-                case .failure(let error):
-                    folderCreationError = error.localizedDescription
-                }
-            }
-        }
-    }
 }
 
 // MARK: - Project Row View
@@ -349,7 +306,6 @@ struct ProjectRowView: View {
     let project: Project
     let hasSession: Bool
     let onSelect: () -> Void
-    let onCreateFolder: () -> Void
     
     @Environment(\.colorScheme) var colorScheme
     @State private var isProcessing = false
@@ -439,20 +395,6 @@ struct ProjectRowView: View {
                 
                 Spacer()
                 
-                // Folder button
-                Button(action: onCreateFolder) {
-                    Image(systemName: "folder.badge.plus")
-                        .font(.system(size: 16))
-                        .foregroundColor(Colors.accentPrimaryEnd)
-                        .frame(width: 30, height: 30)
-                        .background(
-                            Circle()
-                                .fill(Colors.accentPrimaryEnd.opacity(0.1))
-                        )
-                }
-                .buttonStyle(PlainButtonStyle())
-                .padding(.trailing, Spacing.sm)
-                
                 // Chevron
                 Image(systemName: "chevron.right")
                     .font(.caption)
@@ -539,134 +481,6 @@ struct ProjectRowView: View {
     }
 }
 
-// MARK: - Folder Creation Sheet
-
-@available(iOS 17.0, macOS 14.0, *)
-struct FolderCreationSheet: View {
-    let project: Project?
-    @Binding var folderName: String
-    @Binding var errorMessage: String?
-    @Binding var isPresented: Bool
-    let onCreateFolder: () -> Void
-    
-    @Environment(\.colorScheme) var colorScheme
-    @FocusState private var isFocused: Bool
-    
-    var body: some View {
-        NavigationView {
-            VStack(spacing: Spacing.lg) {
-                // Project info
-                if let project = project {
-                    HStack {
-                        Image(systemName: "folder.fill")
-                            .font(.title3)
-                            .foregroundColor(Colors.accentPrimaryEnd)
-                        
-                        VStack(alignment: .leading) {
-                            Text("Creating folder in:")
-                                .font(Typography.font(.caption))
-                                .foregroundColor(Colors.textSecondary(for: colorScheme))
-                            Text(project.name)
-                                .font(Typography.font(.body))
-                                .foregroundColor(Colors.textPrimary(for: colorScheme))
-                        }
-                        
-                        Spacer()
-                    }
-                    .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Colors.bgCard(for: colorScheme))
-                    )
-                }
-                
-                // Folder name input
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    Text("Folder Name")
-                        .font(Typography.font(.caption))
-                        .foregroundColor(Colors.textSecondary(for: colorScheme))
-                    
-                    TextField("Enter folder name", text: $folderName)
-                        .textFieldStyle(PlainTextFieldStyle())
-                        .font(Typography.font(.body))
-                        .foregroundColor(Colors.textPrimary(for: colorScheme))
-                        .padding()
-                        .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(Colors.bgCard(for: colorScheme))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(errorMessage != nil ? Colors.accentDanger : Colors.strokeLight, lineWidth: 1)
-                        )
-                        .focused($isFocused)
-                }
-                
-                // Error message
-                if let error = errorMessage {
-                    HStack {
-                        Image(systemName: "exclamationmark.triangle")
-                            .foregroundColor(Colors.accentDanger)
-                        Text(error)
-                            .font(Typography.font(.caption))
-                            .foregroundColor(Colors.accentDanger)
-                        Spacer()
-                    }
-                    .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Colors.accentDanger.opacity(0.1))
-                    )
-                }
-                
-                Spacer()
-            }
-            .padding()
-            .background(Colors.bgBase(for: colorScheme))
-            .navigationTitle("New Folder")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                #if os(iOS)
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        isPresented = false
-                    }
-                    .foregroundColor(Colors.textSecondary(for: colorScheme))
-                }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Create") {
-                        onCreateFolder()
-                    }
-                    .foregroundColor(Colors.accentPrimaryEnd)
-                    .disabled(folderName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-                #else
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        isPresented = false
-                    }
-                    .foregroundColor(Colors.textSecondary(for: colorScheme))
-                }
-                
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Create") {
-                        onCreateFolder()
-                    }
-                    .foregroundColor(Colors.accentPrimaryEnd)
-                    .disabled(folderName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-                #endif
-            }
-        }
-        .onAppear {
-            isFocused = true
-        }
-    }
-}
-
 // MARK: - Preview
 
 @available(iOS 17.0, macOS 14.0, *)
@@ -686,9 +500,6 @@ struct FolderCreationSheet: View {
         hasSession: true,
         onSelect: {
             print("Project selected")
-        },
-        onCreateFolder: {
-            print("Create folder tapped")
         }
     )
     .padding()

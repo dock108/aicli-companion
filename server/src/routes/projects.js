@@ -174,35 +174,15 @@ export function setupProjectRoutes(app, _aicliService) {
         decodedFolderName.includes('\\') ||
         decodedFolderName.startsWith('.') ||
         decodedFolderName.length > 255
+      ) {
         return res.status(400).json({
           error: 'Invalid request',
-          message: 'Folder name is required',
+          message: 'Invalid folder name',
         });
       }
 
-      // Sanitize folder name - remove special characters that could cause issues
-      const sanitizedFolderName = folderName.trim();
-
-      // Check for invalid characters or patterns
-      if (
-        !sanitizedFolderName ||
-        sanitizedFolderName.includes('..') ||
-        sanitizedFolderName.includes('/') ||
-        sanitizedFolderName.includes('\\') ||
-      const normalizedProjectPath = path.normalize(projectPath);
-
-      // Ensure the new folder is strictly within the project directory (not equal to it or outside)
-      if (
-        normalizedPath === normalizedProjectPath ||
-        !normalizedPath.startsWith(normalizedProjectPath + path.sep)
-      ) {
-        sanitizedFolderName.length > 255
-      ) {
-        return res.status(400).json({
-          error: 'Invalid folder name',
-          message: 'Folder name contains invalid characters or is too long',
-        });
-      }
+      // Use the already decoded folder name
+      const sanitizedFolderName = decodedFolderName;
 
       const projectsDir = getProjectsDir();
       const projectPath = path.join(projectsDir, name);

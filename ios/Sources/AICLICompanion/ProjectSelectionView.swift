@@ -291,19 +291,21 @@ struct ProjectSelectionView: View {
     private func selectProject(_ project: Project) {
         print("🔵 ProjectSelection: Selecting project '\(project.name)' at path: \(project.path)")
         
-        // Debounce rapid selections (500ms)
+        // Reduce debounce to 100ms to prevent accidental double-clicks only
         let now = Date()
         let timeSinceLastSelection = now.timeIntervalSince(lastSelectionTime)
-        if timeSinceLastSelection < 0.5 {
+        if timeSinceLastSelection < 0.1 {
             print("⚠️ ProjectSelection: Ignoring rapid selection for '\(project.name)' (only \(Int(timeSinceLastSelection * 1000))ms since last selection)")
             return
         }
         lastSelectionTime = now
         
-        // Simply select the project - no server notification needed
-        selectedProject = project
+        // Set both values atomically to avoid race conditions
+        withAnimation(.easeInOut(duration: 0.2)) {
+            selectedProject = project
+            isProjectSelected = true
+        }
         print("🟢 ProjectSelection: Selected project '\(project.name)', navigating to chat")
-        isProjectSelected = true
     }
     
     private func disconnectFromServer() {
@@ -622,8 +624,11 @@ struct FolderCreationSheet: View {
             .padding()
             .background(Colors.bgBase(for: colorScheme))
             .navigationTitle("New Folder")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
+                #if os(iOS)
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {
                         isPresented = false
@@ -638,6 +643,22 @@ struct FolderCreationSheet: View {
                     .foregroundColor(Colors.accentPrimaryEnd)
                     .disabled(folderName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
+                #else
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        isPresented = false
+                    }
+                    .foregroundColor(Colors.textSecondary(for: colorScheme))
+                }
+                
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Create") {
+                        onCreateFolder()
+                    }
+                    .foregroundColor(Colors.accentPrimaryEnd)
+                    .disabled(folderName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+                #endif
             }
         }
         .onAppear {

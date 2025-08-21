@@ -30,7 +30,7 @@ struct ChatInputBar: View {
                 attachments: attachments,
                 onRemove: removeAttachment
             )
-            .padding(.horizontal, isIPad && horizontalSizeClass == .regular ? 40 : 16)
+            .padding(.horizontal, isIPad && horizontalSizeClass == .regular ? 20 : 16)
             .padding(.top, attachments.isEmpty ? 0 : 8)
             
             if !attachments.isEmpty {
@@ -100,7 +100,7 @@ struct ChatInputBar: View {
                     .animation(.easeInOut(duration: 0.2), value: isSendBlocked)
                 }
             }
-            .padding(.horizontal, isIPad && horizontalSizeClass == .regular ? 40 : 16)
+            .padding(.horizontal, isIPad && horizontalSizeClass == .regular ? 20 : 16)
             .padding(.vertical, 16)
         }
         .background(.ultraThinMaterial)

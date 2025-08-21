@@ -12,35 +12,47 @@ struct ProjectContextHeader: View {
     
     var body: some View {
         HStack(spacing: 0) {
-            // Back to projects button
-            Button(action: onSwitchProject) {
-                HStack(spacing: 4) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 17, weight: .medium))
-                    Text("Projects")
-                        .font(Typography.font(.body))
-                        .fontWeight(.medium)
+            // Back to projects button (only on iPhone)
+            #if os(iOS)
+            if UIDevice.current.userInterfaceIdiom != .pad {
+                Button(action: onSwitchProject) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 17, weight: .medium))
+                        Text("Projects")
+                            .font(Typography.font(.body))
+                            .fontWeight(.medium)
+                    }
+                    .foregroundColor(Colors.accentPrimary(for: colorScheme).first ?? Colors.accentPrimaryStart)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Colors.bgCard(for: colorScheme))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Colors.strokeLight, lineWidth: 1)
+                            )
+                    )
                 }
-                .foregroundColor(Colors.accentPrimary(for: colorScheme).first ?? Colors.accentPrimaryStart)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Colors.bgCard(for: colorScheme))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Colors.strokeLight, lineWidth: 1)
-                        )
-                )
+                .buttonStyle(.plain)
+                .padding(.trailing, 12)
             }
-            .buttonStyle(.plain)
-            .padding(.trailing, 12)
+            #endif
             
-            // Project info
-            Text(project.name)
-                .font(Typography.font(.body))
-                .fontWeight(.semibold)
-                .foregroundColor(Colors.textPrimary(for: colorScheme))
+            // Project path info (smaller, secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(project.name)
+                    .font(Typography.font(.caption))
+                    .fontWeight(.medium)
+                    .foregroundColor(Colors.textPrimary(for: colorScheme))
+                
+                Text(project.path)
+                    .font(Typography.font(.footnote))
+                    .foregroundColor(Colors.textSecondary(for: colorScheme))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
             
             Spacer()
             
@@ -58,7 +70,7 @@ struct ProjectContextHeader: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.vertical, 8)
         .background(
             Rectangle()
                 .fill(Colors.bgCard(for: colorScheme).opacity(0.95))

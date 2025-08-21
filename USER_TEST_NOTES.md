@@ -117,35 +117,6 @@ Expected behavior: Long messages show a brief summary with key points, expandabl
 - `server/src/services/summarization.js` (to be created if server-side)
 - Consider Core ML integration for on-device processing
 
-### Issue #6: Chat Scroll Position Resets to Top
-**Priority**: High  
-**Component**: iOS App - Chat View Scroll Management  
-**Beta Blocker**: Yes - UX critical  
-**Discovered**: 2025-08-19
-
-**Prompt for AI Investigation**:
-Fix the chat view scroll position resetting to the top of the conversation when users navigate away and return. Users report having to scroll back down to see new messages, which is especially annoying in long conversations. The issue occurs when:
-- Switching between projects and returning to a conversation  
-- Leaving the app and coming back (app backgrounding/foregrounding)
-- Possibly when new messages arrive
-
-Check and fix:
-1. Investigate scroll position preservation in ChatView when view disappears/reappears
-2. Check if MessageListView properly maintains scroll state during view lifecycle
-3. Verify scroll-to-bottom behavior when loading persisted messages
-4. Review how the app handles scroll position during app state transitions (background/foreground)
-5. Ensure new messages trigger proper auto-scroll to bottom
-6. Check if message list ID tracking is causing view refresh issues
-
-Expected behavior: Chat should maintain scroll position when navigating away, or automatically scroll to the bottom to show the most recent messages when returning to a conversation. Follow standard messaging app patterns (WhatsApp/iMessage).
-
-**Files to investigate**:
-- `ios/Sources/AICLICompanion/Views/Chat/ChatView.swift`
-- `ios/Sources/AICLICompanion/Views/Chat/Components/MessageListView.swift`
-- `ios/Sources/AICLICompanion/ViewModels/ChatViewModel.swift`
-- Check for ScrollViewReader usage and scroll anchoring
-- Look for onAppear/onDisappear handlers that might reset state
-
 ### Issue #7: Enhanced Claude Environment Details Display
 **Priority**: Low  
 **Component**: iOS App - Debug/Info Panel  
@@ -263,6 +234,166 @@ When discovering issues during user testing, add them using this format:
 - Any error messages or logs]
 ```
 
+### Issue #10: Clickable File Links in Chat
+**Priority**: Medium  
+**Component**: iOS App - Message Display / Server Integration  
+**Beta Blocker**: No  
+**Discovered**: 2025-08-21
+
+**Prompt for AI Investigation**:
+Implement clickable file names in chat messages that connect to the server and display the formatted file content. When Claude mentions file paths in responses (e.g., "Modified src/server.js:42"), users should be able to tap/click on these file references to view the actual file with proper syntax highlighting. Implement:
+
+1. Detect file path patterns in message content (e.g., `file.ext`, `path/to/file.ext`, `file.ext:lineNumber`)
+2. Make detected file paths clickable/tappable with visual indication (underline, color)
+3. On tap, request file content from server via new API endpoint
+4. Display file in a modal/sheet with syntax highlighting based on file extension
+5. Support line number navigation if specified (file.ext:42 jumps to line 42)
+6. Handle various file path formats Claude might use
+7. Implement file content caching to avoid repeated server requests
+8. Add "Copy Path" and "Copy Content" actions in file viewer
+9. Handle files that don't exist or user lacks permissions to read
+
+Expected behavior: User sees "Modified src/components/Header.jsx:156" in Claude's response, taps on it, and a formatted view of Header.jsx opens with line 156 highlighted. File content is properly syntax highlighted and readable.
+
+**Files to investigate/modify**:
+- `ios/Sources/AICLICompanion/Views/Chat/Components/MessageBubble.swift` (detect and style file links)
+- `ios/Sources/AICLICompanion/Views/FileViewer/FileViewerSheet.swift` (create file viewer)
+- `ios/Sources/AICLICompanion/Services/FileContentService.swift` (fetch file content)
+- `server/src/routes/files.js` (add GET endpoint for file content)
+- `ios/Sources/AICLICompanion/Utils/MessageParser.swift` (parse file references)
+- Consider using Highlightr or similar for syntax highlighting
+
+**Technical considerations**:
+- Security: Validate file paths to prevent directory traversal
+- Performance: Cache viewed files for session duration
+- UX: Show loading state while fetching file content
+- Support common path formats: relative, absolute, with line numbers
+
+### Issue #14: Message Processing Fails Silently with Large Messages or Special Characters
+**Priority**: High  
+**Component**: Server - Message Processing / Error Handling  
+**Beta Blocker**: Yes (Silent failures are unacceptable UX)  
+**Discovered**: 2025-08-21
+**Status**: Awaiting error logs
+
+**Prompt for AI Investigation**:
+Investigate and fix silent failures when processing certain messages, potentially related to message size or special characters. When certain messages are sent, the server appears to fail processing but no error is returned to the iOS app, leaving users with no feedback about what went wrong. Issues to investigate:
+
+1. Check server message size limits and buffer handling for large messages
+2. Investigate special character encoding issues (Unicode, emojis, escape sequences)
+3. Review error handling pipeline - ensure ALL errors propagate back to client
+4. Add comprehensive error boundaries around message processing
+5. Implement proper error responses via APNS when processing fails
+6. Add detailed logging for message processing failures
+7. Check if Claude CLI has message size limits that aren't being handled
+8. Review JSON parsing/stringification for edge cases
+9. Ensure WebSocket and HTTP error responses reach the iOS app
+10. Add timeout handling with proper error messages
+
+Expected behavior: When message processing fails for any reason, the iOS app should receive a clear error message explaining what went wrong (e.g., "Message too large", "Invalid characters", "Processing timeout"). Never fail silently.
+
+**Files to investigate**:
+- `server/src/services/aicli-message-handler.js` (message processing pipeline)
+- `server/src/services/push-notification.js` (error response delivery)
+- `server/src/middleware/error-handler.js` (global error handling)
+- `server/src/services/websocket-message-handlers.js` (WebSocket error paths)
+- `server/src/utils/validation.js` (input validation and sanitization)
+- `ios/Sources/AICLICompanion/Services/WebSocketService.swift` (client error handling)
+
+**Error scenarios to test**:
+- Very large messages (>100KB)
+- Messages with special Unicode characters
+- Messages with unescaped quotes or backslashes
+- Rapid successive messages that might overflow buffers
+- Messages sent during server restart/reload
+- Network interruptions during message processing
+
+**Required improvements**:
+- Add message size validation with clear limits
+- Implement proper character encoding/escaping
+- Add error telemetry to track failure patterns
+- Create error recovery mechanisms
+- Add user-facing error messages for all failure modes
+
+**Note**: Error logs to be added when available to help diagnose specific failure patterns.
+
+### Issue #15: Settings Navigation Gets Stuck/Difficult to Exit
+**Priority**: High  
+**Component**: iOS App - Settings Navigation UI  
+**Beta Blocker**: Potentially (Navigation frustration)  
+**Discovered**: 2025-08-21
+
+**Prompt for AI Investigation**:
+Investigate and fix navigation issues with the Settings view where users get stuck or have difficulty exiting. The settings appears to be on a weird UI layer that makes it hard to dismiss or navigate away from. Users report the navigation feels broken or unresponsive when trying to leave settings. Investigate:
+
+1. Check if Settings is presented as a sheet, modal, or navigation push
+2. Verify dismiss gestures are properly enabled (swipe down on iOS)
+3. Check for missing or non-functional close/done buttons
+4. Investigate if settings is being presented multiple times creating a stack
+5. Review presentation detents and modal presentation styles
+6. Check for any gesture recognizer conflicts
+7. Verify the navigation state management in SettingsView
+8. Test on both iPhone and iPad (different navigation paradigms)
+9. Check if TabView or NavigationStack is interfering with dismissal
+10. Look for any `.interactiveDismissDisabled()` modifiers
+
+Expected behavior: Settings should be easily dismissible via standard iOS patterns - either a Done/Close button, swipe down gesture, or back navigation. User should never feel "trapped" in settings.
+
+**Files to investigate**:
+- `ios/Sources/AICLICompanion/Views/Settings/SettingsView.swift`
+- `ios/Sources/AICLICompanion/Views/ContentView.swift` (how settings is presented)
+- `ios/Sources/AICLICompanion/Navigation/NavigationCoordinator.swift` (if exists)
+- Check for any custom presentation modifiers or sheets
+- Look for navigation state that might not be resetting
+
+**Testing considerations**:
+- Test dismissal via swipe gesture
+- Test dismissal via button (if present)
+- Test navigation on both compact and regular size classes
+- Verify no memory leaks keeping settings view alive
+- Check if issue occurs consistently or intermittently
+
+### Issue #16: Hide Unimplemented Settings Options
+**Priority**: High  
+**Component**: iOS App - Settings UI  
+**Beta Blocker**: Yes (Confusing UX, gives impression of broken features)  
+**Discovered**: 2025-08-21
+
+**Prompt for AI Investigation**:
+Hide or disable all settings options that are not yet implemented to avoid user confusion and the appearance of broken functionality. Review all settings screens and remove/hide options that don't have working implementations. This is critical for beta release to maintain professional appearance and avoid user frustration. Tasks:
+
+1. Audit all settings views (General, Advanced, any other tabs)
+2. Identify which settings are actually connected to working functionality
+3. Hide or remove settings that are placeholders or unimplemented:
+   - Comment out the UI elements rather than deleting (for easy re-enabling)
+   - Add TODO comments indicating what needs implementation
+4. For partially working features, either complete them or hide entirely
+5. Ensure remaining visible settings all have proper:
+   - Persistence (settings are saved and restored)
+   - Immediate effect when changed
+   - Appropriate validation and error handling
+6. Add "Coming Soon" section if desired for transparency about future features
+7. Test all remaining visible settings to confirm they work as expected
+
+Expected behavior: Every visible setting in the app should have a working implementation. No placeholder or "dead" UI elements should be present in the beta release. Users should only see options they can actually use.
+
+**Files to investigate/modify**:
+- `ios/Sources/AICLICompanion/Views/Settings/GeneralSettingsView.swift`
+- `ios/Sources/AICLICompanion/Views/Settings/AdvancedSettingsView.swift`
+- `ios/Sources/AICLICompanion/Views/Settings/SettingsView.swift`
+- `ios/Sources/AICLICompanion/ViewModels/SettingsViewModel.swift`
+- Any other settings-related views or view models
+- Check macOS app settings views as well if applicable
+
+**Specific items to check**:
+- Theme selection (if not working)
+- Notification settings (if not implemented)
+- Sync settings (if CloudKit not ready)
+- Advanced developer options
+- Any experimental features
+- Keyboard shortcuts (if not functional)
+- Export/Import settings (if not implemented)
+
 ---
 
 ## Completed Issues
@@ -271,4 +402,4 @@ When discovering issues during user testing, add them using this format:
 ---
 
 **Document Created**: 2025-08-19  
-**Last Updated**: 2025-08-19 (Added Issue #8: Initial app load freezing)
+**Last Updated**: 2025-08-21 (Added Issue #16: Hide unimplemented settings)

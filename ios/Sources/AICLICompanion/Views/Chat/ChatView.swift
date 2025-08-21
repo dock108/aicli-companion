@@ -164,8 +164,17 @@ struct ChatView: View {
             #endif
         }
         .onAppear {
-            viewModel.currentProject = selectedProject
-            setupView()
+            // Ensure proper setup on view appearance
+            if let project = selectedProject {
+                // Only setup if project is different or not yet set
+                if viewModel.currentProject?.path != project.path {
+                    viewModel.currentProject = project
+                    handleProjectChange()
+                } else {
+                    // Project already set, just ensure view is ready
+                    setupView()
+                }
+            }
         }
         .onDisappear {
             cleanupView()

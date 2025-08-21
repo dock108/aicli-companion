@@ -44,7 +44,60 @@ Clicking on any conversation in the sidebar should immediately load and display 
 - `ios/Sources/AICLICompanion/ProjectSelectionView.swift` (project selection)
 - Check for any `.onAppear` or `.onChange` modifiers that might be interfering
 
+## Root Cause Analysis
+
+The conversation loading issue was caused by:
+
+1. **Excessive Debounce Time**: ProjectSelectionView had a 500ms debounce that ignored rapid selections, preventing legitimate first clicks from registering
+2. **onChange Limitation**: ChatView's `.onChange(of: selectedProject?.path)` only triggered when the path changed, missing initial selections
+3. **Race Condition**: Setting `selectedProject` and `isProjectSelected` separately could cause timing issues
+4. **Incomplete onAppear Logic**: The onAppear handler didn't properly handle initial project setup
+
+## Solution Implemented
+
+### 1. Reduced Debounce Time
+- Changed from 500ms to 100ms (only prevents accidental double-clicks)
+- Allows normal first clicks to register immediately
+- Still prevents rapid double-click issues
+
+### 2. Fixed onChange Handler
+- Changed from `.onChange(of: selectedProject?.path)` to `.onChange(of: selectedProject)`
+- Now properly detects initial selection, not just path changes
+- Handles both initial and subsequent project selections
+
+### 3. Atomic State Updates
+- Wrapped `selectedProject` and `isProjectSelected` updates in `withAnimation` block
+- Ensures both values update together, preventing race conditions
+
+### 4. Improved onAppear Logic
+- Added proper project comparison to avoid unnecessary reloads
+- Handles both initial setup and project changes correctly
+- Ensures view setup when project is already selected
+
+## Changes Made
+
+**File: ProjectSelectionView.swift**
+- Reduced debounce from 500ms to 100ms in `selectProject`
+- Added `withAnimation` for atomic state updates
+- Improved logging for debugging
+
+**File: ChatView.swift**
+- Changed `.onChange` to observe entire `selectedProject` object
+- Improved `onAppear` logic to handle initial selection
+- Added proper project comparison to prevent unnecessary reloads
+
 ## Status
 
-**Current Status**: Investigating  
+**Current Status**: ✅ FIXED - Compiled and tested successfully  
 **Last Updated**: 2025-08-21
+
+### Implementation Complete
+
+- ✅ Reduced debounce time to allow first clicks
+- ✅ Fixed onChange to detect initial selection
+- ✅ Eliminated race conditions with atomic updates
+- ✅ Improved onAppear logic for proper initialization
+- ✅ Code compiled successfully with no errors
+- ✅ SwiftLint validation passed
+
+Conversations now load immediately on first click without requiring workarounds or multiple attempts.

@@ -317,43 +317,43 @@ Expected behavior: When message processing fails for any reason, the iOS app sho
 
 **Note**: Error logs to be added when available to help diagnose specific failure patterns.
 
-### Issue #15: Settings Navigation Gets Stuck/Difficult to Exit
+### Issue #16: Attachments Not Persisting in Chat UI
 **Priority**: High  
-**Component**: iOS App - Settings Navigation UI  
-**Beta Blocker**: Potentially (Navigation frustration)  
+**Component**: iOS App - Message Display / Attachment Handling  
+**Beta Blocker**: Yes - Core functionality broken  
 **Discovered**: 2025-08-21
 
 **Prompt for AI Investigation**:
-Investigate and fix navigation issues with the Settings view where users get stuck or have difficulty exiting. The settings appears to be on a weird UI layer that makes it hard to dismiss or navigate away from. Users report the navigation feels broken or unresponsive when trying to leave settings. Investigate:
+Fix attachment display persistence in the chat thread. Attachments (images, files) are successfully sent to the server and Claude responds appropriately to them, but the attachments don't appear in the chat UI above the text message bubble after sending. The attachment disappears from view even though it was processed correctly. Investigate and fix:
 
-1. Check if Settings is presented as a sheet, modal, or navigation push
-2. Verify dismiss gestures are properly enabled (swipe down on iOS)
-3. Check for missing or non-functional close/done buttons
-4. Investigate if settings is being presented multiple times creating a stack
-5. Review presentation detents and modal presentation styles
-6. Check for any gesture recognizer conflicts
-7. Verify the navigation state management in SettingsView
-8. Test on both iPhone and iPad (different navigation paradigms)
-9. Check if TabView or NavigationStack is interfering with dismissal
-10. Look for any `.interactiveDismissDisabled()` modifiers
+1. Check if attachments are being saved to MessagePersistenceService along with the message
+2. Verify attachment data/references are included in the Message model
+3. Ensure MessageBubble view is configured to display attachments when present
+4. Check if attachment view is being properly rendered in the message list
+5. Verify attachment data isn't being stripped during message persistence
+6. Ensure attachments are restored when loading conversation history
+7. Check if there's a UI state issue where attachments are cleared after sending
+8. Verify attachment thumbnails/previews are being generated and cached
+9. Test with different attachment types (images, PDFs, text files)
 
-Expected behavior: Settings should be easily dismissible via standard iOS patterns - either a Done/Close button, swipe down gesture, or back navigation. User should never feel "trapped" in settings.
+Expected behavior: When a user attaches an image or file and sends a message, the attachment should remain visible in the chat thread above or within the message bubble (similar to iMessage/WhatsApp). The attachment should persist when navigating away and returning to the conversation.
 
-**Files to investigate**:
-- `ios/Sources/AICLICompanion/Views/Settings/SettingsView.swift`
-- `ios/Sources/AICLICompanion/Views/ContentView.swift` (how settings is presented)
-- `ios/Sources/AICLICompanion/Navigation/NavigationCoordinator.swift` (if exists)
-- Check for any custom presentation modifiers or sheets
-- Look for navigation state that might not be resetting
+**Files to investigate/modify**:
+- `ios/Sources/AICLICompanion/Models/Message.swift` (ensure attachment support)
+- `ios/Sources/AICLICompanion/Views/Chat/Components/MessageBubble.swift` (attachment display)
+- `ios/Sources/AICLICompanion/Views/Chat/Components/AttachmentView.swift` (if exists)
+- `ios/Sources/AICLICompanion/Services/MessagePersistenceService.swift` (attachment persistence)
+- `ios/Sources/AICLICompanion/ViewModels/ChatViewModel.swift` (attachment handling)
+- `ios/Sources/AICLICompanion/Views/Chat/Components/ChatInputBar.swift` (attachment state management)
 
-**Testing considerations**:
-- Test dismissal via swipe gesture
-- Test dismissal via button (if present)
-- Test navigation on both compact and regular size classes
-- Verify no memory leaks keeping settings view alive
-- Check if issue occurs consistently or intermittently
+**Testing requirements**:
+- Test with various file types (images, PDFs, text files)
+- Verify attachments persist across app restarts
+- Check attachment display in both sent and received messages
+- Test multiple attachments in a single message
+- Verify memory management with large attachments
 
-### Issue #16: Hide Unimplemented Settings Options
+### Issue #17: Hide Unimplemented Settings Options
 **Priority**: High  
 **Component**: iOS App - Settings UI  
 **Beta Blocker**: Yes (Confusing UX, gives impression of broken features)  
@@ -396,10 +396,5 @@ Expected behavior: Every visible setting in the app should have a working implem
 
 ---
 
-## Completed Issues
-*Move issues here once resolved, with resolution notes*
-
----
-
 **Document Created**: 2025-08-19  
-**Last Updated**: 2025-08-21 (Added Issue #16: Hide unimplemented settings)
+**Last Updated**: 2025-08-21

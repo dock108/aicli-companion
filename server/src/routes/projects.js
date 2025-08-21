@@ -157,7 +157,23 @@ export function setupProjectRoutes(app, _aicliService) {
       }
 
       // Validate folder name
-      if (!folderName || typeof folderName !== 'string') {
+      let decodedFolderName;
+      try {
+        decodedFolderName = decodeURIComponent(folderName.trim());
+      } catch (e) {
+        return res.status(400).json({
+          error: 'Invalid folder name encoding',
+          message: 'Folder name could not be decoded',
+        });
+      }
+
+      // Check for invalid characters or patterns
+      if (
+        !decodedFolderName ||
+        decodedFolderName.includes('/') ||
+        decodedFolderName.includes('\\') ||
+        decodedFolderName.startsWith('.') ||
+        decodedFolderName.length > 255
         return res.status(400).json({
           error: 'Invalid request',
           message: 'Folder name is required',

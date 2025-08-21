@@ -104,7 +104,18 @@ export class AICLIMessageHandler {
         console.warn('Assistant message content is not an array:', typeof response.message.content);
         // Try to convert to array format
         if (typeof response.message.content === 'string') {
+      // Validate content is an array
+      let contentWasConverted = false;
+      if (!Array.isArray(response.message.content)) {
+        console.warn('Assistant message content is not an array:', typeof response.message.content);
+        // Try to convert to array format
+        if (typeof response.message.content === 'string') {
+          console.warn(
+            'Automatically converting assistant message content from string to array format. Original content:',
+            response.message.content
+          );
           response.message.content = [{ type: 'text', text: response.message.content }];
+          contentWasConverted = true;
         } else {
           return {
             action: 'error',

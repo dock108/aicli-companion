@@ -117,7 +117,8 @@ final class ChatViewModel: ObservableObject {
             content: text,
             sender: .user,
             type: .text,
-            requestId: requestId
+            requestId: requestId,
+            attachments: attachments  // Include attachments in the local message
         )
         
         // Add to UI immediately (local-first pattern)

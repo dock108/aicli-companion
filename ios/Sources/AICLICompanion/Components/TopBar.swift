@@ -79,6 +79,7 @@ public struct NavigationTopBar<Destination: View>: View {
     let destination: Destination
     
     @Environment(\.colorScheme) var colorScheme
+    @State private var showingSettings = false
     
     public init(
         title: String,
@@ -105,8 +106,10 @@ public struct NavigationTopBar<Destination: View>: View {
             
             Spacer()
             
-            // Single Navigation-based gear icon (no overlay)
-            NavigationLink(destination: destination) {
+            // Settings button that presents as sheet
+            Button(action: {
+                showingSettings = true
+            }) {
                 Image(systemName: "gearshape")
                     .font(.system(size: 20))
                     .foregroundColor(Colors.textSecondary(for: colorScheme))
@@ -133,6 +136,13 @@ public struct NavigationTopBar<Destination: View>: View {
                 }
             }
         )
+        .sheet(isPresented: $showingSettings) {
+            destination
+                #if os(iOS)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                #endif
+        }
     }
 }
 

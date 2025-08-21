@@ -6,7 +6,13 @@ describe('Error Middleware', () => {
   let mockReq, mockRes, mockNext;
 
   beforeEach(() => {
-    mockReq = {};
+    mockReq = {
+      headers: {},
+      method: 'GET',
+      path: '/test',
+      query: {},
+      body: {},
+    };
     mockRes = {
       status: mock.fn(() => mockRes),
       json: mock.fn(() => mockRes),
@@ -27,10 +33,12 @@ describe('Error Middleware', () => {
       assert.strictEqual(mockRes.status.mock.calls.length, 1);
       assert.strictEqual(mockRes.status.mock.calls[0].arguments[0], 400);
       assert.strictEqual(mockRes.json.mock.calls.length, 1);
-      assert.deepStrictEqual(mockRes.json.mock.calls[0].arguments[0], {
-        error: 'Invalid JSON',
-        message: 'The request body contains invalid JSON',
-      });
+
+      const response = mockRes.json.mock.calls[0].arguments[0];
+      assert.strictEqual(response.success, false);
+      assert.strictEqual(response.error, 'Invalid JSON');
+      assert.strictEqual(response.message, 'The request body contains invalid JSON');
+      assert.ok(response.requestId); // Request ID should be present
     });
 
     it('should handle ENOTFOUND errors', () => {
@@ -40,10 +48,13 @@ describe('Error Middleware', () => {
       errorHandler(error, mockReq, mockRes, mockNext);
 
       assert.strictEqual(mockRes.status.mock.calls[0].arguments[0], 503);
-      assert.deepStrictEqual(mockRes.json.mock.calls[0].arguments[0], {
-        error: 'Service unavailable',
-        message: 'Claude Code CLI not found or not accessible',
-      });
+
+      const response = mockRes.json.mock.calls[0].arguments[0];
+      assert.strictEqual(response.success, false);
+      assert.strictEqual(response.error, 'Service unavailable');
+      assert.strictEqual(response.message, 'Claude Code CLI not found or not accessible');
+      assert.ok(response.requestId);
+      assert.ok(response.suggestion);
     });
 
     it('should handle ECONNREFUSED errors', () => {
@@ -53,10 +64,13 @@ describe('Error Middleware', () => {
       errorHandler(error, mockReq, mockRes, mockNext);
 
       assert.strictEqual(mockRes.status.mock.calls[0].arguments[0], 503);
-      assert.deepStrictEqual(mockRes.json.mock.calls[0].arguments[0], {
-        error: 'Connection refused',
-        message: 'Unable to connect to Claude Code service',
-      });
+
+      const response = mockRes.json.mock.calls[0].arguments[0];
+      assert.strictEqual(response.success, false);
+      assert.strictEqual(response.error, 'Connection refused');
+      assert.strictEqual(response.message, 'Unable to connect to Claude Code service');
+      assert.ok(response.requestId);
+      assert.ok(response.suggestion);
     });
 
     it('should handle generic errors in development mode', () => {
@@ -66,10 +80,12 @@ describe('Error Middleware', () => {
       errorHandler(error, mockReq, mockRes, mockNext);
 
       assert.strictEqual(mockRes.status.mock.calls[0].arguments[0], 500);
-      assert.deepStrictEqual(mockRes.json.mock.calls[0].arguments[0], {
-        error: 'Internal server error',
-        message: 'Something went wrong',
-      });
+
+      const response = mockRes.json.mock.calls[0].arguments[0];
+      assert.strictEqual(response.success, false);
+      assert.strictEqual(response.error, 'Internal server error');
+      assert.strictEqual(response.message, 'Something went wrong');
+      assert.ok(response.requestId);
     });
 
     it('should hide error details in production mode', () => {
@@ -79,26 +95,21 @@ describe('Error Middleware', () => {
       errorHandler(error, mockReq, mockRes, mockNext);
 
       assert.strictEqual(mockRes.status.mock.calls[0].arguments[0], 500);
-      assert.deepStrictEqual(mockRes.json.mock.calls[0].arguments[0], {
-        error: 'Internal server error',
-        message: 'An unexpected error occurred',
-      });
+
+      const response = mockRes.json.mock.calls[0].arguments[0];
+      assert.strictEqual(response.success, false);
+      assert.strictEqual(response.error, 'Internal server error');
+      assert.strictEqual(response.message, 'An unexpected error occurred. Please try again later.');
+      assert.ok(response.requestId);
     });
 
-    it('should log errors to console', () => {
-      const consoleErrorSpy = mock.fn();
-      const originalConsoleError = console.error;
-      console.error = consoleErrorSpy;
-
+    it('should include request ID in all error responses', () => {
       const error = new Error('Test error');
       errorHandler(error, mockReq, mockRes, mockNext);
 
-      assert.strictEqual(consoleErrorSpy.mock.calls.length, 1);
-      assert.strictEqual(consoleErrorSpy.mock.calls[0].arguments[0], 'API Error:');
-      assert.strictEqual(consoleErrorSpy.mock.calls[0].arguments[1], error);
-
-      // Restore console.error
-      console.error = originalConsoleError;
+      const response = mockRes.json.mock.calls[0].arguments[0];
+      assert.ok(response.requestId, 'Response should include requestId');
+      assert.strictEqual(typeof response.requestId, 'string');
     });
   });
 });

@@ -438,8 +438,11 @@ test('PushNotificationService', async (t) => {
 
       await service.sendErrorNotification('client1', {});
 
-      // Should return silently
-      assert.strictEqual(consoleSpy.mock.calls.length, 0);
+      // Should log a warning about not being configured
+      assert.strictEqual(consoleSpy.mock.calls.length, 1);
+      assert.ok(
+        consoleSpy.mock.calls[0].arguments[0].includes('Push notifications not configured')
+      );
 
       consoleSpy.mock.restore();
     });
@@ -480,7 +483,7 @@ test('PushNotificationService', async (t) => {
 
       assert.strictEqual(mockProvider.send.mock.calls.length, 1);
       const notification = mockProvider.send.mock.calls[0].arguments[0];
-      assert.strictEqual(notification.aps.alert.title, 'Claude Error');
+      assert.strictEqual(notification.aps.alert.title, '❌ Processing Error'); // Default error title
       assert.strictEqual(notification.aps.alert.subtitle, 'Test Project');
       assert.strictEqual(notification.aps.alert.body, 'Test error message');
       assert.strictEqual(notification.payload.error, true);

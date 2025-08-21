@@ -123,6 +123,134 @@ export function setupProjectRoutes(app, _aicliService) {
     }
   });
 
+  // Define rate limiter for folder creation route
+  const folderCreationLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 50, // Limit each IP to 50 folder creations per windowMs
+    message: {
+      error: 'Too many requests',
+      message: 'Please try again later.',
+    },
+  });
+
+  // Create a new folder in a project
+  router.post('/projects/:name/folders', folderCreationLimiter, async (req, res) => {
+    try {
+      const { name } = req.params;
+      const { folderName } = req.body;
+
+      // Validate project name
+      if (
+        !name ||
+        typeof name !== 'string' ||
+        name.includes('..') ||
+        name.includes('/') ||
+        name.includes('\\') ||
+        name.startsWith('.') ||
+        name.length > 255 ||
+        !/^[a-zA-Z0-9_-]+$/.test(name)
+      ) {
+        return res.status(400).json({
+          error: 'Invalid project name',
+          message: 'Project name contains invalid characters or is too long',
+        });
+      }
+
+      // Validate folder name
+      let decodedFolderName;
+      try {
+        decodedFolderName = decodeURIComponent(folderName.trim());
+      } catch (e) {
+        return res.status(400).json({
+          error: 'Invalid folder name encoding',
+          message: 'Folder name could not be decoded',
+        });
+      }
+
+      // Check for invalid characters or patterns
+      if (
+        !decodedFolderName ||
+        decodedFolderName.includes('/') ||
+        decodedFolderName.includes('\\') ||
+        decodedFolderName.startsWith('.') ||
+        decodedFolderName.length > 255
+      ) {
+        return res.status(400).json({
+          error: 'Invalid request',
+          message: 'Invalid folder name',
+        });
+      }
+
+      // Use the already decoded folder name
+      const sanitizedFolderName = decodedFolderName;
+
+      const projectsDir = getProjectsDir();
+      const projectPath = path.join(projectsDir, name);
+      const newFolderPath = path.join(projectPath, sanitizedFolderName);
+
+      // Security check - prevent directory traversal for both projectPath and newFolderPath
+      const normalizedBase = path.resolve(projectsDir);
+      const normalizedProjectPath = path.resolve(projectPath);
+      const normalizedNewFolderPath = path.resolve(newFolderPath);
+
+      if (!normalizedProjectPath.startsWith(normalizedBase)) {
+        return res.status(403).json({
+          error: 'Access denied',
+          message: 'Invalid project path',
+        });
+      }
+      if (!normalizedNewFolderPath.startsWith(normalizedBase)) {
+        return res.status(403).json({
+          error: 'Access denied',
+          message: 'Invalid folder path',
+        });
+      }
+
+      // Check if project exists
+      try {
+        const stat = await fs.stat(normalizedProjectPath);
+        if (!stat.isDirectory()) {
+          throw new Error('Not a directory');
+        }
+      } catch (error) {
+        return res.status(404).json({
+          error: 'Project not found',
+          message: `Project '${name}' does not exist`,
+        });
+      }
+
+      // Check if folder already exists
+      try {
+        await fs.access(newFolderPath);
+        return res.status(409).json({
+          error: 'Folder already exists',
+          message: `Folder '${sanitizedFolderName}' already exists in this project`,
+        });
+      } catch (error) {
+        // Folder doesn't exist, which is what we want
+      }
+
+      // Create the folder
+      await fs.mkdir(newFolderPath, { recursive: true });
+
+      console.log(`Created folder '${sanitizedFolderName}' in project '${name}'`);
+
+      res.status(201).json({
+        message: 'Folder created successfully',
+        folder: {
+          name: sanitizedFolderName,
+          path: newFolderPath,
+        },
+      });
+    } catch (error) {
+      console.error('Error creating folder:', error);
+      res.status(500).json({
+        error: 'Failed to create folder',
+        message: error.message,
+      });
+    }
+  });
+
   // Mount routes
   app.use('/api', router);
 }

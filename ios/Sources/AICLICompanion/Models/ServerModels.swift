@@ -135,6 +135,8 @@ public enum AICLICompanionError: LocalizedError, Equatable {
     case sessionExpired
     case rateLimited
     case serverUnavailable
+    case notFound(String)
+    case alreadyExists(String)
     case unknown(String)
     
     public var errorDescription: String? {
@@ -167,6 +169,10 @@ public enum AICLICompanionError: LocalizedError, Equatable {
             return "Rate limited"
         case .serverUnavailable:
             return "Server unavailable"
+        case .notFound(let message):
+            return "Not found: \(message)"
+        case .alreadyExists(let message):
+            return "Already exists: \(message)"
         case .unknown(let message):
             return "Unknown error: \(message)"
         }
@@ -174,21 +180,23 @@ public enum AICLICompanionError: LocalizedError, Equatable {
     
     public static func == (lhs: AICLICompanionError, rhs: AICLICompanionError) -> Bool {
         switch (lhs, rhs) {
-        case (.networkError(let a), .networkError(let b)): return a == b
+        case (.networkError(let lhsMessage), .networkError(let rhsMessage)): return lhsMessage == rhsMessage
         case (.authenticationFailed, .authenticationFailed): return true
-        case (.serverError(let a), .serverError(let b)): return a == b
+        case (.serverError(let lhsMessage), .serverError(let rhsMessage)): return lhsMessage == rhsMessage
         case (.invalidResponse, .invalidResponse): return true
         case (.connectionTimeout, .connectionTimeout): return true
-        case (.websocketError(let a), .websocketError(let b)): return a == b
+        case (.websocketError(let lhsMessage), .websocketError(let rhsMessage)): return lhsMessage == rhsMessage
         case (.invalidURL, .invalidURL): return true
         case (.noProjectSelected, .noProjectSelected): return true
-        case (.fileNotFound(let a), .fileNotFound(let b)): return a == b
+        case (.fileNotFound(let lhsPath), .fileNotFound(let rhsPath)): return lhsPath == rhsPath
         case (.permissionDenied, .permissionDenied): return true
-        case (.invalidInput(let a), .invalidInput(let b)): return a == b
+        case (.invalidInput(let lhsMessage), .invalidInput(let rhsMessage)): return lhsMessage == rhsMessage
         case (.sessionExpired, .sessionExpired): return true
         case (.rateLimited, .rateLimited): return true
         case (.serverUnavailable, .serverUnavailable): return true
-        case (.unknown(let a), .unknown(let b)): return a == b
+        case (.notFound(let lhsResource), .notFound(let rhsResource)): return lhsResource == rhsResource
+        case (.alreadyExists(let lhsResource), .alreadyExists(let rhsResource)): return lhsResource == rhsResource
+        case (.unknown(let lhsMessage), .unknown(let rhsMessage)): return lhsMessage == rhsMessage
         default: return false
         }
     }

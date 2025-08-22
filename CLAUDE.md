@@ -4,9 +4,14 @@
 
 ## Priority Documents
 
-### 1. Check for Active Plans
-**ALWAYS check if a `plan.md` file exists in the root directory FIRST.**
+### 1. Check for Active Plans and Issues
+**ALWAYS check BOTH `plan.md` in root AND `issues/` directory before starting work.**
 
+#### Plans vs Issues
+- **Plans (`plan.md`)**: For major features or refactoring (>1 day of work)
+- **Issues (`issues/`)**: For bug fixes, minor updates, and targeted improvements (<1 day)
+
+### 2. Working with Active Plans
 If `plan.md` exists:
 1. Read the entire plan to understand current implementation status
 2. Look for TODOs marked with ✅ (completed) vs unmarked (pending)
@@ -19,28 +24,52 @@ If `plan.md` exists:
 5. Test each phase before proceeding to the next
 6. Do NOT deviate from the plan without explicit user approval
 
-### 2. Follow These Guidelines
+### 3. Working with Issues
+Check `issues/` directory for active issues:
+1. **Ignore completed issues** (files with `complete-` prefix)
+2. **Read active issues** (files without `complete-` prefix)
+3. **Prioritize by**:
+   - Beta Blocker: Yes issues first
+   - Priority: High > Medium > Low
+   - User impact severity
+4. **Update issues as you work**:
+   - Change Status field as you progress
+   - Add investigation findings
+   - Document solution implemented
+   - Update "Last Updated" date
+5. **When issue is resolved**:
+   - Mark Status as RESOLVED ✅
+   - Add resolution date
+   - Rename file with `complete-` prefix
+
+### 4. Follow These Guidelines
 This document (CLAUDE.md) contains the coding standards and principles for the project. These guidelines OVERRIDE any default behavior.
 
 ## Core Development Principles
 
-### 1. No Random Fallbacks
+### 1. User Directives Take Precedence
+- The user's explicit request in chat ALWAYS overrides default priorities
+- If the user asks to work on specific issues or tasks, do those first
+- Respect when the user wants "quick wins" over high-priority items
+- Don't argue about priority - the user knows their time constraints
+
+### 2. No Random Fallbacks
 - Never add arbitrary default values or fallback behaviors
 - If something is unclear, ask for clarification or mark with a TODO comment
 - Don't make assumptions about missing data or behavior
 
-### 2. Ask Questions Sparingly
+### 3. Ask Questions Sparingly
 - Only interrupt for showstoppers (e.g., missing critical dependencies, architectural decisions)
 - For non-blocking issues, add descriptive TODO comments and continue
 - Batch questions when possible to minimize interruptions
 
-### 3. No Invented Functionality
+### 4. No Invented Functionality
 - Only implement what's explicitly requested or clearly needed
 - Don't add "nice-to-have" features without discussion
 - Stick to fixing the identified problems
 - Avoid feature creep
 
-### 4. Clear TODOs for Unclear Areas
+### 5. Clear TODOs for Unclear Areas
 ```javascript
 // TODO: [QUESTION] Should we limit message history size to prevent memory issues?
 // Current assumption: store all messages, but may need pagination
@@ -49,7 +78,7 @@ This document (CLAUDE.md) contains the coding standards and principles for the p
 // - Should old messages be archived?
 ```
 
-### 5. Descriptive Comments for Complex Logic
+### 6. Descriptive Comments for Complex Logic
 ```javascript
 // IMPLEMENTATION NOTE: Persisting messages to disk on each buffer update
 // Alternative considered: Batch writes every N seconds for performance
@@ -126,6 +155,59 @@ If asked to create a plan for a new feature:
    - Include code examples
    - Specify test requirements
    - Add clear success criteria
+
+### Creating New Issues
+
+When documenting a bug or minor enhancement:
+
+1. **File Naming**: `issues/[number]-[brief-description].md`
+   - Use next sequential number
+   - Keep description short (2-4 words)
+   - Use hyphens, not spaces
+
+2. **Use the Template**: Copy from `issues/template.md` and fill in:
+   ```markdown
+   # Issue #[NUMBER]: [Brief Title]
+   
+   **Priority**: [High/Medium/Low]  
+   **Component**: [Component - Specific Area]  
+   **Beta Blocker**: [Yes/No] ([reason if yes])  
+   **Discovered**: [YYYY-MM-DD]  
+   **Status**: [New/In Progress/Awaiting Info/RESOLVED]  
+   
+   ## Problem Description
+   [Clear description of the issue]
+   
+   ## Investigation Areas
+   1. [Areas to check...]
+   
+   ## Expected Behavior
+   [What should happen instead]
+   
+   ## Files to Investigate
+   - `path/to/file.ext` (reason)
+   
+   ## Root Cause Analysis
+   [Once identified, document here]
+   
+   ## Solution Implemented
+   ### 1. [Fix Category] (✅/⏳/❌)
+   - [Changes made]
+   
+   ## Testing Requirements
+   ### Manual Testing Steps
+   1. [Test steps...]
+   
+   ## Status
+   **Current Status**: [Status]  
+   **Last Updated**: [YYYY-MM-DD]
+   ```
+
+3. **When Complete**:
+   - Set Status to RESOLVED ✅
+   - Add Resolved date
+   - Document the solution
+   - Rename file with `complete-` prefix
 
 ## TODO Tracking Standards
 
@@ -409,20 +491,40 @@ When you see a TODO tag, check if there's a plan.md that addresses it.
    ```
    1. Read this CLAUDE.md file completely
    2. Check if plan.md exists in root
-   3. If plan.md exists, read it completely
-   4. Identify current work status
-   5. Continue from appropriate point
+   3. Check issues/ directory for active issues (ignore complete-* files)
+   4. If plan.md exists, read it completely
+   5. If active issues exist, review them for context
+   6. Identify current work status
+   7. Continue from appropriate point
    ```
 
-2. **If No Active Plan**:
+2. **Priority Order**:
+   ```
+   IMPORTANT: User's explicit request in chat ALWAYS takes precedence!
+   If the user asks to work on something specific, do that first.
+   
+   Default priority when no specific request:
+   1. Active plan.md TODOs (if working on major feature)
+   2. Beta Blocker issues (Priority: High)
+   3. High priority issues
+   4. Medium/Low priority issues
+   5. User's new request
+   
+   Note: Sometimes the user wants to "knock out a few quick fixes" 
+   rather than tackle the highest priority item. Always respect
+   the user's choice of what to work on.
+   ```
+
+3. **If No Active Plan or Issues**:
    ```
    1. Ask user what they want to work on
    2. Check if it relates to existing documentation
    3. Follow these guidelines for implementation
    4. Create plan.md if task is complex (>1 day)
+   5. Create issue file if task is a bug or minor update (<1 day)
    ```
 
-3. **If Plan Exists**:
+4. **If Plan Exists**:
    ```
    1. Continue from next uncompleted TODO
    2. Follow plan's testing requirements
@@ -430,9 +532,18 @@ When you see a TODO tag, check if there's a plan.md that addresses it.
    4. Alert user if blocked
    ```
 
+5. **If Active Issues Exist**:
+   ```
+   1. Work on highest priority issue
+   2. Update issue status as you progress
+   3. Document findings and solutions
+   4. Mark as RESOLVED when complete
+   5. Rename with complete- prefix
+   ```
+
 ## Remember
 
-- **Plans First**: Always check for and follow plan.md
+- **Plans & Issues First**: Always check for plan.md and active issues
 - **Guidelines Second**: Follow this CLAUDE.md for all decisions
 - **Simplicity over complexity**: Choose the simpler solution when possible
 - **Clarity over cleverness**: Write code that's easy to understand
@@ -451,8 +562,9 @@ When in doubt:
 - **NEVER create files unless they're absolutely necessary**
 - **ALWAYS prefer editing an existing file to creating a new one**
 - **NEVER proactively create documentation files unless explicitly requested**
-- **ALWAYS check for plan.md before starting any work**
-- **ALWAYS update plan.md progress if working from it**
+- **ALWAYS check for plan.md AND issues/ before starting any work**
+- **ALWAYS update plan.md or issue files as you progress**
+- **ALWAYS rename completed issues with `complete-` prefix**
 
 ## Critical Naming Conventions
 
@@ -490,6 +602,6 @@ When in doubt:
 
 ---
 
-**Document Version**: 2.1.0  
-**Last Updated**: 2025-08-18  
+**Document Version**: 2.2.0  
+**Last Updated**: 2025-08-22  
 **Status**: Active Development Guidelines

@@ -18,18 +18,37 @@ final class ChatMessageManager: ObservableObject {
     
     // MARK: - Message Operations
     
-    func loadMessages(for project: Project) {
+    func loadMessages(for project: Project, isRefresh: Bool = false) {
         // Load messages from persistence
-        print("📝 MessageManager: Loading messages for project: \(project.name)")
+        print("📝 MessageManager: Loading messages for project: \(project.name) (refresh: \(isRefresh))")
         
-        // Clear current messages first
-        messages.removeAll()
-        
-        // Load project-specific messages
+        // Load project-specific messages from disk
         let loadedMessages = persistenceService.loadMessages(for: project.path)
-        messages = loadedMessages
         
-        print("📝 MessageManager: Loaded \(messages.count) messages for project: \(project.name)")
+        if isRefresh && !messages.isEmpty {
+            // For refresh/reconnect scenarios, merge to avoid duplicates
+            // Create a set of existing message IDs to prevent duplicates
+            let existingIds = Set(messages.map { $0.id })
+            
+            // Filter out any messages that are already in memory
+            let newMessages = loadedMessages.filter { !existingIds.contains($0.id) }
+            
+            if !newMessages.isEmpty {
+                // Combine existing and new messages
+                let allMessages = messages + newMessages
+                
+                // Sort by timestamp to maintain chronological order
+                messages = allMessages.sorted { $0.timestamp < $1.timestamp }
+                
+                print("📝 MessageManager: Merged \(newMessages.count) new messages, total: \(messages.count)")
+            } else {
+                print("📝 MessageManager: No new messages to merge during refresh")
+            }
+        } else {
+            // For initial load or project switch, replace all messages
+            messages = loadedMessages
+            print("📝 MessageManager: Loaded \(messages.count) messages (clean load)")
+        }
     }
     
     func saveMessages(for project: Project) {

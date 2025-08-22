@@ -42,17 +42,28 @@ When connection is re-established, no duplicate messages should appear. Each mes
 
 ## Root Cause Analysis
 
-[To be determined after investigation]
+The issue was caused by a race condition between:
+1. Messages being loaded from disk via `loadMessages()`
+2. Messages being added via push notifications
+
+When `loadMessages()` was called (e.g., during refresh), it would replace the entire message array with messages from disk. However, if a push notification had already:
+- Saved the message to disk (via PushNotificationService)
+- Added it to the UI array (via ChatNotificationHandler)
+
+Then calling `loadMessages()` would load that same message from disk again, creating a duplicate.
 
 ## Solution Implemented
 
-### 1. Message Deduplication
-- Implement proper message ID checking
-- Prevent duplicate additions to UI
+### 1. Added Refresh Parameter to LoadMessages
+Modified `ChatMessageManager.loadMessages()` to accept an `isRefresh` parameter:
+- When `isRefresh=false` (default): Replace all messages (for project switching)
+- When `isRefresh=true`: Merge messages, filtering out duplicates by ID
 
-### 2. Reconnection Handling
-- Fix reconnection message restoration
-- Prevent multiple restore operations
+### 2. Updated Refresh Logic
+Modified ChatView pull-to-refresh to use `isRefresh=true` to prevent duplicates during refresh scenarios.
+
+### 3. Maintained Existing Deduplication
+The existing duplicate checks in `appendMessage()` remain in place as an additional safeguard.
 
 ## Testing Requirements
 
@@ -68,7 +79,20 @@ When connection is re-established, no duplicate messages should appear. Each mes
 - [ ] Network interruption recovery
 - [ ] Session restoration
 
+## Files Modified
+
+1. `/ios/Sources/AICLICompanion/Views/Chat/ViewModels/ChatMessageManager.swift`
+   - Added `isRefresh` parameter to `loadMessages()`
+   - Implemented merge logic for refresh scenarios
+
+2. `/ios/Sources/AICLICompanion/Views/Chat/ViewModels/ChatViewModel.swift`
+   - Updated to pass through `isRefresh` parameter
+
+3. `/ios/Sources/AICLICompanion/Views/Chat/ChatView.swift`
+   - Updated pull-to-refresh to use `isRefresh=true`
+
 ## Status
 
-**Current Status**: New  
-**Last Updated**: 2025-08-22
+**Current Status**: Resolved  
+**Last Updated**: 2025-08-22  
+**Solution**: Implemented smart message merging during refresh to prevent duplicates while maintaining proper project switching behavior

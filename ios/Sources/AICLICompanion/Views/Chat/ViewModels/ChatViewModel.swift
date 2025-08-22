@@ -70,8 +70,8 @@ final class ChatViewModel: ObservableObject {
     // MARK: - Public API (Delegates to Managers)
     
     // MARK: Message Operations
-    func loadMessages(for project: Project) {
-        messageManager.loadMessages(for: project)
+    func loadMessages(for project: Project, isRefresh: Bool = false) {
+        messageManager.loadMessages(for: project, isRefresh: isRefresh)
     }
     
     func saveMessages(for project: Project) {

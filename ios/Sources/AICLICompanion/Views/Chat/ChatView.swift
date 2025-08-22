@@ -94,8 +94,9 @@ struct ChatView: View {
                     print("🔄 User triggered pull-to-refresh - reloading conversation")
                     
                     // Reload messages from local database (instant)
+                    // Use isRefresh=true to merge instead of replace
                     if let project = selectedProject {
-                        viewModel.loadMessages(for: project)
+                        viewModel.loadMessages(for: project, isRefresh: true)
                     }
                     
                     // Small delay for visual feedback

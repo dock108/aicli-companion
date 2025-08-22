@@ -71,6 +71,7 @@ export class AICLIService extends EventEmitter {
     });
 
     this.processRunner.on('aicliResponse', async (data) => {
+      // Process final results (we now only emit one event per response)
       await this.emitAICLIResponse(data.sessionId, data.response, data.isLast);
     });
 

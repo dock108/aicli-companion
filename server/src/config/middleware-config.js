@@ -15,6 +15,10 @@ export class MiddlewareConfig {
    * @param {ServerConfig} config - Server configuration
    */
   static configure(app, config) {
+    // Trust proxy settings for rate limiting
+    // Set to 'loopback' for local development to handle X-Forwarded-For headers correctly
+    app.set('trust proxy', 'loopback');
+
     // Security middleware
     app.use(helmet(config.getHelmetConfig()));
 

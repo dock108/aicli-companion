@@ -227,6 +227,53 @@ router.post('/', async (req, res) => {
         sessionIdValue: sessionId || 'new conversation',
       });
 
+      // Set up streaming status updates listener
+      const streamListener = async (data) => {
+        // Only process chunks for our request ID
+        if (data.requestId !== requestId) return;
+        
+        const chunk = data.chunk;
+        
+        // Send progress updates for interesting chunk types
+        if (chunk.type === 'system' && chunk.subtype === 'init') {
+          // Initial system message - Claude is starting
+          await pushNotificationService.sendProgressNotification(deviceToken, {
+            projectPath,
+            activity: 'Initializing',
+            duration: 0,
+            tokenCount: 0,
+            requestId,
+          });
+        } else if (chunk.type === 'assistant' && chunk.message) {
+          // Assistant is thinking/typing
+          const messageContent = chunk.message?.content?.[0]?.text || '';
+          const preview = messageContent.substring(0, 50);
+          
+          await pushNotificationService.sendProgressNotification(deviceToken, {
+            projectPath,
+            activity: preview ? `Typing: ${preview}...` : 'Thinking',
+            duration: Math.floor((Date.now() - startTime) / 1000),
+            tokenCount: messageContent.length,
+            requestId,
+          });
+        } else if (chunk.type === 'tool_use') {
+          // Claude is using a tool
+          await pushNotificationService.sendProgressNotification(deviceToken, {
+            projectPath,
+            activity: `Using ${chunk.tool_name || 'tool'}`,
+            duration: Math.floor((Date.now() - startTime) / 1000),
+            tokenCount: 0,
+            requestId,
+          });
+        }
+      };
+      
+      // Start time for duration tracking
+      const startTime = Date.now();
+      
+      // Attach the listener
+      aicliService.on('streamChunk', streamListener);
+
       // Use the regular AICLI service for sending prompts
       // IMPORTANT: Set streaming: true to use the processRunner with --resume fix
       const result = await aicliService.sendPrompt(messageValidation.message ?? message, {
@@ -380,13 +427,8 @@ router.post('/', async (req, res) => {
           sessionId: claudeSessionId,
         });
 
-        // Still send success response to client to avoid timeout
-        res.json({
-          success: true,
-          sessionId: claudeSessionId,
-          deliveryMethod: 'skipped_empty',
-          requestId,
-        });
+        // Don't try to send response - it was already sent on line 215
+        // Just return from the async handler
         return;
       }
 
@@ -420,7 +462,12 @@ router.post('/', async (req, res) => {
 
       // Mark processing as completed
       processingCompleted = true;
+      
+      // Clean up the listener after successful processing
+      aicliService.removeListener('streamChunk', streamListener);
     } catch (error) {
+      // Clean up the listener on error
+      aicliService.removeListener('streamChunk', streamListener);
 
       // Determine error type and user-friendly message
       let userErrorMessage = 'Failed to process message';

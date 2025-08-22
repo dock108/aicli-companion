@@ -95,6 +95,11 @@ final class ChatNotificationHandler: ObservableObject {
         // Clear loading state if this is for the current project
         if project.path == projectStateManager.currentProject?.path {
             loadingStateManager.clearLoadingState(for: project.path)
+            
+            // Also clear waiting state in project state to re-enable send button
+            projectStateManager.updateProjectState(for: project.path) { state in
+                state.isWaitingForResponse = false
+            }
         }
     }
     

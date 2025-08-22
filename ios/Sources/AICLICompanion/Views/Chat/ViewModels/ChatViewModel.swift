@@ -102,14 +102,25 @@ final class ChatViewModel: ObservableObject {
     // MARK: Loading State Operations
     func clearLoadingState(for projectPath: String) {
         loadingStateManager.clearLoadingState(for: projectPath)
+        
+        // Also clear waiting state in project state
+        projectStateManager.updateProjectState(for: projectPath) { state in
+            state.isWaitingForResponse = false
+        }
     }
     
     // MARK: Message Sending
     func sendMessage(_ text: String, for project: Project, attachments: [AttachmentData] = []) {
         print("📤 ChatViewModel: Sending message for project: \(project.name)")
         
-        // Set loading state
+        // Set loading state and waiting for response
         loadingStateManager.setLoading(true, for: project.path)
+        loadingStateManager.setWaitingForResponse(true)
+        
+        // Also update project state to block sending
+        projectStateManager.updateProjectState(for: project.path) { state in
+            state.isWaitingForResponse = true
+        }
         
         // Create user message with request ID for tracking
         let requestId = UUID().uuidString
@@ -143,6 +154,12 @@ final class ChatViewModel: ObservableObject {
                 case .failure(let error):
                     print("❌ ChatViewModel: Failed to send message: \(error)")
                     self.loadingStateManager.setLoading(false, for: project.path)
+                    self.loadingStateManager.setWaitingForResponse(false)
+                    
+                    // Clear waiting state in project state
+                    self.projectStateManager.updateProjectState(for: project.path) { state in
+                        state.isWaitingForResponse = false
+                    }
                     
                     // Add error message to UI
                     let errorMessage = Message(

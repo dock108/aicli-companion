@@ -273,8 +273,48 @@ export class AICLIProcessRunner extends EventEmitter {
         reject(new Error(`Claude error: ${error}`));
       };
 
-      // NO TIMEOUT HANDLER - Claude runs as long as needed
-      // Activity monitoring will detect stalls (Issue #28)
+      // Enhanced timeout that can resolve with accumulated text for tool use
+      const timeoutHandler = () => {
+        if (!responseComplete) {
+          claudeProcess.stdout.removeListener('data', dataHandler);
+          claudeProcess.stderr.removeListener('data', errorHandler);
+
+          // Check if we have accumulated text content (tool use pattern)
+          if (accumulatedText.trim().length > 0) {
+            sessionLogger.info('Timeout reached but found accumulated text content', {
+              responseCount: responses.length,
+              accumulatedLength: accumulatedText.length,
+              hasToolUse,
+              sessionId,
+            });
+
+            // Find session ID from any response that has it
+            let foundSessionId = sessionId;
+            for (const response of responses) {
+              if (response.session_id) {
+                foundSessionId = response.session_id;
+                break;
+              }
+            }
+
+            // Return accumulated text as the result
+            resolve({
+              result: accumulatedText.trim(),
+              sessionId: foundSessionId,
+              responses,
+              success: true,
+              source: 'accumulated_text', // Flag to indicate this came from text accumulation
+            });
+          } else {
+            sessionLogger.error('Timeout waiting for Claude response with no accumulated content', {
+              responseCount: responses.length,
+              hasToolUse,
+              sessionId,
+            });
+            reject(new Error('Timeout waiting for Claude response'));
+          }
+        }
+      };
 
       // Attach handlers
       claudeProcess.stdout.on('data', dataHandler);
@@ -294,8 +334,8 @@ export class AICLIProcessRunner extends EventEmitter {
         }
       });
 
-      // NO TIMEOUT - Let Claude run as long as needed
-      // Activity monitoring (Issue #28) will detect if Claude stalls
+      // Set a timeout for response with enhanced handling
+      setTimeout(timeoutHandler, 120000); // 2 minute timeout per message
     });
   }
 
@@ -721,6 +761,18 @@ export class AICLIProcessRunner extends EventEmitter {
 
         // Emit each parsed chunk as a separate stream event
         for (const parsedChunk of parsedChunks) {
+          // Track activity type for heartbeat
+          if (healthMonitor) {
+            if (parsedChunk.type === 'tool_use') {
+              const toolName = parsedChunk.tool_name || parsedChunk.name || 'tool';
+              healthMonitor.recordActivity(`Using ${toolName}`);
+            } else if (parsedChunk.type === 'text' && parsedChunk.content) {
+              healthMonitor.recordActivity('Generating response');
+            } else if (parsedChunk.type === 'thinking') {
+              healthMonitor.recordActivity('Thinking');
+            }
+          }
+
           this.emit('streamChunk', {
             sessionId,
             requestId, // Include original request ID
@@ -940,7 +992,30 @@ export class AICLIProcessRunner extends EventEmitter {
   createHealthMonitor(aicliProcess, sessionId) {
     const startTime = Date.now();
     let lastActivityTime = Date.now();
+    let lastActivityType = 'Starting';
     let intervalCleared = false;
+
+    // Get project path from session
+    const session = this.sessionManager?.getSession(sessionId);
+    const projectPath = session?.workingDirectory || null;
+
+    // Heartbeat broadcasting every 10 seconds
+    const heartbeatInterval = setInterval(() => {
+      if (aicliProcess && aicliProcess.pid && !intervalCleared) {
+        const elapsedSeconds = Math.round((Date.now() - startTime) / 1000);
+        
+        // Broadcast heartbeat via WebSocket
+        this.broadcastHeartbeat({
+          type: 'heartbeat',
+          sessionId,
+          projectPath,
+          activity: lastActivityType,
+          elapsedSeconds,
+          isProcessing: true,
+          timestamp: new Date().toISOString()
+        });
+      }
+    }, 10000); // Every 10 seconds for responsive UI
 
     // Simple status logging every 30 seconds (reduced frequency)
     const statusInterval = setInterval(() => {
@@ -957,12 +1032,37 @@ export class AICLIProcessRunner extends EventEmitter {
     }, 30000); // Log status every 30 seconds (reduced frequency)
 
     return {
-      recordActivity: () => {
+      recordActivity: (activityType = null) => {
         lastActivityTime = Date.now();
+        if (activityType) {
+          lastActivityType = activityType;
+          // Send immediate heartbeat on activity change
+          this.broadcastHeartbeat({
+            type: 'heartbeat',
+            sessionId,
+            projectPath,
+            activity: lastActivityType,
+            elapsedSeconds: Math.round((Date.now() - startTime) / 1000),
+            isProcessing: true,
+            timestamp: new Date().toISOString()
+          });
+        }
       },
       cleanup: () => {
-        if (statusInterval && !intervalCleared) {
-          clearInterval(statusInterval);
+        if (!intervalCleared) {
+          // Send final heartbeat
+          this.broadcastHeartbeat({
+            type: 'heartbeat',
+            sessionId,
+            projectPath,
+            activity: 'Complete',
+            elapsedSeconds: Math.round((Date.now() - startTime) / 1000),
+            isProcessing: false,
+            timestamp: new Date().toISOString()
+          });
+          
+          if (heartbeatInterval) clearInterval(heartbeatInterval);
+          if (statusInterval) clearInterval(statusInterval);
           intervalCleared = true;
           logger.debug('Health monitor cleaned up', { sessionId });
         }
@@ -1027,5 +1127,19 @@ export class AICLIProcessRunner extends EventEmitter {
     }
 
     return this.runAICLIProcess(args, prompt, process.cwd(), 'test-session');
+  }
+
+  /**
+   * Broadcast heartbeat message to all WebSocket clients
+   */
+  broadcastHeartbeat(data) {
+    if (global.wss) {
+      const message = JSON.stringify(data);
+      global.wss.clients.forEach((ws) => {
+        if (ws.readyState === 1) { // WebSocket.OPEN
+          ws.send(message);
+        }
+      });
+    }
   }
 }

@@ -296,7 +296,11 @@ struct ChatView: View {
     private func sendMessage(with attachments: [AttachmentData] = []) {
         guard let project = selectedProject else { return }
         
-        let text = messageText
+        let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Check if message is empty (unless we have attachments)
+        guard !text.isEmpty || !attachments.isEmpty else { return }
+        
         messageText = ""
         
         // Check if we have a server connection

@@ -77,7 +77,45 @@ Users can currently send multiple messages before Claude responds to the first o
 - Similar to iMessage behavior when recipient is unavailable
 - Much of the logic may already exist in the codebase from previous testing
 
+## Root Cause Analysis
+
+The infrastructure for preventing double-sends was already in place but not fully connected:
+1. `ProjectState` had an `isWaitingForResponse` flag
+2. `shouldBlockSending` checked both `isLoading` and `isWaitingForResponse`
+3. ChatInputBar was already disabling the button when `isSendBlocked`
+4. However, `isWaitingForResponse` was never being set/cleared
+
+## Solution Implemented
+
+### 1. Set Waiting State When Sending
+In `ChatViewModel.sendMessage()`:
+- Set `loadingStateManager.setWaitingForResponse(true)`
+- Update project state: `state.isWaitingForResponse = true`
+
+### 2. Clear Waiting State on Response
+In `ChatNotificationHandler.clearLoadingStateIfNeeded()`:
+- Clear project state: `state.isWaitingForResponse = false`
+
+### 3. Clear Waiting State on Error
+In `ChatViewModel` error handling:
+- Set `loadingStateManager.setWaitingForResponse(false)`
+- Clear project state: `state.isWaitingForResponse = false`
+
+### 4. Unified Clearing Method
+Updated `ChatViewModel.clearLoadingState()` to also clear project state
+
+## Files Modified
+
+1. `/ios/Sources/AICLICompanion/Views/Chat/ViewModels/ChatViewModel.swift`
+   - Set `isWaitingForResponse` when sending message
+   - Clear on error
+   - Updated `clearLoadingState` method
+
+2. `/ios/Sources/AICLICompanion/Views/Chat/ViewModels/ChatNotificationHandler.swift`
+   - Clear `isWaitingForResponse` when response arrives
+
 ## Status
 
-**Current Status**: New  
-**Last Updated**: 2025-08-22
+**Current Status**: Resolved  
+**Last Updated**: 2025-08-22  
+**Solution**: Connected existing infrastructure by properly setting/clearing the `isWaitingForResponse` flag

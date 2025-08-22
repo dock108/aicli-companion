@@ -1,10 +1,10 @@
 # Issue #15: Attachment UI Gets Cut Off at Top
 
-**Priority**: High  
+**Priority**: Medium  
 **Component**: iOS App - Attachment View UI  
-**Beta Blocker**: Yes - Visual bug affecting core functionality  
+**Beta Blocker**: No - Feature will be disabled via feature flag for beta  
 **Discovered**: 2025-08-21  
-**Status**: REOPENED - Still not working on iPad  
+**Status**: DEFERRED - Not needed for beta (disabled via feature flag)  
 **Reopened**: 2025-08-22
 
 ## Problem Description

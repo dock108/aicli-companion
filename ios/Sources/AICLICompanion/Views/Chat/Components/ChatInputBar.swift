@@ -15,6 +15,7 @@ struct ChatInputBar: View {
     // FEATURE: Simple send blocking logic
     let isSendBlocked: Bool
     
+    @EnvironmentObject private var settings: SettingsManager
     @FocusState private var isInputFocused: Bool
     @State private var attachments: [AttachmentData] = []
     @State private var showingAttachmentPicker = false
@@ -25,17 +26,19 @@ struct ChatInputBar: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Attachment preview (if any)
-            AttachmentPreview(
-                attachments: attachments,
-                onRemove: removeAttachment
-            )
-            .padding(.horizontal, isIPad && horizontalSizeClass == .regular ? 20 : 16)
-            .padding(.top, attachments.isEmpty ? 0 : 8)
-            
-            if !attachments.isEmpty {
-                Divider()
-                    .background(Colors.strokeLight)
+            // Attachment preview (only show if feature is enabled and there are attachments)
+            if settings.enableAttachments {
+                AttachmentPreview(
+                    attachments: attachments,
+                    onRemove: removeAttachment
+                )
+                .padding(.horizontal, isIPad && horizontalSizeClass == .regular ? 20 : 16)
+                .padding(.top, attachments.isEmpty ? 0 : 8)
+                
+                if !attachments.isEmpty {
+                    Divider()
+                        .background(Colors.strokeLight)
+                }
             }
             
             Divider()
@@ -43,16 +46,18 @@ struct ChatInputBar: View {
             
             VStack(spacing: 8) {
                 HStack(alignment: .bottom, spacing: 12) {
-                    // Attachment button
-                    Button(action: {
-                        showingAttachmentPicker = true
-                    }) {
-                        Image(systemName: "plus.circle")
-                            .font(.system(size: 28))
-                            .foregroundColor(Colors.textSecondary(for: colorScheme))
+                    // Attachment button (only show if feature flag is enabled)
+                    if settings.enableAttachments {
+                        Button(action: {
+                            showingAttachmentPicker = true
+                        }) {
+                            Image(systemName: "plus.circle")
+                                .font(.system(size: 28))
+                                .foregroundColor(Colors.textSecondary(for: colorScheme))
+                        }
+                        // Allow attachments even while loading
+                        .disabled(false)
                     }
-                    // Allow attachments even while loading
-                    .disabled(false)
                     
                     // Text input container
                     VStack(spacing: 0) {
@@ -105,14 +110,22 @@ struct ChatInputBar: View {
         }
         .background(.ultraThinMaterial)
         .sheet(isPresented: $showingAttachmentPicker) {
-            AttachmentPicker(
-                isPresented: $showingAttachmentPicker,
-                onAttachmentSelected: addAttachment
-            )
-            #if os(iOS)
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.hidden) // We have our own drag indicator
-            #endif
+            if settings.enableAttachments {
+                AttachmentPicker(
+                    isPresented: $showingAttachmentPicker,
+                    onAttachmentSelected: addAttachment
+                )
+                #if os(iOS)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.hidden) // We have our own drag indicator
+                #endif
+            }
+        }
+        .onChange(of: settings.enableAttachments) { enabled in
+            // Clear attachments if feature is disabled
+            if !enabled {
+                attachments.removeAll()
+            }
         }
     }
     

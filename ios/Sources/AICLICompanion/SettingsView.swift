@@ -487,6 +487,25 @@ struct SettingsView: View {
     
     private var advancedSection: some View {
         SettingsSection(title: "Advanced") {
+            Toggle(isOn: $settings.enableAttachments) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Enable Attachments")
+                        .font(Typography.font(.body))
+                        .foregroundColor(Colors.textPrimary(for: colorScheme))
+                    Text("Experimental: Allow sending images and files in chat. Note: This feature may not work properly on all devices.")
+                        .font(Typography.font(.caption))
+                        .foregroundColor(Colors.textSecondary(for: colorScheme))
+                }
+            }
+            .toggleStyle(NeumorphicToggleStyle())
+            .padding(.horizontal, Spacing.md)
+            .padding(.vertical, Spacing.sm)
+            .onChange(of: settings.enableAttachments) { _ in
+                settings.saveSettings()
+            }
+            
+            SettingsDivider()
+            
             Toggle(isOn: $settings.debugMode) {
                 Text("Debug Mode")
                     .font(Typography.font(.body))

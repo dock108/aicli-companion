@@ -273,48 +273,8 @@ export class AICLIProcessRunner extends EventEmitter {
         reject(new Error(`Claude error: ${error}`));
       };
 
-      // Enhanced timeout that can resolve with accumulated text for tool use
-      const timeoutHandler = () => {
-        if (!responseComplete) {
-          claudeProcess.stdout.removeListener('data', dataHandler);
-          claudeProcess.stderr.removeListener('data', errorHandler);
-
-          // Check if we have accumulated text content (tool use pattern)
-          if (accumulatedText.trim().length > 0) {
-            sessionLogger.info('Timeout reached but found accumulated text content', {
-              responseCount: responses.length,
-              accumulatedLength: accumulatedText.length,
-              hasToolUse,
-              sessionId,
-            });
-
-            // Find session ID from any response that has it
-            let foundSessionId = sessionId;
-            for (const response of responses) {
-              if (response.session_id) {
-                foundSessionId = response.session_id;
-                break;
-              }
-            }
-
-            // Return accumulated text as the result
-            resolve({
-              result: accumulatedText.trim(),
-              sessionId: foundSessionId,
-              responses,
-              success: true,
-              source: 'accumulated_text', // Flag to indicate this came from text accumulation
-            });
-          } else {
-            sessionLogger.error('Timeout waiting for Claude response with no accumulated content', {
-              responseCount: responses.length,
-              hasToolUse,
-              sessionId,
-            });
-            reject(new Error('Timeout waiting for Claude response'));
-          }
-        }
-      };
+      // NO TIMEOUT HANDLER - Claude runs as long as needed
+      // Activity monitoring will detect stalls (Issue #28)
 
       // Attach handlers
       claudeProcess.stdout.on('data', dataHandler);
@@ -334,8 +294,8 @@ export class AICLIProcessRunner extends EventEmitter {
         }
       });
 
-      // Set a timeout for response with enhanced handling
-      setTimeout(timeoutHandler, 120000); // 2 minute timeout per message
+      // NO TIMEOUT - Let Claude run as long as needed
+      // Activity monitoring (Issue #28) will detect if Claude stalls
     });
   }
 

@@ -40,27 +40,48 @@ The server is sending timeout error responses even when Claude is legitimately w
 
 ## Root Cause Analysis
 
-The server likely has a default timeout (probably 5 minutes) that's too short for complex Claude operations. Need to either:
-1. Remove artificial timeouts entirely
-2. Make timeout configurable and set very high (30+ minutes)
-3. Only timeout on actual process death, not time elapsed
+The server had multiple hardcoded timeouts that were too short for complex Claude operations:
+1. **chat.js**: 5-minute timeout (300000ms) for Claude processing
+2. **aicli-process-runner.js**: 2-minute timeout (120000ms) per message interaction
 
-## Solution Approach
+These timeouts would interrupt legitimate long-running Claude operations that can take 15-20+ minutes.
 
-### 1. Remove Artificial Timeouts
-- Let Claude CLI manage its own timeouts
-- Server should wait indefinitely for Claude response
-- Only timeout on actual connection loss
+## Solution Implemented ✅ (UPDATED)
 
-### 2. Progress Indication
-- Send periodic "still processing" updates to client
-- Use Claude's streaming output as proof of life
-- Don't assume timeout based on time alone
+### 1. ~~Increased Timeout Values~~ REMOVED ALL TIMEOUTS
+**File: `/server/src/routes/chat.js`**
+- ~~Changed timeout to 30 minutes~~ **REMOVED timeout entirely**
+- No more `PROCESSING_TIMEOUT` or timeout promises
+- Claude can run indefinitely
 
-### 3. Configuration Options
-- Add CLAUDE_TIMEOUT env var (default: none or very high)
-- Allow per-request timeout override
-- Document timeout behavior clearly
+**File: `/server/src/services/aicli-process-runner.js`**
+- ~~Changed timeout to 30 minutes~~ **REMOVED timeout handler**
+- No setTimeout calls for message processing
+- Claude responses wait indefinitely
+
+### 2. Configuration Removed
+**File: `/server/.env.example`**
+- ~~Added `CLAUDE_PROCESSING_TIMEOUT`~~ **REMOVED timeout config**
+- Added comment: "NO TIMEOUT - Claude operations run as long as needed"
+
+### 3. Final Implementation
+```javascript
+// Before (chat.js)
+const PROCESSING_TIMEOUT = parseInt(process.env.CLAUDE_PROCESSING_TIMEOUT || '1800000');
+const timeoutPromise = new Promise(...);
+const result = await Promise.race([resultPromise, timeoutPromise]);
+
+// After - NO TIMEOUT
+const result = await aicliService.sendPrompt(...);
+```
+
+```javascript
+// Before (aicli-process-runner.js)
+setTimeout(timeoutHandler, 1800000);
+
+// After - NO TIMEOUT
+// Activity monitoring will detect stalls (Issue #28)
+```
 
 ## Testing Requirements
 
@@ -85,5 +106,15 @@ The server likely has a default timeout (probably 5 minutes) that's too short fo
 
 ## Status
 
-**Current Status**: New  
-**Last Updated**: 2025-08-22
+**Current Status**: RESOLVED ✅  
+**Last Updated**: 2025-08-22 (Updated to remove timeouts entirely)  
+**Resolved**: 2025-08-22
+
+## Result
+
+**UPDATE**: Completely removed all artificial timeouts. Claude operations can now run indefinitely without any server-imposed time limits. Timeout detection will only come from activity monitoring (Issue #28) which can detect when Claude has actually stalled without sending data, rather than using arbitrary time limits.
+
+## Related Issues
+
+- **Issue #28**: Activity monitoring will detect actual stalls
+- **Issue #30**: Handle cases where Claude stops without responding

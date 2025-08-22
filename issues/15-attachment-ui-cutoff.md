@@ -4,8 +4,8 @@
 **Component**: iOS App - Attachment View UI  
 **Beta Blocker**: Yes - Visual bug affecting core functionality  
 **Discovered**: 2025-08-21  
-**Status**: RESOLVED ✅  
-**Resolved**: 2025-08-21
+**Status**: REOPENED - Still not working on iPad  
+**Reopened**: 2025-08-22
 
 ## Problem Description
 
@@ -146,6 +146,10 @@ NavigationStack {
 }
 ```
 
+## iPad-Specific Issues (Reopened)
+
+**Issue still persists on iPad** - The attachment UI is still getting cut off or not working properly on iPad devices. Needs further investigation and iPad-specific fixes.
+
 ## Status
 
-**RESOLVED** - The attachment picker now properly respects safe area insets on all iOS devices. The navigation bar, dismiss buttons, and content are all fully accessible without any clipping issues.
+**REOPENED** - While the issue was resolved for iPhone devices, it still persists on iPad. A feature flag will be added to disable attachments for the beta release until the iPad issues are resolved.

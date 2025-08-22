@@ -53,19 +53,45 @@ Attachments should be sent within the existing session context. Claude should ma
 
 ## Root Cause Analysis
 
-[To be determined after investigation and logs from user]
+From the log analysis in `/Users/michaelfuscoletti/Desktop/session_id_bug.txt`:
+- Line 97 showed `[Session: new]` when attachment was sent instead of using existing session
+- Line 98 showed `"hasSessionId":false` in request
+- Session `1a3d55cb` existed but wasn't used with attachments
+- The iOS app wasn't persisting and retrieving session IDs per project
 
 ## Solution Implemented
 
-### 1. Session ID Preservation
-- Ensure attachments include session ID
-- Fix multipart request headers
+### 1. Session ID Persistence in iOS App
+Added session ID storage/retrieval in `MessageOperations.swift`:
+```swift
+private func getSessionId(for projectPath: String) -> String? {
+    let key = "claude_session_\(projectPath.replacingOccurrences(of: "/", with: "_"))"
+    return UserDefaults.standard.string(forKey: key)
+}
 
-### 2. Server-Side Handling
-- Preserve session through attachment processing
-- Pass session ID to Claude CLI correctly
+private func storeSessionId(_ sessionId: String, for projectPath: String) {
+    let key = "claude_session_\(projectPath.replacingOccurrences(of: "/", with: "_"))"
+    UserDefaults.standard.set(sessionId, forKey: key)
+}
+```
+
+### 2. Include Session ID in All Requests
+Modified `createChatRequest` to include stored session ID (lines 208-214):
+```swift
+if let sessionId = getSessionId(for: projectPath) {
+    requestBody["sessionId"] = sessionId
+    print("📝 Including session ID in request: \(sessionId)")
+}
+```
+
+### 3. Store Session ID from All Response Types
+Updated `parseSuccessResponse` to store session IDs from:
+- Standard ClaudeChatResponse (lines 315-317)
+- APNS acknowledgment responses (lines 332-334)
+- Legacy response format (lines 348-350)
 
 ## Status
 
-**Current Status**: New - Awaiting user logs  
-**Last Updated**: 2025-08-22
+**Current Status**: Resolved  
+**Last Updated**: 2025-08-22  
+**Solution**: Implemented persistent session ID storage per project using UserDefaults

@@ -216,9 +216,8 @@ router.post('/', async (req, res) => {
 
   // Process Claude request asynchronously and deliver via APNS
   setImmediate(async () => {
-    // Set up timeout for long-running operations
-    const PROCESSING_TIMEOUT = parseInt(process.env.CLAUDE_PROCESSING_TIMEOUT || '300000'); // 5 minutes default
-    let timeoutHandle;
+    // NO TIMEOUT - Claude operations can take as long as needed
+    // Timeout should only come from activity monitoring (Issue #28)
     let processingCompleted = false;
 
     try {
@@ -226,30 +225,17 @@ router.post('/', async (req, res) => {
         requestId,
         hasSessionId: !!sessionId,
         sessionIdValue: sessionId || 'new conversation',
-        timeout: PROCESSING_TIMEOUT,
-      });
-
-      // Create timeout promise
-      const timeoutPromise = new Promise((_, reject) => {
-        timeoutHandle = setTimeout(() => {
-          if (!processingCompleted) {
-            reject(new Error(`Claude processing timeout after ${PROCESSING_TIMEOUT}ms`));
-          }
-        }, PROCESSING_TIMEOUT);
       });
 
       // Use the regular AICLI service for sending prompts
       // IMPORTANT: Set streaming: true to use the processRunner with --resume fix
-      const resultPromise = aicliService.sendPrompt(messageValidation.message ?? message, {
+      const result = await aicliService.sendPrompt(messageValidation.message ?? message, {
         sessionId,
         requestId,
         workingDirectory: projectPath || process.cwd(),
         attachments,
         streaming: true, // Use streaming to get processRunner with --resume
       });
-
-      // Race between processing and timeout
-      const result = await Promise.race([resultPromise, timeoutPromise]);
 
       // Log the full result structure for debugging
       logger.info('Claude response structure', {
@@ -432,16 +418,9 @@ router.post('/', async (req, res) => {
         contentLength: content.length,
       });
 
-      // Mark processing as completed and clear timeout
+      // Mark processing as completed
       processingCompleted = true;
-      if (timeoutHandle) {
-        clearTimeout(timeoutHandle);
-      }
     } catch (error) {
-      // Clear timeout if still pending
-      if (timeoutHandle) {
-        clearTimeout(timeoutHandle);
-      }
 
       // Determine error type and user-friendly message
       let userErrorMessage = 'Failed to process message';

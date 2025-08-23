@@ -608,7 +608,7 @@ class PushNotificationService {
           `✅ Stall alert sent for session ${data.sessionId} (${data.silentMinutes} minutes silent)`
         );
       } else {
-        console.error(`❌ Stall alert failed for session ${data.sessionId}:`, result.error);
+        console.error('❌ Stall alert failed for session %s:', data.sessionId, result.error);
       }
 
       return result;

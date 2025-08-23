@@ -427,7 +427,7 @@ public class AICLIMessageOperations {
             return
         }
         
-        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+        URLSession.shared.dataTask(with: request) { [weak self] _, response, error in
             if let error = error {
                 completion(.failure(error))
                 return

@@ -34,7 +34,6 @@ struct ChatMessageList: View {
                     } else if claudeStatus.isProcessing {
                         // Show typing bubble when Claude is working
                         let activity = claudeStatus.lastActivity ?? "Thinking"
-                        let _ = print("💬 ChatMessageList: Showing typing bubble - Activity: \(activity), Elapsed: \(claudeStatus.elapsedSeconds)s")
                         ThinkingIndicator(progressInfo: ProgressInfo(
                             message: activity,
                             progress: nil,
@@ -42,6 +41,9 @@ struct ChatMessageList: View {
                             estimatedTimeRemaining: nil,
                             isIndeterminate: true
                         ))
+                        .onAppear {
+                            print("💬 ChatMessageList: Showing typing bubble - Activity: \(activity), Elapsed: \(claudeStatus.elapsedSeconds)s")
+                        }
                         .padding(.horizontal, 4)
                         .id("claude-processing")
                     }

@@ -135,7 +135,7 @@ struct ChatView: View {
                     },
                     isSendBlocked: selectedProject.map { viewModel.shouldBlockSending(for: $0) } ?? true,
                     isProcessing: selectedProject.map { statusManager.statusFor($0).isProcessing } ?? false,
-                    onStopProcessing: selectedProject != nil ? { 
+                    onStopProcessing: selectedProject != nil ? {
                         stopProcessing()
                     } : nil
                 )

@@ -237,7 +237,7 @@ class PerformanceMonitor: ObservableObject {
     
     private func updateConnectionStability() {
         // Calculate stability score based on disconnection frequency
-        let recentWindow: TimeInterval = 3600 // 1 hour
+        let _: TimeInterval = 3600 // 1 hour - reserved for future use
         let now = Date()
         
         // TODO: CircularBuffer needs public API to access all elements

@@ -13,7 +13,7 @@ public class AppDelegate: NSObject, UIApplicationDelegate {
         print("🎯 AppDelegate initialized with local-first message storage")
         
         // Check if app was launched from a notification while terminated
-        if let remoteNotification = launchOptions?[.remoteNotification] as? [AnyHashable: Any] {
+        if launchOptions?[.remoteNotification] is [AnyHashable: Any] {
             print("🚀 App launched from notification while terminated")
         }
         

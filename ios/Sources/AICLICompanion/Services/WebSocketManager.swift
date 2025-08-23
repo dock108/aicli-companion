@@ -16,7 +16,6 @@ final class WebSocketManager: ObservableObject {
     @Published var connectionError: String?
     
     private let logger = Logger(subsystem: "com.aiclicompanion", category: "WebSocket")
-    
     // MARK: - Connection Management
     
     func connect(to serverURL: String, token: String?) {
@@ -119,7 +118,6 @@ final class WebSocketManager: ObservableObject {
         do {
             if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                let type = json["type"] as? String {
-                
                 logger.debug("Received WebSocket message type: \(type)")
                 
                 switch type {

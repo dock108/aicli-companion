@@ -284,12 +284,12 @@ struct MarkdownParser {
             return nil
         }
         
-        let linkMatch = String(text[linkRange])
+        _ = String(text[linkRange])
         
         // Extract text and URL using regex groups
         // swiftlint:disable:next force_try
         let regex = try! NSRegularExpression(pattern: "\\[([^\\]]+)\\]\\(([^)]+)\\)")
-        let nsRange = NSRange(linkRange, in: text)
+        _ = NSRange(linkRange, in: text)
         
         guard let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
               match.numberOfRanges >= 3 else {

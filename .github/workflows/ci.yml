@@ -246,7 +246,11 @@ jobs:
       run: |
         cd ios
         swiftlint lint --strict --reporter json > ../swiftlint-ios.json || true
-        swiftlint lint --strict --reporter github-actions-logging || exit 0
+        swiftlint lint --strict --reporter github-actions-logging
+        if [ $? -ne 0 ]; then
+          echo "❌ SwiftLint found violations"
+          exit 1
+        fi
     
     - name: Upload SwiftLint report
       uses: actions/upload-artifact@v4
@@ -264,17 +268,17 @@ jobs:
         echo "=== Available SDKs ==="
         xcodebuild -showsdks || true
         echo ""
-        echo "=== Available destinations for AICLICompanionApp ==="
+        echo "=== Available destinations for AICLICompanion ==="
         cd ios
-        xcodebuild -showdestinations -project AICLICompanion.xcodeproj -scheme AICLICompanionApp 2>&1 || true
+        xcodebuild -showdestinations -project AICLICompanion.xcodeproj -scheme AICLICompanion 2>&1 || true
         echo ""
         echo "=== Available build destinations ==="
-        xcodebuild -showBuildSettings -project AICLICompanion.xcodeproj -scheme AICLICompanionApp | grep -i platform || true
+        xcodebuild -showBuildSettings -project AICLICompanion.xcodeproj -scheme AICLICompanion | grep -i platform || true
         
     - name: Resolve Swift Package Dependencies
       run: |
         cd ios
-        xcodebuild -resolvePackageDependencies -project AICLICompanion.xcodeproj -scheme AICLICompanionApp
+        xcodebuild -resolvePackageDependencies -project AICLICompanion.xcodeproj -scheme AICLICompanion
     
     - name: List Available Simulators
       run: |
@@ -291,7 +295,7 @@ jobs:
           echo "No iOS simulators found, trying to use generic platform"
           xcodebuild build \
             -project AICLICompanion.xcodeproj \
-            -scheme AICLICompanionApp \
+            -scheme AICLICompanion \
             -destination 'generic/platform=iOS' \
             -configuration Release \
             CODE_SIGNING_ALLOWED=NO \
@@ -301,7 +305,7 @@ jobs:
           echo "Using simulator: $SIMULATOR_ID"
           xcodebuild build \
             -project AICLICompanion.xcodeproj \
-            -scheme AICLICompanionApp \
+            -scheme AICLICompanion \
             -destination "id=$SIMULATOR_ID" \
             -configuration Release \
             CODE_SIGNING_ALLOWED=NO \
@@ -321,7 +325,7 @@ jobs:
         else
           echo "Running tests on simulator: $SIMULATOR_ID"
           xcodebuild -project AICLICompanion.xcodeproj \
-            -scheme AICLICompanionApp \
+            -scheme AICLICompanion \
             -destination "id=$SIMULATOR_ID" \
             test \
             -enableCodeCoverage YES \
@@ -336,8 +340,12 @@ jobs:
     - name: Generate iOS Coverage Report
       run: |
         cd ios
-        xcrun xccov view --report --json ios-test.xcresult > ios-coverage.json || true
-        xcrun xccov view --report ios-test.xcresult > ios-coverage.txt || true
+        if [ -d "ios-test.xcresult" ]; then
+          xcrun xccov view --report --json ios-test.xcresult > ios-coverage.json || true
+          xcrun xccov view --report ios-test.xcresult > ios-coverage.txt || true
+        else
+          echo "No test results found, skipping coverage report generation"
+        fi
     
     - name: Check iOS Coverage Threshold
       run: |
@@ -345,13 +353,23 @@ jobs:
         if [ -f ios-coverage.json ]; then
           coverage=$(cat ios-coverage.json | python3 -c "import json, sys; data = json.load(sys.stdin); coverage = data['targets'][0].get('lineCoverage', 0) * 100 if 'targets' in data and len(data['targets']) > 0 else 0; print(f'{coverage:.1f}')")
           echo "Code coverage: ${coverage}%"
-          if (( $(echo "$coverage < ${{ env.MINIMUM_COVERAGE }}" | bc -l) )); then
-            echo "❌ Coverage ${coverage}% is below minimum threshold of ${{ env.MINIMUM_COVERAGE }}%"
+          if (( $(echo "$coverage < ${{ env.MINIMUM_IOS_COVERAGE }}" | bc -l) )); then
+            echo "❌ Coverage ${coverage}% is below minimum threshold of ${{ env.MINIMUM_IOS_COVERAGE }}%"
             exit 1
           else
             echo "✅ Coverage ${coverage}% meets minimum threshold"
           fi
+        else
+          echo "⚠️ No coverage report found (tests may have been skipped)"
         fi
+    - name: Upload iOS Test Results
+      uses: actions/upload-artifact@v4
+      with:
+        name: ios-test-results
+        path: ios/ios-test.xcresult
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+      if: always()
+    
     - name: Upload iOS Coverage Reports
       uses: actions/upload-artifact@v4
       with:
@@ -359,6 +377,7 @@ jobs:
         path: |
           ios/ios-coverage.json
           ios/ios-coverage.txt
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
       if: always()
 
   # ============================================================================

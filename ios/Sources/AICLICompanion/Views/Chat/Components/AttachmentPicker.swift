@@ -117,7 +117,7 @@ struct AttachmentPicker: View {
     }
     
     private func showDocumentPickerForCodeFiles() {
-        let codeTypes: [UTType] = [
+        let _: [UTType] = [
             .sourceCode,
             .swiftSource,
             .cPlusPlusSource,

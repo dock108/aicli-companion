@@ -150,7 +150,7 @@ final class ChatViewModel: ObservableObject {
                 guard let self = self else { return }
                 
                 switch result {
-                case .success(_):
+                case .success:
                     print("✅ ChatViewModel: Message accepted by server")
                     // Message was accepted and will be delivered via APNS
                     // Keep loading state active to show Claude is working

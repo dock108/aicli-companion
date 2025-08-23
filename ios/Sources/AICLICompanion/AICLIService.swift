@@ -17,35 +17,38 @@ public class AICLIService: ObservableObject {
     @Published public var connectionStatus: ConnectionStatus = .disconnected
     @Published public var currentSession: String?
 
-    // MARK: - Composed Services
-    private let connectionManager: AICLIConnectionManager
-    private let pushNotificationManager: AICLIPushNotificationManager
-    private let messageOperations: AICLIMessageOperations
-    private let sessionManager: AICLISessionManager
-    private let projectManager: AICLIProjectManager
+    // MARK: - Composed Services (Lazy for performance)
+    private lazy var connectionManager: AICLIConnectionManager = {
+        AICLIConnectionManager(urlSession: urlSession)
+    }()
+    
+    private lazy var pushNotificationManager: AICLIPushNotificationManager = {
+        AICLIPushNotificationManager(urlSession: urlSession, connectionManager: connectionManager)
+    }()
+    
+    private lazy var messageOperations: AICLIMessageOperations = {
+        AICLIMessageOperations(urlSession: urlSession, connectionManager: connectionManager)
+    }()
+    
+    private lazy var sessionManager: AICLISessionManager = {
+        AICLISessionManager(urlSession: urlSession, connectionManager: connectionManager)
+    }()
+    
+    private lazy var projectManager: AICLIProjectManager = {
+        AICLIProjectManager(urlSession: urlSession, connectionManager: connectionManager)
+    }()
     
     private let urlSession: URLSession
     private var cancellables = Set<AnyCancellable>()
+    private var isPropertyForwardingSetup = false
 
     public init() {
-        // Setup URL session
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 30
-        config.timeoutIntervalForResource = 120 // Longer timeout for Claude processing
-        config.waitsForConnectivity = true // Wait for network connectivity
-        config.allowsCellularAccess = true
-        config.sessionSendsLaunchEvents = true
-        self.urlSession = URLSession(configuration: config)
+        // Minimal init - just store a basic URL session
+        // Even URLSession configuration is deferred to avoid any overhead
+        self.urlSession = URLSession.shared
         
-        // Initialize composed services
-        self.connectionManager = AICLIConnectionManager(urlSession: urlSession)
-        self.pushNotificationManager = AICLIPushNotificationManager(urlSession: urlSession, connectionManager: connectionManager)
-        self.messageOperations = AICLIMessageOperations(urlSession: urlSession, connectionManager: connectionManager)
-        self.sessionManager = AICLISessionManager(urlSession: urlSession, connectionManager: connectionManager)
-        self.projectManager = AICLIProjectManager(urlSession: urlSession, connectionManager: connectionManager)
-        
-        // Setup property forwarding
-        setupPropertyForwarding()
+        // Everything else is lazy - created only when needed
+        // This ensures the absolute fastest possible init
     }
 
     deinit {
@@ -58,7 +61,10 @@ public class AICLIService: ObservableObject {
     
     // MARK: - Property Forwarding Setup
     
-    private func setupPropertyForwarding() {
+    private func setupPropertyForwardingIfNeeded() {
+        guard !isPropertyForwardingSetup else { return }
+        isPropertyForwardingSetup = true
+        
         // Forward connection state
         connectionManager.$isConnected
             .assign(to: \.isConnected, on: self)
@@ -77,6 +83,7 @@ public class AICLIService: ObservableObject {
     // MARK: - Connection Management (delegated)
     
     public func connect(to address: String, port: Int, authToken: String?, completion: @escaping (Result<Void, AICLICompanionError>) -> Void) {
+        setupPropertyForwardingIfNeeded()
         connectionManager.connect(to: address, port: port, authToken: authToken, completion: completion)
     }
     

@@ -8,38 +8,53 @@ struct AppMain: App {
     @UIApplicationDelegateAdaptor(AICLICompanion.AppDelegate.self) var appDelegate
     #endif
     
-    // Lazy initialization to avoid blocking app startup
-    @StateObject private var aicliService: AICLICompanion.AICLIService = {
-        let start = CFAbsoluteTimeGetCurrent()
-        print("🔄 Initializing AICLIService...")
-        let service = AICLICompanion.AICLIService.shared
-        let time = CFAbsoluteTimeGetCurrent() - start
-        print("✅ AICLIService initialized in \(String(format: "%.3f", time))s")
-        return service
-    }()
+    // Use shared instances directly - don't force initialization
+    // Services will be created only when first accessed by views
+    private var aicliService: AICLICompanion.AICLIService {
+        AICLICompanion.AICLIService.shared
+    }
     
-    @StateObject private var settingsManager: AICLICompanion.SettingsManager = {
-        let start = CFAbsoluteTimeGetCurrent()
-        print("🔄 Initializing SettingsManager...")
-        let manager = AICLICompanion.SettingsManager()
-        let time = CFAbsoluteTimeGetCurrent() - start
-        print("✅ SettingsManager initialized in \(String(format: "%.3f", time))s")
-        return manager
-    }()
+    private var settingsManager: AICLICompanion.SettingsManager {
+        AICLICompanion.SettingsManager.shared
+    }
     
-    @StateObject private var pushNotificationService: AICLICompanion.PushNotificationService = {
-        let start = CFAbsoluteTimeGetCurrent()
-        print("🔄 Initializing PushNotificationService...")
-        let service = AICLICompanion.PushNotificationService.shared
-        let time = CFAbsoluteTimeGetCurrent() - start
-        print("✅ PushNotificationService initialized in \(String(format: "%.3f", time))s")
-        return service
-    }()
+    private var pushNotificationService: AICLICompanion.PushNotificationService {
+        AICLICompanion.PushNotificationService.shared
+    }
     
     init() {
+        AICLICompanion.PerformanceLogger.shared.logAppEvent("AppMain init started")
         print("🚀 AppMain init started")
+        
+        // Pre-warm keyboard to prevent 12s freeze on first tap
+        #if os(iOS)
+        // Schedule keyboard pre-warming for after window creation
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            // Create an actual UITextField and briefly make it first responder
+            let textField = UITextField(frame: .zero)
+            
+            // Get the key window using the modern approach
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let window = windowScene.windows.first {
+                window.addSubview(textField)
+                textField.alpha = 0 // Make it invisible
+                textField.becomeFirstResponder()
+                
+                // Immediately resign and remove
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    textField.resignFirstResponder()
+                    textField.removeFromSuperview()
+                    print("⌨️ Keyboard system pre-warmed successfully")
+                }
+            } else {
+                print("⌨️ Failed to pre-warm keyboard - no window available")
+            }
+        }
+        #endif
+        
         // Heavy service initialization will happen lazily when first accessed
         print("🚀 AppMain init completed quickly")
+        AICLICompanion.PerformanceLogger.shared.logAppEvent("AppMain init completed")
     }
     
     var body: some Scene {

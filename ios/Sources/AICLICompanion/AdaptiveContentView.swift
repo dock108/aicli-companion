@@ -37,6 +37,10 @@ public struct AdaptiveContentView: View {
             checkConnection()
             animateBackground()
         }
+        // Recheck connection when returning from other views
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            checkConnection()
+        }
         .onChange(of: isConnected) { _, connected in
             if !connected {
                 // Reset project selection when disconnected

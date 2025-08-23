@@ -341,10 +341,13 @@ struct SettingsView: View {
                     
                     // Setup Connection button
                     Button(action: {
-                        // Dismiss settings and navigate to ConnectionView
-                        dismiss()
                         // Clear the connection to trigger showing ConnectionView
                         settings.clearConnection()
+                        // Then dismiss settings
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            NotificationCenter.default.post(name: Notification.Name("SettingsViewDismissed"), object: nil)
+                            dismiss()
+                        }
                     }) {
                         HStack {
                             Image(systemName: "qrcode")
@@ -568,6 +571,7 @@ struct SettingsView: View {
         // Dismiss settings view immediately to return to ConnectionView
         // The ContentView will handle navigation based on connection state
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            NotificationCenter.default.post(name: Notification.Name("SettingsViewDismissed"), object: nil)
             dismiss()
         }
     }
@@ -595,6 +599,18 @@ struct SettingsView: View {
                 switch result {
                 case .success:
                     print("✅ Reconnected successfully")
+                    // Trigger connection state update to reload projects
+                    DispatchQueue.main.async {
+                        // Force a connection update by saving again
+                        settings.saveConnection(
+                            address: connection.address,
+                            port: connection.port,
+                            token: connection.authToken
+                        )
+                        // Dismiss settings to show projects view
+                        NotificationCenter.default.post(name: Notification.Name("SettingsViewDismissed"), object: nil)
+                        dismiss()
+                    }
                 case .failure(let error):
                     print("❌ Reconnection failed: \(error)")
                 }

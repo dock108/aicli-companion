@@ -3,7 +3,7 @@ import Combine
 
 @available(iOS 16.0, macOS 13.0, *)
 public class SettingsManager: ObservableObject {
-    static let shared = SettingsManager()
+    public static let shared = SettingsManager()
     
     @Published var theme: Theme = .system
     @Published var fontSize: FontSize = .medium

@@ -331,45 +331,58 @@ struct ChatView: View {
     private func clearCurrentSession() {
         guard let project = selectedProject else { return }
         
-        // Kill the server session first to clear project mapping
-        if let sessionId = aicliService.getSessionId(for: project.path) {
-            print("🔄 Clearing server session \(sessionId) for project \(project.name)")
-            
-            // Call kill session to clear server's project mapping (no APNS for clear)
-            viewModel.killSession(sessionId, for: project, sendNotification: false) { success in
-                if success {
-                    print("✅ Server session cleared successfully")
-                } else {
-                    print("⚠️ Failed to clear server session, continuing with local cleanup")
-                }
-            }
-        }
-        
-        // Use the new comprehensive clear function
+        // Clear UI immediately for responsiveness
         viewModel.clearSession()
         
-        // Clear persisted messages and session data
-        let persistenceService = MessagePersistenceService.shared
-        persistenceService.clearMessages(for: project.path)
-        
-        // Clear stored session ID to force new session on next message
-        aicliService.clearSessionId(for: project.path)
-        
-        // Clear delivered notifications for this project from notification center
-        let pushService = PushNotificationService.shared
-        pushService.clearProjectNotifications(project.path)
-        
-        // Clear processed message IDs for this project to prevent reprocessing
-        pushService.clearProcessedMessagesForProject(project.path)
-        
-        // Notify that this project's messages were cleared (for UI indicators)
-        NotificationCenter.default.post(
-            name: .projectMessagesCleared,
-            object: nil,
-            userInfo: ["projectPath": project.path, "projectName": project.name]
-        )
-        
-        print("🗑️ Cleared chat: messages, persistence, session ID, notifications, and processed IDs for project \(project.name)")
+        // Do heavy cleanup truly async with background priority
+        Task.detached(priority: .background) {
+            // Get session ID on main thread
+            let sessionId = await MainActor.run {
+                aicliService.getSessionId(for: project.path)
+            }
+            
+            // Kill the server session if it exists
+            if let sessionId = sessionId {
+                print("🔄 Clearing server session \(sessionId) for project \(project.name)")
+                
+                // Call kill session async (no APNS for clear)
+                await MainActor.run {
+                    viewModel.killSession(sessionId, for: project, sendNotification: false) { success in
+                        if success {
+                            print("✅ Server session cleared successfully")
+                        } else {
+                            print("⚠️ Failed to clear server session, continuing with local cleanup")
+                        }
+                    }
+                }
+            }
+            
+            // Do all file I/O operations in background
+            // Clear persisted messages and session data
+            let persistenceService = MessagePersistenceService.shared
+            persistenceService.clearMessages(for: project.path)
+            
+            // Clear stored session ID on main thread
+            await MainActor.run {
+                aicliService.clearSessionId(for: project.path)
+            }
+            
+            // Clear notifications in background
+            let pushService = PushNotificationService.shared
+            pushService.clearProjectNotifications(project.path)
+            pushService.clearProcessedMessagesForProject(project.path)
+            
+            print("🗑️ Cleared chat: messages, persistence, session ID, notifications, and processed IDs for project \(project.name)")
+            
+            // Notify on main thread
+            await MainActor.run {
+                NotificationCenter.default.post(
+                    name: .projectMessagesCleared,
+                    object: nil,
+                    userInfo: ["projectPath": project.path, "projectName": project.name]
+                )
+            }
+        }
     }
     
     // MARK: - Stop Processing

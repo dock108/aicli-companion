@@ -226,7 +226,7 @@ final class WebSocketManager: ObservableObject {
         webSocketTask?.sendPing { [weak self] error in
             if let error = error {
                 self?.logger.error("Ping failed: \(error)")
-                Task { @MainActor in
+                Task { @MainActor [weak self] in
                     self?.handleError(error)
                 }
             }

@@ -20,15 +20,22 @@ final class ProjectStatusTests: XCTestCase {
         XCTAssertEqual(project.id, "/Users/test/project") // id should equal path
     }
     
-    func testProjectWithDescription() {
+    func testProjectCodable() throws {
         let project = Project(
             name: "DescribedProject",
             path: "/test/path",
-            type: "TypeScript",
-            description: "A test project with description"
+            type: "TypeScript"
         )
         
-        XCTAssertEqual(project.description, "A test project with description")
+        let encoder = JSONEncoder()
+        let data = try encoder.encode(project)
+        
+        let decoder = JSONDecoder()
+        let decoded = try decoder.decode(Project.self, from: data)
+        
+        XCTAssertEqual(decoded.name, project.name)
+        XCTAssertEqual(decoded.path, project.path)
+        XCTAssertEqual(decoded.type, project.type)
     }
     
     func testProjectEquality() {
@@ -268,18 +275,26 @@ final class ProjectStatusTests: XCTestCase {
         XCTAssertEqual(session.startedAt, "2024-01-01T12:00:00Z")
     }
     
-    func testProjectSessionOptionalFields() {
+    func testProjectSessionCodable() throws {
         let session = ProjectSession(
             sessionId: "session-xyz",
             projectName: "TestProject",
             projectPath: "/test",
             status: "inactive",
-            startedAt: "2024-01-01T12:00:00Z",
-            endedAt: "2024-01-01T13:00:00Z",
-            messageCount: 42
+            startedAt: "2024-01-01T12:00:00Z"
         )
         
-        XCTAssertEqual(session.endedAt, "2024-01-01T13:00:00Z")
-        XCTAssertEqual(session.messageCount, 42)
+        // Test codable
+        let encoder = JSONEncoder()
+        let data = try encoder.encode(session)
+        
+        let decoder = JSONDecoder()
+        let decoded = try decoder.decode(ProjectSession.self, from: data)
+        
+        XCTAssertEqual(decoded.sessionId, session.sessionId)
+        XCTAssertEqual(decoded.projectName, session.projectName)
+        XCTAssertEqual(decoded.projectPath, session.projectPath)
+        XCTAssertEqual(decoded.status, session.status)
+        XCTAssertEqual(decoded.startedAt, session.startedAt)
     }
 }

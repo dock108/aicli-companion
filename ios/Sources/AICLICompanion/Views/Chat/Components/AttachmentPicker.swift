@@ -70,9 +70,11 @@ struct AttachmentPicker: View {
             }
             .background(Colors.bgBase(for: colorScheme))
             .navigationTitle("Add Attachment")
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
                         isPresented = false
                     }
@@ -80,7 +82,7 @@ struct AttachmentPicker: View {
                     .foregroundColor(Colors.textSecondary(for: colorScheme))
                 }
                 
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItem(placement: .confirmationAction) {
                     Button(action: { isPresented = false }) {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 22))

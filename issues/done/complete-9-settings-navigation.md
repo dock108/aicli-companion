@@ -1,4 +1,4 @@
-# Issue #15: Settings Navigation Gets Stuck/Difficult to Exit
+# Issue #9: Settings Navigation Gets Stuck/Difficult to Exit
 
 **Priority**: High  
 **Component**: iOS App - Settings Navigation UI  

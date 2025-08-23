@@ -63,6 +63,8 @@ struct ProjectSelectionView: View {
     @EnvironmentObject var settings: SettingsManager
     @StateObject private var persistenceService = MessagePersistenceService.shared
     @StateObject private var aicliService = AICLIService.shared
+    @ObservedObject private var statusManager = ProjectStatusManager.shared
+    @StateObject private var webSocketManager = WebSocketManager()
     
     init(selectedProject: Binding<Project?>, isProjectSelected: Binding<Bool>, onDisconnect: (() -> Void)? = nil) {
         self._selectedProject = selectedProject
@@ -151,7 +153,8 @@ struct ProjectSelectionView: View {
                         ForEach(projects) { project in
                             ProjectRowView(
                                 project: project,
-                                hasSession: hasMessagesCache[project.path] ?? false,
+                                hasSession: false, // Don't check messages upfront for performance
+                                status: statusManager.statusFor(project),
                                 onSelect: {
                                     selectProject(project)
                                 }
@@ -165,11 +168,77 @@ struct ProjectSelectionView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Colors.bgBase(for: colorScheme))
         .onAppear {
-            loadProjects()
+            // Load projects asynchronously to prevent UI freeze
+            Task {
+                await loadProjectsAsync()
+            }
+            connectWebSocket()
+        }
+        // Monitor when settings view disappears to check for connection changes
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("SettingsViewDismissed"))) { _ in
+            // Check if connection was cleared
+            if settings.currentConnection == nil {
+                // Connection was cleared - reset projects list
+                Task { @MainActor in
+                    projects = []
+                    errorMessage = nil
+                    hasMessagesCache.removeAll()
+                    loadingStateCoordinator.stopLoading(.projectSelection)
+                }
+            } else if projects.isEmpty {
+                // Connection exists but no projects - reload
+                Task {
+                    await loadProjectsAsync()
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .projectMessagesCleared)) { notification in
+            guard let projectPath = notification.userInfo?["projectPath"] as? String else { return }
+            
+            // Update the hasMessagesCache asynchronously to avoid publishing changes warning
+            Task {
+                let persistenceService = MessagePersistenceService.shared
+                let messages = persistenceService.loadMessages(for: projectPath)
+                await MainActor.run {
+                    hasMessagesCache[projectPath] = !messages.isEmpty
+                    print("📊 Updated hasMessagesCache: project \(projectPath) has \(messages.count) messages, indicator: \(hasMessagesCache[projectPath] ?? false)")
+                }
+            }
+        }
+        .onDisappear {
+            webSocketManager.disconnect()
         }
     }
     
     // MARK: - Private Methods
+    
+    private func checkProjectHasMessages(_ projectPath: String) async -> Bool {
+        // Load messages on background queue to avoid blocking UI
+        return await Task.detached {
+            let messages = MessagePersistenceService.shared.loadMessages(for: projectPath)
+            let hasMessages = !messages.isEmpty
+            if hasMessages {
+                print("📊 Found \(messages.count) messages for project")
+            }
+            return hasMessages
+        }.value
+    }
+    
+    private func loadProjectsAsync() async {
+        // Show loading state immediately
+        await MainActor.run {
+            loadingStateCoordinator.startLoading(.projectSelection, timeout: 10.0)
+            errorMessage = nil
+        }
+        
+        // Small delay to let UI update
+        try? await Task.sleep(nanoseconds: 10_000_000) // 0.01 seconds
+        
+        // Load projects
+        await MainActor.run {
+            loadProjects()
+        }
+    }
     
     private func loadProjects() {
         loadingStateCoordinator.startLoading(.projectSelection, timeout: 10.0)
@@ -193,9 +262,12 @@ struct ProjectSelectionView: View {
         }
         
         URLSession.shared.dataTask(with: request) { data, response, error in
-            DispatchQueue.main.async {
+            // First stop loading on main thread
+            Task { @MainActor in
                 loadingStateCoordinator.stopLoading(.projectSelection)
-                
+            }
+            
+            DispatchQueue.main.async {
                 if let error = error {
                     // Handle specific network errors more gracefully
                     let nsError = error as NSError
@@ -246,24 +318,22 @@ struct ProjectSelectionView: View {
                 
                 do {
                     let response = try JSONDecoder().decode(ProjectsResponse.self, from: data)
-                    projects = response.projects
-                    errorMessage = nil  // Clear any previous error
-                    print("Successfully loaded \(projects.count) projects")
                     
-                    // Check which projects have messages
-                    hasMessagesCache.removeAll()
-                    for project in projects {
-                        let messages = persistenceService.loadMessages(for: project.path)
-                        hasMessagesCache[project.path] = !messages.isEmpty
-                        if !messages.isEmpty {
-                            print("📊 Found \(messages.count) messages for \(project.name)")
-                        } else {
-                            print("📊 No messages found for \(project.name)")
-                        }
+                    // Update state on main thread to avoid publishing changes warning
+                    Task { @MainActor in
+                        projects = response.projects
+                        errorMessage = nil  // Clear any previous error
+                        print("Successfully loaded \(projects.count) projects")
+                        
+                        // Don't check messages upfront - too expensive
+                        // Message indicators will be loaded lazily if needed
+                        hasMessagesCache.removeAll()
                     }
                 } catch let decodingError {
                     print("Decoding error: \(decodingError)")
-                    errorMessage = "Failed to parse server response: \(decodingError.localizedDescription)"
+                    Task { @MainActor in
+                        errorMessage = "Failed to parse server response: \(decodingError.localizedDescription)"
+                    }
                 }
             }
         }.resume()
@@ -297,6 +367,12 @@ struct ProjectSelectionView: View {
         }
     }
     
+    private func connectWebSocket() {
+        guard let serverURL = settings.serverURL else { return }
+        
+        let wsURL = serverURL.absoluteString
+        webSocketManager.connect(to: wsURL, token: settings.authToken)
+    }
 }
 
 // MARK: - Project Row View
@@ -305,6 +381,7 @@ struct ProjectSelectionView: View {
 struct ProjectRowView: View {
     let project: Project
     let hasSession: Bool
+    @ObservedObject var status: Project.StatusInfo
     let onSelect: () -> Void
     
     @Environment(\.colorScheme) var colorScheme
@@ -365,32 +442,8 @@ struct ProjectRowView: View {
                             .foregroundColor(Colors.textPrimary(for: colorScheme))
                             .lineLimit(1)
                         
-                        // Commented out - New badges not working correctly for beta
-                        /*
-                        if hasUnreadMessages {
-                            Text("New")
-                                .font(Typography.font(.caption))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(
-                                    Capsule()
-                                        .fill(Color.blue)
-                                )
-                        }
-                        */
+                        // Processing indicators moved to chat thread as typing bubbles
                     }
-                    
-                    // Commented out - Countdown timers not working correctly for beta
-                    /*
-                    // Show time remaining instead of path
-                    if !timeRemaining.isEmpty {
-                        Text(timeRemaining)
-                            .font(Typography.font(.caption))
-                            .foregroundColor(Colors.textSecondary(for: colorScheme))
-                            .lineLimit(1)
-                    }
-                    */
                 }
                 
                 Spacer()
@@ -495,9 +548,15 @@ struct ProjectRowView: View {
 
 @available(iOS 17.0, macOS 14.0, *)
 #Preview("Project Row") {
-    ProjectRowView(
+    let status = Project.StatusInfo()
+    status.isProcessing = true
+    status.lastActivity = "Using Edit tool"
+    status.elapsedSeconds = 45
+    
+    return ProjectRowView(
         project: Project(name: "my-awesome-app", path: "/path/to/project", type: "folder"),
         hasSession: true,
+        status: status,
         onSelect: {
             print("Project selected")
         }

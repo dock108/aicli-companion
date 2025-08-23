@@ -4,556 +4,552 @@ import XCTest
 @available(iOS 16.0, macOS 13.0, *)
 final class MessageValidatorTests: XCTestCase {
     
-    override func setUp() {
-        super.setUp()
-    }
+    // MARK: - Stream Chunk Validation Tests
     
-    override func tearDown() {
-        super.tearDown()
-    }
-    
-    // MARK: - StreamChunk Validation Tests
-    
-    func testValidStreamChunkWithContent() throws {
-        let validChunk = TestDataFactory.createStreamChunk(
-            content: "Hello, this is valid content",
+    func testValidStreamChunk_ContentType() {
+        let chunk = StreamChunk(
             type: "content",
-            isFinal: false
+            content: "Test content",
+            metadata: nil
         )
-        
-        XCTAssertTrue(MessageValidator.isValidStreamChunk(validChunk))
+        XCTAssertTrue(MessageValidator.isValidStreamChunk(chunk))
     }
     
-    func testValidStreamChunkWithCode() throws {
-        let codeChunk = TestDataFactory.createStreamChunk(
-            content: "print('Hello, World!')",
-            type: "code",
-            isFinal: true
-        )
-        
-        XCTAssertTrue(MessageValidator.isValidStreamChunk(codeChunk))
-    }
-    
-    func testInvalidStreamChunkWithEmptyContent() throws {
-        let emptyChunk = TestDataFactory.createStreamChunk(
-            content: "",
-            type: "content",
-            isFinal: false
-        )
-        
-        XCTAssertFalse(MessageValidator.isValidStreamChunk(emptyChunk))
-    }
-    
-    func testInvalidStreamChunkWithWhitespaceOnlyContent() throws {
-        let whitespaceChunk = TestDataFactory.createStreamChunk(
-            content: "   \n\t  ",
+    func testValidStreamChunk_TextType() {
+        let chunk = StreamChunk(
             type: "text",
-            isFinal: false
+            content: "Test text",
+            metadata: nil
         )
-        
-        XCTAssertFalse(MessageValidator.isValidStreamChunk(whitespaceChunk))
+        XCTAssertTrue(MessageValidator.isValidStreamChunk(chunk))
     }
     
-    func testValidToolUseChunk() throws {
-        let toolMetadata = StreamChunkMetadata(toolName: "Read")
-        let toolChunk = StreamChunk(
-            id: UUID().uuidString,
+    func testInvalidStreamChunk_EmptyContent() {
+        let chunk = StreamChunk(
+            type: "content",
+            content: "",
+            metadata: nil
+        )
+        XCTAssertFalse(MessageValidator.isValidStreamChunk(chunk))
+    }
+    
+    func testInvalidStreamChunk_WhitespaceContent() {
+        let chunk = StreamChunk(
+            type: "text",
+            content: "   \n\t   ",
+            metadata: nil
+        )
+        XCTAssertFalse(MessageValidator.isValidStreamChunk(chunk))
+    }
+    
+    func testValidStreamChunk_ToolUse() {
+        // Create metadata JSON and decode it
+        let metadataJSON = """
+        {
+            "toolName": "TestTool"
+        }
+        """
+        let metadata = try! JSONDecoder().decode(StreamChunkMetadata.self, from: metadataJSON.data(using: .utf8)!)
+        
+        let chunk = StreamChunk(
             type: "tool_use",
-            content: "Reading file...",
-            isFinal: false,
-            metadata: toolMetadata
+            content: nil,
+            metadata: metadata
         )
-        
-        XCTAssertTrue(MessageValidator.isValidStreamChunk(toolChunk))
+        XCTAssertTrue(MessageValidator.isValidStreamChunk(chunk))
     }
     
-    func testInvalidToolUseChunkWithoutToolName() throws {
-        let invalidToolMetadata = StreamChunkMetadata()
-        let toolChunk = StreamChunk(
-            id: UUID().uuidString,
+    func testInvalidStreamChunk_ToolUseNoName() {
+        // Create metadata JSON with empty tool name
+        let metadataJSON = """
+        {
+            "toolName": ""
+        }
+        """
+        let metadata = try! JSONDecoder().decode(StreamChunkMetadata.self, from: metadataJSON.data(using: .utf8)!)
+        
+        let chunk = StreamChunk(
             type: "tool_use",
-            content: "Using tool...",
-            isFinal: false,
-            metadata: invalidToolMetadata
+            content: nil,
+            metadata: metadata
         )
-        
-        XCTAssertFalse(MessageValidator.isValidStreamChunk(toolChunk))
+        XCTAssertFalse(MessageValidator.isValidStreamChunk(chunk))
     }
     
-    func testValidCompleteChunk() throws {
-        let completeChunk = StreamChunk(
-            id: UUID().uuidString,
+    func testInvalidStreamChunk_ToolUseNoMetadata() {
+        let chunk = StreamChunk(
+            type: "tool_use",
+            content: nil,
+            metadata: nil
+        )
+        XCTAssertFalse(MessageValidator.isValidStreamChunk(chunk))
+    }
+    
+    func testValidStreamChunk_ToolResult() {
+        let chunk = StreamChunk(
+            type: "tool_result",
+            content: "Tool output",
+            metadata: nil
+        )
+        XCTAssertTrue(MessageValidator.isValidStreamChunk(chunk))
+    }
+    
+    func testInvalidStreamChunk_ToolResultEmpty() {
+        let chunk = StreamChunk(
+            type: "tool_result",
+            content: "",
+            metadata: nil
+        )
+        XCTAssertFalse(MessageValidator.isValidStreamChunk(chunk))
+    }
+    
+    func testValidStreamChunk_CompleteType() {
+        let chunk = StreamChunk(
             type: "complete",
-            content: "",
-            isFinal: true,
+            content: nil,
             metadata: nil
         )
-        
-        XCTAssertTrue(MessageValidator.isValidStreamChunk(completeChunk))
+        XCTAssertTrue(MessageValidator.isValidStreamChunk(chunk))
     }
     
-    func testValidDividerChunk() throws {
-        let dividerChunk = StreamChunk(
-            id: UUID().uuidString,
+    func testValidStreamChunk_DividerType() {
+        let chunk = StreamChunk(
             type: "divider",
-            content: "",
-            isFinal: false,
+            content: nil,
             metadata: nil
         )
-        
-        XCTAssertTrue(MessageValidator.isValidStreamChunk(dividerChunk))
+        XCTAssertTrue(MessageValidator.isValidStreamChunk(chunk))
     }
     
-    func testUnknownChunkTypesAreAllowed() throws {
-        let unknownChunk = StreamChunk(
-            id: UUID().uuidString,
-            type: "unknown_type",
-            content: "unknown content",
-            isFinal: false,
+    func testValidStreamChunk_CodeType() {
+        let chunk = StreamChunk(
+            type: "code",
+            content: "print('hello')",
             metadata: nil
         )
-        
-        XCTAssertTrue(MessageValidator.isValidStreamChunk(unknownChunk))
+        XCTAssertTrue(MessageValidator.isValidStreamChunk(chunk))
+    }
+    
+    func testValidStreamChunk_UnknownType() {
+        let chunk = StreamChunk(
+            type: "future_type",
+            content: nil,
+            metadata: nil
+        )
+        XCTAssertTrue(MessageValidator.isValidStreamChunk(chunk))
     }
     
     // MARK: - WebSocket Message Validation Tests
     
-    func testValidWebSocketMessageWithStreamChunk() throws {
-        let validChunk = TestDataFactory.createStreamChunk(content: "Valid content")
-        let chunkResponse = StreamChunkResponse(sessionId: "test-session", chunk: validChunk)
-        let webSocketMessage = WebSocketMessage(
+    func testValidWebSocketMessage_StreamChunk() {
+        let chunk = StreamChunk(
+            type: "content",
+            content: "Test",
+            metadata: nil
+        )
+        let response = StreamChunkResponse(chunk: chunk)
+        let message = WebSocketMessage(
             type: .streamChunk,
-            requestId: "req-123",
-            timestamp: Date(),
-            data: .streamChunk(chunkResponse)
+            data: .streamChunk(response)
         )
-        
-        XCTAssertTrue(MessageValidator.isValidWebSocketMessage(webSocketMessage))
+        XCTAssertTrue(MessageValidator.isValidWebSocketMessage(message))
     }
     
-    func testInvalidWebSocketMessageWithInvalidChunk() throws {
-        let invalidChunk = TestDataFactory.createStreamChunk(content: "")
-        let chunkResponse = StreamChunkResponse(sessionId: "test-session", chunk: invalidChunk)
-        let webSocketMessage = WebSocketMessage(
+    func testInvalidWebSocketMessage_EmptyStreamChunk() {
+        let chunk = StreamChunk(
+            type: "content",
+            content: "",
+            metadata: nil
+        )
+        let response = StreamChunkResponse(chunk: chunk)
+        let message = WebSocketMessage(
             type: .streamChunk,
-            requestId: "req-123",
-            timestamp: Date(),
-            data: .streamChunk(chunkResponse)
+            data: .streamChunk(response)
         )
-        
-        XCTAssertFalse(MessageValidator.isValidWebSocketMessage(webSocketMessage))
+        XCTAssertFalse(MessageValidator.isValidWebSocketMessage(message))
     }
     
-    func testValidAssistantMessage() throws {
-        let assistantResponse = AssistantMessageResponse(
-            type: "assistant_message",
-            messageId: "msg-123",
-            content: [MessageContentBlock(type: "text", text: "Hello!", toolName: nil, toolInput: nil, toolId: nil)],
-            model: "claude-3-sonnet",
-            usage: TestDataFactory.createUsage(),
-            claudeSessionId: "session-123",
-            deliverables: nil,
-            aggregated: false,
-            messageCount: 1,
-            isComplete: true,
-            timestamp: Date()
+    func testValidWebSocketMessage_AssistantMessage() {
+        let contentBlock = MessageContentBlock(
+            type: "text",
+            text: "Hello",
+            source: nil,
+            name: nil,
+            input: nil,
+            toolUseId: nil,
+            content: nil,
+            isError: nil
         )
-        
-        let webSocketMessage = WebSocketMessage(
-            type: .assistantMessage,
-            requestId: "req-123",
-            timestamp: Date(),
-            data: .assistantMessage(assistantResponse)
-        )
-        
-        XCTAssertTrue(MessageValidator.isValidWebSocketMessage(webSocketMessage))
-    }
-    
-    func testInvalidAssistantMessageWithEmptyContent() throws {
-        let emptyAssistantResponse = AssistantMessageResponse(
-            type: "assistant_message",
-            messageId: "msg-123",
-            content: [MessageContentBlock(type: "text", text: "", toolName: nil, toolInput: nil, toolId: nil)],
-            model: "claude-3-sonnet",
+        let response = AssistantMessageResponse(
+            content: [contentBlock],
+            messageId: "msg123",
+            sessionId: "123",
+            model: nil,
             usage: nil,
-            claudeSessionId: "session-123",
-            deliverables: nil,
-            aggregated: false,
-            messageCount: 1,
-            isComplete: true,
-            timestamp: Date()
+            stopReason: nil,
+            stopSequence: nil,
+            type: "message",
+            role: "assistant"
         )
-        
-        let webSocketMessage = WebSocketMessage(
+        let message = WebSocketMessage(
             type: .assistantMessage,
-            requestId: "req-123",
-            timestamp: Date(),
-            data: .assistantMessage(emptyAssistantResponse)
+            data: .assistantMessage(response)
         )
-        
-        XCTAssertFalse(MessageValidator.isValidWebSocketMessage(webSocketMessage))
+        XCTAssertTrue(MessageValidator.isValidWebSocketMessage(message))
     }
     
-    func testValidToolUseMessage() throws {
-        let toolUseResponse = ToolUseResponse(
-            type: "tool_use",
-            toolName: "Read",
-            toolInput: ["file_path": AnyCodable("/test/file.txt")],
-            toolId: "tool-123",
-            timestamp: Date()
+    func testInvalidWebSocketMessage_EmptyAssistantMessage() {
+        let response = AssistantMessageResponse(
+            content: [],
+            messageId: "msg123",
+            sessionId: "123",
+            model: nil,
+            usage: nil,
+            stopReason: nil,
+            stopSequence: nil,
+            type: "message",
+            role: "assistant"
         )
-        
-        let webSocketMessage = WebSocketMessage(
+        let message = WebSocketMessage(
+            type: .assistantMessage,
+            data: .assistantMessage(response)
+        )
+        // Empty content array should fail validation
+        XCTAssertFalse(MessageValidator.isValidWebSocketMessage(message))
+    }
+    
+    func testValidWebSocketMessage_ToolUse() {
+        let tool = ToolUseResponse(
+            id: "tool123",
+            name: "TestTool",
+            input: [:]
+        )
+        let message = WebSocketMessage(
             type: .toolUse,
-            requestId: "req-123",
-            timestamp: Date(),
-            data: .toolUse(toolUseResponse)
+            data: .toolUse(tool)
         )
-        
-        XCTAssertTrue(MessageValidator.isValidWebSocketMessage(webSocketMessage))
+        XCTAssertTrue(MessageValidator.isValidWebSocketMessage(message))
     }
     
-    func testInvalidToolUseMessageWithEmptyName() throws {
-        let invalidToolUseResponse = ToolUseResponse(
-            type: "tool_use",
-            toolName: "",
-            toolInput: ["file_path": AnyCodable("/test/file.txt")],
-            toolId: "tool-123",
-            timestamp: Date()
+    func testInvalidWebSocketMessage_EmptyToolName() {
+        let tool = ToolUseResponse(
+            id: "tool123",
+            name: "",
+            input: [:]
         )
-        
-        let webSocketMessage = WebSocketMessage(
+        let message = WebSocketMessage(
             type: .toolUse,
-            requestId: "req-123",
-            timestamp: Date(),
-            data: .toolUse(invalidToolUseResponse)
+            data: .toolUse(tool)
         )
-        
-        XCTAssertFalse(MessageValidator.isValidWebSocketMessage(webSocketMessage))
+        XCTAssertFalse(MessageValidator.isValidWebSocketMessage(message))
     }
     
-    func testValidToolResultMessage() throws {
-        let toolResultResponse = ToolResultResponse(
-            type: "tool_result",
-            toolName: "Read",
-            toolId: "tool-123",
-            result: "File content here",
-            success: true,
-            error: nil,
-            timestamp: Date()
+    func testValidWebSocketMessage_ToolResult() {
+        let contentBlock = MessageContentBlock(
+            type: "text",
+            text: "Result",
+            source: nil,
+            name: nil,
+            input: nil,
+            toolUseId: nil,
+            content: nil,
+            isError: nil
         )
-        
-        let webSocketMessage = WebSocketMessage(
+        let result = ToolResultResponse(
+            toolUseId: "tool123",
+            content: [contentBlock],
+            isError: false
+        )
+        let message = WebSocketMessage(
             type: .toolResult,
-            requestId: "req-123",
-            timestamp: Date(),
-            data: .toolResult(toolResultResponse)
+            data: .toolResult(result)
         )
-        
-        XCTAssertTrue(MessageValidator.isValidWebSocketMessage(webSocketMessage))
+        XCTAssertTrue(MessageValidator.isValidWebSocketMessage(message))
     }
     
-    func testValidToolResultMessageWithError() throws {
-        let errorToolResultResponse = ToolResultResponse(
-            type: "tool_result",
-            toolName: "Write",
-            toolId: "tool-456",
-            result: nil,
-            success: false,
-            error: "Permission denied",
-            timestamp: Date()
+    func testInvalidWebSocketMessage_EmptyToolResult() {
+        let result = ToolResultResponse(
+            toolUseId: "tool123",
+            content: [],
+            isError: false
         )
-        
-        let webSocketMessage = WebSocketMessage(
+        let message = WebSocketMessage(
             type: .toolResult,
-            requestId: "req-123",
-            timestamp: Date(),
-            data: .toolResult(errorToolResultResponse)
+            data: .toolResult(result)
         )
-        
-        XCTAssertTrue(MessageValidator.isValidWebSocketMessage(webSocketMessage))
+        // Empty content array should fail validation
+        XCTAssertFalse(MessageValidator.isValidWebSocketMessage(message))
     }
     
-    func testInvalidToolResultMessageWithoutResultOrError() throws {
-        let invalidToolResultResponse = ToolResultResponse(
-            type: "tool_result",
-            toolName: "Edit",
-            toolId: "tool-789",
-            result: nil,
-            success: false,
-            error: nil,
-            timestamp: Date()
+    func testValidWebSocketMessage_Error() {
+        let error = ErrorResponse(
+            message: "Error occurred",
+            code: "ERR_001"
         )
-        
-        let webSocketMessage = WebSocketMessage(
-            type: .toolResult,
-            requestId: "req-123",
-            timestamp: Date(),
-            data: .toolResult(invalidToolResultResponse)
-        )
-        
-        XCTAssertFalse(MessageValidator.isValidWebSocketMessage(webSocketMessage))
-    }
-    
-    func testValidErrorMessage() throws {
-        let errorResponse = ErrorResponse(
-            code: "network_error",
-            message: "Connection failed",
-            details: nil
-        )
-        
-        let webSocketMessage = WebSocketMessage(
+        let message = WebSocketMessage(
             type: .error,
-            requestId: "req-123",
-            timestamp: Date(),
-            data: .error(errorResponse)
+            data: .error(error)
         )
-        
-        XCTAssertTrue(MessageValidator.isValidWebSocketMessage(webSocketMessage))
+        XCTAssertTrue(MessageValidator.isValidWebSocketMessage(message))
     }
     
-    func testInvalidErrorMessageWithEmptyMessage() throws {
-        let invalidErrorResponse = ErrorResponse(
-            code: "unknown_error",
+    func testInvalidWebSocketMessage_EmptyError() {
+        let error = ErrorResponse(
             message: "",
-            details: nil
+            code: nil
         )
-        
-        let webSocketMessage = WebSocketMessage(
+        let message = WebSocketMessage(
             type: .error,
-            requestId: "req-123",
-            timestamp: Date(),
-            data: .error(invalidErrorResponse)
+            data: .error(error)
         )
-        
-        XCTAssertFalse(MessageValidator.isValidWebSocketMessage(webSocketMessage))
+        XCTAssertFalse(MessageValidator.isValidWebSocketMessage(message))
     }
     
-    // MARK: - Message Duplicate Filtering Tests
+    func testValidWebSocketMessage_SessionStatus() {
+        let status = SessionStatusResponse(
+            isActive: true,
+            sessionId: "123",
+            startTime: Date(),
+            lastActivity: Date(),
+            messageCount: 5,
+            workingDirectory: "/test",
+            serverVersion: "1.0.0"
+        )
+        let message = WebSocketMessage(
+            type: .sessionStatus,
+            data: .sessionStatus(status)
+        )
+        XCTAssertTrue(MessageValidator.isValidWebSocketMessage(message))
+    }
     
-    func testFilterDuplicatesRemovesSameContentSameSender() throws {
-        let baseTime = Date()
-        let message1 = TestDataFactory.createUserMessage(
+    // MARK: - Duplicate Filtering Tests
+    
+    func testFilterDuplicates_RemovesDuplicateContent() {
+        let message1 = Message(
             content: "Hello",
-            timestamp: baseTime
+            sender: .user,
+            timestamp: Date()
         )
-        let message2 = TestDataFactory.createUserMessage(
+        let message2 = Message(
             content: "Hello",
-            timestamp: baseTime.addingTimeInterval(0.5) // Within 1 second window
+            sender: .user,
+            timestamp: Date().addingTimeInterval(0.5)
         )
-        let message3 = TestDataFactory.createAssistantMessage(
-            content: "Hi there!",
-            timestamp: baseTime.addingTimeInterval(1)
+        let message3 = Message(
+            content: "World",
+            sender: .user,
+            timestamp: Date().addingTimeInterval(1.5)
         )
         
-        let messages = [message1, message2, message3]
-        let filtered = MessageValidator.filterDuplicates(messages: messages)
-        
+        let filtered = MessageValidator.filterDuplicates(messages: [message1, message2, message3])
         XCTAssertEqual(filtered.count, 2)
-        XCTAssertTrue(filtered.contains { $0.id == message1.id })
-        XCTAssertFalse(filtered.contains { $0.id == message2.id })
-        XCTAssertTrue(filtered.contains { $0.id == message3.id })
+        XCTAssertEqual(filtered[0].content, "Hello")
+        XCTAssertEqual(filtered[1].content, "World")
     }
     
-    func testFilterDuplicatesKeepsSameContentDifferentSenders() throws {
-        let baseTime = Date()
-        let userMessage = TestDataFactory.createUserMessage(
+    func testFilterDuplicates_KeepsDifferentSenders() {
+        let message1 = Message(
             content: "Hello",
-            timestamp: baseTime
+            sender: .user,
+            timestamp: Date()
         )
-        let assistantMessage = TestDataFactory.createAssistantMessage(
-            content: "Hello", // Same content, different sender
-            timestamp: baseTime.addingTimeInterval(0.5)
+        let message2 = Message(
+            content: "Hello",
+            sender: .assistant,
+            timestamp: Date().addingTimeInterval(0.5)
         )
         
-        let messages = [userMessage, assistantMessage]
-        let filtered = MessageValidator.filterDuplicates(messages: messages)
-        
+        let filtered = MessageValidator.filterDuplicates(messages: [message1, message2])
         XCTAssertEqual(filtered.count, 2)
-        XCTAssertTrue(filtered.contains { $0.id == userMessage.id })
-        XCTAssertTrue(filtered.contains { $0.id == assistantMessage.id })
     }
     
-    func testFilterDuplicatesKeepsMessagesOutsideTimeWindow() throws {
-        let baseTime = Date()
-        let message1 = TestDataFactory.createUserMessage(
+    func testFilterDuplicates_KeepsMessagesOutsideTimeWindow() {
+        let message1 = Message(
             content: "Hello",
-            timestamp: baseTime
+            sender: .user,
+            timestamp: Date()
         )
-        let message2 = TestDataFactory.createUserMessage(
+        let message2 = Message(
             content: "Hello",
-            timestamp: baseTime.addingTimeInterval(2) // Outside 1 second window
+            sender: .user,
+            timestamp: Date().addingTimeInterval(2.0)
         )
         
-        let messages = [message1, message2]
-        let filtered = MessageValidator.filterDuplicates(messages: messages)
-        
+        let filtered = MessageValidator.filterDuplicates(messages: [message1, message2], within: 1.0)
         XCTAssertEqual(filtered.count, 2)
-        XCTAssertTrue(filtered.contains { $0.id == message1.id })
-        XCTAssertTrue(filtered.contains { $0.id == message2.id })
     }
     
-    func testFilterDuplicatesWithCustomTimeWindow() throws {
-        let baseTime = Date()
-        let message1 = TestDataFactory.createUserMessage(
-            content: "Test",
-            timestamp: baseTime
-        )
-        let message2 = TestDataFactory.createUserMessage(
-            content: "Test",
-            timestamp: baseTime.addingTimeInterval(2.5) // Within 3 second window
-        )
-        
-        let messages = [message1, message2]
-        let filtered = MessageValidator.filterDuplicates(messages: messages, within: 3.0)
-        
-        XCTAssertEqual(filtered.count, 1)
-        XCTAssertTrue(filtered.contains { $0.id == message1.id })
+    func testFilterDuplicates_EmptyArray() {
+        let filtered = MessageValidator.filterDuplicates(messages: [])
+        XCTAssertEqual(filtered.count, 0)
     }
     
     // MARK: - Message Order Tests
     
-    func testEnsureMessageOrderSortsCorrectly() throws {
-        let baseTime = Date()
-        let message1 = TestDataFactory.createUserMessage(
-            content: "First",
-            timestamp: baseTime.addingTimeInterval(10) // Latest timestamp
-        )
-        let message2 = TestDataFactory.createAssistantMessage(
-            content: "Second",
-            timestamp: baseTime.addingTimeInterval(5)
-        )
-        let message3 = TestDataFactory.createUserMessage(
-            content: "Third",
-            timestamp: baseTime // Earliest timestamp
-        )
+    func testEnsureMessageOrder_SortsCorrectly() {
+        let date1 = Date()
+        let date2 = date1.addingTimeInterval(1)
+        let date3 = date1.addingTimeInterval(2)
         
-        let unorderedMessages = [message1, message2, message3]
-        let orderedMessages = MessageValidator.ensureMessageOrder(messages: unorderedMessages)
+        let message1 = Message(content: "First", sender: .user, timestamp: date1)
+        let message2 = Message(content: "Second", sender: .assistant, timestamp: date2)
+        let message3 = Message(content: "Third", sender: .user, timestamp: date3)
         
-        XCTAssertEqual(orderedMessages.count, 3)
-        XCTAssertEqual(orderedMessages[0].id, message3.id) // Earliest first
-        XCTAssertEqual(orderedMessages[1].id, message2.id)
-        XCTAssertEqual(orderedMessages[2].id, message1.id) // Latest last
+        let unordered = [message3, message1, message2]
+        let ordered = MessageValidator.ensureMessageOrder(messages: unordered)
+        
+        XCTAssertEqual(ordered[0].content, "First")
+        XCTAssertEqual(ordered[1].content, "Second")
+        XCTAssertEqual(ordered[2].content, "Third")
     }
     
-    func testEnsureMessageOrderWithAlreadyOrderedMessages() throws {
-        let orderedMessages = TestDataFactory.createMessageHistory(count: 3)
-        let reorderedMessages = MessageValidator.ensureMessageOrder(messages: orderedMessages)
-        
-        XCTAssertEqual(reorderedMessages.count, orderedMessages.count)
-        
-        // Should maintain the same order if already ordered
-        for i in 0..<orderedMessages.count {
-            XCTAssertEqual(reorderedMessages[i].id, orderedMessages[i].id)
-        }
+    func testEnsureMessageOrder_EmptyArray() {
+        let ordered = MessageValidator.ensureMessageOrder(messages: [])
+        XCTAssertEqual(ordered.count, 0)
+    }
+    
+    func testEnsureMessageOrder_SingleMessage() {
+        let message = Message(content: "Test", sender: .user)
+        let ordered = MessageValidator.ensureMessageOrder(messages: [message])
+        XCTAssertEqual(ordered.count, 1)
+        XCTAssertEqual(ordered[0].content, "Test")
     }
     
     // MARK: - Content Cleaning Tests
     
-    func testCleanMessageContentRemovesExcessiveWhitespace() throws {
-        let messyContent = "  Hello  \n\n\n\n\nWorld  \t\n  "
-        let cleaned = MessageValidator.cleanMessageContent(messyContent)
-        
-        XCTAssertEqual(cleaned, "Hello  \n\nWorld")
+    func testCleanMessageContent_RemovesExcessiveWhitespace() {
+        let dirty = "  Hello   World  \n\n\n\n  Test  "
+        let cleaned = MessageValidator.cleanMessageContent(dirty)
+        XCTAssertEqual(cleaned, "Hello   World  \n\n  Test")
     }
     
-    func testCleanMessageContentRemovesControlCharacters() throws {
-        let contentWithControlChars = "Hello\u{0001}World\u{0002}Test\u{007F}"
-        let cleaned = MessageValidator.cleanMessageContent(contentWithControlChars)
-        
+    func testCleanMessageContent_RemovesControlCharacters() {
+        let dirty = "Hello\u{0000}World\u{0001}Test"
+        let cleaned = MessageValidator.cleanMessageContent(dirty)
         XCTAssertEqual(cleaned, "HelloWorldTest")
     }
     
-    func testCleanMessageContentPreservesNewlinesAndTabs() throws {
-        let contentWithValidWhitespace = "Line 1\nLine 2\n\tIndented line"
-        let cleaned = MessageValidator.cleanMessageContent(contentWithValidWhitespace)
-        
-        XCTAssertEqual(cleaned, "Line 1\nLine 2\n\tIndented line")
+    func testCleanMessageContent_KeepsNewlinesAndTabs() {
+        let content = "Hello\nWorld\tTest"
+        let cleaned = MessageValidator.cleanMessageContent(content)
+        XCTAssertEqual(cleaned, "Hello\nWorld\tTest")
     }
     
-    func testCleanMessageContentWithEmptyString() throws {
+    func testCleanMessageContent_ReplacesMultipleNewlines() {
+        let dirty = "Hello\n\n\n\n\nWorld"
+        let cleaned = MessageValidator.cleanMessageContent(dirty)
+        XCTAssertEqual(cleaned, "Hello\n\nWorld")
+    }
+    
+    func testCleanMessageContent_EmptyString() {
         let cleaned = MessageValidator.cleanMessageContent("")
         XCTAssertEqual(cleaned, "")
     }
     
-    func testCleanMessageContentWithOnlyWhitespace() throws {
-        let cleaned = MessageValidator.cleanMessageContent("   \n\t  ")
+    func testCleanMessageContent_OnlyWhitespace() {
+        let cleaned = MessageValidator.cleanMessageContent("   \n\n\t   ")
         XCTAssertEqual(cleaned, "")
     }
     
-    // MARK: - Display Message Filtering Tests
+    // MARK: - Display Message Tests
     
-    func testShouldDisplayMessageWithValidContent() throws {
-        let validMessage = TestDataFactory.createUserMessage(content: "This is a valid message")
-        XCTAssertTrue(MessageValidator.shouldDisplayMessage(validMessage))
+    func testShouldDisplayMessage_ValidUserMessage() {
+        let message = Message(content: "Hello", sender: .user)
+        XCTAssertTrue(MessageValidator.shouldDisplayMessage(message))
     }
     
-    func testShouldDisplayMessageWithEmptyContent() throws {
-        let emptyMessage = TestDataFactory.createUserMessage(content: "")
-        XCTAssertFalse(MessageValidator.shouldDisplayMessage(emptyMessage))
+    func testShouldDisplayMessage_ValidAssistantMessage() {
+        let message = Message(content: "Response", sender: .assistant)
+        XCTAssertTrue(MessageValidator.shouldDisplayMessage(message))
     }
     
-    func testShouldDisplayMessageWithWhitespaceOnlyContent() throws {
-        let whitespaceMessage = TestDataFactory.createUserMessage(content: "   \n\t  ")
-        XCTAssertFalse(MessageValidator.shouldDisplayMessage(whitespaceMessage))
+    func testShouldDisplayMessage_EmptyContent() {
+        let message = Message(content: "", sender: .user)
+        XCTAssertFalse(MessageValidator.shouldDisplayMessage(message))
     }
     
-    func testShouldDisplaySystemMessage() throws {
-        let systemMessage = TestDataFactory.createSystemMessage(content: "System status: Online")
-        XCTAssertTrue(MessageValidator.shouldDisplayMessage(systemMessage))
+    func testShouldDisplayMessage_WhitespaceContent() {
+        let message = Message(content: "   \n\t   ", sender: .user)
+        XCTAssertFalse(MessageValidator.shouldDisplayMessage(message))
     }
     
-    func testShouldNotDisplayInternalSystemMessage() throws {
-        let internalMessage1 = TestDataFactory.createSystemMessage(content: "[System] Internal process started")
-        let internalMessage2 = TestDataFactory.createSystemMessage(content: "[Debug] Connection established")
-        let internalMessage3 = TestDataFactory.createSystemMessage(content: "[Internal] Cache cleared")
-        
-        XCTAssertFalse(MessageValidator.shouldDisplayMessage(internalMessage1))
-        XCTAssertFalse(MessageValidator.shouldDisplayMessage(internalMessage2))
-        XCTAssertFalse(MessageValidator.shouldDisplayMessage(internalMessage3))
+    func testShouldDisplayMessage_SystemMessage() {
+        let message = Message(content: "System update", sender: .system)
+        XCTAssertTrue(MessageValidator.shouldDisplayMessage(message))
     }
     
-    func testShouldDisplayValidSystemMessage() throws {
-        let validSystemMessage = TestDataFactory.createSystemMessage(content: "Connection established")
-        XCTAssertTrue(MessageValidator.shouldDisplayMessage(validSystemMessage))
+    func testShouldDisplayMessage_InternalSystemMessage() {
+        let message = Message(content: "[System] Internal log", sender: .system)
+        XCTAssertFalse(MessageValidator.shouldDisplayMessage(message))
     }
     
-    // MARK: - Performance Tests
-    
-    func testValidationPerformanceWithLargeMessageSet() throws {
-        let messages = TestDataFactory.createMessageHistory(count: 1000)
-        
-        measure {
-            for message in messages {
-                _ = MessageValidator.shouldDisplayMessage(message)
-            }
-        }
+    func testShouldDisplayMessage_DebugMessage() {
+        let message = Message(content: "[Debug] Memory usage", sender: .system)
+        XCTAssertFalse(MessageValidator.shouldDisplayMessage(message))
     }
     
-    func testDuplicateFilteringPerformanceWithLargeSet() throws {
-        // Create messages with some duplicates
+    func testShouldDisplayMessage_InternalMessage() {
+        let message = Message(content: "[Internal] State change", sender: .system)
+        XCTAssertFalse(MessageValidator.shouldDisplayMessage(message))
+    }
+    
+    func testShouldDisplayMessage_NormalSystemMessage() {
+        let message = Message(content: "Connection established", sender: .system)
+        XCTAssertTrue(MessageValidator.shouldDisplayMessage(message))
+    }
+    
+    // MARK: - Edge Cases and Performance Tests
+    
+    func testFilterDuplicates_LargeDataset() {
         var messages: [Message] = []
         let baseTime = Date()
         
-        for i in 0..<500 {
-            let message = TestDataFactory.createUserMessage(
-                content: "Message \(i % 100)", // Creates duplicates
-                timestamp: baseTime.addingTimeInterval(TimeInterval(i))
-            )
-            messages.append(message)
+        // Create 1000 messages with some actual duplicates
+        for i in 0..<1000 {
+            let content = i % 10 == 0 ? "Duplicate" : "Message \(i)"
+            messages.append(Message(
+                content: content,
+                sender: .user,
+                timestamp: baseTime.addingTimeInterval(Double(i) * 0.01) // 0.01 sec apart
+            ))
+            
+            // Add actual duplicate within time window for every 10th message
+            if i % 10 == 0 && i > 0 {
+                messages.append(Message(
+                    content: content,
+                    sender: .user,
+                    timestamp: baseTime.addingTimeInterval(Double(i) * 0.01 + 0.001) // Very close in time
+                ))
+            }
         }
         
-        measure {
-            _ = MessageValidator.filterDuplicates(messages: messages)
-        }
+        let startTime = Date()
+        let filtered = MessageValidator.filterDuplicates(messages: messages, within: 0.5)
+        let duration = Date().timeIntervalSince(startTime)
+        
+        XCTAssertLessThan(duration, 1.0, "Filtering should complete in under 1 second")
+        XCTAssertLessThan(filtered.count, messages.count, "Should filter out duplicate messages")
+        XCTAssertGreaterThan(filtered.count, 900, "Should keep most messages")
     }
     
-    func testContentCleaningPerformanceWithLargeText() throws {
-        let largeContent = String(repeating: "Hello World\n\n\n\n", count: 1000)
-        
-        measure {
-            _ = MessageValidator.cleanMessageContent(largeContent)
+    func testCleanMessageContent_UnicodeEmoji() {
+        let content = "Hello 👋 World 🌍 Test 🧪"
+        let cleaned = MessageValidator.cleanMessageContent(content)
+        XCTAssertEqual(cleaned, content)
+    }
+    
+    func testCleanMessageContent_MixedLanguages() {
+        let content = "Hello 你好 مرحبا こんにちは"
+        let cleaned = MessageValidator.cleanMessageContent(content)
+        XCTAssertEqual(cleaned, content)
+    }
+    
+    func testValidStreamChunk_AllTypes() {
+        let types = ["content", "text", "code", "header", "section", "list", "complete", "divider"]
+        for type in types {
+            let content = (type == "complete" || type == "divider") ? nil : "Test"
+            let chunk = StreamChunk(type: type, content: content, metadata: nil)
+            XCTAssertTrue(MessageValidator.isValidStreamChunk(chunk), "Type \(type) should be valid")
         }
     }
 }

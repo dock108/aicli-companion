@@ -11,6 +11,7 @@ describe('MiddlewareConfig', () => {
     // Mock Express app
     mockApp = {
       use: mock.fn(),
+      set: mock.fn(), // Add set method for trust proxy setting
     };
 
     // Mock server config
@@ -19,6 +20,7 @@ describe('MiddlewareConfig', () => {
       getCorsConfig: mock.fn(() => ({ origin: ['*'], credentials: true })),
       isTest: mock.fn(() => false),
       authToken: 'test-token',
+      isInternetExposed: false, // Add missing property for configureSecurity
     };
   });
 

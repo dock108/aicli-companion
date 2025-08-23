@@ -16,9 +16,7 @@ let package = Package(
         .package(url: "https://github.com/daltoniam/Starscream.git", from: "4.0.0"),
         .package(url: "https://github.com/apple/swift-markdown.git", from: "0.3.0"),
         .package(url: "https://github.com/kishikawakatsumi/KeychainAccess.git", from: "4.2.2"),
-        .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
-        .package(url: "https://github.com/pointfreeco/swift-snapshot-testing.git", from: "1.15.0"),
-        .package(url: "https://github.com/nalexn/ViewInspector.git", from: "0.9.0")
+        .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0")
     ],
     targets: [
         .target(
@@ -28,16 +26,11 @@ let package = Package(
                 .product(name: "Markdown", package: "swift-markdown"),
                 "KeychainAccess",
                 .product(name: "Crypto", package: "swift-crypto")
-            ],
-            resources: [
-                .process("Resources")
             ]),
         .testTarget(
             name: "AICLICompanionTests",
             dependencies: [
-                "AICLICompanion",
-                .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
-                .product(name: "ViewInspector", package: "ViewInspector")
+                "AICLICompanion"
             ])
     ]
 )

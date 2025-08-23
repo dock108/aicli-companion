@@ -44,7 +44,7 @@ public class AICLIMessageOperations {
         }
         
         let task = urlSession.dataTask(with: request) { [weak self] data, response, error in
-            self?.handleChatResponse(data: data, response: response, error: error, completion: completion)
+            self?.handleChatResponse(data: data, response: response, error: error, projectPath: projectPath, completion: completion)
         }
         
         task.resume()
@@ -176,6 +176,26 @@ public class AICLIMessageOperations {
         task.resume()
     }
     
+    // MARK: - Session Management
+    
+    private func getSessionId(for projectPath: String) -> String? {
+        // Use UserDefaults to store session IDs per project
+        let key = "claude_session_\(projectPath.replacingOccurrences(of: "/", with: "_"))"
+        return UserDefaults.standard.string(forKey: key)
+    }
+    
+    private func storeSessionId(_ sessionId: String, for projectPath: String) {
+        let key = "claude_session_\(projectPath.replacingOccurrences(of: "/", with: "_"))"
+        UserDefaults.standard.set(sessionId, forKey: key)
+        print("💾 Stored session ID \(sessionId) for project \(projectPath)")
+    }
+    
+    func clearSessionId(for projectPath: String) {
+        let key = "claude_session_\(projectPath.replacingOccurrences(of: "/", with: "_"))"
+        UserDefaults.standard.removeObject(forKey: key)
+        print("🗑️ Cleared session ID for project \(projectPath)")
+    }
+    
     // MARK: - Private Helper Methods
     
     private func createChatRequest(baseURL: URL, message: String, projectPath: String?, attachments: [AttachmentData]? = nil) -> URLRequest? {
@@ -190,6 +210,14 @@ public class AICLIMessageOperations {
         
         if let projectPath = projectPath {
             requestBody["projectPath"] = projectPath  // Server expects camelCase
+            
+            // Include session ID if we have one for this project
+            if let sessionId = getSessionId(for: projectPath) {
+                requestBody["sessionId"] = sessionId
+                print("📝 Including session ID in request: \(sessionId)")
+            } else {
+                print("⚠️ No session ID found for project: \(projectPath)")
+            }
         }
         
         // Include device token for APNS delivery
@@ -224,6 +252,7 @@ public class AICLIMessageOperations {
         data: Data?,
         response: URLResponse?,
         error: Error?,
+        projectPath: String?,
         completion: @escaping (Result<ClaudeChatResponse, AICLICompanionError>) -> Void
     ) {
         if let error = error {
@@ -243,7 +272,7 @@ public class AICLIMessageOperations {
         
         switch httpResponse.statusCode {
         case 200...299:
-            parseSuccessResponse(data: data, completion: completion)
+            parseSuccessResponse(data: data, projectPath: projectPath, completion: completion)
         case 401:
             handleAuthenticationError(data: data, completion: completion)
         case 400...499:
@@ -284,9 +313,15 @@ public class AICLIMessageOperations {
         }
     }
     
-    private func parseSuccessResponse(data: Data, completion: @escaping (Result<ClaudeChatResponse, AICLICompanionError>) -> Void) {
+    private func parseSuccessResponse(data: Data, projectPath: String?, completion: @escaping (Result<ClaudeChatResponse, AICLICompanionError>) -> Void) {
         do {
             let response = try decoder.decode(ClaudeChatResponse.self, from: data)
+            
+            // Store session ID if we have one and a project path
+            if let sessionId = response.sessionId, let projectPath = projectPath {
+                storeSessionId(sessionId, for: projectPath)
+            }
+            
             completion(.success(response))
         } catch {
             // Try to parse as a simple success response
@@ -297,18 +332,32 @@ public class AICLIMessageOperations {
                    let deliveryMethod = jsonObject["deliveryMethod"] as? String,
                    deliveryMethod == "apns" {
                     // This is an acknowledgment that the message will be delivered via APNS
+                    let sessionId = jsonObject["sessionId"] as? String
+                    
+                    // Store session ID if we have one and a project path
+                    if let sessionId = sessionId, let projectPath = projectPath {
+                        storeSessionId(sessionId, for: projectPath)
+                    }
+                    
                     let response = ClaudeChatResponse(
                         content: "", // Content will come via APNS
-                        sessionId: jsonObject["sessionId"] as? String,
+                        sessionId: sessionId,
                         error: nil,
                         metadata: jsonObject as? [String: AnyCodable]
                     )
                     completion(.success(response))
                 } else if let content = jsonObject["content"] as? String {
                     // Legacy response format with content
+                    let sessionId = jsonObject["session_id"] as? String ?? jsonObject["sessionId"] as? String
+                    
+                    // Store session ID if we have one and a project path
+                    if let sessionId = sessionId, let projectPath = projectPath {
+                        storeSessionId(sessionId, for: projectPath)
+                    }
+                    
                     let response = ClaudeChatResponse(
                         content: content,
-                        sessionId: jsonObject["session_id"] as? String ?? jsonObject["sessionId"] as? String,
+                        sessionId: sessionId,
                         error: nil,
                         metadata: nil
                     )
@@ -347,6 +396,57 @@ public class AICLIMessageOperations {
                 throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date format")
             }
         }
+    }
+    
+    // MARK: - Kill Session
+    
+    public func killSession(_ sessionId: String, projectPath: String, sendNotification: Bool = true, completion: @escaping (Result<Void, Error>) -> Void) {
+        guard let baseURL = connectionManager.currentBaseURL else {
+            completion(.failure(AICLICompanionError.networkError("No connection configured")))
+            return
+        }
+        
+        let killURL = baseURL.appendingPathComponent("/api/chat/kill")
+        var request = connectionManager.createAuthenticatedRequest(url: killURL, method: "POST")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        var requestBody: [String: Any] = [
+            "sessionId": sessionId,
+            "reason": "User requested cancellation"
+        ]
+        
+        // Include device token only if notification is requested
+        if sendNotification, let deviceToken = UserDefaults.standard.string(forKey: "devicePushToken") {
+            requestBody["deviceToken"] = deviceToken
+        }
+        
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+        } catch {
+            completion(.failure(error))
+            return
+        }
+        
+        URLSession.shared.dataTask(with: request) { [weak self] _, response, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                completion(.failure(AICLICompanionError.invalidResponse))
+                return
+            }
+            
+            if httpResponse.statusCode == 200 {
+                // Clear the session ID for this project
+                self?.clearSessionId(for: projectPath)
+                completion(.success(()))
+            } else {
+                let error = AICLICompanionError.serverError("Failed to kill session: HTTP \(httpResponse.statusCode)")
+                completion(.failure(error))
+            }
+        }.resume()
     }
 }
 

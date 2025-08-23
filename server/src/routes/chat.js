@@ -216,40 +216,74 @@ router.post('/', async (req, res) => {
 
   // Process Claude request asynchronously and deliver via APNS
   setImmediate(async () => {
-    // Set up timeout for long-running operations
-    const PROCESSING_TIMEOUT = parseInt(process.env.CLAUDE_PROCESSING_TIMEOUT || '300000'); // 5 minutes default
-    let timeoutHandle;
-    let processingCompleted = false;
+    // NO TIMEOUT - Claude operations can take as long as needed
+    // Timeout should only come from activity monitoring (Issue #28)
+    let streamListener; // Declare streamListener in the outer scope
 
     try {
       logger.info('Starting async Claude processing', {
         requestId,
         hasSessionId: !!sessionId,
         sessionIdValue: sessionId || 'new conversation',
-        timeout: PROCESSING_TIMEOUT,
       });
 
-      // Create timeout promise
-      const timeoutPromise = new Promise((_, reject) => {
-        timeoutHandle = setTimeout(() => {
-          if (!processingCompleted) {
-            reject(new Error(`Claude processing timeout after ${PROCESSING_TIMEOUT}ms`));
-          }
-        }, PROCESSING_TIMEOUT);
-      });
+      // Set up streaming status updates listener
+      streamListener = async (data) => {
+        // Only process chunks for our request ID
+        if (data.requestId !== requestId) return;
+
+        const chunk = data.chunk;
+
+        // Send progress updates for interesting chunk types
+        if (chunk.type === 'system' && chunk.subtype === 'init') {
+          // Initial system message - Claude is starting
+          await pushNotificationService.sendProgressNotification(deviceToken, {
+            projectPath,
+            activity: 'Initializing',
+            duration: 0,
+            tokenCount: 0,
+            requestId,
+          });
+        } else if (chunk.type === 'assistant' && chunk.message) {
+          // Assistant is thinking/typing
+          const messageContent = chunk.message?.content?.[0]?.text || '';
+          const preview = messageContent.substring(0, 50);
+
+          await pushNotificationService.sendProgressNotification(deviceToken, {
+            projectPath,
+            activity: preview ? `Typing: ${preview}...` : 'Thinking',
+            duration: Math.floor((Date.now() - startTime) / 1000),
+            tokenCount: messageContent.length,
+            requestId,
+          });
+        } else if (chunk.type === 'tool_use') {
+          // Claude is using a tool
+          await pushNotificationService.sendProgressNotification(deviceToken, {
+            projectPath,
+            activity: `Using ${chunk.tool_name || 'tool'}`,
+            duration: Math.floor((Date.now() - startTime) / 1000),
+            tokenCount: 0,
+            requestId,
+          });
+        }
+      };
+
+      // Start time for duration tracking
+      const startTime = Date.now();
+
+      // Attach the listener
+      aicliService.on('streamChunk', streamListener);
 
       // Use the regular AICLI service for sending prompts
       // IMPORTANT: Set streaming: true to use the processRunner with --resume fix
-      const resultPromise = aicliService.sendPrompt(messageValidation.message ?? message, {
+      const result = await aicliService.sendPrompt(messageValidation.message ?? message, {
         sessionId,
         requestId,
         workingDirectory: projectPath || process.cwd(),
         attachments,
         streaming: true, // Use streaming to get processRunner with --resume
+        deviceToken, // Pass device token for stall notifications
       });
-
-      // Race between processing and timeout
-      const result = await Promise.race([resultPromise, timeoutPromise]);
 
       // Log the full result structure for debugging
       logger.info('Claude response structure', {
@@ -299,6 +333,37 @@ router.post('/', async (req, res) => {
       } else if (typeof result?.response === 'string') {
         // Fallback if response is a plain string
         content = result.response;
+      }
+
+      // If content is still empty, try to extract from responses array
+      if ((!content || content.trim().length === 0) && result?.response?.responses) {
+        logger.info('Primary content extraction empty, checking responses array', {
+          requestId,
+          responsesCount: result.response.responses.length,
+        });
+
+        // Try to find text content in the responses array
+        for (const resp of result.response.responses) {
+          if (resp.type === 'text' && resp.text) {
+            content += resp.text;
+          } else if (resp.type === 'text' && resp.content) {
+            content += resp.content;
+          } else if (resp.type === 'assistant' && resp.message) {
+            content += resp.message;
+          } else if (resp.type === 'message' && resp.content) {
+            content += resp.content;
+          } else if (resp.type === 'result' && resp.result) {
+            content += resp.result;
+          }
+        }
+
+        if (content.length > 0) {
+          logger.info('Extracted content from responses array', {
+            requestId,
+            contentLength: content.length,
+            sessionId: claudeSessionId,
+          });
+        }
       }
 
       // Log content extraction result
@@ -387,21 +452,55 @@ router.post('/', async (req, res) => {
         });
       }
 
-      // Skip sending notification if content is empty
+      // Check if content is empty - but handle streaming responses properly
       if (!content || content.trim().length === 0) {
-        logger.warn('Skipping APNS delivery - Claude returned empty content', {
-          requestId,
-          sessionId: claudeSessionId,
-        });
+        // Check if this is a streaming response with accumulated text
+        const isStreamingResponse =
+          result?.source === 'streaming' ||
+          result?.source === 'accumulated_text' ||
+          result?.streaming === true;
 
-        // Still send success response to client to avoid timeout
-        res.json({
-          success: true,
-          sessionId: claudeSessionId,
-          deliveryMethod: 'skipped_empty',
-          requestId,
-        });
-        return;
+        if (isStreamingResponse) {
+          // For streaming, the accumulated text comes back as result.result
+          // The process runner returns with source: 'accumulated_text'
+          if (
+            result?.result &&
+            typeof result.result === 'string' &&
+            result.result.trim().length > 0
+          ) {
+            logger.info('Extracting accumulated text from streaming response', {
+              requestId,
+              sessionId: claudeSessionId,
+              source: result.source || 'streaming',
+              textLength: result.result.length,
+            });
+            content = result.result;
+          } else {
+            // Streaming completed but no content accumulated
+            // This can happen if Claude hasn't responded yet or if there's a genuine issue
+            logger.info('Streaming response pending or empty', {
+              requestId,
+              sessionId: claudeSessionId,
+              source: result?.source,
+              hasResult: !!result?.result,
+            });
+
+            // Don't send anything - let the stream complete naturally
+            // The stall detection will handle truly stuck operations
+            return;
+          }
+        } else {
+          // Non-streaming empty response - this is unusual but don't send fallback
+          logger.warn('Non-streaming response was empty', {
+            requestId,
+            sessionId: claudeSessionId,
+            hasResponses: !!result?.response?.responses,
+            responsesCount: result?.response?.responses?.length || 0,
+          });
+
+          // Don't send fallback - let stall detection handle truly stuck operations
+          return;
+        }
       }
 
       // Send Claude response via APNS
@@ -432,15 +531,14 @@ router.post('/', async (req, res) => {
         contentLength: content.length,
       });
 
-      // Mark processing as completed and clear timeout
-      processingCompleted = true;
-      if (timeoutHandle) {
-        clearTimeout(timeoutHandle);
+      // Clean up the listener after successful processing
+      if (streamListener) {
+        aicliService.removeListener('streamChunk', streamListener);
       }
     } catch (error) {
-      // Clear timeout if still pending
-      if (timeoutHandle) {
-        clearTimeout(timeoutHandle);
+      // Clean up the listener on error
+      if (streamListener) {
+        aicliService.removeListener('streamChunk', streamListener);
       }
 
       // Determine error type and user-friendly message
@@ -753,6 +851,92 @@ router.get('/:sessionId/messages', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to fetch messages',
+    });
+  }
+});
+
+/**
+ * POST /api/chat/kill - Kill/cancel a running Claude operation
+ */
+router.post('/kill', async (req, res) => {
+  const { sessionId, deviceToken, reason = 'User requested cancellation' } = req.body;
+  const requestId =
+    req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+  logger.info('Kill operation requested', { sessionId, requestId, reason });
+
+  if (!sessionId) {
+    return res.status(400).json({
+      success: false,
+      error: 'Session ID is required',
+    });
+  }
+
+  try {
+    // Get AICLI service from app instance
+    const aicliService = req.app.get('aicliService');
+    
+    if (!aicliService) {
+      logger.error('AICLI service not initialized', { requestId });
+      return res.status(500).json({
+        success: false,
+        error: 'Service temporarily unavailable',
+      });
+    }
+
+    // Kill the Claude process for this session
+    const killResult = await aicliService.killSession(sessionId, reason);
+
+    if (!killResult.success) {
+      logger.warn('Session kill failed', {
+        sessionId,
+        requestId,
+        reason: killResult.error,
+      });
+
+      return res.status(404).json({
+        success: false,
+        error: killResult.error || 'Session not found or not running',
+      });
+    }
+
+    logger.info('Session killed successfully', {
+      sessionId,
+      requestId,
+      processKilled: killResult.processKilled,
+      sessionCleaned: killResult.sessionCleaned,
+    });
+
+    // Send notification if device token provided
+    if (deviceToken) {
+      await pushNotificationService.sendAutoResponseControlNotification(deviceToken, {
+        projectPath: killResult.projectPath,
+        action: 'stop',
+        reason: `Session terminated: ${reason}`,
+        requestId,
+      });
+    }
+
+    res.json({
+      success: true,
+      sessionId,
+      message: 'Session terminated successfully',
+      processKilled: killResult.processKilled,
+      sessionCleaned: killResult.sessionCleaned,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error('Failed to kill session', {
+      sessionId,
+      requestId,
+      error: error.message,
+      stack: error.stack,
+    });
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to terminate session',
+      details: error.message,
     });
   }
 });

@@ -15,8 +15,10 @@ import { AICLIProcessRunner } from './aicli-process-runner.js';
 // Long-running task manager removed - trusting Claude CLI timeouts
 import { AICLIValidationService } from './aicli-validation-service.js';
 // Session persistence removed - server is stateless
+import { createLogger } from '../utils/logger.js';
 
 const execAsync = promisify(exec);
+const logger = createLogger('AICLIService');
 
 export class AICLIService extends EventEmitter {
   constructor(options = {}) {
@@ -71,6 +73,7 @@ export class AICLIService extends EventEmitter {
     });
 
     this.processRunner.on('aicliResponse', async (data) => {
+      // Process final results (we now only emit one event per response)
       await this.emitAICLIResponse(data.sessionId, data.response, data.isLast);
     });
 
@@ -289,6 +292,7 @@ export class AICLIService extends EventEmitter {
       streaming = false,
       skipPermissions = false,
       attachments = null,
+      deviceToken = null, // Device token for push notifications
     } = options;
 
     // Process attachments first
@@ -324,6 +328,7 @@ export class AICLIService extends EventEmitter {
           workingDirectory: validatedWorkingDir,
           skipPermissions,
           attachmentPaths: attachmentData.filePaths, // Pass file paths
+          deviceToken, // Pass device token for stall notifications
         });
       } else {
         result = await this.sendOneTimePrompt(enhancedPrompt, {
@@ -542,6 +547,7 @@ export class AICLIService extends EventEmitter {
       workingDirectory = process.cwd(),
       skipPermissions = false,
       attachmentPaths = [],
+      deviceToken = null, // Device token for push notifications
     }
   ) {
     // Validate inputs
@@ -576,7 +582,8 @@ export class AICLIService extends EventEmitter {
       skipPermissions,
       sessionId, // Pass through the session ID if provided, or undefined for fresh chats
       requestId, // Pass requestId for response tracking
-      attachmentPaths // Pass attachment file paths
+      attachmentPaths, // Pass attachment file paths
+      deviceToken // Pass device token for stall notifications
     );
   }
 
@@ -586,7 +593,8 @@ export class AICLIService extends EventEmitter {
     _skipPermissions = false,
     sessionId = null,
     requestId = null,
-    attachmentPaths = []
+    attachmentPaths = [],
+    deviceToken = null // Device token for push notifications
   ) {
     // For now, use the existing --print mode until we fix interactive sessions
     // Create a session object for the process runner
@@ -598,6 +606,7 @@ export class AICLIService extends EventEmitter {
       isRestoredSession: false,
       requestId,
       attachmentPaths, // Include attachment paths in session
+      deviceToken, // Pass device token for stall notifications
     };
 
     try {
@@ -719,12 +728,9 @@ export class AICLIService extends EventEmitter {
     }
 
     try {
-      // Update activity and processing state
+      // Update activity and processing state (this also tracks Claude session activity)
       await this.sessionManager.updateSessionActivity(sanitizedSessionId);
       this.sessionManager.setSessionProcessing(sanitizedSessionId, true);
-
-      // Track Claude session activity at the start of request
-      this.sessionManager.trackClaudeSessionActivity(sanitizedSessionId);
 
       console.log(
         `📝 Executing AICLI CLI command for session ${sanitizedSessionId}: "${sanitizedPrompt}"`
@@ -739,9 +745,6 @@ export class AICLIService extends EventEmitter {
 
       // Execute AICLI CLI with continuation and print mode
       const response = await this.executeAICLICommand(session, sanitizedPrompt);
-
-      // Track Claude session activity to reset 24-hour timeout
-      this.sessionManager.trackClaudeSessionActivity(sanitizedSessionId);
 
       // Emit command sent event
       this.emit('commandSent', {
@@ -1046,6 +1049,48 @@ export class AICLIService extends EventEmitter {
 
   async closeSession(sessionId) {
     return this.sessionManager.closeSession(sessionId);
+  }
+
+  /**
+   * Kill/cancel a running Claude operation
+   * @param {string} sessionId - The session ID to kill
+   * @param {string} reason - Reason for killing the session
+   * @returns {Object} Result of the kill operation
+   */
+  async killSession(sessionId, reason = 'User requested cancellation') {
+    try {
+      logger.info('Killing session', { sessionId, reason });
+
+      // Get the session to find its project path
+      const session = this.sessionManager.getSession(sessionId);
+      const projectPath = session?.workingDirectory || null;
+
+      // Kill the Claude process if it exists
+      const processKilled = await this.processRunner.killProcess(sessionId, reason);
+
+      // Clean up the session
+      const sessionCleaned = await this.sessionManager.terminateSession(sessionId, reason);
+
+      // Clear any message buffers
+      this.sessionManager.clearSessionBuffer(sessionId);
+
+      return {
+        success: true,
+        processKilled,
+        sessionCleaned,
+        projectPath,
+      };
+    } catch (error) {
+      logger.error('Failed to kill session', {
+        sessionId,
+        error: error.message,
+      });
+
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
   }
 
   hasSession(sessionId) {

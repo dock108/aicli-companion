@@ -1,4 +1,9 @@
 import SwiftUI
+#if os(iOS)
+import UIKit
+#else
+import AppKit
+#endif
 
 @available(iOS 17.0, macOS 14.0, *)
 public struct AdaptiveContentView: View {
@@ -37,6 +42,16 @@ public struct AdaptiveContentView: View {
             checkConnection()
             animateBackground()
         }
+        // Recheck connection when returning from other views
+        #if os(iOS)
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            checkConnection()
+        }
+        #else
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            checkConnection()
+        }
+        #endif
         .onChange(of: isConnected) { _, connected in
             if !connected {
                 // Reset project selection when disconnected

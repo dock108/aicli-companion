@@ -173,6 +173,42 @@ final class ChatViewModel: ObservableObject {
         }
     }
     
+    // MARK: Kill Session
+    func killSession(_ sessionId: String, for project: Project, completion: @escaping (Bool) -> Void) {
+        print("⏹️ ChatViewModel: Killing session \(sessionId) for project: \(project.name)")
+        
+        // Call the kill endpoint via AICLIService
+        aicliService.killSession(sessionId, projectPath: project.path) { [weak self] result in
+            Task { @MainActor in
+                switch result {
+                case .success:
+                    print("✅ ChatViewModel: Session killed successfully")
+                    
+                    // Clear loading states
+                    self?.loadingStateManager.setLoading(false, for: project.path)
+                    self?.loadingStateManager.setWaitingForResponse(false)
+                    
+                    // Update project state
+                    self?.projectStateManager.updateProjectState(for: project.path) { state in
+                        state.isWaitingForResponse = false
+                        state.isLoading = false
+                    }
+                    
+                    completion(true)
+                    
+                case .failure(let error):
+                    print("❌ ChatViewModel: Failed to kill session: \(error)")
+                    completion(false)
+                }
+            }
+        }
+    }
+    
+    // MARK: Add System Message
+    func addSystemMessage(_ message: Message, for project: Project) {
+        messageManager.appendMessage(message, for: project)
+    }
+    
     // MARK: Lifecycle
     func onDisappear() {
         print("👋 ChatViewModel: View disappeared")

@@ -397,6 +397,57 @@ public class AICLIMessageOperations {
             }
         }
     }
+    
+    // MARK: - Kill Session
+    
+    public func killSession(_ sessionId: String, projectPath: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        guard let baseURL = connectionManager.currentBaseURL else {
+            completion(.failure(AICLICompanionError.networkError("No connection configured")))
+            return
+        }
+        
+        let killURL = baseURL.appendingPathComponent("/api/chat/kill")
+        var request = connectionManager.createAuthenticatedRequest(url: killURL, method: "POST")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        var requestBody: [String: Any] = [
+            "sessionId": sessionId,
+            "reason": "User requested cancellation"
+        ]
+        
+        // Include device token if available
+        if let deviceToken = UserDefaults.standard.string(forKey: "devicePushToken") {
+            requestBody["deviceToken"] = deviceToken
+        }
+        
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+        } catch {
+            completion(.failure(error))
+            return
+        }
+        
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                completion(.failure(AICLICompanionError.invalidResponse))
+                return
+            }
+            
+            if httpResponse.statusCode == 200 {
+                // Clear the session ID for this project
+                self?.clearSessionId(for: projectPath)
+                completion(.success(()))
+            } else {
+                let error = AICLICompanionError.serverError("Failed to kill session: HTTP \(httpResponse.statusCode)")
+                completion(.failure(error))
+            }
+        }.resume()
+    }
 }
 
 // MARK: - Response Models

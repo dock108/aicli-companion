@@ -27,6 +27,9 @@ export class AICLIProcessRunner extends EventEmitter {
     this.allowedTools = ['Read', 'Write', 'Edit'];
     this.disallowedTools = [];
     this.skipPermissions = false;
+    
+    // Track active processes for killing
+    this.activeProcesses = new Map(); // sessionId -> process
   }
 
   // Lazy getter for AICLI command
@@ -228,11 +231,36 @@ export class AICLIProcessRunner extends EventEmitter {
               });
             }
 
-            // Accumulate text content from text messages (common after tool use)
+            // Accumulate text content from various message types
+            // Tool use responses often contain text in different fields
             if (parsed.type === 'text' && parsed.text) {
               accumulatedText += parsed.text;
-              sessionLogger.info('Accumulated text content', {
+              sessionLogger.info('Accumulated text content from text field', {
                 textLength: parsed.text.length,
+                totalAccumulated: accumulatedText.length,
+                sessionId,
+              });
+            } else if (parsed.type === 'text' && parsed.content) {
+              // Sometimes text comes in 'content' field instead of 'text'
+              accumulatedText += parsed.content;
+              sessionLogger.info('Accumulated text content from content field', {
+                textLength: parsed.content.length,
+                totalAccumulated: accumulatedText.length,
+                sessionId,
+              });
+            } else if (parsed.type === 'assistant' && parsed.message) {
+              // Assistant messages might contain the actual response
+              accumulatedText += parsed.message;
+              sessionLogger.info('Accumulated text from assistant message', {
+                textLength: parsed.message.length,
+                totalAccumulated: accumulatedText.length,
+                sessionId,
+              });
+            } else if (parsed.type === 'message' && parsed.content) {
+              // Generic message type with content
+              accumulatedText += parsed.content;
+              sessionLogger.info('Accumulated text from message content', {
+                textLength: parsed.content.length,
                 totalAccumulated: accumulatedText.length,
                 sessionId,
               });
@@ -441,7 +469,7 @@ export class AICLIProcessRunner extends EventEmitter {
    * This method handles both regular and long-running commands
    */
   async executeAICLICommand(session, prompt, attachmentPaths = []) {
-    const { sessionId, workingDirectory, requestId } = session;
+    const { sessionId, workingDirectory, requestId, deviceToken } = session;
 
     // Create logger with session context
     const sessionLogger = logger.child({ sessionId });
@@ -529,7 +557,7 @@ export class AICLIProcessRunner extends EventEmitter {
     });
 
     // No more timeout calculations - trust Claude CLI
-    return this.runAICLIProcess(args, finalPrompt, workingDirectory, sessionId, requestId);
+    return this.runAICLIProcess(args, finalPrompt, workingDirectory, sessionId, requestId, deviceToken);
   }
 
   /**
@@ -564,7 +592,7 @@ export class AICLIProcessRunner extends EventEmitter {
   /**
    * Run AICLI CLI process with comprehensive monitoring and parsing
    */
-  async runAICLIProcess(args, prompt, workingDirectory, sessionId, requestId = null) {
+  async runAICLIProcess(args, prompt, workingDirectory, sessionId, requestId = null, deviceToken = null) {
     const processLogger = logger.child({ sessionId });
 
     processLogger.debug('Running AICLI process', {
@@ -628,6 +656,9 @@ export class AICLIProcessRunner extends EventEmitter {
       // Start monitoring this process
       this.startProcessMonitoring(aicliProcess.pid);
 
+      // Track this process for potential killing
+      this.activeProcesses.set(sessionId, aicliProcess);
+
       // Emit process start event
       this.emit('processStart', {
         sessionId,
@@ -640,7 +671,13 @@ export class AICLIProcessRunner extends EventEmitter {
       });
 
       // Set up health monitoring (no timeouts, just monitoring)
-      const healthMonitor = this.createHealthMonitor(aicliProcess, sessionId, workingDirectory);
+      const healthMonitor = this.createHealthMonitor(
+        aicliProcess,
+        sessionId,
+        workingDirectory,
+        requestId,
+        deviceToken
+      );
 
       // Set up output handling
       const outputHandler = this.createOutputHandler(
@@ -657,11 +694,15 @@ export class AICLIProcessRunner extends EventEmitter {
       aicliProcess.on('close', (code) => {
         outputHandler.handleClose(code);
         healthMonitor.cleanup();
+        // Clean up process tracking
+        this.activeProcesses.delete(sessionId);
       });
 
       aicliProcess.on('error', (error) => {
         processLogger.error('AICLI process error', { error: error.message });
         healthMonitor.cleanup();
+        // Clean up process tracking
+        this.activeProcesses.delete(sessionId);
         reject(new Error(`AICLI CLI process error: ${error.message}`));
       });
     });
@@ -987,16 +1028,21 @@ export class AICLIProcessRunner extends EventEmitter {
   }
 
   /**
-   * Create simple health monitor - no timeouts, just monitoring
+   * Create health monitor with stall detection
    */
-  createHealthMonitor(aicliProcess, sessionId, workingDirectory) {
+  createHealthMonitor(aicliProcess, sessionId, workingDirectory, requestId, deviceToken) {
     const startTime = Date.now();
     let lastActivityTime = Date.now();
     let lastActivityType = 'Starting';
     let intervalCleared = false;
+    let stallWarningsSent = 0;
 
     // Use the working directory from the parameter
     const projectPath = workingDirectory;
+
+    // Configurable stall threshold (default: 2 minutes)
+    const stallThreshold = parseInt(process.env.CLAUDE_STALL_THRESHOLD || '120000', 10);
+    const autoKillStalled = process.env.CLAUDE_AUTO_KILL_STALLED === 'true';
 
     // Heartbeat broadcasting every 10 seconds
     const heartbeatInterval = setInterval(() => {
@@ -1016,19 +1062,111 @@ export class AICLIProcessRunner extends EventEmitter {
       }
     }, 10000); // Every 10 seconds for responsive UI
 
-    // Simple status logging every 30 seconds (reduced frequency)
+    // Stall detection and status logging every 30 seconds
     const statusInterval = setInterval(() => {
       if (aicliProcess && aicliProcess.pid && !intervalCleared) {
         const runtime = Math.round((Date.now() - startTime) / 1000);
         const timeSinceActivity = Math.round((Date.now() - lastActivityTime) / 1000);
+        const silentDuration = Date.now() - lastActivityTime;
+        
+        // Log status
         logger.debug('AICLI process status', {
           pid: aicliProcess.pid,
           sessionId,
           runtime,
           lastActivity: timeSinceActivity,
         });
+
+        // Check for stall
+        if (silentDuration > stallThreshold) {
+          const minutesSilent = Math.floor(silentDuration / 60000);
+          
+          // Check if process is still alive
+          if (aicliProcess.killed || aicliProcess.exitCode !== null) {
+            logger.error('Claude process died unexpectedly', {
+              sessionId,
+              exitCode: aicliProcess.exitCode,
+              runtime,
+            });
+            
+            // Emit process death event
+            const deathData = {
+              sessionId,
+              exitCode: aicliProcess.exitCode,
+              runtime,
+              timestamp: new Date().toISOString(),
+              requestId,
+              projectPath,
+            };
+            
+            this.emit('processDeath', deathData);
+            
+            // Send push notification if device token available
+            if (deviceToken) {
+              const { pushNotificationService } = require('./push-notification.js');
+              pushNotificationService.sendStallAlert(deviceToken, {
+                sessionId,
+                requestId,
+                projectPath,
+                silentMinutes: Math.floor(silentDuration / 60000),
+                lastActivity: lastActivityType,
+                processAlive: false,
+              }).catch(err => {
+                logger.error('Failed to send death alert', { error: err.message });
+              });
+            }
+          } else {
+            logger.warn('Claude process appears stalled', {
+              sessionId,
+              silentMinutes: minutesSilent,
+              lastActivityType,
+              pid: aicliProcess.pid,
+            });
+            
+            // Emit stall warning
+            const stallData = {
+              sessionId,
+              silentDuration,
+              silentMinutes: minutesSilent,
+              lastActivityType,
+              pid: aicliProcess.pid,
+              timestamp: new Date().toISOString(),
+              warningNumber: ++stallWarningsSent,
+              requestId,
+              projectPath,
+              processAlive: true,
+            };
+            
+            this.emit('processStall', stallData);
+            
+            // Send push notification if device token available
+            if (deviceToken) {
+              const { pushNotificationService } = require('./push-notification.js');
+              pushNotificationService.sendStallAlert(deviceToken, {
+                sessionId,
+                requestId,
+                projectPath,
+                silentMinutes: minutesSilent,
+                lastActivity: lastActivityType,
+                processAlive: true,
+              }).catch(err => {
+                logger.error('Failed to send stall alert', { error: err.message });
+              });
+            }
+            
+            // Auto-kill if configured
+            if (autoKillStalled && stallWarningsSent >= 2) {
+              logger.error('Auto-killing stalled Claude process', {
+                sessionId,
+                pid: aicliProcess.pid,
+                silentMinutes: minutesSilent,
+              });
+              aicliProcess.kill('SIGTERM');
+            }
+          }
+        }
       }
-    }, 30000); // Log status every 30 seconds (reduced frequency)
+    }, 30000); // Check every 30 seconds
 
     return {
       recordActivity: (activityType = null) => {
@@ -1126,6 +1264,89 @@ export class AICLIProcessRunner extends EventEmitter {
     }
 
     return this.runAICLIProcess(args, prompt, process.cwd(), 'test-session');
+  }
+
+  /**
+   * Kill a running Claude process
+   * @param {string} sessionId - The session ID of the process to kill
+   * @param {string} reason - Reason for killing the process
+   * @returns {boolean} Whether a process was killed
+   */
+  async killProcess(sessionId, reason = 'User requested cancellation') {
+    const process = this.activeProcesses.get(sessionId);
+    
+    if (!process) {
+      logger.info('No active process found for session', { sessionId });
+      return false;
+    }
+
+    try {
+      logger.info('Killing Claude process', {
+        sessionId,
+        pid: process.pid,
+        reason,
+      });
+
+      // Try graceful shutdown first (SIGINT)
+      process.kill('SIGINT');
+      
+      // Give it 2 seconds to shut down gracefully
+      await new Promise((resolve) => {
+        let timeout = setTimeout(() => {
+          if (!process.killed) {
+            logger.warn('Process did not terminate gracefully, sending SIGKILL', {
+              sessionId,
+              pid: process.pid,
+            });
+            // Force kill if still running
+            process.kill('SIGKILL');
+          }
+          resolve();
+        }, 2000);
+
+        // If process ends before timeout, resolve early
+        process.once('exit', () => {
+          clearTimeout(timeout);
+          resolve();
+        });
+      });
+
+      // Clean up tracking
+      this.activeProcesses.delete(sessionId);
+
+      // Emit process killed event
+      this.emit('processKilled', {
+        sessionId,
+        pid: process.pid,
+        reason,
+        timestamp: new Date().toISOString(),
+      });
+
+      return true;
+    } catch (error) {
+      logger.error('Failed to kill process', {
+        sessionId,
+        error: error.message,
+      });
+      return false;
+    }
+  }
+
+  /**
+   * Get active process count
+   * @returns {number} Number of active processes
+   */
+  getActiveProcessCount() {
+    return this.activeProcesses.size;
+  }
+
+  /**
+   * Check if a session has an active process
+   * @param {string} sessionId - The session ID to check
+   * @returns {boolean} Whether the session has an active process
+   */
+  hasActiveProcess(sessionId) {
+    return this.activeProcesses.has(sessionId);
   }
 
   /**

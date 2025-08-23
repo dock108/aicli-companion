@@ -591,6 +591,57 @@ export class AICLISessionManager extends EventEmitter {
   }
 
   /**
+   * Forcefully terminate a session (used when killing Claude process)
+   * @param {string} sessionId - The session ID to terminate
+   * @param {string} reason - Reason for termination
+   * @returns {boolean} Whether the session was terminated
+   */
+  async terminateSession(sessionId, reason = 'User requested termination') {
+    try {
+      console.log(`⚠️ Forcefully terminating session: ${sessionId}`);
+      console.log(`   Reason: ${reason}`);
+
+      // Remove from all tracking maps
+      const hadSession = this.activeSessions.has(sessionId);
+      this.activeSessions.delete(sessionId);
+      this.sessionMessageBuffers.delete(sessionId);
+      this.interactiveSessions.delete(sessionId);
+      this.claudeSessions.delete(sessionId);
+
+      // Find and clear project session mapping
+      for (const [projectPath, sid] of this.projectSessions.entries()) {
+        if (sid === sessionId) {
+          this.projectSessions.delete(projectPath);
+          break;
+        }
+      }
+
+      // Emit termination event
+      this.emit('sessionTerminated', {
+        sessionId,
+        reason,
+        timestamp: new Date().toISOString(),
+      });
+
+      console.log(`✅ Session ${sessionId} terminated`);
+      console.log(`   Remaining active sessions: ${this.activeSessions.size}`);
+
+      return hadSession;
+    } catch (error) {
+      console.error('Error terminating session:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Clear session buffer
+   * @param {string} sessionId - The session ID
+   */
+  clearSessionBuffer(sessionId) {
+    this.sessionMessageBuffers.delete(sessionId);
+  }
+
+  /**
    * Check if a session exists and is active (including persisted sessions)
    */
   hasSession(sessionId) {

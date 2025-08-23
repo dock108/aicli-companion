@@ -15,6 +15,10 @@ struct ChatInputBar: View {
     // FEATURE: Simple send blocking logic
     let isSendBlocked: Bool
     
+    // Processing state for showing stop button
+    let isProcessing: Bool
+    let onStopProcessing: (() -> Void)?
+    
     @EnvironmentObject private var settings: SettingsManager
     @FocusState private var isInputFocused: Bool
     @State private var attachments: [AttachmentData] = []
@@ -85,24 +89,48 @@ struct ChatInputBar: View {
                             }
                     }
                     
-                    // Send button
-                    Button(action: sendMessage) {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.system(size: 32))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: (hasContent && !isSendBlocked)
-                                        ? Colors.accentPrimary(for: colorScheme)
-                                        : [Colors.textSecondary(for: colorScheme)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                    // Send or Stop button
+                    Group {
+                        if isProcessing {
+                            // Stop button when processing
+                            Button(action: {
+                                onStopProcessing?()
+                            }) {
+                                Image(systemName: "stop.circle.fill")
+                                    .font(.system(size: 32))
+                                    .foregroundStyle(
+                                        LinearGradient(
+                                            colors: [Color.red, Color.red.opacity(0.8)],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                            }
+                            .transition(.scale.combined(with: .opacity))
+                        } else {
+                            // Send button when not processing
+                            Button(action: sendMessage) {
+                                Image(systemName: "arrow.up.circle.fill")
+                                    .font(.system(size: 32))
+                                    .foregroundStyle(
+                                        LinearGradient(
+                                            colors: (hasContent && !isSendBlocked)
+                                                ? Colors.accentPrimary(for: colorScheme)
+                                                : [Colors.textSecondary(for: colorScheme)],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                            }
+                            // FEATURE: Simple send blocking - disable when blocked or no content
+                            .disabled(!hasContent || isSendBlocked)
+                            .transition(.scale.combined(with: .opacity))
+                        }
                     }
-                    // FEATURE: Simple send blocking - disable when blocked or no content
-                    .disabled(!hasContent || isSendBlocked)
+                    // Animate the button transitions
                     .animation(.easeInOut(duration: 0.2), value: hasContent)
                     .animation(.easeInOut(duration: 0.2), value: isSendBlocked)
+                    .animation(.easeInOut(duration: 0.2), value: isProcessing)
                 }
             }
             .padding(.horizontal, isIPad && horizontalSizeClass == .regular ? 20 : 16)

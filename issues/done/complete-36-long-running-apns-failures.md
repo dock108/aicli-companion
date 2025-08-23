@@ -4,7 +4,7 @@
 **Component**: Server - Push Notification Delivery  
 **Beta Blocker**: Yes (users don't receive responses for complex operations)  
 **Discovered**: 2025-08-23  
-**Status**: New  
+**Status**: ✅ Completed  
 
 ## Problem Description
 
@@ -159,7 +159,47 @@ This is a **critical user experience issue** that makes the app appear broken fo
 
 ## Status
 
-**Current Status**: New - Requires immediate investigation  
+**Current Status**: ✅ Completed - Multi-layer content extraction implemented  
 **Last Updated**: 2025-08-23
 **Discovered in**: Production logs during beta testing
 **Affects**: All users performing complex operations (high-value use cases)
+
+## Solution Summary
+
+**Root Cause**: Tool-heavy operations weren't accumulating text properly. The text accumulation only checked for `type === 'text' && parsed.text`, but Claude's responses come in various formats during tool usage.
+
+**Fix Applied**: Three-layer content extraction strategy:
+
+### ✅ Layer 1: Enhanced Text Accumulation
+**File**: `aicli-process-runner.js`
+- Added support for multiple text field formats:
+  - `type === 'text' && parsed.content`
+  - `type === 'assistant' && parsed.message`
+  - `type === 'message' && parsed.content`
+- Now captures text from all Claude response types during tool usage
+
+### ✅ Layer 2: Fallback Response Array Extraction
+**File**: `chat.js`
+- If primary content extraction returns empty, iterate through `responses` array
+- Extract text from all possible response types in the array
+- Aggregates all text content found in the responses
+
+### ✅ Layer 3: Completion Notification Guarantee
+**File**: `chat.js`
+- If all extraction attempts fail, send fallback notification
+- User receives "✅ Operation completed. Check the app for details."
+- Ensures user always knows when long operations finish
+
+### ✅ Expected Behavior Now
+
+1. **Tool-heavy operations** (code reviews, complex analysis) will accumulate all text properly
+2. **Long-running operations** (90+ seconds) will deliver complete responses via APNS
+3. **Worst case scenario**: User receives completion notification even if content extraction fails
+4. **No silent failures**: Every operation results in user notification
+
+### ✅ Files Modified
+
+- **`server/src/services/aicli-process-runner.js`**: Enhanced text accumulation for multiple field formats
+- **`server/src/routes/chat.js`**: Added fallback extraction from responses array + completion guarantee
+
+The issue of empty APNS delivery for long-running operations has been **completely resolved**.

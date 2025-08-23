@@ -283,6 +283,7 @@ router.post('/', async (req, res) => {
         workingDirectory: projectPath || process.cwd(),
         attachments,
         streaming: true, // Use streaming to get processRunner with --resume
+        deviceToken, // Pass device token for stall notifications
       });
 
       // Log the full result structure for debugging
@@ -333,6 +334,37 @@ router.post('/', async (req, res) => {
       } else if (typeof result?.response === 'string') {
         // Fallback if response is a plain string
         content = result.response;
+      }
+
+      // If content is still empty, try to extract from responses array
+      if ((!content || content.trim().length === 0) && result?.response?.responses) {
+        logger.info('Primary content extraction empty, checking responses array', {
+          requestId,
+          responsesCount: result.response.responses.length,
+        });
+        
+        // Try to find text content in the responses array
+        for (const resp of result.response.responses) {
+          if (resp.type === 'text' && resp.text) {
+            content += resp.text;
+          } else if (resp.type === 'text' && resp.content) {
+            content += resp.content;
+          } else if (resp.type === 'assistant' && resp.message) {
+            content += resp.message;
+          } else if (resp.type === 'message' && resp.content) {
+            content += resp.content;
+          } else if (resp.type === 'result' && resp.result) {
+            content += resp.result;
+          }
+        }
+        
+        if (content.length > 0) {
+          logger.info('Extracted content from responses array', {
+            requestId,
+            contentLength: content.length,
+            sessionId: claudeSessionId,
+          });
+        }
       }
 
       // Log content extraction result
@@ -421,16 +453,50 @@ router.post('/', async (req, res) => {
         });
       }
 
-      // Skip sending notification if content is empty
+      // Check if content is empty - but handle streaming responses properly
       if (!content || content.trim().length === 0) {
-        logger.warn('Skipping APNS delivery - Claude returned empty content', {
-          requestId,
-          sessionId: claudeSessionId,
-        });
-
-        // Don't try to send response - it was already sent on line 215
-        // Just return from the async handler
-        return;
+        // Check if this is a streaming response with accumulated text
+        const isStreamingResponse = result?.source === 'streaming' || 
+                                   result?.source === 'accumulated_text' || 
+                                   result?.streaming === true;
+        
+        if (isStreamingResponse) {
+          // For streaming, the accumulated text comes back as result.result
+          // The process runner returns with source: 'accumulated_text'
+          if (result?.result && typeof result.result === 'string' && result.result.trim().length > 0) {
+            logger.info('Extracting accumulated text from streaming response', {
+              requestId,
+              sessionId: claudeSessionId,
+              source: result.source || 'streaming',
+              textLength: result.result.length,
+            });
+            content = result.result;
+          } else {
+            // Streaming completed but no content accumulated
+            // This can happen if Claude hasn't responded yet or if there's a genuine issue
+            logger.info('Streaming response pending or empty', {
+              requestId,
+              sessionId: claudeSessionId,
+              source: result?.source,
+              hasResult: !!result?.result,
+            });
+            
+            // Don't send anything - let the stream complete naturally
+            // The stall detection will handle truly stuck operations
+            return;
+          }
+        } else {
+          // Non-streaming empty response - this is unusual but don't send fallback
+          logger.warn('Non-streaming response was empty', {
+            requestId,
+            sessionId: claudeSessionId,
+            hasResponses: !!result?.response?.responses,
+            responsesCount: result?.response?.responses?.length || 0,
+          });
+          
+          // Don't send fallback - let stall detection handle truly stuck operations
+          return;
+        }
       }
 
       // Send Claude response via APNS
@@ -784,6 +850,84 @@ router.get('/:sessionId/messages', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to fetch messages',
+    });
+  }
+});
+
+/**
+ * POST /api/chat/kill - Kill/cancel a running Claude operation
+ */
+router.post('/kill', async (req, res) => {
+  const { sessionId, deviceToken, reason = 'User requested cancellation' } = req.body;
+  const requestId =
+    req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+  logger.info('Kill operation requested', { sessionId, requestId, reason });
+
+  if (!sessionId) {
+    return res.status(400).json({
+      success: false,
+      error: 'Session ID is required',
+    });
+  }
+
+  try {
+    // Get AICLI service from app instance
+    const aicliService = req.app.get('aicliService');
+    
+    // Kill the Claude process for this session
+    const killResult = await aicliService.killSession(sessionId, reason);
+
+    if (!killResult.success) {
+      logger.warn('Session kill failed', {
+        sessionId,
+        requestId,
+        reason: killResult.error,
+      });
+
+      return res.status(404).json({
+        success: false,
+        error: killResult.error || 'Session not found or not running',
+      });
+    }
+
+    logger.info('Session killed successfully', {
+      sessionId,
+      requestId,
+      processKilled: killResult.processKilled,
+      sessionCleaned: killResult.sessionCleaned,
+    });
+
+    // Send notification if device token provided
+    if (deviceToken) {
+      await pushNotificationService.sendAutoResponseControlNotification(deviceToken, {
+        projectPath: killResult.projectPath,
+        action: 'stop',
+        reason: `Session terminated: ${reason}`,
+        requestId,
+      });
+    }
+
+    res.json({
+      success: true,
+      sessionId,
+      message: 'Session terminated successfully',
+      processKilled: killResult.processKilled,
+      sessionCleaned: killResult.sessionCleaned,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error('Failed to kill session', {
+      sessionId,
+      requestId,
+      error: error.message,
+      stack: error.stack,
+    });
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to terminate session',
+      details: error.message,
     });
   }
 });

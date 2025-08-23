@@ -163,5 +163,77 @@ Options:
 
 ## Status
 
-**Current Status**: New  
-**Last Updated**: 2025-08-22
+**Current Status**: ✅ Completed  
+**Last Updated**: 2025-08-23
+
+## Solution Summary
+
+Stall detection has been **fully implemented** with automatic push notifications to alert users when Claude stops responding.
+
+### ✅ What Was Implemented
+
+#### 1. **Activity Monitoring in Health Monitor** (`aicli-process-runner.js`)
+- Tracks `lastActivityTime` for every Claude output
+- Checks for stalls every 30 seconds
+- Configurable stall threshold via `CLAUDE_STALL_THRESHOLD` (default: 2 minutes)
+- Differentiates between stalled process and dead process
+
+#### 2. **Push Notification Alerts** (`push-notification.js`)
+- New `sendStallAlert` method for stall-specific notifications
+- Different alerts for:
+  - ⚠️ "Claude May Have Stalled" - process alive but silent
+  - ❌ "Claude Process Stopped" - process died unexpectedly
+- Shows last known activity and duration of silence
+
+#### 3. **Device Token Propagation**
+- Device token passed through entire call chain:
+  - `chat.js` → `aicli.js` → `aicli-process-runner.js`
+- Enables direct push notifications to the requesting device
+- Falls back gracefully if no device token available
+
+#### 4. **Configurable Behavior**
+```bash
+# Stall detection threshold in milliseconds
+CLAUDE_STALL_THRESHOLD=120000  # Default: 2 minutes
+
+# Auto-kill stalled processes after 2 warnings
+CLAUDE_AUTO_KILL_STALLED=false  # Default: false (alert only)
+```
+
+#### 5. **Event System**
+- Emits `processStall` event with detailed stall information
+- Emits `processDeath` event when process dies
+- Allows other components to react to stalls
+
+### ✅ How It Works
+
+1. **Activity Recording**: Every output from Claude updates `lastActivityTime`
+2. **Stall Detection**: Every 30 seconds, checks if silence exceeds threshold
+3. **User Notification**: Sends push notification with actionable information
+4. **Process Health**: Detects if process died vs just stalled
+5. **Auto-Recovery**: Optional auto-kill after multiple stall warnings
+
+### ✅ User Experience
+
+When Claude stalls, users receive:
+```
+⚠️ Claude May Have Stalled
+No output for 2 minutes. Last activity: Using Edit tool
+[Wait Longer] [Stop Claude] [Check Status]
+```
+
+When Claude process dies:
+```
+❌ Claude Process Stopped
+Claude process unexpectedly stopped. Last activity: Generating response
+[Start New Session] [View Logs]
+```
+
+### ✅ Files Modified
+
+- **`server/src/services/aicli-process-runner.js`**: Added stall detection to health monitor
+- **`server/src/services/push-notification.js`**: Added sendStallAlert method
+- **`server/src/services/aicli.js`**: Added device token propagation
+- **`server/src/routes/chat.js`**: Pass device token to AICLI service
+
+The stall detection system is now **production-ready** and provides comprehensive monitoring of Claude's processing state.

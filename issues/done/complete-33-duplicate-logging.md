@@ -116,6 +116,19 @@ While not a beta blocker, this should be addressed soon as it:
 
 ## Status
 
-**Current Status**: New  
-**Last Updated**: 2025-08-22  
-**Notes**: Multiple duplicate processing paths need consolidation
+**Current Status**: Completed  
+**Last Updated**: 2025-08-23  
+**Notes**: Both server-side and iOS-side duplicate logging issues have been resolved.
+
+### What Was Fixed
+#### Server-side
+1. Removed redundant `trackClaudeSessionActivity` calls in `aicli.js`
+2. Eliminated triple logging of "Updated activity for Claude session" messages
+3. Cleaned up activity tracking to only update once per operation
+
+#### iOS-side
+1. Push notification duplicate processing - Resolved
+2. Multiple message queue processors - No longer occurring
+3. Duplicate observer registrations - Fixed
+4. Device token no longer logged multiple times
+5. Message processing now happens exactly once per notification

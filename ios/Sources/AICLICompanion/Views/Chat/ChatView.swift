@@ -17,6 +17,7 @@ struct ChatView: View {
     @State private var inputBarOffset: CGFloat = 0
     @State private var showingPermissionAlert = false
     @State private var permissionRequest: PermissionRequestData?
+    @State private var showingStopConfirmation = false
     
     // Removed complex scroll tracking - handled by ChatMessageList now
     
@@ -132,7 +133,11 @@ struct ChatView: View {
                     onSendMessage: { attachments in
                         sendMessage(with: attachments)
                     },
-                    isSendBlocked: selectedProject.map { viewModel.shouldBlockSending(for: $0) } ?? true
+                    isSendBlocked: selectedProject.map { viewModel.shouldBlockSending(for: $0) } ?? true,
+                    isProcessing: selectedProject.map { statusManager.statusFor($0).isProcessing } ?? false,
+                    onStopProcessing: selectedProject != nil ? { 
+                        stopProcessing()
+                    } : nil
                 )
                 .offset(y: inputBarOffset)
             }
@@ -216,6 +221,14 @@ struct ChatView: View {
             if let request = permissionRequest {
                 Text(request.prompt)
             }
+        }
+        .alert("Stop Claude?", isPresented: $showingStopConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Stop Work", role: .destructive) {
+                confirmStopProcessing()
+            }
+        } message: {
+            Text("This will immediately stop Claude's current work and end your session. You'll need to start a new conversation.")
         }
     }
     
@@ -346,6 +359,46 @@ struct ChatView: View {
         )
         
         print("🗑️ Cleared chat: messages, persistence, session ID, notifications, and processed IDs for project \(project.name)")
+    }
+    
+    // MARK: - Stop Processing
+    private func stopProcessing() {
+        // Show confirmation dialog
+        showingStopConfirmation = true
+    }
+    
+    private func confirmStopProcessing() {
+        guard let project = selectedProject else { return }
+        
+        print("⏹️ Stopping Claude processing for project: \(project.name)")
+        
+        // Get the current session ID for this project
+        let sessionId = aicliService.getSessionId(for: project.path)
+        
+        guard let sessionId = sessionId else {
+            print("⚠️ No active session to stop")
+            return
+        }
+        
+        // Call the kill endpoint
+        viewModel.killSession(sessionId, for: project) { success in
+            if success {
+                print("✅ Successfully stopped Claude processing")
+                
+                // Clear the processing state
+                statusManager.statusFor(project).reset()
+                
+                // Add a system message to show the session was terminated
+                let terminationMessage = Message(
+                    content: "⏹️ Session terminated by user",
+                    sender: .assistant,
+                    type: .text
+                )
+                viewModel.addSystemMessage(terminationMessage, for: project)
+            } else {
+                print("❌ Failed to stop Claude processing")
+            }
+        }
     }
     
     // MARK: - HTTP Connection

@@ -538,6 +538,143 @@ class PushNotificationService {
   }
 
   /**
+   * Send a push notification for Claude stall detection
+   * @param {string} deviceToken - The device token
+   * @param {Object} data - Stall data
+   * @param {string} data.sessionId - The session ID
+   * @param {string} data.requestId - The request ID
+   * @param {string} data.projectPath - The project path
+   * @param {number} data.silentMinutes - Minutes of silence
+   * @param {string} data.lastActivity - Last known activity
+   * @param {boolean} data.processAlive - Whether process is still running
+   */
+  async sendStallAlert(deviceToken, data) {
+    if (!this.isConfigured) {
+      console.log('⚠️  Push notifications not configured - skipping stall alert');
+      return { success: false, error: 'Not configured' };
+    }
+
+    if (!deviceToken) {
+      return { success: false, error: 'No device token provided' };
+    }
+
+    try {
+      const notification = new apn.Notification();
+
+      notification.expiry = Math.floor(Date.now() / 1000) + 3600; // 1 hour
+      notification.sound = 'default';
+      notification.contentAvailable = true;
+      notification.priority = 10; // High priority for stall alerts
+
+      // Different messages based on process state
+      const title = data.processAlive
+        ? '⚠️ Claude May Have Stalled'
+        : '❌ Claude Process Stopped';
+
+      const bodyMessage = data.processAlive
+        ? `No output for ${data.silentMinutes} minute${data.silentMinutes > 1 ? 's' : ''}. Last activity: ${data.lastActivity || 'Unknown'}`
+        : `Claude process unexpectedly stopped. Last activity: ${data.lastActivity || 'Unknown'}`;
+
+      notification.alert = {
+        title,
+        subtitle: data.projectPath || 'AICLI Companion',
+        body: bodyMessage,
+      };
+
+      notification.topic = this.bundleId || process.env.APNS_BUNDLE_ID || 'com.claude.companion';
+      notification.pushType = 'alert';
+      notification.category = 'CLAUDE_STALL';
+      notification.mutableContent = 1; // Allow notification actions
+
+      notification.payload = {
+        type: 'stallAlert',
+        sessionId: data.sessionId,
+        requestId: data.requestId,
+        projectPath: data.projectPath,
+        silentMinutes: data.silentMinutes,
+        lastActivity: data.lastActivity,
+        processAlive: data.processAlive,
+        timestamp: new Date().toISOString(),
+        deliveryMethod: 'apns_stall_alert',
+      };
+
+      notification.threadId = data.projectPath || 'stall';
+
+      const result = await this.sendNotification(deviceToken, notification, {
+        retries: 2, // Fewer retries for stall alerts
+        retryDelay: 500,
+      });
+
+      if (result.success) {
+        console.log(`✅ Stall alert sent for session ${data.sessionId} (${data.silentMinutes} minutes silent)`);
+      } else {
+        console.error(`❌ Stall alert failed for session ${data.sessionId}:`, result.error);
+      }
+
+      return result;
+    } catch (error) {
+      console.error('❌ Error sending stall alert:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Send a message notification with structured data
+   * @param {string} deviceToken - The device token
+   * @param {Object} data - Message data
+   */
+  async sendMessageNotification(deviceToken, data) {
+    if (!this.isConfigured) {
+      console.log('⚠️  Push notifications not configured - skipping message notification');
+      return { success: false, error: 'Not configured' };
+    }
+
+    if (!deviceToken) {
+      return { success: false, error: 'No device token provided' };
+    }
+
+    try {
+      const notification = new apn.Notification();
+
+      notification.expiry = Math.floor(Date.now() / 1000) + 3600;
+      notification.sound = 'default';
+      notification.contentAvailable = true;
+      notification.priority = 10;
+
+      notification.alert = {
+        title: 'Claude Response',
+        subtitle: data.projectPath || 'AICLI Companion',
+        body: this.truncateMessage(data.message, 150),
+      };
+
+      notification.topic = this.bundleId || process.env.APNS_BUNDLE_ID || 'com.claude.companion';
+      notification.pushType = 'alert';
+      notification.category = 'CLAUDE_MESSAGE';
+
+      notification.payload = {
+        ...data,
+        type: 'message',
+        deliveryMethod: 'apns_message',
+      };
+
+      notification.threadId = data.projectPath || 'default';
+
+      const result = await this.sendNotification(deviceToken, notification);
+
+      if (result.success) {
+        console.log(`✅ Message notification sent for session ${data.sessionId}`);
+      } else {
+        console.error(`❌ Message notification failed:`, result.error);
+      }
+
+      return result;
+    } catch (error) {
+      console.error('❌ Error sending message notification:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
    * Send a push notification for an error
    * @param {string} clientId - The WebSocket client ID
    * @param {Object} data - Error data

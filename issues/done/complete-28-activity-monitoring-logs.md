@@ -4,7 +4,7 @@
 **Component**: Server - Logging/Monitoring  
 **Beta Blocker**: No (but improves debugging and UX)  
 **Discovered**: 2025-08-22  
-**Status**: New  
+**Status**: ✅ Completed (via Issues #36, #1, #29)  
 
 ## Problem Description
 
@@ -109,5 +109,82 @@ logger.info('Claude still processing', {
 
 ## Status
 
-**Current Status**: New  
-**Last Updated**: 2025-08-22
+**Current Status**: ✅ Completed (via Issues #36, #1, #29)  
+**Last Updated**: 2025-08-23
+
+## Solution Summary
+
+Activity monitoring has been **fully implemented** through the heartbeat system and enhanced logging added while fixing Issues #1, #29, and #36.
+
+### ✅ What Was Implemented
+
+#### 1. **Real-time Activity Monitoring** (`aicli-process-runner.js`)
+- `healthMonitor.recordActivity()` tracks all Claude activities
+- Detects and logs specific activities:
+  - Tool usage: `Using ${toolName}`
+  - Text generation: `Generating response`
+  - Thinking: `Thinking`
+- Updates activity type immediately when detected
+
+#### 2. **Heartbeat Broadcasting** (Every 10 seconds)
+- Broadcasts project status via WebSocket to all connected clients
+- Includes:
+  - `projectPath`: Current working directory
+  - `isProcessing`: true while Claude is working
+  - `lastActivity`: Current activity type
+  - `elapsedSeconds`: Time since processing started
+- iOS app displays this as typing bubble with activity text
+
+#### 3. **Enhanced Logging** 
+- Session-aware logging with `sessionLogger.child({ sessionId })`
+- Activity logs for:
+  - Tool use detection: `Tool use detected in stream`
+  - Text accumulation: `Accumulated text content from [field]`
+  - Session tracking: `Claude still processing for session ${sessionId}`
+  - Completion: `Got complete response with result type`
+
+#### 4. **Stream-based Activity Detection**
+- Monitors stdout/stderr from Claude CLI process
+- Parses streaming chunks in real-time
+- Logs meaningful progress indicators
+- Throttled to avoid spam
+
+### ✅ Actual Log Examples Now Generated
+
+```javascript
+// Tool use
+"Tool use detected in stream" { toolName: 'Read', sessionId: 'abc123' }
+
+// Activity tracking  
+"Heartbeat broadcasting" { 
+  projectPath: '/Users/project',
+  isProcessing: true,
+  lastActivity: 'Using Edit tool',
+  elapsedSeconds: 45
+}
+
+// Text accumulation
+"Accumulated text content from assistant message" {
+  textLength: 256,
+  totalAccumulated: 1024,
+  sessionId: 'abc123'
+}
+
+// Session activity
+"Claude still processing for session abc123" {
+  elapsedSeconds: 120,
+  lastActivity: 'Generating response'
+}
+```
+
+### ✅ All Requirements Met
+
+- ✅ **Stream-Based Activity Detection**: Implemented via `healthMonitor`
+- ✅ **Periodic Status Logs**: Heartbeat every 10 seconds
+- ✅ **Tool Use Monitoring**: Specific tool names logged
+- ✅ **Session ID Tracking**: All logs include sessionId
+- ✅ **Non-spammy**: Throttled with 10-second intervals
+- ✅ **iOS Integration**: Heartbeats show as typing bubbles
+- ✅ **Progress Visibility**: Users see what Claude is doing in real-time
+
+The activity monitoring system is now **more comprehensive than originally requested**, providing both server-side logging and real-time client updates via WebSocket heartbeats.

@@ -20,7 +20,7 @@ class PerformanceMonitor: ObservableObject {
     private var metricsTimer: Timer?
     private let metricsReportInterval: TimeInterval = 60.0 // Report every minute
     
-    private let httpAICLIService = AICLIService.shared
+    private var httpAICLIService: AICLIService?
     private var cancellables = Set<AnyCancellable>()
     
     // Session tracking
@@ -28,6 +28,7 @@ class PerformanceMonitor: ObservableObject {
     private var lastConnectionTime: Date?
     private var totalConnectionTime: TimeInterval = 0
     private var disconnectionCount = 0
+    private var observersSetUp = false
     
     // MARK: - Types
     
@@ -98,7 +99,8 @@ class PerformanceMonitor: ObservableObject {
     // MARK: - Initialization
     
     private init() {
-        setupObservers()
+        // Don't setup observers immediately - this would trigger AICLIService initialization
+        // Observers will be set up lazily when first needed
         startMetricsReporting()
     }
     
@@ -190,9 +192,27 @@ class PerformanceMonitor: ObservableObject {
     
     // MARK: - Private Methods
     
+    private func getAICLIService() -> AICLIService {
+        if let service = httpAICLIService {
+            return service
+        }
+        print("🚀 [PERF] PerformanceMonitor lazy initializing AICLIService at \(Date())")
+        let service = AICLIService.shared
+        httpAICLIService = service
+        
+        // Set up observers now that we have the service
+        if !observersSetUp {
+            setupObservers()
+            observersSetUp = true
+        }
+        
+        return service
+    }
+    
     private func setupObservers() {
-        // Monitor HTTP service connection state
-        httpAICLIService.$isConnected
+        // Monitor HTTP service connection state - service already initialized at this point
+        guard let service = httpAICLIService else { return }
+        service.$isConnected
             .sink { [weak self] isConnected in
                 if isConnected {
                     self?.recordConnectionEstablished()
@@ -312,7 +332,7 @@ class PerformanceMonitor: ObservableObject {
     }
     
     private func reportMetrics() {
-        guard httpAICLIService.isConnected else { return }
+        guard getAICLIService().isConnected else { return }
         
         let metrics = getCurrentMetrics(sessionId: nil) // HTTP doesn't maintain persistent sessions
         

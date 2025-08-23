@@ -17,31 +17,44 @@ public class AppDelegate: NSObject, UIApplicationDelegate {
             print("🚀 App launched from notification while terminated")
         }
         
-        // Setup lightweight components first
-        PushNotificationService.shared.setupNotificationCategories()
-        print("📱 Registered notification categories with actions")
+        // CRITICAL: Do NOT access heavy singletons during app launch
+        // This prevents blocking main thread during startup
         
-        // Start performance monitoring (lightweight)
-        PerformanceMonitor.shared.startSession()
-        print("📊 Performance monitoring started")
-        
-        // Do heavy operations asynchronously after app is ready
-        Task {
+        // Do ALL initialization asynchronously after app is ready
+        Task { @MainActor in
             print("🔄 Starting async initialization tasks...")
             
-            // Request push notification authorization
-            do {
-                _ = try await PushNotificationService.shared.requestAuthorizationWithOptions()
-                print("✅ Push notification authorization requested")
-            } catch {
-                print("❌ Failed to request notification authorization: \(error)")
+            // Initialize services asynchronously in background
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask {
+                    // Push notification setup (heavy: categories, UserDefaults)
+                    let pushService = PushNotificationService.shared
+                    print("📱 Push notification service initialized asynchronously")
+                    
+                    // Request authorization
+                    do {
+                        _ = try await pushService.requestAuthorizationWithOptions()
+                        print("✅ Push notification authorization requested")
+                    } catch {
+                        print("❌ Failed to request notification authorization: \(error)")
+                    }
+                    
+                    // Process pending notifications (can be slow)
+                    await pushService.processPendingNotifications()
+                }
+                
+                group.addTask {
+                    // Performance monitoring (potentially heavy depending on implementation)
+                    let perfMonitor = PerformanceMonitor.shared
+                    perfMonitor.startSession()
+                    print("📊 Performance monitoring started asynchronously")
+                }
+                
+                group.addTask {
+                    // Session cleanup
+                    await self.performSessionCleanupAsync()
+                }
             }
-            
-            // Process pending notifications (can be slow)
-            await PushNotificationService.shared.processPendingNotifications()
-            
-            // Perform session cleanup
-            await performSessionCleanupAsync()
             
             let totalTime = CFAbsoluteTimeGetCurrent() - startTime
             print("✅ App initialization completed in \(String(format: "%.2f", totalTime))s")

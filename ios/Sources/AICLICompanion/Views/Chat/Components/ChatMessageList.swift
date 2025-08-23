@@ -1,4 +1,7 @@
 import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
 
 @available(iOS 16.0, macOS 13.0, *)
 struct ChatMessageList: View {
@@ -8,7 +11,7 @@ struct ChatMessageList: View {
     let isIPad: Bool
     let horizontalSizeClass: UserInterfaceSizeClass?
     let colorScheme: ColorScheme
-    let claudeStatus: Project.StatusInfo?
+    @ObservedObject var claudeStatus: Project.StatusInfo
     
     // Simple scroll state - only what we actually need
     @State private var isNearBottom: Bool = true
@@ -28,9 +31,10 @@ struct ChatMessageList: View {
                         ThinkingIndicator(progressInfo: progressInfo)
                             .padding(.horizontal, 4)
                             .id("loading-indicator")
-                    } else if let status = claudeStatus, status.isProcessing {
+                    } else if claudeStatus.isProcessing {
                         // Show typing bubble when Claude is working
-                        let activity = status.lastActivity ?? "Thinking"
+                        let activity = claudeStatus.lastActivity ?? "Thinking"
+                        let _ = print("💬 ChatMessageList: Showing typing bubble - Activity: \(activity), Elapsed: \(claudeStatus.elapsedSeconds)s")
                         ThinkingIndicator(progressInfo: ProgressInfo(
                             message: activity,
                             progress: nil,
@@ -88,12 +92,14 @@ struct ChatMessageList: View {
             .onReceive(NotificationCenter.default.publisher(for: .scrollToBottom)) { _ in
                 scrollToBottom(proxy, animated: true)
             }
+            #if os(iOS)
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
                 // Scroll to bottom when keyboard appears (if near bottom)
                 if shouldAutoScroll {
                     scrollToBottom(proxy, animated: true)
                 }
             }
+            #endif
         }
     }
     

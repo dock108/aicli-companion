@@ -70,15 +70,23 @@ struct ChatView: View {
                 }
                 
                 // Message list
-                ChatMessageList(
-                    messages: viewModel.messages,
-                    isLoading: viewModel.isLoadingForProject(selectedProject?.path ?? ""),
-                    progressInfo: viewModel.progressInfo,
-                    isIPad: isIPad,
-                    horizontalSizeClass: horizontalSizeClass,
-                    colorScheme: colorScheme,
-                    claudeStatus: selectedProject != nil ? statusManager.statusFor(selectedProject!) : nil
-                )
+                Group {
+                    if let project = selectedProject {
+                        ChatMessageList(
+                            messages: viewModel.messages,
+                            isLoading: viewModel.isLoadingForProject(project.path),
+                            progressInfo: viewModel.progressInfo,
+                            isIPad: isIPad,
+                            horizontalSizeClass: horizontalSizeClass,
+                            colorScheme: colorScheme,
+                            claudeStatus: statusManager.statusFor(project)
+                        )
+                    } else {
+                        // Empty state when no project selected
+                        Text("Select a project to start chatting")
+                            .foregroundColor(Colors.textSecondary(for: colorScheme))
+                    }
+                }
                 #if os(iOS)
                 .refreshable {
                     // WhatsApp/iMessage pattern: Just reload local conversation

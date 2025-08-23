@@ -875,6 +875,14 @@ router.post('/kill', async (req, res) => {
   try {
     // Get AICLI service from app instance
     const aicliService = req.app.get('aicliService');
+    
+    if (!aicliService) {
+      logger.error('AICLI service not initialized', { requestId });
+      return res.status(500).json({
+        success: false,
+        error: 'Service temporarily unavailable',
+      });
+    }
 
     // Kill the Claude process for this session
     const killResult = await aicliService.killSession(sessionId, reason);

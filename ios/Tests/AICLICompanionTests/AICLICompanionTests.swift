@@ -14,13 +14,13 @@ final class AICLICompanionTests: XCTestCase {
     }
 
     func testKeychainManagerInitialization() throws {
-        let manager = KeychainManager()
+        let manager = KeychainManager.shared
 
         XCTAssertNotNil(manager)
     }
 
     func testAICLIServiceInitialization() throws {
-        let service = AICLIService()
+        let service = AICLIService.shared
 
         XCTAssertNotNil(service)
 

@@ -5,8 +5,8 @@ public struct ContentView: View {
     public init() {}
     @EnvironmentObject var aicliService: AICLIService
     @EnvironmentObject var settings: SettingsManager
+    @Environment(\.dependencies) private var dependencies
     @State private var isConnected = false
-    @StateObject private var projectStateManager = ProjectStateManager.shared
     @State private var isProjectSelected = false
     @State private var currentSession: ProjectSession?
     @State private var backgroundOpacity: Double = 0
@@ -30,12 +30,12 @@ public struct ContentView: View {
                                     insertion: .move(edge: .leading).combined(with: .opacity),
                                     removal: .move(edge: .trailing).combined(with: .opacity)
                                 ))
-                        } else if !isProjectSelected || projectStateManager.currentProject == nil {
+                        } else if !isProjectSelected || dependencies.projectStateManager.currentProject == nil {
                             // Step 2: Project selection screen
                             ProjectSelectionView(
                                 selectedProject: Binding(
-                                    get: { projectStateManager.currentProject },
-                                    set: { projectStateManager.setCurrentProject($0) }
+                                    get: { dependencies.projectStateManager.currentProject },
+                                    set: { dependencies.projectStateManager.setCurrentProject($0) }
                                 ),
                                 isProjectSelected: $isProjectSelected,
                                 onDisconnect: disconnectFromServer
@@ -44,7 +44,7 @@ public struct ContentView: View {
                                 insertion: .move(edge: .trailing).combined(with: .opacity),
                                 removal: .move(edge: .leading).combined(with: .opacity)
                             ))
-                        } else if let project = projectStateManager.currentProject {
+                        } else if let project = dependencies.projectStateManager.currentProject {
                             // Step 3: Chat screen with selected project
                             ChatView(
                                 selectedProject: project,
@@ -71,17 +71,17 @@ public struct ContentView: View {
         .onChange(of: isConnected) { _, connected in
             if !connected {
                 // Reset project selection when disconnected
-                projectStateManager.setCurrentProject(nil)
+                dependencies.projectStateManager.setCurrentProject(nil)
                 isProjectSelected = false
             }
         }
         .onChange(of: isProjectSelected) { _, selected in
             print("🎯 ContentView: isProjectSelected changed to: \(selected)")
-            if selected, let project = projectStateManager.currentProject {
+            if selected, let project = dependencies.projectStateManager.currentProject {
                 print("🎯 ContentView: Navigation should show ChatView for project: \(project.name)")
             }
         }
-        .onChange(of: projectStateManager.currentProject) { _, project in
+        .onChange(of: dependencies.projectStateManager.currentProject) { _, project in
             if let project = project {
                 print("🎯 ContentView: projectStateManager.currentProject changed to: \(project.name)")
             } else {
@@ -99,7 +99,7 @@ public struct ContentView: View {
         settings.clearConnection()
         withAnimation(.easeInOut(duration: 0.3)) {
             isConnected = false
-            projectStateManager.setCurrentProject(nil)
+            dependencies.projectStateManager.setCurrentProject(nil)
             isProjectSelected = false
             currentSession = nil
         }
@@ -118,7 +118,7 @@ public struct ContentView: View {
         
         // Reset to project selection screen
         withAnimation(.easeInOut(duration: 0.3)) {
-            projectStateManager.setCurrentProject(nil)
+            dependencies.projectStateManager.setCurrentProject(nil)
             isProjectSelected = false
             currentSession = nil
         }

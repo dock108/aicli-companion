@@ -31,7 +31,10 @@ final class ChatNotificationHandler: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] notification in
-            self?.handleClaudeResponseNotification(notification)
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                self.handleClaudeResponseNotification(notification)
+            }
         }
     }
     
@@ -95,6 +98,16 @@ final class ChatNotificationHandler: ObservableObject {
         // Clear loading state if this is for the current project
         if project.path == projectStateManager.currentProject?.path {
             loadingStateManager.clearLoadingState(for: project.path)
+            
+            // Also clear waiting state in project state to re-enable send button
+            projectStateManager.updateProjectState(for: project.path) { state in
+                state.isWaitingForResponse = false
+            }
+            
+            // Clear processing state for stop button
+            print("🔄 Clearing processing state for project: \(project.path)")
+            ProjectStatusManager.shared.statusFor(project).isProcessing = false
+            print("✅ Processing state cleared. isProcessing = \(ProjectStatusManager.shared.statusFor(project).isProcessing)")
         }
     }
     

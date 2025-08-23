@@ -3,7 +3,7 @@ import Combine
 
 @available(iOS 16.0, macOS 13.0, *)
 public class SettingsManager: ObservableObject {
-    static let shared = SettingsManager()
+    public static let shared = SettingsManager()
     
     @Published var theme: Theme = .system
     @Published var fontSize: FontSize = .medium
@@ -26,6 +26,7 @@ public class SettingsManager: ObservableObject {
     @Published var notificationPreview: Bool = true
     @Published var debugMode: Bool = false
     @Published var showNetworkActivity: Bool = false
+    @Published var enableAttachments: Bool = false // Feature flag for attachments (experimental)
 
     private let userDefaults = UserDefaults.standard
     private let keychain = KeychainManager.shared
@@ -79,6 +80,9 @@ public class SettingsManager: ObservableObject {
         hapticFeedback = settings.hapticFeedback
         storeChatHistory = settings.storeChatHistory
         isPremium = settings.isPremium
+        
+        // Load enableAttachments from UserDefaults directly (not in AppSettings)
+        enableAttachments = userDefaults.bool(forKey: "enableAttachments")
     }
 
     func saveSettings() {
@@ -93,6 +97,9 @@ public class SettingsManager: ObservableObject {
         settings.isPremium = isPremium
 
         appSettings = settings
+        
+        // Save enableAttachments directly to UserDefaults
+        userDefaults.set(enableAttachments, forKey: "enableAttachments")
     }
 
     // MARK: - Connection Management
@@ -282,6 +289,7 @@ public class SettingsManager: ObservableObject {
         notificationPreview = true
         debugMode = false
         showNetworkActivity = false
+        enableAttachments = false
         isConnected = false
         currentSessionId = nil
     }

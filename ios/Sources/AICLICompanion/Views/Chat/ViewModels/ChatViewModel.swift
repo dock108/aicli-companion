@@ -70,8 +70,8 @@ final class ChatViewModel: ObservableObject {
     // MARK: - Public API (Delegates to Managers)
     
     // MARK: Message Operations
-    func loadMessages(for project: Project) {
-        messageManager.loadMessages(for: project)
+    func loadMessages(for project: Project, isRefresh: Bool = false) {
+        messageManager.loadMessages(for: project, isRefresh: isRefresh)
     }
     
     func saveMessages(for project: Project) {
@@ -102,14 +102,30 @@ final class ChatViewModel: ObservableObject {
     // MARK: Loading State Operations
     func clearLoadingState(for projectPath: String) {
         loadingStateManager.clearLoadingState(for: projectPath)
+        
+        // Also clear waiting state in project state
+        projectStateManager.updateProjectState(for: projectPath) { state in
+            state.isWaitingForResponse = false
+        }
     }
     
     // MARK: Message Sending
     func sendMessage(_ text: String, for project: Project, attachments: [AttachmentData] = []) {
         print("📤 ChatViewModel: Sending message for project: \(project.name)")
         
-        // Set loading state
+        // Set loading state and waiting for response
         loadingStateManager.setLoading(true, for: project.path)
+        loadingStateManager.setWaitingForResponse(true)
+        
+        // Also update project state to block sending
+        projectStateManager.updateProjectState(for: project.path) { state in
+            state.isWaitingForResponse = true
+        }
+        
+        // Set processing state for stop button visibility
+        print("🔴 Setting processing state for project: \(project.path)")
+        ProjectStatusManager.shared.statusFor(project).isProcessing = true
+        print("✅ Processing state set. isProcessing = \(ProjectStatusManager.shared.statusFor(project).isProcessing)")
         
         // Create user message with request ID for tracking
         let requestId = UUID().uuidString
@@ -130,11 +146,11 @@ final class ChatViewModel: ObservableObject {
             projectPath: project.path,
             attachments: attachments
         ) { [weak self] result in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 guard let self = self else { return }
                 
                 switch result {
-                case .success(let response):
+                case .success:
                     print("✅ ChatViewModel: Message accepted by server")
                     // Message was accepted and will be delivered via APNS
                     // Keep loading state active to show Claude is working
@@ -143,6 +159,15 @@ final class ChatViewModel: ObservableObject {
                 case .failure(let error):
                     print("❌ ChatViewModel: Failed to send message: \(error)")
                     self.loadingStateManager.setLoading(false, for: project.path)
+                    self.loadingStateManager.setWaitingForResponse(false)
+                    
+                    // Clear waiting state in project state
+                    self.projectStateManager.updateProjectState(for: project.path) { state in
+                        state.isWaitingForResponse = false
+                    }
+                    
+                    // Clear processing state for stop button
+                    ProjectStatusManager.shared.statusFor(project).isProcessing = false
                     
                     // Add error message to UI
                     let errorMessage = Message(
@@ -154,6 +179,45 @@ final class ChatViewModel: ObservableObject {
                 }
             }
         }
+    }
+    
+    // MARK: Kill Session
+    func killSession(_ sessionId: String, for project: Project, sendNotification: Bool = true, completion: @escaping (Bool) -> Void) {
+        print("⏹️ ChatViewModel: Killing session \(sessionId) for project: \(project.name)")
+        
+        // Call the kill endpoint via AICLIService
+        aicliService.killSession(sessionId, projectPath: project.path, sendNotification: sendNotification) { [weak self] result in
+            Task { @MainActor in
+                switch result {
+                case .success:
+                    print("✅ ChatViewModel: Session killed successfully")
+                    
+                    // Clear loading states
+                    self?.loadingStateManager.setLoading(false, for: project.path)
+                    self?.loadingStateManager.setWaitingForResponse(false)
+                    
+                    // Update project state
+                    self?.projectStateManager.updateProjectState(for: project.path) { state in
+                        state.isWaitingForResponse = false
+                        state.isLoading = false
+                    }
+                    
+                    // Clear processing state for stop button
+                    ProjectStatusManager.shared.statusFor(project).isProcessing = false
+                    
+                    completion(true)
+                    
+                case .failure(let error):
+                    print("❌ ChatViewModel: Failed to kill session: \(error)")
+                    completion(false)
+                }
+            }
+        }
+    }
+    
+    // MARK: Add System Message
+    func addSystemMessage(_ message: Message, for project: Project) {
+        messageManager.appendMessage(message, for: project)
     }
     
     // MARK: Lifecycle

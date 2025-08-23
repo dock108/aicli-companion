@@ -10,19 +10,16 @@ struct ChatView: View {
     @EnvironmentObject var aicliService: AICLIService
     @EnvironmentObject var settings: SettingsManager
     @ObservedObject private var viewModel = ChatViewModel.shared
+    @ObservedObject private var statusManager = ProjectStatusManager.shared
     
     @State private var messageText = ""
     @State private var keyboardHeight: CGFloat = 0
     @State private var inputBarOffset: CGFloat = 0
     @State private var showingPermissionAlert = false
     @State private var permissionRequest: PermissionRequestData?
+    @State private var showingStopConfirmation = false
     
-    // Smart scroll tracking
-    @State private var isNearBottom: Bool = true
-    @State private var lastScrollPosition: CGFloat = 0
-    @State private var scrollViewHeight: CGFloat = 0
-    @State private var contentHeight: CGFloat = 0
-    @State private var unreadMessageCount: Int = 0
+    // Removed complex scroll tracking - handled by ChatMessageList now
     
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
@@ -74,28 +71,32 @@ struct ChatView: View {
                 }
                 
                 // Message list
-                ChatMessageList(
-                    messages: viewModel.messages,
-                    isLoading: viewModel.isLoadingForProject(selectedProject?.path ?? ""),
-                    progressInfo: viewModel.progressInfo,
-                    isIPad: isIPad,
-                    horizontalSizeClass: horizontalSizeClass,
-                    colorScheme: colorScheme,
-                    projectPath: selectedProject?.path, // Pass project path for project-specific scroll storage
-                    isNearBottom: $isNearBottom,
-                    lastScrollPosition: $lastScrollPosition,
-                    scrollViewHeight: $scrollViewHeight,
-                    contentHeight: $contentHeight,
-                    onScrollPositionChanged: checkIfNearBottom
-                )
+                Group {
+                    if let project = selectedProject {
+                        ChatMessageList(
+                            messages: viewModel.messages,
+                            isLoading: viewModel.isLoadingForProject(project.path),
+                            progressInfo: viewModel.progressInfo,
+                            isIPad: isIPad,
+                            horizontalSizeClass: horizontalSizeClass,
+                            colorScheme: colorScheme,
+                            claudeStatus: statusManager.statusFor(project)
+                        )
+                    } else {
+                        // Empty state when no project selected
+                        Text("Select a project to start chatting")
+                            .foregroundColor(Colors.textSecondary(for: colorScheme))
+                    }
+                }
                 #if os(iOS)
                 .refreshable {
                     // WhatsApp/iMessage pattern: Just reload local conversation
                     print("🔄 User triggered pull-to-refresh - reloading conversation")
                     
                     // Reload messages from local database (instant)
+                    // Use isRefresh=true to merge instead of replace
                     if let project = selectedProject {
-                        viewModel.loadMessages(for: project)
+                        viewModel.loadMessages(for: project, isRefresh: true)
                     }
                     
                     // Small delay for visual feedback
@@ -132,7 +133,11 @@ struct ChatView: View {
                     onSendMessage: { attachments in
                         sendMessage(with: attachments)
                     },
-                    isSendBlocked: selectedProject.map { viewModel.shouldBlockSending(for: $0) } ?? true
+                    isSendBlocked: selectedProject.map { viewModel.shouldBlockSending(for: $0) } ?? true,
+                    isProcessing: selectedProject.map { statusManager.statusFor($0).isProcessing } ?? false,
+                    onStopProcessing: selectedProject != nil ? {
+                        stopProcessing()
+                    } : nil
                 )
                 .offset(y: inputBarOffset)
             }
@@ -203,9 +208,7 @@ struct ChatView: View {
                 handleProjectChange()
             }
         }
-        .onChange(of: viewModel.messages.count) { oldCount, newCount in
-            handleMessageCountChange(oldCount: oldCount, newCount: newCount)
-        }
+        // Removed message count change handling - ChatMessageList handles auto-scroll now
         .alert("Permission Required", isPresented: $showingPermissionAlert) {
             if let request = permissionRequest {
                 ForEach(request.options, id: \.self) { option in
@@ -218,6 +221,14 @@ struct ChatView: View {
             if let request = permissionRequest {
                 Text(request.prompt)
             }
+        }
+        .alert("Stop Claude?", isPresented: $showingStopConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Stop Work", role: .destructive) {
+                confirmStopProcessing()
+            }
+        } message: {
+            Text("This will immediately stop Claude's current work and end your session. You'll need to start a new conversation.")
         }
     }
     
@@ -295,7 +306,11 @@ struct ChatView: View {
     private func sendMessage(with attachments: [AttachmentData] = []) {
         guard let project = selectedProject else { return }
         
-        let text = messageText
+        let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Check if message is empty (unless we have attachments)
+        guard !text.isEmpty || !attachments.isEmpty else { return }
+        
         messageText = ""
         
         // Check if we have a server connection
@@ -316,17 +331,98 @@ struct ChatView: View {
     private func clearCurrentSession() {
         guard let project = selectedProject else { return }
         
-        // HTTP doesn't need to send clearChat to server - sessions are managed by the server
-        // Just clear the local messages
-        
-        // Use the new comprehensive clear function
+        // Clear UI immediately for responsiveness
         viewModel.clearSession()
         
-        // Clear persisted messages and session data
-        let persistenceService = MessagePersistenceService.shared
-        persistenceService.clearMessages(for: project.path)
+        // Do heavy cleanup truly async with background priority
+        Task.detached(priority: .background) {
+            // Get session ID on main thread
+            let sessionId = await MainActor.run {
+                aicliService.getSessionId(for: project.path)
+            }
+            
+            // Kill the server session if it exists
+            if let sessionId = sessionId {
+                print("🔄 Clearing server session \(sessionId) for project \(project.name)")
+                
+                // Call kill session async (no APNS for clear)
+                await MainActor.run {
+                    viewModel.killSession(sessionId, for: project, sendNotification: false) { success in
+                        if success {
+                            print("✅ Server session cleared successfully")
+                        } else {
+                            print("⚠️ Failed to clear server session, continuing with local cleanup")
+                        }
+                    }
+                }
+            }
+            
+            // Do all file I/O operations in background
+            // Clear persisted messages and session data
+            let persistenceService = MessagePersistenceService.shared
+            persistenceService.clearMessages(for: project.path)
+            
+            // Clear stored session ID on main thread
+            await MainActor.run {
+                aicliService.clearSessionId(for: project.path)
+            }
+            
+            // Clear notifications in background
+            let pushService = PushNotificationService.shared
+            pushService.clearProjectNotifications(project.path)
+            pushService.clearProcessedMessagesForProject(project.path)
+            
+            print("🗑️ Cleared chat: messages, persistence, session ID, notifications, and processed IDs for project \(project.name)")
+            
+            // Notify on main thread
+            await MainActor.run {
+                NotificationCenter.default.post(
+                    name: .projectMessagesCleared,
+                    object: nil,
+                    userInfo: ["projectPath": project.path, "projectName": project.name]
+                )
+            }
+        }
+    }
+    
+    // MARK: - Stop Processing
+    private func stopProcessing() {
+        // Show confirmation dialog
+        showingStopConfirmation = true
+    }
+    
+    private func confirmStopProcessing() {
+        guard let project = selectedProject else { return }
         
-        // HTTP doesn't maintain active sessions - they're request-scoped
+        print("⏹️ Stopping Claude processing for project: \(project.name)")
+        
+        // Get the current session ID for this project
+        let sessionId = aicliService.getSessionId(for: project.path)
+        
+        guard let sessionId = sessionId else {
+            print("⚠️ No active session to stop")
+            return
+        }
+        
+        // Call the kill endpoint
+        viewModel.killSession(sessionId, for: project) { success in
+            if success {
+                print("✅ Successfully stopped Claude processing")
+                
+                // Clear the processing state
+                statusManager.statusFor(project).reset()
+                
+                // Add a system message to show the session was terminated
+                let terminationMessage = Message(
+                    content: "⏹️ Session terminated by user",
+                    sender: .assistant,
+                    type: .text
+                )
+                viewModel.addSystemMessage(terminationMessage, for: project)
+            } else {
+                print("❌ Failed to stop Claude processing")
+            }
+        }
     }
     
     // MARK: - HTTP Connection
@@ -438,48 +534,8 @@ struct ChatView: View {
         viewModel.messages.append(welcomeMessage)
     }
     
-    // MARK: - Scroll Management
-    private func checkIfNearBottom(_ position: CGFloat) {
-        let threshold: CGFloat = 100
-        let maxScrollPosition = max(0, contentHeight - scrollViewHeight)
-        let wasNearBottom = isNearBottom
-        isNearBottom = (maxScrollPosition - position) <= threshold
-        
-        // Reset unread count when user scrolls to bottom
-        if isNearBottom && !wasNearBottom {
-            unreadMessageCount = 0
-        }
-    }
-    
-    private func scrollToBottom() {
-        // Trigger scroll to bottom via a notification that ChatMessageList can listen to
-        NotificationCenter.default.post(
-            name: .scrollToBottom,
-            object: nil
-        )
-        
-        // Reset unread count
-        unreadMessageCount = 0
-        
-        // Update near bottom status
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            isNearBottom = true
-        }
-    }
-    
-    private func handleMessageCountChange(oldCount: Int, newCount: Int) {
-        // Only track new messages from assistant when user is not near bottom
-        if newCount > oldCount, !isNearBottom {
-            let newMessages = Array(viewModel.messages.suffix(newCount - oldCount))
-            let assistantMessages = newMessages.filter { $0.sender == .assistant }
-            unreadMessageCount += assistantMessages.count
-        }
-        
-        // Reset count when switching projects or loading initial messages
-        if oldCount == 0 {
-            unreadMessageCount = 0
-        }
-    }
+    // MARK: - Removed Scroll Management
+    // All scroll management is now handled by ChatMessageList with simple iMessage-like behavior
 }
 
 // MARK: - Preview

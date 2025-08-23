@@ -131,6 +131,14 @@ public class AICLISessionManager: ObservableObject {
     var hasActiveSession: Bool {
         return currentSession != nil
     }
+    
+    // MARK: - Session ID Management
+    
+    func getSessionId(for projectPath: String) -> String? {
+        // Use UserDefaults to retrieve session IDs per project
+        let key = "claude_session_\(projectPath.replacingOccurrences(of: "/", with: "_"))"
+        return UserDefaults.standard.string(forKey: key)
+    }
 }
 
 // MARK: - Session Models

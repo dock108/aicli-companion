@@ -88,12 +88,8 @@ struct MessageValidator {
     /// Filter duplicate messages based on content and timestamp
     static func filterDuplicates(messages: [Message], within timeWindow: TimeInterval = 1.0) -> [Message] {
         var filtered: [Message] = []
-        var seenContent: Set<String> = []
         
         for message in messages {
-            // Create a content hash for duplicate detection
-            let contentHash = "\(message.content):\(message.sender)"
-            
             // Check if we've seen this exact content recently
             let isDuplicate = filtered.contains { existingMessage in
                 let timeDiff = abs(message.timestamp.timeIntervalSince(existingMessage.timestamp))
@@ -103,9 +99,8 @@ struct MessageValidator {
                 return sameContent && sameRole && timeDiff < timeWindow
             }
             
-            if !isDuplicate && !seenContent.contains(contentHash) {
+            if !isDuplicate {
                 filtered.append(message)
-                seenContent.insert(contentHash)
             } else {
                 print("🚫 Filtering duplicate message: \(message.content.prefix(50))...")
             }

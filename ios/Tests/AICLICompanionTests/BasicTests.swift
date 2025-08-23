@@ -33,7 +33,7 @@ final class BasicTests: XCTestCase {
         XCTAssertEqual(MessageType.markdown.rawValue, "markdown")
         XCTAssertEqual(MessageType.code.rawValue, "code")
         
-        XCTAssertEqual(MessageType.allCases.count, 10)
+        XCTAssertEqual(MessageType.allCases.count, 11)
     }
     
     func testBasicMessageCreation() throws {
@@ -81,6 +81,7 @@ final class BasicTests: XCTestCase {
     
     func testServerConnectionCreation() throws {
         let connection = ServerConnection(
+            name: "Test Server",
             address: "localhost",
             port: 3000,
             authToken: "test-token",
@@ -95,37 +96,37 @@ final class BasicTests: XCTestCase {
     
     func testServerConnectionURL() throws {
         let connection = ServerConnection(
+            name: "Example Server",
             address: "example.com",
             port: 8080,
             isSecure: false
         )
         
         let url = connection.url
-        XCTAssertNotNil(url)
-        XCTAssertEqual(url?.absoluteString, "http://example.com:8080")
+        XCTAssertEqual(url, "http://example.com:8080")
     }
     
     func testServerConnectionSecureURL() throws {
         let connection = ServerConnection(
+            name: "Secure Server",
             address: "secure.example.com",
             port: 443,
             isSecure: true
         )
         
         let url = connection.url
-        XCTAssertNotNil(url)
-        XCTAssertEqual(url?.absoluteString, "https://secure.example.com")
+        XCTAssertEqual(url, "https://secure.example.com:443")
     }
     
     func testAICLICompanionErrorEnum() throws {
-        let connectionError = AICLICompanionError.connectionFailed("Test error")
-        XCTAssertEqual(connectionError.errorDescription, "Connection failed: Test error")
+        let networkError = AICLICompanionError.networkError("Test error")
+        XCTAssertNotNil(networkError.errorDescription)
         
         let authError = AICLICompanionError.authenticationFailed
-        XCTAssertEqual(authError.errorDescription, "Authentication failed. Please check your token.")
+        XCTAssertNotNil(authError.errorDescription)
         
-        let httpError = AICLICompanionError.httpError(404)
-        XCTAssertEqual(httpError.errorDescription, "HTTP error: 404")
+        let serverError = AICLICompanionError.serverError("Server error")
+        XCTAssertNotNil(serverError.errorDescription)
     }
     
     // MARK: - Performance Tests

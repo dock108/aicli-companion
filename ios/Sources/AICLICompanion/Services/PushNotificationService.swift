@@ -1,5 +1,6 @@
 import Foundation
 import UserNotifications
+import CryptoKit
 #if os(iOS)
 import UIKit
 #endif
@@ -36,6 +37,7 @@ public class PushNotificationService: NSObject, ObservableObject {
     // Track processed message IDs to prevent duplicates (WhatsApp/iMessage pattern)
     private var processedMessageIds = Set<String>()
     private let processedMessageQueue = DispatchQueue(label: "com.aiclicompanion.processedMessages")
+    private let processedMessagesKey = "processedPushNotificationIds"
     
     
     // MARK: - Initialization
@@ -44,6 +46,7 @@ public class PushNotificationService: NSObject, ObservableObject {
         super.init()
         setupNotificationCategories()
         notificationCenter.delegate = self
+        loadProcessedMessageIds()
     }
     
     // MARK: - Public Methods
@@ -297,14 +300,17 @@ extension PushNotificationService {
         let notificationId = extractNotificationId(from: userInfo)
         
         // Check if we've already processed this message (WhatsApp/iMessage pattern)
-        let alreadyProcessed = await processedMessageQueue.sync { processedMessageIds.contains(notificationId) }
+        let alreadyProcessed = processedMessageQueue.sync { processedMessageIds.contains(notificationId) }
         if alreadyProcessed {
             print("✅ Message already processed, skipping duplicate: \(notificationId)")
             return
         }
         
         // Mark as processed
-        await processedMessageQueue.sync { processedMessageIds.insert(notificationId) }
+        processedMessageQueue.sync { _ = processedMessageIds.insert(notificationId) }
+        
+        // Save to UserDefaults to persist across app restarts
+        saveProcessedMessageIds()
         
         // Clean up old entries if set gets too large (keep last 100)
         await cleanupProcessedMessageIds()
@@ -502,21 +508,84 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
             return requestId
         }
         
-        // For small messages, create ID from content hash
+        // For small messages, create stable ID from content hash
         if let message = userInfo["message"] as? String,
            let projectPath = userInfo["projectPath"] as? String {
-            // Create deterministic ID from message content and project
+            // Create deterministic ID from message content and project using SHA256
             let combined = "\(projectPath):\(message)"
-            return String(combined.hashValue)
+            return stableHash(of: combined)
         }
         
         // Fallback to random ID (shouldn't happen)
         return UUID().uuidString
     }
     
+    /// Create stable hash that doesn't change between app launches
+    private func stableHash(of string: String) -> String {
+        let data = Data(string.utf8)
+        let digest = SHA256.hash(data: data)
+        return digest.compactMap { String(format: "%02x", $0) }.joined()
+    }
+    
+    /// Load processed message IDs from UserDefaults
+    private func loadProcessedMessageIds() {
+        processedMessageQueue.sync {
+            if let savedIds = UserDefaults.standard.array(forKey: processedMessagesKey) as? [String] {
+                processedMessageIds = Set(savedIds)
+                print("📱 Loaded \(processedMessageIds.count) processed message IDs from UserDefaults")
+            } else {
+                processedMessageIds = Set<String>()
+                print("📱 No processed message IDs found in UserDefaults")
+            }
+        }
+    }
+    
+    /// Save processed message IDs to UserDefaults
+    private func saveProcessedMessageIds() {
+        processedMessageQueue.sync {
+            let idsArray = Array(processedMessageIds)
+            UserDefaults.standard.set(idsArray, forKey: processedMessagesKey)
+            print("💾 Saved \(processedMessageIds.count) processed message IDs to UserDefaults")
+        }
+    }
+    
+    /// Clear processed message IDs for a specific project when chat is cleared
+    public func clearProcessedMessagesForProject(_ projectPath: String) {
+        processedMessageQueue.sync {
+            // Get all delivered notifications for this project
+            notificationCenter.getDeliveredNotifications { [weak self] notifications in
+                guard let self = self else { return }
+                
+                let projectNotificationIds = notifications
+                    .filter { notification in
+                        if let notificationProjectPath = notification.request.content.userInfo["projectPath"] as? String {
+                            return notificationProjectPath == projectPath
+                        }
+                        return false
+                    }
+                    .compactMap { notification in
+                        self.extractNotificationId(from: notification.request.content.userInfo)
+                    }
+                
+                // Remove these IDs from processed set
+                self.processedMessageQueue.sync {
+                    for notificationId in projectNotificationIds {
+                        self.processedMessageIds.remove(notificationId)
+                    }
+                }
+                
+                // Save updated processed IDs
+                self.saveProcessedMessageIds()
+                
+                print("🗑️ Cleared \(projectNotificationIds.count) processed message IDs for project: \(projectPath)")
+            }
+        }
+    }
+    
     /// Clean up old processed message IDs to prevent memory growth
     private func cleanupProcessedMessageIds() async {
-        await processedMessageQueue.sync {
+        var didCleanup = false
+        processedMessageQueue.sync {
             // Keep only last 100 message IDs
             if processedMessageIds.count > 100 {
                 // Convert to array, sort by insertion order isn't preserved in Set
@@ -525,7 +594,13 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
                 for _ in 0..<excess {
                     processedMessageIds.remove(processedMessageIds.first!)
                 }
+                didCleanup = true
             }
+        }
+        
+        // Save to UserDefaults if we cleaned up
+        if didCleanup {
+            saveProcessedMessageIds()
         }
     }
     
@@ -662,6 +737,7 @@ extension Notification.Name {
     static let openProject = Notification.Name("com.aiclicompanion.openProject")
     static let markProjectRead = Notification.Name("com.aiclicompanion.markProjectRead")
     static let claudeResponseReceived = Notification.Name("com.aiclicompanion.claudeResponseReceived")
+    static let projectMessagesCleared = Notification.Name("com.aiclicompanion.projectMessagesCleared")
 }
 
 // MARK: - Push Notification Payload Helper

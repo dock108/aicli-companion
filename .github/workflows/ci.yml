@@ -261,12 +261,11 @@ jobs:
     - name: Build iOS Library
       run: |
         cd ios
-        # Build for macOS since it's always available on CI runners
-        # The code is SwiftUI and cross-platform, so this validates compilation
+        # Build for iOS Simulator which is available on CI runners
         xcodebuild build \
           -project AICLICompanion.xcodeproj \
           -scheme AICLICompanion \
-          -destination 'platform=macOS' \
+          -destination 'generic/platform=iOS Simulator' \
           -configuration Release \
           CODE_SIGNING_ALLOWED=NO \
           ONLY_ACTIVE_ARCH=NO \

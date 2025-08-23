@@ -256,15 +256,15 @@ jobs:
     - name: Resolve Swift Package Dependencies
       run: |
         cd ios
-        xcodebuild -resolvePackageDependencies -project AICLICompanion.xcodeproj -scheme AICLICompanion
+        xcodebuild -resolvePackageDependencies -project AICLICompanion.xcodeproj -scheme AICLICompanionApp
     
-    - name: Build iOS Library
+    - name: Build iOS App
       run: |
         cd ios
         # Build for iOS Simulator which is available on CI runners
         xcodebuild build \
           -project AICLICompanion.xcodeproj \
-          -scheme AICLICompanion \
+          -scheme AICLICompanionApp \
           -destination 'generic/platform=iOS Simulator' \
           -configuration Release \
           CODE_SIGNING_ALLOWED=NO \
@@ -275,7 +275,7 @@ jobs:
       run: |
         cd ios
         xcodebuild -project AICLICompanion.xcodeproj \
-          -scheme AICLICompanion \
+          -scheme AICLICompanionApp \
           -destination "generic/platform=iOS Simulator" \
           test \
           -enableCodeCoverage YES \

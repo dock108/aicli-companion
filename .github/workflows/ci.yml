@@ -185,7 +185,7 @@ jobs:
     permissions:
       contents: read
       checks: write
-    runs-on: macos-15
+    runs-on: macos-14
     timeout-minutes: 45
     
     steps:
@@ -258,33 +258,62 @@ jobs:
         cd ios
         xcodebuild -resolvePackageDependencies -project AICLICompanion.xcodeproj -scheme AICLICompanionApp
     
+    - name: List Available Simulators
+      run: |
+        echo "=== Available Simulators ==="
+        xcrun simctl list devices available
+        
     - name: Build iOS App
       run: |
         cd ios
-        # Build for iOS Simulator which is available on CI runners
-        xcodebuild build \
-          -project AICLICompanion.xcodeproj \
-          -scheme AICLICompanionApp \
-          -destination 'generic/platform=iOS Simulator' \
-          -configuration Release \
-          CODE_SIGNING_ALLOWED=NO \
-          ONLY_ACTIVE_ARCH=NO \
-          -derivedDataPath build
+        # Get the first available iOS Simulator
+        SIMULATOR_ID=$(xcrun simctl list devices available -j | jq -r '.devices | to_entries | map(select(.key | contains("iOS"))) | .[0].value[0].udid' || echo "")
+        
+        if [ -z "$SIMULATOR_ID" ]; then
+          echo "No iOS simulators found, trying to use generic platform"
+          xcodebuild build \
+            -project AICLICompanion.xcodeproj \
+            -scheme AICLICompanionApp \
+            -destination 'generic/platform=iOS' \
+            -configuration Release \
+            CODE_SIGNING_ALLOWED=NO \
+            ONLY_ACTIVE_ARCH=NO \
+            -derivedDataPath build
+        else
+          echo "Using simulator: $SIMULATOR_ID"
+          xcodebuild build \
+            -project AICLICompanion.xcodeproj \
+            -scheme AICLICompanionApp \
+            -destination "id=$SIMULATOR_ID" \
+            -configuration Release \
+            CODE_SIGNING_ALLOWED=NO \
+            ONLY_ACTIVE_ARCH=NO \
+            -derivedDataPath build
+        fi
     
     - name: Run iOS Tests with Coverage
       run: |
         cd ios
-        xcodebuild -project AICLICompanion.xcodeproj \
-          -scheme AICLICompanionApp \
-          -destination "generic/platform=iOS Simulator" \
-          test \
-          -enableCodeCoverage YES \
-          CODE_SIGNING_ALLOWED=NO \
-          -resultBundlePath ios-test.xcresult \
-          -parallel-testing-enabled NO \
-          -maximum-concurrent-test-simulator-destinations 1 \
-          IDEBuildOperationMaxNumberOfConcurrentCompileTasks=4 \
-          ONLY_ACTIVE_ARCH=NO
+        # Get the first available iOS Simulator for tests
+        SIMULATOR_ID=$(xcrun simctl list devices available -j | jq -r '.devices | to_entries | map(select(.key | contains("iOS"))) | .[0].value[0].udid' || echo "")
+        
+        if [ -z "$SIMULATOR_ID" ]; then
+          echo "No iOS simulators found, skipping tests"
+          exit 0
+        else
+          echo "Running tests on simulator: $SIMULATOR_ID"
+          xcodebuild -project AICLICompanion.xcodeproj \
+            -scheme AICLICompanionApp \
+            -destination "id=$SIMULATOR_ID" \
+            test \
+            -enableCodeCoverage YES \
+            CODE_SIGNING_ALLOWED=NO \
+            -resultBundlePath ios-test.xcresult \
+            -parallel-testing-enabled NO \
+            -maximum-concurrent-test-simulator-destinations 1 \
+            IDEBuildOperationMaxNumberOfConcurrentCompileTasks=4 \
+            ONLY_ACTIVE_ARCH=NO
+        fi
     
     - name: Generate iOS Coverage Report
       run: |

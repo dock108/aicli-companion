@@ -400,7 +400,7 @@ public class AICLIMessageOperations {
     
     // MARK: - Kill Session
     
-    public func killSession(_ sessionId: String, projectPath: String, completion: @escaping (Result<Void, Error>) -> Void) {
+    public func killSession(_ sessionId: String, projectPath: String, sendNotification: Bool = true, completion: @escaping (Result<Void, Error>) -> Void) {
         guard let baseURL = connectionManager.currentBaseURL else {
             completion(.failure(AICLICompanionError.networkError("No connection configured")))
             return
@@ -415,8 +415,8 @@ public class AICLIMessageOperations {
             "reason": "User requested cancellation"
         ]
         
-        // Include device token if available
-        if let deviceToken = UserDefaults.standard.string(forKey: "devicePushToken") {
+        // Include device token only if notification is requested
+        if sendNotification, let deviceToken = UserDefaults.standard.string(forKey: "devicePushToken") {
             requestBody["deviceToken"] = deviceToken
         }
         

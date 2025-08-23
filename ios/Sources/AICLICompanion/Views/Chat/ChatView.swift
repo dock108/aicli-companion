@@ -10,7 +10,7 @@ struct ChatView: View {
     @EnvironmentObject var aicliService: AICLIService
     @EnvironmentObject var settings: SettingsManager
     @ObservedObject private var viewModel = ChatViewModel.shared
-    @StateObject private var statusManager = ProjectStatusManager()
+    @ObservedObject private var statusManager = ProjectStatusManager.shared
     
     @State private var messageText = ""
     @State private var keyboardHeight: CGFloat = 0
@@ -331,8 +331,19 @@ struct ChatView: View {
     private func clearCurrentSession() {
         guard let project = selectedProject else { return }
         
-        // HTTP doesn't need to send clearChat to server - sessions are managed by the server
-        // Just clear the local messages and session data
+        // Kill the server session first to clear project mapping
+        if let sessionId = aicliService.getSessionId(for: project.path) {
+            print("🔄 Clearing server session \(sessionId) for project \(project.name)")
+            
+            // Call kill session to clear server's project mapping (no APNS for clear)
+            viewModel.killSession(sessionId, for: project, sendNotification: false) { success in
+                if success {
+                    print("✅ Server session cleared successfully")
+                } else {
+                    print("⚠️ Failed to clear server session, continuing with local cleanup")
+                }
+            }
+        }
         
         // Use the new comprehensive clear function
         viewModel.clearSession()

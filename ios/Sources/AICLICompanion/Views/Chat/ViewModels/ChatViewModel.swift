@@ -122,6 +122,11 @@ final class ChatViewModel: ObservableObject {
             state.isWaitingForResponse = true
         }
         
+        // Set processing state for stop button visibility
+        print("🔴 Setting processing state for project: \(project.path)")
+        ProjectStatusManager.shared.statusFor(project).isProcessing = true
+        print("✅ Processing state set. isProcessing = \(ProjectStatusManager.shared.statusFor(project).isProcessing)")
+        
         // Create user message with request ID for tracking
         let requestId = UUID().uuidString
         let userMessage = Message(
@@ -161,6 +166,9 @@ final class ChatViewModel: ObservableObject {
                         state.isWaitingForResponse = false
                     }
                     
+                    // Clear processing state for stop button
+                    ProjectStatusManager.shared.statusFor(project).isProcessing = false
+                    
                     // Add error message to UI
                     let errorMessage = Message(
                         content: "Failed to send message: \(error.localizedDescription)",
@@ -174,11 +182,11 @@ final class ChatViewModel: ObservableObject {
     }
     
     // MARK: Kill Session
-    func killSession(_ sessionId: String, for project: Project, completion: @escaping (Bool) -> Void) {
+    func killSession(_ sessionId: String, for project: Project, sendNotification: Bool = true, completion: @escaping (Bool) -> Void) {
         print("⏹️ ChatViewModel: Killing session \(sessionId) for project: \(project.name)")
         
         // Call the kill endpoint via AICLIService
-        aicliService.killSession(sessionId, projectPath: project.path) { [weak self] result in
+        aicliService.killSession(sessionId, projectPath: project.path, sendNotification: sendNotification) { [weak self] result in
             Task { @MainActor in
                 switch result {
                 case .success:
@@ -193,6 +201,9 @@ final class ChatViewModel: ObservableObject {
                         state.isWaitingForResponse = false
                         state.isLoading = false
                     }
+                    
+                    // Clear processing state for stop button
+                    ProjectStatusManager.shared.statusFor(project).isProcessing = false
                     
                     completion(true)
                     

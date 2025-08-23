@@ -63,7 +63,7 @@ struct ProjectSelectionView: View {
     @EnvironmentObject var settings: SettingsManager
     @StateObject private var persistenceService = MessagePersistenceService.shared
     @StateObject private var aicliService = AICLIService.shared
-    @StateObject private var statusManager = ProjectStatusManager()
+    @ObservedObject private var statusManager = ProjectStatusManager.shared
     @StateObject private var webSocketManager = WebSocketManager()
     
     init(selectedProject: Binding<Project?>, isProjectSelected: Binding<Bool>, onDisconnect: (() -> Void)? = nil) {

@@ -164,7 +164,7 @@ public class AICLIService: ObservableObject {
     
     // MARK: - Kill Session
     
-    public func killSession(_ sessionId: String, projectPath: String, completion: @escaping (Result<Void, Error>) -> Void) {
-        messageOperations.killSession(sessionId, projectPath: projectPath, completion: completion)
+    public func killSession(_ sessionId: String, projectPath: String, sendNotification: Bool = true, completion: @escaping (Result<Void, Error>) -> Void) {
+        messageOperations.killSession(sessionId, projectPath: projectPath, sendNotification: sendNotification, completion: completion)
     }
 }

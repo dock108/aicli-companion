@@ -52,11 +52,13 @@ extension Project {
 @MainActor
 @available(iOS 16.0, macOS 13.0, *)
 final class ProjectStatusManager: ObservableObject {
+    static let shared = ProjectStatusManager()
+    
     @Published private(set) var projectStatuses: [String: Project.StatusInfo] = [:]
     
     private var cancellables = Set<AnyCancellable>()
     
-    init() {
+    private init() {
         setupHeartbeatObserver()
     }
     

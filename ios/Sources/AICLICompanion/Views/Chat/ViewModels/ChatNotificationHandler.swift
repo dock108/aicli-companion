@@ -102,6 +102,11 @@ final class ChatNotificationHandler: ObservableObject {
             projectStateManager.updateProjectState(for: project.path) { state in
                 state.isWaitingForResponse = false
             }
+            
+            // Clear processing state for stop button
+            print("🔄 Clearing processing state for project: \(project.path)")
+            ProjectStatusManager.shared.statusFor(project).isProcessing = false
+            print("✅ Processing state cleared. isProcessing = \(ProjectStatusManager.shared.statusFor(project).isProcessing)")
         }
     }
     

@@ -6,7 +6,8 @@ import UserNotifications
 @available(iOS 17.0, *)
 public class AppDelegate: NSObject, UIApplicationDelegate {
     public func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
-        // App launch setup
+        let startTime = CFAbsoluteTimeGetCurrent()
+        print("🚀 AppDelegate.didFinishLaunching started")
         
         // Local-first pattern: No background session coordination needed
         print("🎯 AppDelegate initialized with local-first message storage")
@@ -14,26 +15,40 @@ public class AppDelegate: NSObject, UIApplicationDelegate {
         // Check if app was launched from a notification while terminated
         if let remoteNotification = launchOptions?[.remoteNotification] as? [AnyHashable: Any] {
             print("🚀 App launched from notification while terminated")
-            // Don't process just this notification - we'll process ALL pending ones below
         }
         
-        // Process ALL pending notifications that weren't delivered while app was terminated
-        // This ensures we don't miss any messages, not just the one that was tapped
-        Task {
-            await PushNotificationService.shared.processPendingNotifications()
-        }
-        
-        // Perform async initialization tasks in background
-        Task {
-            // Perform session cleanup on app launch
-            await performSessionCleanupAsync()
-        }
-        
-        // Start performance monitoring session (lightweight, can stay synchronous)
-        PerformanceMonitor.shared.startSession()
-        
-        // Setup enhanced push notifications
+        // Setup lightweight components first
         PushNotificationService.shared.setupNotificationCategories()
+        print("📱 Registered notification categories with actions")
+        
+        // Start performance monitoring (lightweight)
+        PerformanceMonitor.shared.startSession()
+        print("📊 Performance monitoring started")
+        
+        // Do heavy operations asynchronously after app is ready
+        Task {
+            print("🔄 Starting async initialization tasks...")
+            
+            // Request push notification authorization
+            do {
+                _ = try await PushNotificationService.shared.requestAuthorizationWithOptions()
+                print("✅ Push notification authorization requested")
+            } catch {
+                print("❌ Failed to request notification authorization: \(error)")
+            }
+            
+            // Process pending notifications (can be slow)
+            await PushNotificationService.shared.processPendingNotifications()
+            
+            // Perform session cleanup
+            await performSessionCleanupAsync()
+            
+            let totalTime = CFAbsoluteTimeGetCurrent() - startTime
+            print("✅ App initialization completed in \(String(format: "%.2f", totalTime))s")
+        }
+        
+        let syncTime = CFAbsoluteTimeGetCurrent() - startTime
+        print("🚀 AppDelegate.didFinishLaunching completed synchronously in \(String(format: "%.3f", syncTime))s")
         
         return true
     }

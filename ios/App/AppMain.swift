@@ -8,19 +8,38 @@ struct AppMain: App {
     @UIApplicationDelegateAdaptor(AICLICompanion.AppDelegate.self) var appDelegate
     #endif
     
-    @StateObject private var aicliService = AICLICompanion.AICLIService.shared
-    @StateObject private var settingsManager = AICLICompanion.SettingsManager()
-    @StateObject private var pushNotificationService = AICLICompanion.PushNotificationService.shared
+    // Lazy initialization to avoid blocking app startup
+    @StateObject private var aicliService: AICLICompanion.AICLIService = {
+        let start = CFAbsoluteTimeGetCurrent()
+        print("🔄 Initializing AICLIService...")
+        let service = AICLICompanion.AICLIService.shared
+        let time = CFAbsoluteTimeGetCurrent() - start
+        print("✅ AICLIService initialized in \(String(format: "%.3f", time))s")
+        return service
+    }()
+    
+    @StateObject private var settingsManager: AICLICompanion.SettingsManager = {
+        let start = CFAbsoluteTimeGetCurrent()
+        print("🔄 Initializing SettingsManager...")
+        let manager = AICLICompanion.SettingsManager()
+        let time = CFAbsoluteTimeGetCurrent() - start
+        print("✅ SettingsManager initialized in \(String(format: "%.3f", time))s")
+        return manager
+    }()
+    
+    @StateObject private var pushNotificationService: AICLICompanion.PushNotificationService = {
+        let start = CFAbsoluteTimeGetCurrent()
+        print("🔄 Initializing PushNotificationService...")
+        let service = AICLICompanion.PushNotificationService.shared
+        let time = CFAbsoluteTimeGetCurrent() - start
+        print("✅ PushNotificationService initialized in \(String(format: "%.3f", time))s")
+        return service
+    }()
     
     init() {
-        // Request enhanced push notification authorization on app launch
-        Task {
-            do {
-                _ = try await AICLICompanion.PushNotificationService.shared.requestAuthorizationWithOptions()
-            } catch {
-                print("Failed to request notification authorization: \(error)")
-            }
-        }
+        print("🚀 AppMain init started")
+        // Heavy service initialization will happen lazily when first accessed
+        print("🚀 AppMain init completed quickly")
     }
     
     var body: some Scene {
@@ -38,11 +57,8 @@ struct AppMain: App {
                     AICLICompanion.PushNotificationService.shared.resetBadgeCount()
                     print("📱 App became active - cleared badge count")
                     
-                    // Process any pending notifications that arrived while app was terminated
-                    // This catches messages that weren't delivered via background fetch
-                    Task {
-                        await AICLICompanion.PushNotificationService.shared.processPendingNotifications()
-                    }
+                    // Don't process pending notifications here - already handled in AppDelegate
+                    // This prevents duplicate processing and improves performance
                 }
         }
     }

@@ -219,6 +219,7 @@ router.post('/', async (req, res) => {
     // NO TIMEOUT - Claude operations can take as long as needed
     // Timeout should only come from activity monitoring (Issue #28)
     let processingCompleted = false;
+    let streamListener; // Declare streamListener in the outer scope
 
     try {
       logger.info('Starting async Claude processing', {
@@ -228,7 +229,7 @@ router.post('/', async (req, res) => {
       });
 
       // Set up streaming status updates listener
-      const streamListener = async (data) => {
+      streamListener = async (data) => {
         // Only process chunks for our request ID
         if (data.requestId !== requestId) return;
         
@@ -464,10 +465,14 @@ router.post('/', async (req, res) => {
       processingCompleted = true;
       
       // Clean up the listener after successful processing
-      aicliService.removeListener('streamChunk', streamListener);
+      if (streamListener) {
+        aicliService.removeListener('streamChunk', streamListener);
+      }
     } catch (error) {
       // Clean up the listener on error
-      aicliService.removeListener('streamChunk', streamListener);
+      if (streamListener) {
+        aicliService.removeListener('streamChunk', streamListener);
+      }
 
       // Determine error type and user-friendly message
       let userErrorMessage = 'Failed to process message';

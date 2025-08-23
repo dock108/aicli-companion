@@ -141,11 +141,11 @@ final class ChatViewModel: ObservableObject {
             projectPath: project.path,
             attachments: attachments
         ) { [weak self] result in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 guard let self = self else { return }
                 
                 switch result {
-                case .success(let response):
+                case .success(_):
                     print("✅ ChatViewModel: Message accepted by server")
                     // Message was accepted and will be delivered via APNS
                     // Keep loading state active to show Claude is working

@@ -10,6 +10,7 @@ struct ChatView: View {
     @EnvironmentObject var aicliService: AICLIService
     @EnvironmentObject var settings: SettingsManager
     @ObservedObject private var viewModel = ChatViewModel.shared
+    @StateObject private var statusManager = ProjectStatusManager()
     
     @State private var messageText = ""
     @State private var keyboardHeight: CGFloat = 0
@@ -17,12 +18,7 @@ struct ChatView: View {
     @State private var showingPermissionAlert = false
     @State private var permissionRequest: PermissionRequestData?
     
-    // Smart scroll tracking
-    @State private var isNearBottom: Bool = true
-    @State private var lastScrollPosition: CGFloat = 0
-    @State private var scrollViewHeight: CGFloat = 0
-    @State private var contentHeight: CGFloat = 0
-    @State private var unreadMessageCount: Int = 0
+    // Removed complex scroll tracking - handled by ChatMessageList now
     
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
@@ -81,12 +77,7 @@ struct ChatView: View {
                     isIPad: isIPad,
                     horizontalSizeClass: horizontalSizeClass,
                     colorScheme: colorScheme,
-                    projectPath: selectedProject?.path, // Pass project path for project-specific scroll storage
-                    isNearBottom: $isNearBottom,
-                    lastScrollPosition: $lastScrollPosition,
-                    scrollViewHeight: $scrollViewHeight,
-                    contentHeight: $contentHeight,
-                    onScrollPositionChanged: checkIfNearBottom
+                    claudeStatus: selectedProject != nil ? statusManager.statusFor(selectedProject!) : nil
                 )
                 #if os(iOS)
                 .refreshable {
@@ -204,9 +195,7 @@ struct ChatView: View {
                 handleProjectChange()
             }
         }
-        .onChange(of: viewModel.messages.count) { oldCount, newCount in
-            handleMessageCountChange(oldCount: oldCount, newCount: newCount)
-        }
+        // Removed message count change handling - ChatMessageList handles auto-scroll now
         .alert("Permission Required", isPresented: $showingPermissionAlert) {
             if let request = permissionRequest {
                 ForEach(request.options, id: \.self) { option in
@@ -322,7 +311,7 @@ struct ChatView: View {
         guard let project = selectedProject else { return }
         
         // HTTP doesn't need to send clearChat to server - sessions are managed by the server
-        // Just clear the local messages
+        // Just clear the local messages and session data
         
         // Use the new comprehensive clear function
         viewModel.clearSession()
@@ -331,7 +320,24 @@ struct ChatView: View {
         let persistenceService = MessagePersistenceService.shared
         persistenceService.clearMessages(for: project.path)
         
-        // HTTP doesn't maintain active sessions - they're request-scoped
+        // Clear stored session ID to force new session on next message
+        aicliService.clearSessionId(for: project.path)
+        
+        // Clear delivered notifications for this project from notification center
+        let pushService = PushNotificationService.shared
+        pushService.clearProjectNotifications(project.path)
+        
+        // Clear processed message IDs for this project to prevent reprocessing
+        pushService.clearProcessedMessagesForProject(project.path)
+        
+        // Notify that this project's messages were cleared (for UI indicators)
+        NotificationCenter.default.post(
+            name: .projectMessagesCleared,
+            object: nil,
+            userInfo: ["projectPath": project.path, "projectName": project.name]
+        )
+        
+        print("🗑️ Cleared chat: messages, persistence, session ID, notifications, and processed IDs for project \(project.name)")
     }
     
     // MARK: - HTTP Connection
@@ -443,48 +449,8 @@ struct ChatView: View {
         viewModel.messages.append(welcomeMessage)
     }
     
-    // MARK: - Scroll Management
-    private func checkIfNearBottom(_ position: CGFloat) {
-        let threshold: CGFloat = 100
-        let maxScrollPosition = max(0, contentHeight - scrollViewHeight)
-        let wasNearBottom = isNearBottom
-        isNearBottom = (maxScrollPosition - position) <= threshold
-        
-        // Reset unread count when user scrolls to bottom
-        if isNearBottom && !wasNearBottom {
-            unreadMessageCount = 0
-        }
-    }
-    
-    private func scrollToBottom() {
-        // Trigger scroll to bottom via a notification that ChatMessageList can listen to
-        NotificationCenter.default.post(
-            name: .scrollToBottom,
-            object: nil
-        )
-        
-        // Reset unread count
-        unreadMessageCount = 0
-        
-        // Update near bottom status
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            isNearBottom = true
-        }
-    }
-    
-    private func handleMessageCountChange(oldCount: Int, newCount: Int) {
-        // Only track new messages from assistant when user is not near bottom
-        if newCount > oldCount, !isNearBottom {
-            let newMessages = Array(viewModel.messages.suffix(newCount - oldCount))
-            let assistantMessages = newMessages.filter { $0.sender == .assistant }
-            unreadMessageCount += assistantMessages.count
-        }
-        
-        // Reset count when switching projects or loading initial messages
-        if oldCount == 0 {
-            unreadMessageCount = 0
-        }
-    }
+    // MARK: - Removed Scroll Management
+    // All scroll management is now handled by ChatMessageList with simple iMessage-like behavior
 }
 
 // MARK: - Preview

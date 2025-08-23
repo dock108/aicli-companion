@@ -151,4 +151,10 @@ public class AICLIService: ObservableObject {
     public var isRegisteredForPushNotifications: Bool {
         return pushNotificationManager.isRegisteredForPushNotifications
     }
+    
+    // MARK: - Session Management
+    
+    public func clearSessionId(for projectPath: String) {
+        messageOperations.clearSessionId(for: projectPath)
+    }
 }

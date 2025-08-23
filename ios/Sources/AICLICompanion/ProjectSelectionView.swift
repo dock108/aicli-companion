@@ -63,6 +63,8 @@ struct ProjectSelectionView: View {
     @EnvironmentObject var settings: SettingsManager
     @StateObject private var persistenceService = MessagePersistenceService.shared
     @StateObject private var aicliService = AICLIService.shared
+    @StateObject private var statusManager = ProjectStatusManager()
+    @StateObject private var webSocketManager = WebSocketManager()
     
     init(selectedProject: Binding<Project?>, isProjectSelected: Binding<Bool>, onDisconnect: (() -> Void)? = nil) {
         self._selectedProject = selectedProject
@@ -152,6 +154,7 @@ struct ProjectSelectionView: View {
                             ProjectRowView(
                                 project: project,
                                 hasSession: hasMessagesCache[project.path] ?? false,
+                                status: statusManager.statusFor(project),
                                 onSelect: {
                                     selectProject(project)
                                 }
@@ -166,6 +169,20 @@ struct ProjectSelectionView: View {
         .background(Colors.bgBase(for: colorScheme))
         .onAppear {
             loadProjects()
+            connectWebSocket()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .projectMessagesCleared)) { notification in
+            guard let projectPath = notification.userInfo?["projectPath"] as? String else { return }
+            
+            // Update the hasMessagesCache by actually checking the persistence service
+            let persistenceService = MessagePersistenceService.shared
+            let messages = persistenceService.loadMessages(for: projectPath)
+            hasMessagesCache[projectPath] = !messages.isEmpty
+            
+            print("📊 Updated hasMessagesCache: project \(projectPath) has \(messages.count) messages, indicator: \(hasMessagesCache[projectPath] ?? false)")
+        }
+        .onDisappear {
+            webSocketManager.disconnect()
         }
     }
     
@@ -297,6 +314,12 @@ struct ProjectSelectionView: View {
         }
     }
     
+    private func connectWebSocket() {
+        guard let serverURL = settings.serverURL else { return }
+        
+        let wsURL = serverURL.absoluteString
+        webSocketManager.connect(to: wsURL, token: settings.authToken)
+    }
 }
 
 // MARK: - Project Row View
@@ -305,6 +328,7 @@ struct ProjectSelectionView: View {
 struct ProjectRowView: View {
     let project: Project
     let hasSession: Bool
+    @ObservedObject var status: Project.StatusInfo
     let onSelect: () -> Void
     
     @Environment(\.colorScheme) var colorScheme
@@ -365,32 +389,8 @@ struct ProjectRowView: View {
                             .foregroundColor(Colors.textPrimary(for: colorScheme))
                             .lineLimit(1)
                         
-                        // Commented out - New badges not working correctly for beta
-                        /*
-                        if hasUnreadMessages {
-                            Text("New")
-                                .font(Typography.font(.caption))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(
-                                    Capsule()
-                                        .fill(Color.blue)
-                                )
-                        }
-                        */
+                        // Processing indicators moved to chat thread as typing bubbles
                     }
-                    
-                    // Commented out - Countdown timers not working correctly for beta
-                    /*
-                    // Show time remaining instead of path
-                    if !timeRemaining.isEmpty {
-                        Text(timeRemaining)
-                            .font(Typography.font(.caption))
-                            .foregroundColor(Colors.textSecondary(for: colorScheme))
-                            .lineLimit(1)
-                    }
-                    */
                 }
                 
                 Spacer()
@@ -495,9 +495,15 @@ struct ProjectRowView: View {
 
 @available(iOS 17.0, macOS 14.0, *)
 #Preview("Project Row") {
-    ProjectRowView(
+    let status = Project.StatusInfo()
+    status.isProcessing = true
+    status.lastActivity = "Using Edit tool"
+    status.elapsedSeconds = 45
+    
+    return ProjectRowView(
         project: Project(name: "my-awesome-app", path: "/path/to/project", type: "folder"),
         hasSession: true,
+        status: status,
         onSelect: {
             print("Project selected")
         }

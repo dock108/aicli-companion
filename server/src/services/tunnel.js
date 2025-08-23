@@ -55,10 +55,12 @@ export class TunnelService {
       logger.debug(`Environment NGROK_AUTH_TOKEN present: ${!!process.env.NGROK_AUTH_TOKEN}`);
       logger.debug(`Auth token parameter present: ${!!authToken}`);
 
-      // Configure ngrok options
+      // Configure ngrok options with WebSocket support
       const options = {
         addr: port,
         proto: 'http',
+        // For @ngrok/ngrok package, WebSocket support is automatic with HTTP tunnels
+        // Just need to ensure no restrictions on upgrade headers
       };
 
       // Configure auth token if provided

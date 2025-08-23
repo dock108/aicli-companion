@@ -640,7 +640,7 @@ export class AICLIProcessRunner extends EventEmitter {
       });
 
       // Set up health monitoring (no timeouts, just monitoring)
-      const healthMonitor = this.createHealthMonitor(aicliProcess, sessionId);
+      const healthMonitor = this.createHealthMonitor(aicliProcess, sessionId, workingDirectory);
 
       // Set up output handling
       const outputHandler = this.createOutputHandler(
@@ -989,15 +989,14 @@ export class AICLIProcessRunner extends EventEmitter {
   /**
    * Create simple health monitor - no timeouts, just monitoring
    */
-  createHealthMonitor(aicliProcess, sessionId) {
+  createHealthMonitor(aicliProcess, sessionId, workingDirectory) {
     const startTime = Date.now();
     let lastActivityTime = Date.now();
     let lastActivityType = 'Starting';
     let intervalCleared = false;
 
-    // Get project path from session
-    const session = this.sessionManager?.getSession(sessionId);
-    const projectPath = session?.workingDirectory || null;
+    // Use the working directory from the parameter
+    const projectPath = workingDirectory;
 
     // Heartbeat broadcasting every 10 seconds
     const heartbeatInterval = setInterval(() => {
@@ -1040,7 +1039,7 @@ export class AICLIProcessRunner extends EventEmitter {
           this.broadcastHeartbeat({
             type: 'heartbeat',
             sessionId,
-            projectPath,
+            projectPath: workingDirectory,
             activity: lastActivityType,
             elapsedSeconds: Math.round((Date.now() - startTime) / 1000),
             isProcessing: true,
@@ -1054,7 +1053,7 @@ export class AICLIProcessRunner extends EventEmitter {
           this.broadcastHeartbeat({
             type: 'heartbeat',
             sessionId,
-            projectPath,
+            projectPath: workingDirectory,
             activity: 'Complete',
             elapsedSeconds: Math.round((Date.now() - startTime) / 1000),
             isProcessing: false,

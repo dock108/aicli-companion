@@ -31,7 +31,9 @@ final class ChatNotificationHandler: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] notification in
-            self?.handleClaudeResponseNotification(notification)
+            Task { @MainActor in
+                self?.handleClaudeResponseNotification(notification)
+            }
         }
     }
     

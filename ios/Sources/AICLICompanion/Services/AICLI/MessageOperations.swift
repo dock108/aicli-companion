@@ -190,6 +190,12 @@ public class AICLIMessageOperations {
         print("💾 Stored session ID \(sessionId) for project \(projectPath)")
     }
     
+    func clearSessionId(for projectPath: String) {
+        let key = "claude_session_\(projectPath.replacingOccurrences(of: "/", with: "_"))"
+        UserDefaults.standard.removeObject(forKey: key)
+        print("🗑️ Cleared session ID for project \(projectPath)")
+    }
+    
     // MARK: - Private Helper Methods
     
     private func createChatRequest(baseURL: URL, message: String, projectPath: String?, attachments: [AttachmentData]? = nil) -> URLRequest? {

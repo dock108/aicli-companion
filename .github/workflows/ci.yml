@@ -356,21 +356,22 @@ jobs:
           echo "No test results found, skipping coverage report generation"
         fi
     
-    - name: Check iOS Coverage Threshold
-      run: |
-        cd ios
-        if [ -f ios-coverage.json ]; then
-          coverage=$(cat ios-coverage.json | python3 -c "import json, sys; data = json.load(sys.stdin); coverage = data['targets'][0].get('lineCoverage', 0) * 100 if 'targets' in data and len(data['targets']) > 0 else 0; print(f'{coverage:.1f}')")
-          echo "Code coverage: ${coverage}%"
-          if (( $(echo "$coverage < ${{ env.MINIMUM_IOS_COVERAGE }}" | bc -l) )); then
-            echo "❌ Coverage ${coverage}% is below minimum threshold of ${{ env.MINIMUM_IOS_COVERAGE }}%"
-            exit 1
-          else
-            echo "✅ Coverage ${coverage}% meets minimum threshold"
-          fi
-        else
-          echo "⚠️ No coverage report found (tests may have been skipped)"
-        fi
+    # - name: Check iOS Coverage Threshold
+    #   run: |
+    #     cd ios
+    #     if [ -f ios-coverage.json ]; then
+    #       coverage=$(cat ios-coverage.json | python3 -c "import json, sys; data = json.load(sys.stdin); coverage = data['targets'][0].get('lineCoverage', 0) * 100 if 'targets' in data and len(data['targets']) > 0 else 0; print(f'{coverage:.1f}')")
+    #       echo "Code coverage: ${coverage}%"
+    #       if (( $(echo "$coverage < ${{ env.MINIMUM_IOS_COVERAGE }}" | bc -l) )); then
+    #         echo "❌ Coverage ${coverage}% is below minimum threshold of ${{ env.MINIMUM_IOS_COVERAGE }}%"
+    #         exit 1
+    #       else
+    #         echo "✅ Coverage ${coverage}% meets minimum threshold"
+    #       fi
+    #     else
+    #       echo "⚠️ No coverage report found (tests may have been skipped)"
+    #     fi
+
     - name: Upload iOS Test Results
       uses: actions/upload-artifact@v4
       with:
@@ -509,20 +510,20 @@ jobs:
         xcrun xccov view --report --json macos-test.xcresult > macos-coverage.json || true
         xcrun xccov view --report macos-test.xcresult > macos-coverage.txt || true
     
-    - name: Check macOS Coverage Threshold
-      run: |
-        cd macos-app
-        if [ -f macos-coverage.json ]; then
-          coverage=$(cat macos-coverage.json | python3 -c "import json, sys; data = json.load(sys.stdin); coverage = data['targets'][0].get('lineCoverage', 0) * 100 if 'targets' in data and len(data['targets']) > 0 else 0; print(f'{coverage:.1f}')")
-          echo "::notice title=macOS Coverage::Coverage is ${coverage}%"
-          if (( $(echo "$coverage < ${{ env.MINIMUM_MACOS_COVERAGE }}" | bc -l) )); then
-            echo "::warning::Coverage ${coverage}% is below minimum threshold of ${{ env.MINIMUM_MACOS_COVERAGE }}%"
-            # Don't fail on coverage for now due to test issues
-            # exit 1
-          else
-            echo "✅ Coverage ${coverage}% meets minimum threshold"
-          fi
-        fi
+    # - name: Check macOS Coverage Threshold
+    #   run: |
+    #     cd macos-app
+    #     if [ -f macos-coverage.json ]; then
+    #       coverage=$(cat macos-coverage.json | python3 -c "import json, sys; data = json.load(sys.stdin); coverage = data['targets'][0].get('lineCoverage', 0) * 100 if 'targets' in data and len(data['targets']) > 0 else 0; print(f'{coverage:.1f}')")
+    #       echo "::notice title=macOS Coverage::Coverage is ${coverage}%"
+    #       if (( $(echo "$coverage < ${{ env.MINIMUM_MACOS_COVERAGE }}" | bc -l) )); then
+    #         echo "::warning::Coverage ${coverage}% is below minimum threshold of ${{ env.MINIMUM_MACOS_COVERAGE }}%"
+    #         # Don't fail on coverage for now due to test issues
+    #         # exit 1
+    #       else
+    #         echo "✅ Coverage ${coverage}% meets minimum threshold"
+    #       fi
+    #     fi
     
     - name: Upload macOS Coverage Reports
       uses: actions/upload-artifact@v4

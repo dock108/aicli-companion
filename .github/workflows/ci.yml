@@ -263,6 +263,15 @@ jobs:
     # Skip iOS simulator installation - just build for generic device
     # This avoids downloading GBs of simulator runtime data
     
+    - name: Clean build and reset package cache
+      run: |
+        cd ios
+        # Clean any previous builds
+        xcodebuild clean -scheme AICLICompanion -destination 'generic/platform=iOS' || true
+        # Reset package cache to force fresh resolution
+        swift package reset
+        swift package resolve
+    
     - name: Check Available SDKs and Destinations
       run: |
         echo "=== Available SDKs ==="

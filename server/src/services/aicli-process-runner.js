@@ -27,7 +27,7 @@ export class AICLIProcessRunner extends EventEmitter {
     this.allowedTools = ['Read', 'Write', 'Edit'];
     this.disallowedTools = [];
     this.skipPermissions = false;
-    
+
     // Track active processes for killing
     this.activeProcesses = new Map(); // sessionId -> process
   }
@@ -557,7 +557,14 @@ export class AICLIProcessRunner extends EventEmitter {
     });
 
     // No more timeout calculations - trust Claude CLI
-    return this.runAICLIProcess(args, finalPrompt, workingDirectory, sessionId, requestId, deviceToken);
+    return this.runAICLIProcess(
+      args,
+      finalPrompt,
+      workingDirectory,
+      sessionId,
+      requestId,
+      deviceToken
+    );
   }
 
   /**
@@ -592,7 +599,14 @@ export class AICLIProcessRunner extends EventEmitter {
   /**
    * Run AICLI CLI process with comprehensive monitoring and parsing
    */
-  async runAICLIProcess(args, prompt, workingDirectory, sessionId, requestId = null, deviceToken = null) {
+  async runAICLIProcess(
+    args,
+    prompt,
+    workingDirectory,
+    sessionId,
+    requestId = null,
+    deviceToken = null
+  ) {
     const processLogger = logger.child({ sessionId });
 
     processLogger.debug('Running AICLI process', {
@@ -1048,7 +1062,7 @@ export class AICLIProcessRunner extends EventEmitter {
     const heartbeatInterval = setInterval(() => {
       if (aicliProcess && aicliProcess.pid && !intervalCleared) {
         const elapsedSeconds = Math.round((Date.now() - startTime) / 1000);
-        
+
         // Broadcast heartbeat via WebSocket
         this.broadcastHeartbeat({
           type: 'heartbeat',
@@ -1057,7 +1071,7 @@ export class AICLIProcessRunner extends EventEmitter {
           activity: lastActivityType,
           elapsedSeconds,
           isProcessing: true,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
       }
     }, 10000); // Every 10 seconds for responsive UI
@@ -1068,7 +1082,7 @@ export class AICLIProcessRunner extends EventEmitter {
         const runtime = Math.round((Date.now() - startTime) / 1000);
         const timeSinceActivity = Math.round((Date.now() - lastActivityTime) / 1000);
         const silentDuration = Date.now() - lastActivityTime;
-        
+
         // Log status
         logger.debug('AICLI process status', {
           pid: aicliProcess.pid,
@@ -1080,7 +1094,7 @@ export class AICLIProcessRunner extends EventEmitter {
         // Check for stall
         if (silentDuration > stallThreshold) {
           const minutesSilent = Math.floor(silentDuration / 60000);
-          
+
           // Check if process is still alive
           if (aicliProcess.killed || aicliProcess.exitCode !== null) {
             logger.error('Claude process died unexpectedly', {
@@ -1088,7 +1102,7 @@ export class AICLIProcessRunner extends EventEmitter {
               exitCode: aicliProcess.exitCode,
               runtime,
             });
-            
+
             // Emit process death event
             const deathData = {
               sessionId,
@@ -1098,22 +1112,24 @@ export class AICLIProcessRunner extends EventEmitter {
               requestId,
               projectPath,
             };
-            
+
             this.emit('processDeath', deathData);
-            
+
             // Send push notification if device token available
             if (deviceToken) {
               const { pushNotificationService } = require('./push-notification.js');
-              pushNotificationService.sendStallAlert(deviceToken, {
-                sessionId,
-                requestId,
-                projectPath,
-                silentMinutes: Math.floor(silentDuration / 60000),
-                lastActivity: lastActivityType,
-                processAlive: false,
-              }).catch(err => {
-                logger.error('Failed to send death alert', { error: err.message });
-              });
+              pushNotificationService
+                .sendStallAlert(deviceToken, {
+                  sessionId,
+                  requestId,
+                  projectPath,
+                  silentMinutes: Math.floor(silentDuration / 60000),
+                  lastActivity: lastActivityType,
+                  processAlive: false,
+                })
+                .catch((err) => {
+                  logger.error('Failed to send death alert', { error: err.message });
+                });
             }
           } else {
             logger.warn('Claude process appears stalled', {
@@ -1122,7 +1138,7 @@ export class AICLIProcessRunner extends EventEmitter {
               lastActivityType,
               pid: aicliProcess.pid,
             });
-            
+
             // Emit stall warning
             const stallData = {
               sessionId,
@@ -1136,24 +1152,26 @@ export class AICLIProcessRunner extends EventEmitter {
               projectPath,
               processAlive: true,
             };
-            
+
             this.emit('processStall', stallData);
-            
+
             // Send push notification if device token available
             if (deviceToken) {
               const { pushNotificationService } = require('./push-notification.js');
-              pushNotificationService.sendStallAlert(deviceToken, {
-                sessionId,
-                requestId,
-                projectPath,
-                silentMinutes: minutesSilent,
-                lastActivity: lastActivityType,
-                processAlive: true,
-              }).catch(err => {
-                logger.error('Failed to send stall alert', { error: err.message });
-              });
+              pushNotificationService
+                .sendStallAlert(deviceToken, {
+                  sessionId,
+                  requestId,
+                  projectPath,
+                  silentMinutes: minutesSilent,
+                  lastActivity: lastActivityType,
+                  processAlive: true,
+                })
+                .catch((err) => {
+                  logger.error('Failed to send stall alert', { error: err.message });
+                });
             }
-            
+
             // Auto-kill if configured
             if (autoKillStalled && stallWarningsSent >= 2) {
               logger.error('Auto-killing stalled Claude process', {
@@ -1181,7 +1199,7 @@ export class AICLIProcessRunner extends EventEmitter {
             activity: lastActivityType,
             elapsedSeconds: Math.round((Date.now() - startTime) / 1000),
             isProcessing: true,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
           });
         }
       },
@@ -1195,9 +1213,9 @@ export class AICLIProcessRunner extends EventEmitter {
             activity: 'Complete',
             elapsedSeconds: Math.round((Date.now() - startTime) / 1000),
             isProcessing: false,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
           });
-          
+
           if (heartbeatInterval) clearInterval(heartbeatInterval);
           if (statusInterval) clearInterval(statusInterval);
           intervalCleared = true;
@@ -1274,7 +1292,7 @@ export class AICLIProcessRunner extends EventEmitter {
    */
   async killProcess(sessionId, reason = 'User requested cancellation') {
     const process = this.activeProcesses.get(sessionId);
-    
+
     if (!process) {
       logger.info('No active process found for session', { sessionId });
       return false;
@@ -1289,10 +1307,10 @@ export class AICLIProcessRunner extends EventEmitter {
 
       // Try graceful shutdown first (SIGINT)
       process.kill('SIGINT');
-      
+
       // Give it 2 seconds to shut down gracefully
       await new Promise((resolve) => {
-        let timeout = setTimeout(() => {
+        const timeout = setTimeout(() => {
           if (!process.killed) {
             logger.warn('Process did not terminate gracefully, sending SIGKILL', {
               sessionId,
@@ -1356,7 +1374,8 @@ export class AICLIProcessRunner extends EventEmitter {
     if (global.wss) {
       const message = JSON.stringify(data);
       global.wss.clients.forEach((ws) => {
-        if (ws.readyState === 1) { // WebSocket.OPEN
+        if (ws.readyState === 1) {
+          // WebSocket.OPEN
           ws.send(message);
         }
       });

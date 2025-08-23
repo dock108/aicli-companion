@@ -218,7 +218,6 @@ router.post('/', async (req, res) => {
   setImmediate(async () => {
     // NO TIMEOUT - Claude operations can take as long as needed
     // Timeout should only come from activity monitoring (Issue #28)
-    let processingCompleted = false;
     let streamListener; // Declare streamListener in the outer scope
 
     try {
@@ -232,9 +231,9 @@ router.post('/', async (req, res) => {
       streamListener = async (data) => {
         // Only process chunks for our request ID
         if (data.requestId !== requestId) return;
-        
+
         const chunk = data.chunk;
-        
+
         // Send progress updates for interesting chunk types
         if (chunk.type === 'system' && chunk.subtype === 'init') {
           // Initial system message - Claude is starting
@@ -249,7 +248,7 @@ router.post('/', async (req, res) => {
           // Assistant is thinking/typing
           const messageContent = chunk.message?.content?.[0]?.text || '';
           const preview = messageContent.substring(0, 50);
-          
+
           await pushNotificationService.sendProgressNotification(deviceToken, {
             projectPath,
             activity: preview ? `Typing: ${preview}...` : 'Thinking',
@@ -268,10 +267,10 @@ router.post('/', async (req, res) => {
           });
         }
       };
-      
+
       // Start time for duration tracking
       const startTime = Date.now();
-      
+
       // Attach the listener
       aicliService.on('streamChunk', streamListener);
 
@@ -342,7 +341,7 @@ router.post('/', async (req, res) => {
           requestId,
           responsesCount: result.response.responses.length,
         });
-        
+
         // Try to find text content in the responses array
         for (const resp of result.response.responses) {
           if (resp.type === 'text' && resp.text) {
@@ -357,7 +356,7 @@ router.post('/', async (req, res) => {
             content += resp.result;
           }
         }
-        
+
         if (content.length > 0) {
           logger.info('Extracted content from responses array', {
             requestId,
@@ -456,14 +455,19 @@ router.post('/', async (req, res) => {
       // Check if content is empty - but handle streaming responses properly
       if (!content || content.trim().length === 0) {
         // Check if this is a streaming response with accumulated text
-        const isStreamingResponse = result?.source === 'streaming' || 
-                                   result?.source === 'accumulated_text' || 
-                                   result?.streaming === true;
-        
+        const isStreamingResponse =
+          result?.source === 'streaming' ||
+          result?.source === 'accumulated_text' ||
+          result?.streaming === true;
+
         if (isStreamingResponse) {
           // For streaming, the accumulated text comes back as result.result
           // The process runner returns with source: 'accumulated_text'
-          if (result?.result && typeof result.result === 'string' && result.result.trim().length > 0) {
+          if (
+            result?.result &&
+            typeof result.result === 'string' &&
+            result.result.trim().length > 0
+          ) {
             logger.info('Extracting accumulated text from streaming response', {
               requestId,
               sessionId: claudeSessionId,
@@ -480,7 +484,7 @@ router.post('/', async (req, res) => {
               source: result?.source,
               hasResult: !!result?.result,
             });
-            
+
             // Don't send anything - let the stream complete naturally
             // The stall detection will handle truly stuck operations
             return;
@@ -493,7 +497,7 @@ router.post('/', async (req, res) => {
             hasResponses: !!result?.response?.responses,
             responsesCount: result?.response?.responses?.length || 0,
           });
-          
+
           // Don't send fallback - let stall detection handle truly stuck operations
           return;
         }
@@ -527,9 +531,6 @@ router.post('/', async (req, res) => {
         contentLength: content.length,
       });
 
-      // Mark processing as completed
-      processingCompleted = true;
-      
       // Clean up the listener after successful processing
       if (streamListener) {
         aicliService.removeListener('streamChunk', streamListener);
@@ -874,7 +875,7 @@ router.post('/kill', async (req, res) => {
   try {
     // Get AICLI service from app instance
     const aicliService = req.app.get('aicliService');
-    
+
     // Kill the Claude process for this session
     const killResult = await aicliService.killSession(sessionId, reason);
 

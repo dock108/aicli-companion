@@ -270,9 +270,9 @@ class AICLICompanionServer {
 
   async setupWebSocketServer() {
     // Create WebSocket server on same HTTP/HTTPS server
-    this.wss = new WebSocketServer({ 
+    this.wss = new WebSocketServer({
       server: this.server,
-      path: '/ws'
+      path: '/ws',
     });
 
     // Store in global for access from other modules
@@ -281,25 +281,26 @@ class AICLICompanionServer {
     // Handle WebSocket connections
     this.wss.on('connection', (ws, req) => {
       console.log('🔌 WebSocket client connected');
-      
+
       // Verify auth token if required
       if (this.config.authRequired) {
         const url = new URL(req.url, `http://${req.headers.host}`);
-        const token = url.searchParams.get('token') || req.headers.authorization?.replace('Bearer ', '');
-        
+        const token =
+          url.searchParams.get('token') || req.headers.authorization?.replace('Bearer ', '');
+
         if (token !== this.config.authToken) {
           console.log('🚫 WebSocket connection rejected - invalid token');
           ws.close(1008, 'Unauthorized');
           return;
         }
       }
-      
+
       // Setup ping-pong for connection health
       ws.isAlive = true;
-      ws.on('pong', () => { 
-        ws.isAlive = true; 
+      ws.on('pong', () => {
+        ws.isAlive = true;
       });
-      
+
       ws.on('message', (data) => {
         try {
           const message = JSON.parse(data.toString());
@@ -309,11 +310,11 @@ class AICLICompanionServer {
           console.error('❌ Invalid WebSocket message:', error.message);
         }
       });
-      
+
       ws.on('close', () => {
         console.log('🔌 WebSocket client disconnected');
       });
-      
+
       ws.on('error', (error) => {
         console.error('❌ WebSocket error:', error.message);
       });

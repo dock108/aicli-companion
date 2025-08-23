@@ -567,9 +567,7 @@ class PushNotificationService {
       notification.priority = 10; // High priority for stall alerts
 
       // Different messages based on process state
-      const title = data.processAlive
-        ? '⚠️ Claude May Have Stalled'
-        : '❌ Claude Process Stopped';
+      const title = data.processAlive ? '⚠️ Claude May Have Stalled' : '❌ Claude Process Stopped';
 
       const bodyMessage = data.processAlive
         ? `No output for ${data.silentMinutes} minute${data.silentMinutes > 1 ? 's' : ''}. Last activity: ${data.lastActivity || 'Unknown'}`
@@ -606,7 +604,9 @@ class PushNotificationService {
       });
 
       if (result.success) {
-        console.log(`✅ Stall alert sent for session ${data.sessionId} (${data.silentMinutes} minutes silent)`);
+        console.log(
+          `✅ Stall alert sent for session ${data.sessionId} (${data.silentMinutes} minutes silent)`
+        );
       } else {
         console.error(`❌ Stall alert failed for session ${data.sessionId}:`, result.error);
       }

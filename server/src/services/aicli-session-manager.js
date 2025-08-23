@@ -634,14 +634,6 @@ export class AICLISessionManager extends EventEmitter {
   }
 
   /**
-   * Clear session buffer
-   * @param {string} sessionId - The session ID
-   */
-  clearSessionBuffer(sessionId) {
-    this.sessionMessageBuffers.delete(sessionId);
-  }
-
-  /**
    * Check if a session exists and is active (including persisted sessions)
    */
   hasSession(sessionId) {

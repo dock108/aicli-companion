@@ -48,7 +48,7 @@ final class MessageQueueManagerTests: XCTestCase {
     }
     
 @MainActor
-    func testTrackQueuedMessage() async {
+    func testTrackQueuedMessage() async throws {
         guard !isCI else {
             throw XCTSkip("Skipping async test in CI environment")
         }
@@ -74,7 +74,7 @@ final class MessageQueueManagerTests: XCTestCase {
     }
     
 @MainActor
-    func testTrackMultipleMessages() async {
+    func testTrackMultipleMessages() async throws {
         let messages = [
             ("msg-001", "session-123"),
             ("msg-002", "session-123"),
@@ -101,7 +101,7 @@ final class MessageQueueManagerTests: XCTestCase {
     }
     
 @MainActor
-    func testMarkMessageDelivered() async {
+    func testMarkMessageDelivered() async throws {
         let messageId = "msg-001"
         let sessionId = "session-123"
         
@@ -176,7 +176,7 @@ final class MessageQueueManagerTests: XCTestCase {
     // MARK: - Clear Queue Tests
     
     @MainActor
-    func testClearQueueForSession() async {
+    func testClearQueueForSession() async throws {
         let sessionId = "session-123"
         let otherSessionId = "session-456"
         
@@ -202,7 +202,7 @@ final class MessageQueueManagerTests: XCTestCase {
     }
     
     @MainActor
-    func testClearAllQueues() async {
+    func testClearAllQueues() async throws {
         queueManager.trackQueuedMessage(messageId: "msg-001", sessionId: "session-123")
         queueManager.trackQueuedMessage(messageId: "msg-002", sessionId: "session-456")
         
@@ -388,7 +388,7 @@ final class MessageQueueManagerTests: XCTestCase {
     // MARK: - Thread Safety Tests
     
 @MainActor
-    func testConcurrentQueueOperations() async {
+    func testConcurrentQueueOperations() async throws {
         guard !isCI else {
             throw XCTSkip("Skipping concurrent test in CI environment")
         }
@@ -418,7 +418,7 @@ final class MessageQueueManagerTests: XCTestCase {
     }
     
 @MainActor
-    func testConcurrentDeliveryOperations() async {
+    func testConcurrentDeliveryOperations() async throws {
         guard !isCI else {
             throw XCTSkip("Skipping concurrent test in CI environment")
         }
@@ -474,7 +474,7 @@ final class MessageQueueManagerTests: XCTestCase {
     }
     
 @MainActor
-    func testMultiplePriorities() async {
+    func testMultiplePriorities() async throws {
         queueManager.trackQueuedMessage(messageId: "msg-high", sessionId: "session-123", priority: 10)
         queueManager.trackQueuedMessage(messageId: "msg-low", sessionId: "session-123", priority: 1)
         queueManager.trackQueuedMessage(messageId: "msg-normal", sessionId: "session-123", priority: 5)
@@ -490,7 +490,7 @@ final class MessageQueueManagerTests: XCTestCase {
     }
     
 @MainActor
-    func testOldestQueuedTimestamp() async {
+    func testOldestQueuedTimestamp() async throws {
         let firstTime = Date()
         queueManager.trackQueuedMessage(messageId: "msg-001", sessionId: "session-123")
         
@@ -509,7 +509,7 @@ final class MessageQueueManagerTests: XCTestCase {
     }
     
 @MainActor
-    func testCleanupDeliveredMessages() async {
+    func testCleanupDeliveredMessages() async throws {
         // This method is called internally after marking messages as delivered
         queueManager.trackQueuedMessage(messageId: "msg-001", sessionId: "session-123")
         queueManager.markMessageDelivered(messageId: "msg-001")
@@ -537,7 +537,7 @@ final class MessageQueueManagerTests: XCTestCase {
     // MARK: - Performance Tests
     
 @MainActor
-    func testLargeQueuePerformance() async {
+    func testLargeQueuePerformance() async throws {
         let messageCount = 1000
         let startTime = Date()
         

@@ -344,7 +344,11 @@ final class WebSocketManagerTests: XCTestCase {
     
     // MARK: - Performance Tests
     
-    func testPerformanceOfMessageSerialization() {
+    func testPerformanceOfMessageSerialization() throws {
+        guard !isCI else {
+            throw XCTSkip("Skipping performance test in CI environment")
+        }
+        
         measure {
             for i in 0..<100 {
                 let askData = AskRequest(message: "Performance test message \(i)", options: nil)

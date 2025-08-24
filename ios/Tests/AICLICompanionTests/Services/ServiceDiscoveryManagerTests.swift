@@ -523,7 +523,11 @@ final class ServiceDiscoveryManagerTests: XCTestCase {
     
     // MARK: - Performance Tests
     
-    func testPerformanceOfServerCreation() {
+    func testPerformanceOfServerCreation() throws {
+        guard !isCI else {
+            throw XCTSkip("Skipping performance test in CI environment")
+        }
+        
         measure {
             let netService = NetService(domain: "local.", type: "_aiclicode._tcp.", name: "Perf Test")
             

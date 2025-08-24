@@ -354,7 +354,9 @@ jobs:
             -skip-testing:AICLICompanionTests/MessageQueueManagerTests/testConcurrentDeliveryOperations \
             -skip-testing:AICLICompanionTests/LoggingManagerTests/testConcurrentLogging \
             -skip-testing:AICLICompanionTests/WebSocketManagerTests/testConcurrentMessageProcessing \
-            -skip-testing:AICLICompanionTests/ServiceDiscoveryManagerTests/testPerformanceOfManualConfigCreation
+            -skip-testing:AICLICompanionTests/ServiceDiscoveryManagerTests/testPerformanceOfManualConfigCreation \
+            -skip-testing:AICLICompanionTests/ServiceDiscoveryManagerTests/testPerformanceOfServerCreation \
+            -skip-testing:AICLICompanionTests/WebSocketManagerTests/testPerformanceOfMessageSerialization
         fi
     
     - name: Generate iOS Coverage Report

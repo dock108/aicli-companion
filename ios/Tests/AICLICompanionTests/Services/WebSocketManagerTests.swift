@@ -314,10 +314,9 @@ final class WebSocketManagerTests: XCTestCase {
     
     // MARK: - Concurrent Access Tests
     
-    func testConcurrentMessageProcessing() {
+    func testConcurrentMessageProcessing() throws {
         guard !isCI else {
-            XCTSkip("Skipping concurrent test in CI environment")
-            return
+            throw XCTSkip("Skipping concurrent test in CI environment")
         }
         
         let expectation = XCTestExpectation(description: "Concurrent message processing")

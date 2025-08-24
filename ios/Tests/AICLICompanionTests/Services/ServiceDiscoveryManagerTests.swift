@@ -548,10 +548,9 @@ final class ServiceDiscoveryManagerTests: XCTestCase {
         }
     }
     
-    func testPerformanceOfManualConfigCreation() {
+    func testPerformanceOfManualConfigCreation() throws {
         guard !isCI else {
-            XCTSkip("Skipping performance test in CI environment")
-            return
+            throw XCTSkip("Skipping performance test in CI environment")
         }
         
         measure {

@@ -25,10 +25,9 @@ final class MessageQueueManagerTests: XCTestCase {
     
     // MARK: - Basic Queue Operations Tests
     
-    func testInitialState() {
+    func testInitialState() throws {
         guard !isCI else {
-            XCTSkip("Skipping singleton state test in CI environment")
-            return
+            throw XCTSkip("Skipping singleton state test in CI environment")
         }
         
         // Clear any existing state from singleton

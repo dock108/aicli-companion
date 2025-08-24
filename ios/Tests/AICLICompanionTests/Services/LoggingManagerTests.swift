@@ -389,10 +389,9 @@ final class LoggingManagerTests: XCTestCase {
         XCTAssertLessThan(duration, 1.0)
     }
     
-    func testConcurrentLogging() {
+    func testConcurrentLogging() throws {
         guard !isCI else {
-            XCTSkip("Skipping concurrent test in CI environment")
-            return
+            throw XCTSkip("Skipping concurrent test in CI environment")
         }
         
         let expectation = XCTestExpectation(description: "Concurrent logging")

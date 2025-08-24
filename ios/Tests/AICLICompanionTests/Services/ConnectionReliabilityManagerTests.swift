@@ -138,10 +138,9 @@ final class ConnectionReliabilityManagerTests: XCTestCase {
         }
     }
     
-    func testExponentialBackoffProgression() {
+    func testExponentialBackoffProgression() throws {
         guard !isCI else {
-            XCTSkip("Skipping timing-sensitive test in CI environment")
-            return
+            throw XCTSkip("Skipping timing-sensitive test in CI environment")
         }
         
         let manager = ConnectionReliabilityManager.shared
@@ -245,10 +244,9 @@ final class ConnectionReliabilityManagerTests: XCTestCase {
         XCTAssertEqual(manager.connectionQuality, .excellent)
     }
     
-    func testHandleConnectionLost() {
+    func testHandleConnectionLost() throws {
         guard !isCI else {
-            XCTSkip("Skipping singleton state test in CI environment")
-            return
+            throw XCTSkip("Skipping singleton state test in CI environment")
         }
         
         let manager = ConnectionReliabilityManager.shared
@@ -446,10 +444,9 @@ final class ConnectionReliabilityManagerTests: XCTestCase {
         XCTAssertNotNil(manager.connectionQuality)
     }
     
-    func testRecordDisconnection() {
+    func testRecordDisconnection() throws {
         guard !isCI else {
-            XCTSkip("Skipping singleton state test in CI environment")
-            return
+            throw XCTSkip("Skipping singleton state test in CI environment")
         }
         
         let manager = ConnectionReliabilityManager.shared

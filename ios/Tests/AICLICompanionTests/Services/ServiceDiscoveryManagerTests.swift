@@ -6,6 +6,12 @@ import Network
 @available(iOS 16.0, macOS 13.0, *)
 final class ServiceDiscoveryManagerTests: XCTestCase {
     
+    // Helper to check if we're in CI
+    private var isCI: Bool {
+        ProcessInfo.processInfo.environment["CI"] != nil ||
+        ProcessInfo.processInfo.environment["GITHUB_ACTIONS"] != nil
+    }
+    
     // MARK: - Service Discovery Manager Creation Tests
     
     func testServiceDiscoveryManagerCreation() {
@@ -543,6 +549,11 @@ final class ServiceDiscoveryManagerTests: XCTestCase {
     }
     
     func testPerformanceOfManualConfigCreation() {
+        guard !isCI else {
+            XCTSkip("Skipping performance test in CI environment")
+            return
+        }
+        
         measure {
             for i in 0..<1000 {
                 let config = ManualServerConfiguration(

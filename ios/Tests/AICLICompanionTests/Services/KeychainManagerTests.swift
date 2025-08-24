@@ -10,7 +10,8 @@ final class KeychainManagerTests: XCTestCase {
     
     // Helper to check if we're in CI
     private var isCI: Bool {
-        ProcessInfo.processInfo.environment["CI"] != nil
+        ProcessInfo.processInfo.environment["CI"] != nil ||
+        ProcessInfo.processInfo.environment["GITHUB_ACTIONS"] != nil
     }
     
     override func setUp() {

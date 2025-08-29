@@ -15,11 +15,15 @@ Need to implement a comprehensive autonomous coding agent system that shifts the
 
 The system should provide:
 
-**Core Agent Intelligence:**
+**Core Agent Intelligence (Includes Auto-Reply from Issue #4):**
+- Automatic conversation continuation without manual intervention
+- Intelligent response generation based on Claude's output
 - "continue testing" - proceed with current test suite
 - "reread claude cause you didn't follow the rules" - review guidelines and correct approach  
 - "it's time for the next sprint" - move to next development phase
 - "hey we really hit a showstopper drop everything and alert Mike" - escalate critical issues
+- Smart stop conditions (iteration limits, task completion, errors)
+- Repository rules (CLAUDE.md) integration for context-aware replies
 
 **Professional Project Creation Workflow:**
 - In-app project creation with enterprise-grade template files
@@ -286,6 +290,11 @@ ios/Sources/AICLICompanion/Views/MainTabView.swift - add project browser tab
 - DFS ML Project TDD Structure: `/Users/michaelfuscoletti/Desktop/dfs_ml/plan.md`
 - Persistence Guidelines: `/Users/michaelfuscoletti/Desktop/dfs_ml/CLAUDE.md`  
 - Comprehensive Task Template: `/Users/michaelfuscoletti/Desktop/dfs_ml/issues/template.md`
+
+**Related Issues**:
+- **Issue #32** (Intelligent Project Onboarding): This autonomous agent USES #32's project creation system
+- **Issue #4** (Auto-Reply - SUPERSEDED): All auto-reply functionality is now part of this issue
+- **Issue #33** (macOS Companion): Future expansion for cross-platform development
 
 **Future Dependencies**:
 - **Issue #33** (Planned): macOS Development Companion Expansion

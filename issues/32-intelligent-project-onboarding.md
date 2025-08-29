@@ -11,6 +11,8 @@
 
 Need to implement a comprehensive intelligent project onboarding system that provides professional-grade project creation with built-in planning validation. The system should guide users through proper project setup, validate requirements completeness, and ensure projects start with everything needed for successful development.
 
+**Note: This is a STANDALONE feature** that can be used independently. While Issue #34 (Autonomous Coding Agent) will leverage this system for project creation, Issue #32 provides value on its own for users who want intelligent project setup without full automation.
+
 **This tool is specifically designed for building modular, production-grade applications** - not quick prompts or proof-of-concepts. It's for technical users who need structured, enterprise-level development workflows: experienced engineers building real production systems with proper architecture, testing, and deployment considerations.
 
 The system should provide:

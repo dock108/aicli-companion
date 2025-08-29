@@ -80,8 +80,18 @@ struct MarkdownParser {
                 var filePathString = AttributedString(path)
                 filePathString.foregroundColor = .blue
                 filePathString.underlineStyle = .single
-                // Store file path metadata for tap handling
+                // Create a custom URL that we can parse later
+                // Using a custom scheme to avoid file:// URL parsing issues
+                var urlString = "aicli-file://\(path)"
+                if let lineNumber = lineNumber {
+                    urlString += "#\(lineNumber)"
+                }
+                if let url = URL(string: urlString) {
+                    filePathString.link = url
+                }
+                // Also store file path metadata for debugging
                 filePathString.filePathMetadata = FilePathMetadata(path: path, lineNumber: lineNumber)
+                print("📄 [MARKDOWN PARSER] Added file path as link: \(path), line: \(lineNumber?.description ?? "nil")")
                 attributedString += filePathString
             case .heading(let level, let text):
                 var headingString = AttributedString(text)
@@ -101,7 +111,60 @@ struct MarkdownParser {
                 if index > 0 && !isFirstListItem(at: index, in: contentParts) {
                     attributedString += AttributedString("\n")
                 }
-                attributedString += AttributedString("• \(text)")
+                
+                // Add bullet point
+                attributedString += AttributedString("• ")
+                
+                // Parse the list item text for inline formatting including file paths
+                let inlineParts = parseInlineMarkdown(text)
+                for inlinePart in inlineParts {
+                    switch inlinePart {
+                    case .text(let string):
+                        attributedString += AttributedString(string)
+                    case .bold(let string):
+                        var boldString = AttributedString(string)
+                        boldString.font = .body.bold()
+                        attributedString += boldString
+                    case .italic(let string):
+                        var italicString = AttributedString(string)
+                        italicString.font = .body.italic()
+                        attributedString += italicString
+                    case .code(let string):
+                        var codeString = AttributedString(string)
+                        codeString.font = .system(.body, design: .monospaced)
+                        codeString.backgroundColor = .secondary.opacity(0.2)
+                        attributedString += codeString
+                    case .link(let text, let url):
+                        var linkString = AttributedString(text)
+                        linkString.foregroundColor = .blue
+                        linkString.underlineStyle = .single
+                        if let linkURL = URL(string: url) {
+                            linkString.link = linkURL
+                        }
+                        attributedString += linkString
+                    case .filePath(let path, let lineNumber):
+                        var filePathString = AttributedString(path)
+                        filePathString.foregroundColor = .blue
+                        filePathString.underlineStyle = .single
+                        // Create a custom URL that we can parse later
+                        // Using a custom scheme to avoid file:// URL parsing issues
+                        var urlString = "aicli-file://\(path)"
+                        if let lineNumber = lineNumber {
+                            urlString += "#\(lineNumber)"
+                        }
+                        if let url = URL(string: urlString) {
+                            filePathString.link = url
+                        }
+                        // Also store file path metadata for debugging
+                        filePathString.filePathMetadata = FilePathMetadata(path: path, lineNumber: lineNumber)
+                        print("📄 [MARKDOWN PARSER] Added inline file path as link: \(path), line: \(lineNumber?.description ?? "nil")")
+                        attributedString += filePathString
+                    default:
+                        // For any other inline parts, just add as text
+                        attributedString += AttributedString("\(inlinePart)")
+                    }
+                }
+                
                 // Only add newline if not the last element
                 if !isLastPart {
                     attributedString += AttributedString("\n")
@@ -200,8 +263,9 @@ struct MarkdownParser {
     private static func parseListItem(_ line: String) -> ContentPart? {
         let trimmed = line.trimmingCharacters(in: .leadingWhitespaces)
         
-        if trimmed.hasPrefix("- ") || trimmed.hasPrefix("* ") {
-            return .listItem(String(trimmed.dropFirst(2)))
+        if trimmed.hasPrefix("- ") || trimmed.hasPrefix("* ") || trimmed.hasPrefix("• ") {
+            let prefix = trimmed.hasPrefix("• ") ? "• " : (trimmed.hasPrefix("- ") ? "- " : "* ")
+            return .listItem(String(trimmed.dropFirst(prefix.count)))
         }
         
         return nil
@@ -212,7 +276,20 @@ struct MarkdownParser {
         var remaining = text
         
         while !remaining.isEmpty {
-            // Check for links first
+            // Check for file paths first (before links)
+            if let (filePathPart, filePathRange) = parseFilePath(from: remaining) {
+                // Add text before file path if any
+                let beforeFilePath = String(remaining[remaining.startIndex..<filePathRange.lowerBound])
+                if !beforeFilePath.isEmpty {
+                    parts.append(contentsOf: parseFormattedText(beforeFilePath))
+                }
+                
+                parts.append(filePathPart)
+                remaining = String(remaining[filePathRange.upperBound...])
+                continue
+            }
+            
+            // Check for links
             if let (linkPart, linkRange) = parseLink(from: remaining) {
                 // Add text before link if any
                 let beforeLink = String(remaining[remaining.startIndex..<linkRange.lowerBound])
@@ -338,6 +415,109 @@ struct MarkdownParser {
         return (.link(linkText, url: linkURL), linkRange)
     }
     
+    private static func parseFilePath(from text: String) -> (part: ContentPart, range: Range<String.Index>)? {
+        // File path patterns to match - simplified for better reliability
+        let patterns = [
+            // Pattern 1: Backtick-enclosed filenames: `filename.py`, `README_LOTTERY.md`
+            "`([a-zA-Z0-9_.-]+\\.[a-zA-Z0-9]{1,10})`",
+            
+            // Pattern 2: Simple standalone filenames with word boundaries
+            "\\b([a-zA-Z][a-zA-Z0-9_.-]*\\.[a-zA-Z0-9]{1,6})\\b",
+            
+            // Pattern 3: Paths with directories
+            "\\b((?:[a-zA-Z0-9_.-]+/)+[a-zA-Z0-9_.-]+\\.[a-zA-Z0-9]{1,6})\\b",
+            
+            // Pattern 4: Relative paths starting with ./
+            "\\b(\\.{1,2}/[a-zA-Z0-9_./.-]+\\.[a-zA-Z0-9]{1,6})\\b"
+        ]
+        
+        for (index, pattern) in patterns.enumerated() {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+                continue
+            }
+            
+            let nsRange = NSRange(text.startIndex..<text.endIndex, in: text)
+            guard let match = regex.firstMatch(in: text, range: nsRange),
+                  match.numberOfRanges >= 2 else {
+                continue
+            }
+            
+            // Get the captured group (the actual file path)
+            let captureRange = match.range(at: 1)
+            guard let pathRange = Range(captureRange, in: text) else { continue }
+            
+            let fullPath = String(text[pathRange])
+            
+            // For backtick pattern (index 0), we want to use the full match range for visual consistency
+            let visualRange = index == 0 ? Range(match.range(at: 0), in: text)! : pathRange
+            
+            // Parse line number if present
+            var filePath = fullPath
+            var lineNumber: Int?
+            
+            if let colonIndex = fullPath.lastIndex(of: ":") {
+                let afterColon = String(fullPath[fullPath.index(after: colonIndex)...])
+                if let lineNum = Int(afterColon) {
+                    filePath = String(fullPath[..<colonIndex])
+                    lineNumber = lineNum
+                }
+            }
+            
+            // Validate that this looks like a real file path
+            if isValidFilePath(filePath) {
+                return (.filePath(filePath, lineNumber: lineNumber), visualRange)
+            }
+        }
+        
+        return nil
+    }
+    
+    private static func isValidFilePath(_ path: String) -> Bool {
+        // Basic validation to avoid false positives
+        
+        // Must have a file extension
+        guard let dotIndex = path.lastIndex(of: ".") else { return false }
+        
+        // Must not be just a number or very short
+        guard path.count >= 3 else { return false }
+        
+        // Extract file extension
+        let extensionStartIndex = path.index(after: dotIndex)
+        let fileExtension = String(path[extensionStartIndex...]).lowercased()
+        
+        // Must have a reasonable extension length (1-10 chars)
+        guard fileExtension.count >= 1 && fileExtension.count <= 10 else { return false }
+        
+        // Check if extension contains only alphanumeric characters
+        guard fileExtension.allSatisfy({ $0.isLetter || $0.isNumber }) else { return false }
+        
+        // Common file extensions that Claude might reference
+        let commonExtensions = Set([
+            "js", "ts", "jsx", "tsx", "py", "swift", "java", "cpp", "c", "h", "hpp",
+            "go", "rs", "rb", "php", "html", "css", "scss", "sass", "json", "xml",
+            "yml", "yaml", "toml", "md", "txt", "sh", "bat", "sql", "r", "m", "mm",
+            "vue", "svelte", "dart", "kt", "scala", "clj", "hs", "elm", "ex", "exs",
+            "cfg", "ini", "conf", "log", "csv", "tsv", "env", "dockerfile", "lock"
+        ])
+        
+        let pathLower = path.lowercased()
+        
+        // Accept if:
+        // 1. Has a common extension
+        // 2. Looks like a file path (contains /)
+        // 3. Starts with relative path indicators
+        // 4. Has any reasonable file extension (not in our list but looks valid)
+        return commonExtensions.contains(fileExtension) ||
+               path.contains("/") ||
+               path.hasPrefix("./") ||
+               path.hasPrefix("../") ||
+               // Accept any file with reasonable extension if it looks like a filename
+               (fileExtension.count >= 1 && fileExtension.count <= 6 &&
+                path.count >= 4 &&
+                !path.contains(" ") && // No spaces
+                path.first?.isLetter == true) // Starts with letter
+    }
+    
     // MARK: - Helper Functions
     
     private static func isFirstListItem(at index: Int, in parts: [ContentPart]) -> Bool {
@@ -366,6 +546,8 @@ struct MarkdownParser {
                 return string
             case .link(let text, _):
                 return text
+            case .filePath(let path, let lineNumber):
+                return lineNumber != nil ? "\(path):\(lineNumber!)" : path
             case .heading(_, let text), .listItem(let text):
                 return text
             case .codeBlock(let code, _):

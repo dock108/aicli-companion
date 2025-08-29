@@ -62,18 +62,65 @@ struct MessageContentRenderer {
     // MARK: - AI Bubble Rendering
     
     static func aiBubble(for message: Message, colorScheme: ColorScheme, clipboardManager: ClipboardManager) -> some View {
+        AIBubbleContent(message: message, colorScheme: colorScheme, clipboardManager: clipboardManager)
+    }
+}
+
+// MARK: - AI Bubble Content Component
+
+@available(iOS 17.0, macOS 14.0, *)
+private struct AIBubbleContent: View {
+    let message: Message
+    let colorScheme: ColorScheme
+    let clipboardManager: ClipboardManager
+    
+    @State private var selectedFilePath: String?
+    @State private var selectedLineNumber: Int?
+    @State private var showFileViewer = false
+    
+    var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Message content
             VStack(alignment: .leading, spacing: 0) {
-                // Render formatted content
-                // Trim trailing whitespace/newlines before parsing
+                // Render formatted content with file path click handling
                 let trimmedContent = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
-                Text(MarkdownParser.parseMarkdown(trimmedContent))
+                let parsedContent = MarkdownParser.parseMarkdown(trimmedContent)
+                
+                Text(parsedContent)
                     .font(Typography.font(.body))
                     .foregroundColor(Colors.textPrimary(for: colorScheme))
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
+                    .environment(\.openURL, OpenURLAction { url in
+                        // Check if this is a file path URL with our custom scheme
+                        if url.scheme == "aicli-file" {
+                            // Extract the path from the URL host and path components
+                            // The URL format is aicli-file://path/to/file
+                            let fullPath = url.absoluteString
+                                .replacingOccurrences(of: "aicli-file://", with: "")
+                                .components(separatedBy: "#")[0] // Remove fragment if present
+                            
+                            print("📄 [FILE LINK] File path tapped: \(fullPath)")
+                            
+                            // Extract line number if present
+                            var lineNumber: Int?
+                            if let fragment = url.fragment, let line = Int(fragment) {
+                                lineNumber = line
+                            }
+                            
+                            // Resolve and open the file
+                            let resolvedPath = resolveFilePath(fullPath)
+                            print("📄 [FILE LINK] Resolved path: \(resolvedPath)")
+                            
+                            selectedFilePath = resolvedPath
+                            selectedLineNumber = lineNumber
+                            showFileViewer = true
+                            
+                            return .handled
+                        }
+                        return .systemAction(url)
+                    })
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 14)
@@ -111,16 +158,65 @@ struct MessageContentRenderer {
             }
             
             Button(action: {
-                shareMessage(message)
+                MessageContentRenderer.shareMessage(message)
             }) {
                 Label("Share", systemImage: "square.and.arrow.up")
             }
         }
+        .sheet(isPresented: $showFileViewer) {
+            if let filePath = selectedFilePath {
+                FileViewerSheet(filePath: filePath, lineNumber: selectedLineNumber)
+                    .onAppear {
+                        print("📄 [SHEET] Presenting FileViewerSheet for: \(filePath)")
+                    }
+            } else {
+                Text("No file selected")
+                    .onAppear {
+                        print("📄 [SHEET] ❌ No file path set for sheet presentation")
+                    }
+            }
+        }
+        .onChange(of: showFileViewer) { _, newValue in
+            print("📄 [SHEET STATE] showFileViewer changed to: \(newValue)")
+        }
     }
     
-    // MARK: - Helper Functions
+    // MARK: - Path Resolution Helper
     
-    private static func shareMessage(_ message: Message) {
+    private func resolveFilePath(_ filePath: String) -> String {
+        // If it's already an absolute path, return as-is
+        if filePath.hasPrefix("/") {
+            return filePath
+        }
+        
+        // Try to get the current project path
+        guard let projectStateManager = try? DependencyContainer.shared.projectStateManager,
+              let currentProject = projectStateManager.currentProject else {
+            // Fallback: return the original path and let server handle it
+            return filePath
+        }
+        
+        let projectPath = currentProject.path
+        
+        // If the file path contains directory separators, try it as a relative path first
+        if filePath.contains("/") {
+            let resolvedPath = (projectPath as NSString).appendingPathComponent(filePath)
+            return resolvedPath
+        }
+        
+        // For just filenames, we'll pass the filename and let the server search for it
+        // The server is better positioned to do efficient file system searches
+        // But we'll provide the project path as working directory context
+        return filePath
+    }
+}
+
+
+// MARK: - Helper Functions Extension
+
+@available(iOS 17.0, macOS 14.0, *)
+extension MessageContentRenderer {
+    static func shareMessage(_ message: Message) {
         #if os(iOS)
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
               let window = windowScene.windows.first,

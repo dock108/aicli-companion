@@ -238,6 +238,10 @@ struct ChatView: View {
         
         print("🔷 ChatView: Setting up for project '\(project.name)'")
         
+        // Store the current project path for FileContentService to use
+        UserDefaults.standard.set(project.path, forKey: "currentProjectPath")
+        print("🔷 ChatView: Stored project path for file access: \(project.path)")
+        
         // Set the current project in the view model
         viewModel.setCurrentProject(project)
         

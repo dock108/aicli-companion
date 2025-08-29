@@ -875,7 +875,7 @@ router.post('/kill', async (req, res) => {
   try {
     // Get AICLI service from app instance
     const aicliService = req.app.get('aicliService');
-    
+
     if (!aicliService) {
       logger.error('AICLI service not initialized', { requestId });
       return res.status(500).json({

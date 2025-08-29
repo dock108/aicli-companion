@@ -1,6 +1,31 @@
 import SwiftUI
 import Foundation
 
+// MARK: - File Path Metadata
+
+struct FilePathMetadata: Codable, Hashable {
+    let path: String
+    let lineNumber: Int?
+}
+
+// MARK: - AttributedString Extension for File Paths
+
+struct FilePathAttributeKey: AttributedStringKey {
+    typealias Value = FilePathMetadata
+    static let name = "filePathMetadata"
+}
+
+extension AttributeScopes.SwiftUIAttributes {
+    var filePathMetadata: FilePathAttributeKey.Type { FilePathAttributeKey.self }
+}
+
+extension AttributedString {
+    var filePathMetadata: FilePathMetadata? {
+        get { self[FilePathAttributeKey.self] }
+        set { self[FilePathAttributeKey.self] = newValue }
+    }
+}
+
 // MARK: - Markdown Parsing Utilities
 
 struct MarkdownParser {
@@ -12,6 +37,7 @@ struct MarkdownParser {
         case italic(String)
         case code(String)
         case link(String, url: String)
+        case filePath(String, lineNumber: Int?)
         case heading(level: Int, text: String)
         case listItem(String)
         case codeBlock(String, language: String?)
@@ -50,6 +76,13 @@ struct MarkdownParser {
                     linkString.link = linkURL
                 }
                 attributedString += linkString
+            case .filePath(let path, let lineNumber):
+                var filePathString = AttributedString(path)
+                filePathString.foregroundColor = .blue
+                filePathString.underlineStyle = .single
+                // Store file path metadata for tap handling
+                filePathString.filePathMetadata = FilePathMetadata(path: path, lineNumber: lineNumber)
+                attributedString += filePathString
             case .heading(let level, let text):
                 var headingString = AttributedString(text)
                 headingString.font = headingFont(for: level)

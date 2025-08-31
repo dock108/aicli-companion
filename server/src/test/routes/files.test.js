@@ -250,6 +250,131 @@ describe('Files Routes', () => {
       assert.ok(response.status === 400 || response.status === 403);
       assert.strictEqual(response.body.success, false);
     });
+
+    it('should reject working directory with control characters', async () => {
+      const filesRouter = (await import('../../routes/files.js')).default;
+      app.use('/api/files', filesRouter);
+
+      const response = await request(app).post('/api/files/content').send({
+        path: 'test.js',
+        workingDirectory: 'test\x00dir',
+      });
+
+      assert.strictEqual(response.status, 400);
+      assert.strictEqual(response.body.success, false);
+      assert.strictEqual(response.body.error, 'INVALID_WORKING_DIRECTORY');
+    });
+
+    it('should handle absolute paths within root directory', async () => {
+      const filesRouter = (await import('../../routes/files.js')).default;
+      app.use('/api/files', filesRouter);
+
+      const cwd = process.cwd();
+      const response = await request(app).post('/api/files/content').send({
+        path: 'package.json',
+        workingDirectory: cwd,
+      });
+
+      // Should accept absolute path within root
+      assert.ok(response.status === 200 || response.status === 404);
+    });
+
+    it('should reject absolute paths outside root directory', async () => {
+      const filesRouter = (await import('../../routes/files.js')).default;
+      app.use('/api/files', filesRouter);
+
+      const response = await request(app).post('/api/files/content').send({
+        path: 'test.js',
+        workingDirectory: '/etc',
+      });
+
+      assert.strictEqual(response.status, 400);
+      assert.strictEqual(response.body.success, false);
+      assert.strictEqual(response.body.error, 'INVALID_WORKING_DIRECTORY');
+    });
+
+    it('should handle valid relative working directory', async () => {
+      const filesRouter = (await import('../../routes/files.js')).default;
+      app.use('/api/files', filesRouter);
+
+      const response = await request(app).post('/api/files/content').send({
+        path: 'package.json',
+        workingDirectory: 'src',
+      });
+
+      // Should work with valid relative directory
+      assert.ok(response.status === 200 || response.status === 404);
+    });
+
+    it('should handle empty working directory', async () => {
+      const filesRouter = (await import('../../routes/files.js')).default;
+      app.use('/api/files', filesRouter);
+
+      const response = await request(app).post('/api/files/content').send({
+        path: 'package.json',
+        workingDirectory: '',
+      });
+
+      // Empty working directory should default to root
+      assert.ok(response.status === 200 || response.status === 404);
+    });
+
+    it('should handle null working directory', async () => {
+      const filesRouter = (await import('../../routes/files.js')).default;
+      app.use('/api/files', filesRouter);
+
+      const response = await request(app).post('/api/files/content').send({
+        path: 'package.json',
+        workingDirectory: null,
+      });
+
+      // Null working directory should default to root
+      assert.ok(response.status === 200 || response.status === 404);
+    });
+
+    it('should handle working directory that is a file', async () => {
+      const filesRouter = (await import('../../routes/files.js')).default;
+      app.use('/api/files', filesRouter);
+
+      const response = await request(app).post('/api/files/content').send({
+        path: 'test.js',
+        workingDirectory: 'package.json',
+      });
+
+      assert.strictEqual(response.status, 400);
+      assert.strictEqual(response.body.success, false);
+      assert.strictEqual(response.body.error, 'INVALID_WORKING_DIRECTORY');
+    });
+
+    it('should successfully read file with valid path', async () => {
+      const filesRouter = (await import('../../routes/files.js')).default;
+      app.use('/api/files', filesRouter);
+
+      const response = await request(app).post('/api/files/content').send({
+        path: 'package.json',
+        workingDirectory: '.',
+      });
+
+      if (response.status === 200) {
+        assert.strictEqual(response.body.success, true);
+        assert.ok(response.body.content);
+        assert.strictEqual(response.body.content.filename, 'package.json');
+      }
+    });
+
+    it('should handle file search by filename only', async () => {
+      const filesRouter = (await import('../../routes/files.js')).default;
+      app.use('/api/files', filesRouter);
+
+      const response = await request(app).post('/api/files/content').send({
+        path: 'package.json',
+      });
+
+      if (response.status === 200) {
+        assert.strictEqual(response.body.success, true);
+        assert.ok(response.body.content);
+      }
+    });
   });
 
   describe('GET /api/files/info', () => {
@@ -288,6 +413,65 @@ describe('Files Routes', () => {
       // The info endpoint returns 403 when file doesn't exist due to path validation
       assert.ok(response.status === 403 || response.status === 404);
       assert.strictEqual(response.body.success, false);
+    });
+
+    it('should reject invalid working directory in GET endpoint', async () => {
+      const filesRouter = (await import('../../routes/files.js')).default;
+      app.use('/api/files', filesRouter);
+
+      const response = await request(app).get('/api/files/info').query({
+        path: 'test.js',
+        workingDirectory: '/nonexistent/directory',
+      });
+
+      assert.strictEqual(response.status, 400);
+      assert.strictEqual(response.body.success, false);
+      assert.strictEqual(response.body.error, 'INVALID_WORKING_DIRECTORY');
+    });
+
+    it('should handle absolute path outside root in GET endpoint', async () => {
+      const filesRouter = (await import('../../routes/files.js')).default;
+      app.use('/api/files', filesRouter);
+
+      const response = await request(app).get('/api/files/info').query({
+        path: 'test.js',
+        workingDirectory: '/etc',
+      });
+
+      assert.strictEqual(response.status, 400);
+      assert.strictEqual(response.body.success, false);
+      assert.strictEqual(response.body.error, 'INVALID_WORKING_DIRECTORY');
+    });
+
+    it('should handle working directory with control characters in GET endpoint', async () => {
+      const filesRouter = (await import('../../routes/files.js')).default;
+      app.use('/api/files', filesRouter);
+
+      const response = await request(app).get('/api/files/info').query({
+        path: 'test.js',
+        workingDirectory: 'test\x00dir',
+      });
+
+      assert.strictEqual(response.status, 400);
+      assert.strictEqual(response.body.success, false);
+      assert.strictEqual(response.body.error, 'INVALID_WORKING_DIRECTORY');
+    });
+
+    it('should get info for valid file', async () => {
+      const filesRouter = (await import('../../routes/files.js')).default;
+      app.use('/api/files', filesRouter);
+
+      const response = await request(app).get('/api/files/info').query({
+        path: 'package.json',
+        workingDirectory: '.',
+      });
+
+      if (response.status === 200) {
+        assert.strictEqual(response.body.success, true);
+        assert.ok(response.body.info);
+        assert.strictEqual(response.body.info.filename, 'package.json');
+        assert.ok(response.body.info.canView);
+      }
     });
   });
 

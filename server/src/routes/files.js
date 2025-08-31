@@ -22,25 +22,89 @@ async function validateWorkingDirectory(workingDirectory) {
     return ROOT_DIRECTORY;
   }
 
-  // Resolve the working directory against the root
-  const resolvedDir = path.resolve(ROOT_DIRECTORY, workingDirectory);
-  
-  try {
-    // Get the real path to handle symlinks
-    const realPath = await fs.realpath(resolvedDir);
-    
-    // Ensure the resolved path is within the root directory
-    if (!realPath.startsWith(ROOT_DIRECTORY)) {
-      logger.warn(`Blocked attempt to escape root directory: ${workingDirectory} -> ${realPath}`);
-      throw new Error('Working directory is outside the allowed root');
+  // Sanitize the input to remove any null bytes or control characters
+  // eslint-disable-next-line no-control-regex
+  const sanitized = workingDirectory.replace(/[\x00-\x1f\x7f]/g, '');
+  if (sanitized !== workingDirectory) {
+    logger.warn(`Rejected working directory with control characters: ${workingDirectory}`);
+    throw new Error('Invalid working directory');
+  }
+
+  // Normalize the path to remove .. and . segments
+  const normalized = path.normalize(workingDirectory);
+
+  // Check for obvious path traversal attempts
+  if (normalized.includes('..') || path.isAbsolute(normalized)) {
+    // If it's an absolute path, ensure it's under ROOT_DIRECTORY
+    if (path.isAbsolute(normalized)) {
+      if (!normalized.startsWith(ROOT_DIRECTORY)) {
+        logger.warn(`Blocked absolute path outside root: ${workingDirectory}`);
+        throw new Error('Working directory is outside the allowed root');
+      }
+      // Use the absolute path as-is if it's within root
+      const resolvedDir = normalized;
+
+      try {
+        // Verify it exists and is a directory
+        const stats = await fs.stat(resolvedDir);
+        if (!stats.isDirectory()) {
+          throw new Error('Working directory is not a directory');
+        }
+
+        // Get real path to resolve symlinks
+        const realPath = await fs.realpath(resolvedDir);
+
+        // Double-check the real path is still within root
+        if (!realPath.startsWith(ROOT_DIRECTORY)) {
+          logger.warn(`Blocked symlink escape attempt: ${workingDirectory} -> ${realPath}`);
+          throw new Error('Working directory is outside the allowed root');
+        }
+
+        return realPath;
+      } catch (error) {
+        if (error.code === 'ENOENT') {
+          logger.warn(`Working directory does not exist: ${workingDirectory}`);
+          throw new Error('Working directory does not exist');
+        } else if (error.code === 'EACCES') {
+          logger.warn(`No access to working directory: ${workingDirectory}`);
+          throw new Error('Permission denied for working directory');
+        }
+        throw error;
+      }
     }
-    
+
+    // Reject relative paths with ..
+    if (normalized.includes('..')) {
+      logger.warn(`Blocked path traversal attempt: ${workingDirectory}`);
+      throw new Error('Path traversal not allowed');
+    }
+  }
+
+  // For relative paths, resolve against ROOT_DIRECTORY
+  const resolvedDir = path.resolve(ROOT_DIRECTORY, normalized);
+
+  // Ensure resolved path is within root (belt and suspenders)
+  if (!resolvedDir.startsWith(ROOT_DIRECTORY)) {
+    logger.warn(`Blocked attempt to escape root directory: ${workingDirectory} -> ${resolvedDir}`);
+    throw new Error('Working directory is outside the allowed root');
+  }
+
+  try {
     // Verify the directory exists and is accessible
-    const stats = await fs.stat(realPath);
+    const stats = await fs.stat(resolvedDir);
     if (!stats.isDirectory()) {
       throw new Error('Working directory is not a directory');
     }
-    
+
+    // Get the real path to handle symlinks
+    const realPath = await fs.realpath(resolvedDir);
+
+    // Final check: ensure the real path is still within the root directory
+    if (!realPath.startsWith(ROOT_DIRECTORY)) {
+      logger.warn(`Blocked symlink escape attempt: ${workingDirectory} -> ${realPath}`);
+      throw new Error('Working directory is outside the allowed root');
+    }
+
     return realPath;
   } catch (error) {
     if (error.code === 'ENOENT') {

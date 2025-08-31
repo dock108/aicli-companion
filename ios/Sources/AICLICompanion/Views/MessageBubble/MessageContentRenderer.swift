@@ -69,6 +69,7 @@ struct MessageContentRenderer {
 // MARK: - AI Bubble Content Component
 
 @available(iOS 17.0, macOS 14.0, *)
+@MainActor
 private struct AIBubbleContent: View {
     let message: Message
     let colorScheme: ColorScheme

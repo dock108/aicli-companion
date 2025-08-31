@@ -19,7 +19,7 @@ describe('Files Routes', () => {
 
       const response = await request(app)
         .post('/api/files/content')
-        .send({ workingDirectory: '/test/dir' });
+        .send({ workingDirectory: '.' });
 
       assert.strictEqual(response.status, 400);
       assert.strictEqual(response.body.success, false);
@@ -32,7 +32,7 @@ describe('Files Routes', () => {
 
       const response = await request(app).post('/api/files/content').send({
         path: '../../../etc/passwd',
-        workingDirectory: '/test/dir',
+        workingDirectory: '.', // Use current directory which exists
       });
 
       assert.strictEqual(response.status, 403);
@@ -46,7 +46,7 @@ describe('Files Routes', () => {
 
       const response = await request(app).post('/api/files/content').send({
         path: 'Makefile',
-        workingDirectory: '/test/dir',
+        workingDirectory: '.', // Use current directory which exists
       });
 
       // File doesn't exist, so it returns 404, not 415
@@ -60,7 +60,7 @@ describe('Files Routes', () => {
 
       const response = await request(app).post('/api/files/content').send({
         path: 'image.png',
-        workingDirectory: '/test/dir',
+        workingDirectory: '.', // Use current directory which exists
       });
 
       // File doesn't exist, so it returns 404, not 415
@@ -74,7 +74,7 @@ describe('Files Routes', () => {
 
       const response = await request(app).post('/api/files/content').send({
         path: '',
-        workingDirectory: '/test/dir',
+        workingDirectory: '.',
       });
 
       assert.strictEqual(response.status, 400);
@@ -87,7 +87,7 @@ describe('Files Routes', () => {
 
       const response = await request(app).post('/api/files/content').send({
         path: null,
-        workingDirectory: '/test/dir',
+        workingDirectory: '.',
       });
 
       assert.strictEqual(response.status, 400);
@@ -100,7 +100,7 @@ describe('Files Routes', () => {
 
       const response = await request(app).post('/api/files/content').send({
         path: 123,
-        workingDirectory: '/test/dir',
+        workingDirectory: '.',
       });
 
       assert.strictEqual(response.status, 400);
@@ -115,7 +115,7 @@ describe('Files Routes', () => {
         .post('/api/files/content')
         .send({
           path: ['file.js'],
-          workingDirectory: '/test/dir',
+          workingDirectory: '.',
         });
 
       assert.strictEqual(response.status, 400);
@@ -142,7 +142,7 @@ describe('Files Routes', () => {
 
       const response = await request(app).post('/api/files/content').send({
         path: 'file.js\x00.txt',
-        workingDirectory: '/test/dir',
+        workingDirectory: '.',
       });
 
       // Path security checks should reject this
@@ -156,7 +156,7 @@ describe('Files Routes', () => {
 
       const response = await request(app).post('/api/files/content').send({
         path: 'script.exe',
-        workingDirectory: '/test/dir',
+        workingDirectory: '.',
       });
 
       // File doesn't exist, so it returns 404, not 415
@@ -170,7 +170,7 @@ describe('Files Routes', () => {
 
       const response = await request(app).post('/api/files/content').send({
         path: 'archive.zip',
-        workingDirectory: '/test/dir',
+        workingDirectory: '.',
       });
 
       // File doesn't exist, so it returns 404, not 415
@@ -184,7 +184,7 @@ describe('Files Routes', () => {
 
       const response = await request(app).post('/api/files/content').send({
         path: 'nonexistent.js',
-        workingDirectory: '/test/dir',
+        workingDirectory: '.',
       });
 
       assert.strictEqual(response.status, 404);
@@ -197,7 +197,7 @@ describe('Files Routes', () => {
 
       const response = await request(app).post('/api/files/content').send({
         path: '/etc/passwd', // Absolute path outside working dir
-        workingDirectory: '/test/dir',
+        workingDirectory: '.',
       });
 
       assert.strictEqual(response.status, 403);
@@ -215,12 +215,40 @@ describe('Files Routes', () => {
           .post('/api/files/content')
           .send({
             path: `test${ext}`,
-            workingDirectory: '/test/dir',
+            workingDirectory: '.',
           });
 
         // Will be 404 because files don't exist, but should not be 415 (unsupported)
         assert.notStrictEqual(response.status, 415, `Should support ${ext} files`);
       }
+    });
+
+    it('should reject invalid working directory', async () => {
+      const filesRouter = (await import('../../routes/files.js')).default;
+      app.use('/api/files', filesRouter);
+
+      const response = await request(app).post('/api/files/content').send({
+        path: 'test.js',
+        workingDirectory: '/nonexistent/directory',
+      });
+
+      assert.strictEqual(response.status, 400);
+      assert.strictEqual(response.body.success, false);
+      assert.strictEqual(response.body.error, 'INVALID_WORKING_DIRECTORY');
+    });
+
+    it('should reject working directory with path traversal', async () => {
+      const filesRouter = (await import('../../routes/files.js')).default;
+      app.use('/api/files', filesRouter);
+
+      const response = await request(app).post('/api/files/content').send({
+        path: 'test.js',
+        workingDirectory: '../../../etc',
+      });
+
+      // This should either be 400 (invalid directory) or successfully resolve but be outside root
+      assert.ok(response.status === 400 || response.status === 403);
+      assert.strictEqual(response.body.success, false);
     });
   });
 
@@ -241,7 +269,7 @@ describe('Files Routes', () => {
 
       const response = await request(app).get('/api/files/info').query({
         path: '../../../etc/passwd',
-        workingDirectory: '/test/dir',
+        workingDirectory: '.',
       });
 
       assert.strictEqual(response.status, 403);
@@ -254,7 +282,7 @@ describe('Files Routes', () => {
 
       const response = await request(app).get('/api/files/info').query({
         path: 'nonexistent.js',
-        workingDirectory: '/test/dir',
+        workingDirectory: '.',
       });
 
       // The info endpoint returns 403 when file doesn't exist due to path validation
@@ -283,7 +311,7 @@ describe('Files Routes', () => {
       const longPath = `${'a'.repeat(5000)}.js`;
       const response = await request(app).post('/api/files/content').send({
         path: longPath,
-        workingDirectory: '/test/dir',
+        workingDirectory: '.',
       });
 
       // Should be handled gracefully, likely 403 or 404
@@ -297,7 +325,7 @@ describe('Files Routes', () => {
 
       const response = await request(app).post('/api/files/content').send({
         path: 'file<>:"|?*.js',
-        workingDirectory: '/test/dir',
+        workingDirectory: '.',
       });
 
       // Should be rejected or handled gracefully
@@ -311,7 +339,7 @@ describe('Files Routes', () => {
 
       const response = await request(app).post('/api/files/content').send({
         path: 'file%20with%20spaces.js',
-        workingDirectory: '/test/dir',
+        workingDirectory: '.',
       });
 
       // Will be 404 because file doesn't exist
@@ -325,7 +353,7 @@ describe('Files Routes', () => {
 
       const response = await request(app).post('/api/files/content').send({
         path: '测试文件.js',
-        workingDirectory: '/test/dir',
+        workingDirectory: '.',
       });
 
       // Will be 404 because file doesn't exist

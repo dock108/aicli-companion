@@ -7,6 +7,53 @@ import { createLogger } from '../utils/logger.js';
 const router = express.Router();
 const logger = createLogger('FileRoutes');
 
+// Define safe root for all file operations
+const ROOT_DIRECTORY = process.cwd();
+
+/**
+ * Validates and resolves a working directory to ensure it's within the safe root
+ * @param {string} workingDirectory - The directory to validate
+ * @returns {Promise<string>} The validated and resolved directory path
+ * @throws {Error} If the directory is invalid or outside the root
+ */
+async function validateWorkingDirectory(workingDirectory) {
+  // If no working directory specified, use the root
+  if (!workingDirectory || typeof workingDirectory !== 'string') {
+    return ROOT_DIRECTORY;
+  }
+
+  // Resolve the working directory against the root
+  const resolvedDir = path.resolve(ROOT_DIRECTORY, workingDirectory);
+  
+  try {
+    // Get the real path to handle symlinks
+    const realPath = await fs.realpath(resolvedDir);
+    
+    // Ensure the resolved path is within the root directory
+    if (!realPath.startsWith(ROOT_DIRECTORY)) {
+      logger.warn(`Blocked attempt to escape root directory: ${workingDirectory} -> ${realPath}`);
+      throw new Error('Working directory is outside the allowed root');
+    }
+    
+    // Verify the directory exists and is accessible
+    const stats = await fs.stat(realPath);
+    if (!stats.isDirectory()) {
+      throw new Error('Working directory is not a directory');
+    }
+    
+    return realPath;
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      logger.warn(`Working directory does not exist: ${workingDirectory}`);
+      throw new Error('Working directory does not exist');
+    } else if (error.code === 'EACCES') {
+      logger.warn(`No access to working directory: ${workingDirectory}`);
+      throw new Error('Permission denied for working directory');
+    }
+    throw error;
+  }
+}
+
 // Enhanced function to search for files and detect duplicates
 async function findAllMatchingFiles(baseDir, filename, maxDepth = 10, currentDepth = 0) {
   const matches = [];
@@ -130,8 +177,19 @@ router.post('/content', async (req, res) => {
       });
     }
 
-    // Get the base directory for validation
-    const baseDirectory = workingDirectory || process.cwd();
+    // Validate and get the base directory
+    let baseDirectory;
+    try {
+      baseDirectory = await validateWorkingDirectory(workingDirectory);
+    } catch (error) {
+      logger.warn(`Invalid working directory: ${error.message}`);
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid working directory',
+        error: 'INVALID_WORKING_DIRECTORY',
+        details: error.message,
+      });
+    }
 
     logger.info(`File content request for: ${requestedPath} in directory: ${baseDirectory}`);
 
@@ -339,7 +397,19 @@ router.get('/info', async (req, res) => {
       });
     }
 
-    const baseDirectory = workingDirectory || process.cwd();
+    // Validate and get the base directory
+    let baseDirectory;
+    try {
+      baseDirectory = await validateWorkingDirectory(workingDirectory);
+    } catch (error) {
+      logger.warn(`Invalid working directory: ${error.message}`);
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid working directory',
+        error: 'INVALID_WORKING_DIRECTORY',
+        details: error.message,
+      });
+    }
 
     // Validate path
     let validatedPath;

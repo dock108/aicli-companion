@@ -258,7 +258,7 @@ router.post('/content', async (req, res) => {
     logger.info(`File content request for: ${requestedPath} in directory: ${baseDirectory}`);
 
     // Check if this is just a filename (no path separators) and needs searching
-    let validatedPath;
+    let secureFilePath;
     let duplicateWarning = null;
 
     if (!requestedPath.includes('/') && !requestedPath.includes('\\')) {
@@ -298,7 +298,7 @@ router.post('/content', async (req, res) => {
 
       // Security: Always validate the found path is within the safe root
       try {
-        validatedPath = await PathValidator.validatePath(
+        secureFilePath = await PathValidator.validatePath(
           baseDirectory,
           path.relative(baseDirectory, foundPath),
           {
@@ -316,12 +316,12 @@ router.post('/content', async (req, res) => {
         });
       }
       logger.info(
-        `Using file at: ${validatedPath}${allMatches.length > 1 ? ` (selected most recent of ${allMatches.length} matches)` : ''}`
+        `Using file at: ${secureFilePath}${allMatches.length > 1 ? ` (selected most recent of ${allMatches.length} matches)` : ''}`
       );
     } else {
       // Validate and resolve the path securely for paths with directories
       try {
-        validatedPath = await PathValidator.validatePath(baseDirectory, requestedPath, {
+        secureFilePath = await PathValidator.validatePath(baseDirectory, requestedPath, {
           allowSymlinks: false,
           mustExist: true,
           mustBeDirectory: false,
@@ -337,7 +337,7 @@ router.post('/content', async (req, res) => {
     }
 
     // Check if file extension is supported
-    const fileExtension = path.extname(validatedPath).toLowerCase();
+    const fileExtension = path.extname(secureFilePath).toLowerCase();
     if (!SUPPORTED_EXTENSIONS.has(fileExtension) && fileExtension !== '') {
       logger.warn(`Unsupported file extension: ${fileExtension} for file: ${requestedPath}`);
       return res.status(415).json({
@@ -347,12 +347,12 @@ router.post('/content', async (req, res) => {
       });
     }
 
-    // Get file stats first - validatedPath is now safe after PathValidator.validatePath()
+    // Get file stats first - secureFilePath is safe after PathValidator.validatePath()
     let stats;
     try {
-      stats = await fs.stat(validatedPath);
+      stats = await fs.stat(secureFilePath);
     } catch (statError) {
-      logger.warn(`File stat failed for ${validatedPath}: ${statError.message}`);
+      logger.warn(`File stat failed for ${secureFilePath}: ${statError.message}`);
 
       if (statError.code === 'ENOENT') {
         return res.status(404).json({
@@ -389,12 +389,12 @@ router.post('/content', async (req, res) => {
       });
     }
 
-    // Read file content
+    // Read file content using the securely validated path
     let content;
     try {
-      content = await fs.readFile(validatedPath, 'utf8');
+      content = await fs.readFile(secureFilePath, 'utf8');
     } catch (readError) {
-      logger.error(`File read failed for ${validatedPath}: ${readError.message}`);
+      logger.error(`File read failed for ${secureFilePath}: ${readError.message}`);
 
       if (readError.code === 'ENOENT') {
         return res.status(404).json({
@@ -428,7 +428,7 @@ router.post('/content', async (req, res) => {
     }
 
     // Create response
-    const fileName = path.basename(validatedPath);
+    const fileName = path.basename(secureFilePath);
     const mimeType = getMimeType(fileExtension);
 
     const fileContentData = {
@@ -495,9 +495,9 @@ router.get('/info', async (req, res) => {
     }
 
     // Validate path
-    let validatedPath;
+    let secureFilePath;
     try {
-      validatedPath = await PathValidator.validatePath(baseDirectory, requestedPath, {
+      secureFilePath = await PathValidator.validatePath(baseDirectory, requestedPath, {
         allowSymlinks: false,
         mustExist: true,
         mustBeDirectory: false,
@@ -511,9 +511,9 @@ router.get('/info', async (req, res) => {
     }
 
     // Get file stats using the securely validated path
-    const stats = await fs.stat(validatedPath);
-    const fileName = path.basename(validatedPath);
-    const fileExtension = path.extname(validatedPath).toLowerCase();
+    const stats = await fs.stat(secureFilePath);
+    const fileName = path.basename(secureFilePath);
+    const fileExtension = path.extname(secureFilePath).toLowerCase();
     const mimeType = getMimeType(fileExtension);
 
     res.json({

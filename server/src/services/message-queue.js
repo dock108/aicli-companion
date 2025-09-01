@@ -4,6 +4,7 @@
  */
 
 import { EventEmitter } from 'events';
+import { randomUUID } from 'crypto';
 import Debug from 'debug';
 
 const debug = Debug('aicli:message-queue');
@@ -30,7 +31,7 @@ const DEFAULT_CONFIG = {
  */
 class QueuedMessage {
   constructor(message, priority = MessagePriority.NORMAL, metadata = {}) {
-    this.id = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    this.id = `msg_${randomUUID()}`;
     this.message = message;
     this.priority = priority;
     this.metadata = metadata;

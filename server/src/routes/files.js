@@ -298,11 +298,16 @@ router.post('/content', async (req, res) => {
 
       // Security: Always validate the found path is within the safe root
       try {
-        validatedPath = await PathValidator.validatePath(baseDirectory, path.relative(baseDirectory, validatedPath), {
-          allowSymlinks: false,
-          mustExist: true,
-          mustBeDirectory: false,
-        });
+        const safeValidatedPath = await PathValidator.validatePath(
+          baseDirectory,
+          path.relative(baseDirectory, validatedPath),
+          {
+            allowSymlinks: false,
+            mustExist: true,
+            mustBeDirectory: false,
+          }
+        );
+        validatedPath = safeValidatedPath;
       } catch (pathError) {
         logger.warn(`Path validation failed for found file ${validatedPath}: ${pathError.message}`);
         return res.status(403).json({
@@ -317,11 +322,12 @@ router.post('/content', async (req, res) => {
     } else {
       // Validate and resolve the path securely for paths with directories
       try {
-        validatedPath = await PathValidator.validatePath(baseDirectory, requestedPath, {
+        const safeValidatedPath = await PathValidator.validatePath(baseDirectory, requestedPath, {
           allowSymlinks: false,
           mustExist: true,
           mustBeDirectory: false,
         });
+        validatedPath = safeValidatedPath;
       } catch (pathError) {
         logger.warn(`Path validation failed for ${requestedPath}: ${pathError.message}`);
         return res.status(403).json({
@@ -343,7 +349,7 @@ router.post('/content', async (req, res) => {
       });
     }
 
-    // Get file stats first
+    // Get file stats first - validatedPath is now safe after PathValidator.validatePath()
     let stats;
     try {
       stats = await fs.stat(validatedPath);
@@ -493,11 +499,12 @@ router.get('/info', async (req, res) => {
     // Validate path
     let validatedPath;
     try {
-      validatedPath = await PathValidator.validatePath(baseDirectory, requestedPath, {
+      const safeValidatedPath = await PathValidator.validatePath(baseDirectory, requestedPath, {
         allowSymlinks: false,
         mustExist: true,
         mustBeDirectory: false,
       });
+      validatedPath = safeValidatedPath;
     } catch (pathError) {
       return res.status(403).json({
         success: false,
@@ -506,7 +513,7 @@ router.get('/info', async (req, res) => {
       });
     }
 
-    // Get file stats
+    // Get file stats using the securely validated path
     const stats = await fs.stat(validatedPath);
     const fileName = path.basename(validatedPath);
     const fileExtension = path.extname(validatedPath).toLowerCase();

@@ -1,11 +1,11 @@
+import { randomUUID } from 'crypto';
 import { createLogger } from '../utils/logger.js';
 
 const logger = createLogger('ErrorHandler');
 
 export function errorHandler(error, req, res, _next) {
   // Generate request ID if not present
-  const requestId =
-    req.headers['x-request-id'] || `ERR_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const requestId = req.headers['x-request-id'] || `ERR_${randomUUID()}`;
 
   // Log comprehensive error details
   logger.error('API Error occurred', {

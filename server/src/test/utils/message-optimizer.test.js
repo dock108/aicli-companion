@@ -281,18 +281,14 @@ describe('MessageOptimizer', () => {
       assert.notStrictEqual(id1, id2);
     });
 
-    it('should include timestamp in ID', () => {
-      const beforeTime = Date.now();
+    it('should generate ID with UUID format', () => {
       const id = optimizer.generateId();
-      const afterTime = Date.now();
+      const parts = id.split('_');
 
-      // Extract timestamp from ID
-      const match = id.match(/msg_(\d+)_/);
-      assert.ok(match);
-
-      const timestamp = parseInt(match[1]);
-      assert.ok(timestamp >= beforeTime);
-      assert.ok(timestamp <= afterTime);
+      assert.strictEqual(parts.length, 2);
+      assert.strictEqual(parts[0], 'msg');
+      // UUID format: 8-4-4-4-12 characters with hyphens
+      assert.ok(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(parts[1]));
     });
   });
 

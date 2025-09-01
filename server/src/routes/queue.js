@@ -1,4 +1,5 @@
 import express from 'express';
+import { randomUUID } from 'crypto';
 import { createLogger } from '../utils/logger.js';
 import { messageQueueManager, MessagePriority } from '../services/message-queue.js';
 
@@ -10,8 +11,7 @@ const router = express.Router();
  */
 router.get('/:sessionId/status', (req, res) => {
   const { sessionId } = req.params;
-  const requestId =
-    req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
 
   logger.info('Getting queue status', { sessionId, requestId });
 
@@ -40,8 +40,7 @@ router.get('/:sessionId/status', (req, res) => {
  */
 router.get('/:sessionId/messages', (req, res) => {
   const { sessionId } = req.params;
-  const requestId =
-    req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
 
   logger.info('Getting queued messages', { sessionId, requestId });
 
@@ -104,8 +103,7 @@ router.get('/:sessionId/messages', (req, res) => {
  */
 router.post('/:sessionId/pause', (req, res) => {
   const { sessionId } = req.params;
-  const requestId =
-    req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
 
   logger.info('Pausing queue', { sessionId, requestId });
 
@@ -129,8 +127,7 @@ router.post('/:sessionId/pause', (req, res) => {
  */
 router.post('/:sessionId/resume', (req, res) => {
   const { sessionId } = req.params;
-  const requestId =
-    req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
 
   logger.info('Resuming queue', { sessionId, requestId });
 
@@ -154,8 +151,7 @@ router.post('/:sessionId/resume', (req, res) => {
  */
 router.post('/:sessionId/clear', (req, res) => {
   const { sessionId } = req.params;
-  const requestId =
-    req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
 
   logger.info('Clearing queue', { sessionId, requestId });
 
@@ -179,8 +175,7 @@ router.post('/:sessionId/clear', (req, res) => {
  */
 router.delete('/:sessionId', (req, res) => {
   const { sessionId } = req.params;
-  const requestId =
-    req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
 
   logger.info('Removing queue', { sessionId, requestId });
 
@@ -210,8 +205,7 @@ router.delete('/:sessionId', (req, res) => {
  * GET /api/queue/metrics - Get global queue metrics
  */
 router.get('/metrics', (req, res) => {
-  const requestId =
-    req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
 
   logger.info('Getting queue metrics', { requestId });
 
@@ -254,8 +248,7 @@ router.get('/metrics', (req, res) => {
 router.put('/:sessionId/message/:messageId/priority', (req, res) => {
   const { sessionId, messageId } = req.params;
   const { priority } = req.body;
-  const requestId =
-    req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
 
   logger.info('Updating message priority', { sessionId, messageId, priority, requestId });
 

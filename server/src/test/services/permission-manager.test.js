@@ -508,14 +508,14 @@ describe('PermissionManager', () => {
       assert.notStrictEqual(id1, id2);
     });
 
-    it('should generate IDs with timestamp and random component', () => {
+    it('should generate IDs with UUID format', () => {
       const id = manager.generateRequestId();
       const parts = id.split('_');
 
-      assert.strictEqual(parts.length, 3);
+      assert.strictEqual(parts.length, 2);
       assert.strictEqual(parts[0], 'perm');
-      assert.ok(!isNaN(parseInt(parts[1]))); // timestamp part
-      assert.ok(parts[2].length > 0); // random part
+      // UUID format: 8-4-4-4-12 characters with hyphens
+      assert.ok(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(parts[1]));
     });
   });
 

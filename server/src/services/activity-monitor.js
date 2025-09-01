@@ -6,6 +6,7 @@
  */
 
 import { EventEmitter } from 'events';
+import { randomUUID } from 'crypto';
 import { createLogger } from '../utils/logger.js';
 import fs from 'fs/promises';
 import path from 'path';
@@ -547,7 +548,7 @@ export class ActivityMonitor extends EventEmitter {
    * Generate activity ID
    */
   generateActivityId() {
-    return `act_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return `act_${randomUUID()}`;
   }
 
   /**

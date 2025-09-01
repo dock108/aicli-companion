@@ -24,8 +24,7 @@ router.post('/', async (req, res) => {
     autoResponse, // Auto-response metadata
     priority = MessagePriority.NORMAL, // Message priority for queue
   } = req.body;
-  const requestId =
-    req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
 
   // Look up existing session for this project path if client didn't send a sessionId
   const aicliService = req.app.get('aicliService');
@@ -672,8 +671,7 @@ router.post('/', async (req, res) => {
  */
 router.post('/auto-response/pause', async (req, res) => {
   const { sessionId, deviceToken } = req.body;
-  const requestId =
-    req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
 
   if (!sessionId) {
     return res.status(400).json({
@@ -720,8 +718,7 @@ router.post('/auto-response/pause', async (req, res) => {
  */
 router.post('/auto-response/resume', async (req, res) => {
   const { sessionId, deviceToken } = req.body;
-  const requestId =
-    req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
 
   if (!sessionId) {
     return res.status(400).json({
@@ -768,8 +765,7 @@ router.post('/auto-response/resume', async (req, res) => {
  */
 router.post('/auto-response/stop', async (req, res) => {
   const { sessionId, deviceToken, reason } = req.body;
-  const requestId =
-    req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
 
   if (!sessionId) {
     return res.status(400).json({
@@ -818,8 +814,7 @@ router.post('/auto-response/stop', async (req, res) => {
  */
 router.get('/:sessionId/progress', async (req, res) => {
   const { sessionId } = req.params;
-  const requestId =
-    req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
 
   logger.info('Fetching thinking progress', { sessionId, requestId });
 
@@ -968,8 +963,7 @@ router.get('/:sessionId/messages', async (req, res) => {
  */
 router.post('/kill', async (req, res) => {
   const { sessionId, deviceToken, reason = 'User requested cancellation' } = req.body;
-  const requestId =
-    req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
 
   logger.info('Kill operation requested', { sessionId, requestId, reason });
 

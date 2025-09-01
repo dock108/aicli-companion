@@ -1,203 +1,251 @@
-# iOS Test Coverage Improvement Plan
+# Issue #2: CloudKit Sync & Cross-Device Coordination - Implementation Plan
 
-## Current State (August 23, 2025)
-- **Line Coverage**: 2.82% (603/21,379 lines)
-- **File Coverage**: 11.1% (11/99 files)
-- **Total Tests**: 249 passing tests
-- **Test Files**: 14 files with 4,261 lines
-- **Target Coverage**: 70% (14,965 lines)
-- **Gap to Target**: 14,362 lines need testing
+## 🎯 **Goal**
+Implement cross-device message synchronization and device coordination to eliminate duplicate auto-responses and enable seamless conversation handoff between iPhone, iPad, and Mac.
 
-## Files Currently Tested
-### Models (8 files, 154 tests)
-- ✅ Message.swift (MessageCoreTests, 26 tests)
-- ✅ Project.swift (ProjectStatusTests, 15 tests)
-- ✅ ServerConnection.swift (ServerModelsTests, 30 tests)
-- ✅ RichContent.swift (RichContentTests, 24 tests)
-- ✅ SecuritySettings.swift (SecuritySettingsTests, 35 tests)
-- ✅ WebSocketMessage.swift (WebSocketModelsTests, 24 tests)
+## 📋 **Core Problems to Solve**
+1. **No Cross-Device Sync**: Messages don't appear on all devices
+2. **Duplicate Auto-Responses**: Multiple devices send same response
+3. **Lost Context**: No session coordination between devices
+4. **No Primary Device**: No clear ownership of auto-response duties
 
-### Services (3 files, 95 tests)
-- ✅ KeychainManager.swift (KeychainManagerTests, 26 tests)
-- ✅ PerformanceLogger.swift (PerformanceLoggerTests, 20 tests)
-- ✅ MessageValidator.swift (MessageValidatorTests, 50 tests)
+## 🏗️ **Implementation Strategy**
 
-## Testing Roadmap
+### **Phase 1: Server-Side Device Coordination (Foundation)**
+**Duration**: 3-4 days  
+**Approach**: Build on existing WebSocket infrastructure
 
-### Phase 1: Critical Core Services (Target: 21.4% coverage)
-**Timeline**: Week 1-2
-**Files**: 10 services, ~3,959 lines
-**Priority**: CRITICAL - These are the foundation of the app
+#### **1.1 Device Registry Service**
+- Create `server/src/services/device-registry.js`
+- Simple device tracking with last-seen timestamps  
+- Primary device election (first-come, first-served)
+- Duplicate message detection using message hashes
 
-1. **PushNotificationService.swift** (772 lines, +3.6%)
-   - Test push notification registration
-   - Test message delivery
-   - Test error handling
-   - Mock APNS interactions
+#### **1.2 Enhanced WebSocket Protocol**
+- Add device identification to existing WebSocket connections
+- Implement device announcement and coordination messages
+- Extend current message broadcasting for device sync
 
-2. **AICLIService/MessageOperations.swift** (460 lines, +2.2%)
-   - Test message sending/receiving
-   - Test session management
-   - Test error recovery
-   - Mock Claude CLI interactions
+#### **1.3 Deduplication Layer**  
+- Add message hash checking in existing chat routes
+- 5-second window for duplicate detection
+- Integration with current message queue system
 
-3. **WebSocketManager.swift** (~400 lines, +1.9%)
-   - Test connection lifecycle
-   - Test reconnection logic
-   - Test message routing
-   - Mock WebSocket events
+### **Phase 2: iOS CloudKit Integration (Data Sync)**
+**Duration**: 4-5 days  
+**Approach**: Leverage existing message persistence patterns
 
-4. **SecurityManager.swift** (367 lines, +1.7%)
-   - Test authentication
-   - Test authorization
-   - Test secure storage
-   - Test permission handling
+#### **2.1 CloudKit Schema Design**
+- Message records (map to existing MessageCore model)
+- Session records (extend current session model)  
+- Simple sync state tracking
+- Device records for coordination
 
-5. **ConnectionReliabilityManager.swift** (365 lines, +1.7%)
-   - Test connection monitoring
-   - Test retry logic
-   - Test fallback mechanisms
+#### **2.2 CloudKit Sync Service**
+- Build on existing `MessagePersistenceService` patterns
+- Incremental sync (not full refresh)
+- Conflict resolution: last-write-wins initially
+- Offline queue using existing patterns
 
-6. **ServiceDiscoveryManager.swift** (402 lines, +1.9%)
-   - Test service discovery
-   - Test server selection
-   - Test network scanning
+#### **2.3 Device Coordinator**
+- Simple coordinator integrated with existing `SettingsManager`
+- Primary device status as @Published property
+- Connect to server device registry via WebSocket
 
-7. **PerformanceMonitor.swift** (384 lines, +1.8%)
-   - Test metric collection
-   - Test performance tracking
-   - Test memory monitoring
+### **Phase 3: Integration & Testing (Polish)**  
+**Duration**: 2-3 days
+**Approach**: End-to-end validation and optimization
 
-8. **ConversationExporter.swift** (328 lines, +1.5%)
-   - Test export formats
-   - Test data serialization
-   - Test file operations
+#### **3.1 UI Integration**
+- Primary device indicator in existing ChatView
+- Settings toggle for device coordination
+- Simple conflict resolution UI
 
-9. **MessagePersistenceService.swift** (~250 lines, +1.2%)
-   - Test message storage
-   - Test retrieval logic
-   - Test data migration
+#### **3.2 Performance Optimization**
+- Batch sync operations
+- Smart sync triggers (foreground, message events)
+- Connection reliability improvements
 
-10. **ConversationPersistenceService.swift** (~231 lines, +1.1%)
-    - Test conversation storage
-    - Test session recovery
-    - Test data integrity
+## 🛠️ **Implementation Details**
 
-### Phase 2: View Models & Business Logic (Target: 32.2% coverage)
-**Timeline**: Week 2-3
-**Files**: 6 view models, ~2,300 lines
-**Priority**: HIGH - Business logic is easier to test than UI
+### **Key Files to Create**
+```
+server/src/services/device-registry.js        # Device tracking & coordination
+server/src/services/duplicate-detector.js     # Message deduplication  
+ios/Sources/.../CloudKit/CloudKitSyncService.swift  # CloudKit integration
+ios/Sources/.../DeviceCoordinator.swift       # Device coordination logic
+```
 
-1. **ChatViewModel.swift** (~500 lines, +2.3%)
-   - Test message flow
-   - Test state management
-   - Test user interactions
+### **Key Files to Modify**
+```
+server/src/routes/chat.js                     # Add deduplication
+server/src/index.js                           # WebSocket device messages
+ios/.../MessagePersistenceService.swift       # CloudKit integration
+ios/.../ChatViewModel.swift                   # Device coordination
+```
 
-2. **AutoResponseManager.swift** (398 lines, +1.9%)
-   - Test auto-response logic
-   - Test permission handling
-   - Test response generation
+## 🧪 **Testing Strategy**
 
-3. **ProjectStatusManager.swift** (~300 lines, +1.4%)
-   - Test status tracking
-   - Test project lifecycle
-   - Test status updates
+### **Phase 1 Testing**
+- Device registration/tracking
+- Duplicate message rejection  
+- Primary device election
+- WebSocket device coordination
 
-4. **ConnectionViewModel.swift** (~300 lines, +1.4%)
-   - Test connection state
-   - Test server management
-   - Test error handling
+### **Phase 2 Testing**
+- CloudKit container setup
+- Message sync between devices
+- Offline sync queue
+- Basic conflict resolution
 
-5. **SettingsViewModel.swift** (~342 lines, +1.6%)
-   - Test settings persistence
-   - Test preference updates
-   - Test validation logic
+### **Phase 3 Testing**  
+- End-to-end 2-device scenarios
+- Primary device handoff
+- Network interruption recovery
+- Manual testing checklist (basic sync, auto-response coordination, conflicts)
 
-### Phase 3: UI Components & Rendering (Target: 47.5% coverage)
-**Timeline**: Week 3-4
-**Files**: 10 components, ~3,275 lines
-**Priority**: MEDIUM - Can use snapshot testing for efficiency
+## ⚡ **Success Criteria**
+- **Sync Latency**: Messages appear on other devices within 3 seconds
+- **Duplicate Prevention**: 100% elimination of duplicate auto-responses
+- **Primary Handoff**: Clean device transfer within 5 seconds  
+- **Reliability**: 99%+ sync success rate under normal conditions
 
-1. **MarkdownParser.swift** (349 lines, +1.6%)
-2. **RichContentRenderer.swift** (~305 lines, +1.4%)
-3. **ClaudeOutputParser.swift** (~298 lines, +1.4%)
-4. **AttachmentPicker.swift** (432 lines, +2.0%)
-5. **AttachmentPreview.swift** (329 lines, +1.5%)
-6. **MessageBubble.swift** (~262 lines, +1.2%)
-7. **ToolActivity.swift** (424 lines, +2.0%)
-8. **ClaudeStatusIndicator.swift** (326 lines, +1.5%)
-9. **ConnectionQualityIndicator.swift** (345 lines, +1.6%)
-10. **NavigationStateManager.swift** (~205 lines, +1.0%)
+## 🚦 **Risk Mitigation**
+- **Incremental Rollout**: Server changes first, then iOS integration
+- **Fallback Strategy**: Maintain existing single-device functionality
+- **Simple First**: Last-write-wins conflict resolution initially
+- **Monitoring**: Comprehensive logging for sync operations
 
-### Phase 4: Main Views (Target: 58.8% coverage)
-**Timeline**: Week 4-5
-**Files**: 4 main views, ~2,404 lines
-**Priority**: MEDIUM - Use ViewInspector or snapshot testing
+## 📦 **Dependencies**
+- Apple Developer CloudKit container setup
+- No new server dependencies (uses existing infrastructure)
+- No new iOS dependencies (uses existing CloudKit/SwiftUI)
 
-1. **ConnectionView.swift** (648 lines, +3.0%)
-2. **SettingsView.swift** (638 lines, +3.0%)
-3. **ProjectSelectionView.swift** (567 lines, +2.7%)
-4. **ChatView.swift** (551 lines, +2.6%)
+## 🔄 **Rollback Plan**
+- Feature flag for device coordination (can disable)
+- CloudKit integration isolated in separate service
+- Server changes backward compatible with existing clients
 
-### Phase 5: Remaining High-Value Files (Target: 70.0% coverage)
-**Timeline**: Week 5-6
-**Files**: 9 files, ~2,400 lines
-**Priority**: LOW-MEDIUM - Fill gaps to reach 70%
+## 📋 **Detailed Task Breakdown**
 
-1. **SecuritySettingsView.swift** (447 lines, +2.1%)
-2. **PerformanceDashboard.swift** (388 lines, +1.8%)
-3. **VimModeView.swift** (~294 lines, +1.4%)
-4. **ProjectContextView.swift** (~277 lines, +1.3%)
-5. **MessageStreamManager.swift** (~250 lines, +1.2%)
-6. **DependencyContainer.swift** (~220 lines, +1.0%)
-7. **Settings.swift** (~216 lines, +1.0%)
-8. **AnimationConstants.swift** (~158 lines, +0.7%)
-9. **ClipboardManager.swift** (~150 lines, +0.7%)
+### **Phase 1: Server Foundation (Days 1-4)**
 
-## Testing Strategy
+#### **Day 1: Device Registry Service**
+- [ ] Create `server/src/services/device-registry.js`
+- [ ] Implement device registration and tracking
+- [ ] Add primary device election logic
+- [ ] Create comprehensive tests
 
-### Approach by File Type
-1. **Services**: Mock external dependencies, test business logic
-2. **View Models**: Test state management and data flow
-3. **Views**: Snapshot testing or ViewInspector for UI verification
-4. **Utilities**: Direct unit tests with edge cases
-5. **Models**: Already completed ✅
+#### **Day 2: Message Deduplication**
+- [ ] Create `server/src/services/duplicate-detector.js`
+- [ ] Add message hashing and duplicate detection
+- [ ] Integrate with existing message queue
+- [ ] Test duplicate prevention scenarios
 
-### Test Types to Implement
-- Unit tests for all business logic
-- Integration tests for service interactions
-- Snapshot tests for UI components
-- Performance tests for critical paths
-- Mock implementations for external dependencies
+#### **Day 3: WebSocket Protocol Enhancement**
+- [ ] Extend WebSocket handlers in `server/src/index.js`
+- [ ] Add device announcement messages
+- [ ] Implement device coordination broadcasts
+- [ ] Test multi-device WebSocket scenarios
 
-### Tools & Frameworks
-- XCTest (primary framework)
-- Consider ViewInspector for SwiftUI testing (after Xcode upgrade)
-- Manual mocking (no external dependencies)
-- XCTestExpectation for async testing
+#### **Day 4: Chat Route Integration**
+- [ ] Modify `server/src/routes/chat.js` for deduplication
+- [ ] Add device context to message processing
+- [ ] Integrate with device registry
+- [ ] End-to-end server testing
 
-## Success Metrics
-- ✅ All tests passing in CI/CD
-- ✅ 70% line coverage achieved
-- ✅ Critical paths have >90% coverage
-- ✅ No flaky tests
-- ✅ Test execution time <2 minutes
+### **Phase 2: iOS CloudKit Integration (Days 5-9)**
 
-## Risk Mitigation
-- **CI Environment Issues**: Already fixed KeychainManager CI skipping
-- **Async Testing**: Use proper expectations and timeouts
-- **SwiftUI Testing**: May need Xcode 16 for ViewInspector
-- **Test Maintenance**: Keep tests simple and focused
+#### **Day 5: CloudKit Container Setup**
+- [ ] Configure CloudKit container in Apple Developer
+- [ ] Enable CloudKit capability in Xcode project
+- [ ] Update Info.plist with container ID
+- [ ] Test basic CloudKit connection
 
-## Next Immediate Steps
-1. Start with PushNotificationService.swift (largest file)
-2. Create mock for APNS interactions
-3. Write comprehensive test suite
-4. Move to AICLIService next
-5. Continue down priority list
+#### **Day 6: CloudKit Schema & Models**
+- [ ] Create `ios/Sources/.../CloudKit/CloudKitModels.swift`
+- [ ] Define record types (Message, Session, Device, SyncState)
+- [ ] Create mapping between local and CloudKit models
+- [ ] Test record creation and retrieval
 
-## Notes
-- Current tests achieve 80-100% coverage on tested files
-- Focus on high-use paths and critical functionality
-- Avoid testing SwiftUI layout details
-- Prioritize testable business logic over UI
+#### **Day 7: CloudKit Sync Service**
+- [ ] Create `ios/Sources/.../CloudKit/CloudKitSyncService.swift`
+- [ ] Implement push/pull sync operations
+- [ ] Add subscription handlers for real-time updates
+- [ ] Create offline sync queue
+
+#### **Day 8: Device Coordinator**
+- [ ] Create `ios/Sources/.../DeviceCoordinator.swift`
+- [ ] Connect to server device registry via WebSocket
+- [ ] Implement primary device status tracking
+- [ ] Add device coordination UI state
+
+#### **Day 9: Message Persistence Integration**
+- [ ] Modify `MessagePersistenceService.swift` for CloudKit
+- [ ] Add sync triggers (foreground, message events)
+- [ ] Implement conflict resolution (last-write-wins)
+- [ ] Test offline/online sync scenarios
+
+### **Phase 3: Integration & Polish (Days 10-12)**
+
+#### **Day 10: UI Integration**
+- [ ] Add primary device indicator to ChatView
+- [ ] Create device coordination settings UI
+- [ ] Add sync status indicators
+- [ ] Implement manual sync triggers
+
+#### **Day 11: End-to-End Testing**
+- [ ] Test 2-device sync scenarios
+- [ ] Validate auto-response coordination
+- [ ] Test primary device handoff
+- [ ] Network interruption recovery testing
+
+#### **Day 12: Performance & Polish**
+- [ ] Optimize sync performance and batching
+- [ ] Add comprehensive error handling
+- [ ] Final integration testing
+- [ ] Documentation and code cleanup
+
+## 🎯 **CLAUDE.md Alignment**
+
+### **1. PERSISTENCE AND COMPLETION**
+- Complete 3-phase implementation with full testing
+- 80%+ test coverage for new components
+- Fix all test failures, no "good enough" compromises
+
+### **2. User First**
+- Solves core user problem: seamless cross-device experience
+- Eliminates frustrating duplicate auto-responses
+- Enables natural device handoff workflow
+
+### **3. Keep It Simple**
+- Build on existing WebSocket and message persistence patterns
+- Last-write-wins conflict resolution initially (can enhance later)
+- No complex distributed consensus algorithms
+
+### **4. Follow Existing Patterns**
+- Uses existing WebSocket infrastructure for coordination
+- Extends current MessagePersistenceService patterns
+- Integrates with existing SettingsManager for device state
+
+### **5. No Defensive Coding**
+- Clear error handling only for recoverable scenarios
+- Fast failure for CloudKit connectivity issues
+- Simple, predictable sync behavior
+
+## 🏁 **Definition of Done**
+- [ ] Messages sync between devices within 3 seconds
+- [ ] Zero duplicate auto-responses in multi-device scenarios
+- [ ] Primary device election and handoff working reliably
+- [ ] Offline sync queue processes correctly on reconnection
+- [ ] All tests passing with >80% coverage
+- [ ] Manual testing checklist completed
+- [ ] Performance metrics met (sync latency, reliability)
+- [ ] Rollback capability verified
+
+---
+
+**Created**: 2025-09-01  
+**Estimated Effort**: 12 days  
+**Success Metrics**: <3s sync latency, 100% duplicate prevention, 99%+ reliability  
+**Risk Level**: Medium (CloudKit dependency, multi-device complexity)

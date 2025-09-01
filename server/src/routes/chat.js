@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { createLogger } from '../utils/logger.js';
 import { ValidationUtils } from '../utils/validation.js';
 import { messageQueueManager, MessagePriority } from '../services/message-queue.js';
+import { deviceRegistry } from '../services/device-registry.js';
 
 const logger = createLogger('ChatAPI');
 // TODO: Check what validation middleware exists
@@ -23,6 +24,9 @@ router.post('/', async (req, res) => {
     attachments,
     autoResponse, // Auto-response metadata
     priority = MessagePriority.NORMAL, // Message priority for queue
+    deviceId, // Device identifier for coordination
+    userId, // User identifier for device coordination
+    deviceInfo, // Device information (platform, version, etc.)
   } = req.body;
   const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
 
@@ -54,6 +58,41 @@ router.post('/', async (req, res) => {
     return res.status(400).json({
       success: false,
       error: 'Message is required',
+    });
+  }
+
+  // Handle device registration and coordination if deviceId and userId provided
+  let resolvedDeviceId = deviceId;
+  if (deviceId && userId) {
+    try {
+      // Register device with device registry
+      const registrationResult = deviceRegistry.registerDevice(userId, deviceId, deviceInfo || {});
+      
+      if (registrationResult.success) {
+        // Update device heartbeat
+        deviceRegistry.updateLastSeen(deviceId);
+        
+        logger.info('Device registered and heartbeat updated', {
+          requestId,
+          deviceId: `${deviceId.substring(0, 8)}...`,
+          userId: `${userId.substring(0, 8)}...`,
+          platform: deviceInfo?.platform || 'unknown'
+        });
+      }
+    } catch (deviceError) {
+      logger.warn('Device registration failed', {
+        requestId,
+        deviceId: `${deviceId.substring(0, 8)}...`,
+        error: deviceError.message
+      });
+      // Continue processing even if device registration fails
+    }
+  } else if (deviceToken) {
+    // Fallback: use deviceToken as deviceId for backward compatibility
+    resolvedDeviceId = deviceToken;
+    logger.info('Using deviceToken as deviceId for backward compatibility', {
+      requestId,
+      deviceToken: `${deviceToken.substring(0, 8)}...`
     });
   }
 
@@ -236,8 +275,16 @@ router.post('/', async (req, res) => {
     }
   }
 
-  // Queue the message
-  const messageId = messageQueueManager.queueMessage(
+  // Queue the message with device context for deduplication
+  const messageMetadata = {
+    requestId,
+    timestamp: new Date().toISOString(),
+    deviceId: resolvedDeviceId,
+    userId: userId,
+    deviceInfo: deviceInfo
+  };
+
+  const queueResult = messageQueueManager.queueMessage(
     queueSessionId,
     {
       message,
@@ -248,10 +295,57 @@ router.post('/', async (req, res) => {
       requestId,
       sessionId,
       validatedMessage: messageValidation.message ?? message,
+      content: message, // Duplicate detector needs this field
     },
     messagePriority,
-    { requestId, timestamp: new Date().toISOString() }
+    messageMetadata
   );
+
+  // Check if message was rejected due to duplication
+  if (!queueResult.queued) {
+    if (queueResult.reason === 'duplicate') {
+      logger.info('Duplicate message detected and rejected', {
+        requestId,
+        messageHash: queueResult.messageHash,
+        originalDevice: queueResult.duplicateInfo?.originalDeviceId,
+        currentDevice: resolvedDeviceId,
+        timeDifference: queueResult.duplicateInfo?.timeDifference
+      });
+
+      // Return success but indicate it was a duplicate
+      return res.json({
+        success: true,
+        message: 'Duplicate message detected - not processed',
+        requestId,
+        sessionId: sessionId || null,
+        projectPath,
+        timestamp: new Date().toISOString(),
+        deliveryMethod: 'apns',
+        duplicate: true,
+        duplicateInfo: {
+          messageHash: queueResult.messageHash,
+          originalDevice: queueResult.duplicateInfo?.originalDeviceId?.substring(0, 8) + '...',
+          timeDifference: queueResult.duplicateInfo?.timeDifference
+        }
+      });
+    } else {
+      // Other queue rejection reasons
+      logger.error('Message queue rejected message', {
+        requestId,
+        reason: queueResult.reason,
+        sessionId: queueSessionId
+      });
+
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to queue message for processing',
+        reason: queueResult.reason,
+        requestId
+      });
+    }
+  }
+
+  const messageId = queueResult.messageId;
 
   logger.info('Message queued for processing', {
     requestId,
@@ -670,7 +764,7 @@ router.post('/', async (req, res) => {
  * POST /api/chat/auto-response/pause - Pause auto-response mode for a session
  */
 router.post('/auto-response/pause', async (req, res) => {
-  const { sessionId, deviceToken } = req.body;
+  const { sessionId, deviceToken, deviceId, userId } = req.body;
   const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
 
   if (!sessionId) {
@@ -678,6 +772,19 @@ router.post('/auto-response/pause', async (req, res) => {
       success: false,
       error: 'Session ID is required',
     });
+  }
+
+  // Update device heartbeat if device context provided
+  if (deviceId && userId) {
+    try {
+      deviceRegistry.updateLastSeen(deviceId);
+    } catch (error) {
+      logger.warn('Failed to update device heartbeat during pause', {
+        requestId,
+        deviceId: `${deviceId.substring(0, 8)}...`,
+        error: error.message
+      });
+    }
   }
 
   logger.info('Pausing auto-response mode', { sessionId, requestId });
@@ -717,7 +824,7 @@ router.post('/auto-response/pause', async (req, res) => {
  * POST /api/chat/auto-response/resume - Resume auto-response mode for a session
  */
 router.post('/auto-response/resume', async (req, res) => {
-  const { sessionId, deviceToken } = req.body;
+  const { sessionId, deviceToken, deviceId, userId } = req.body;
   const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
 
   if (!sessionId) {
@@ -725,6 +832,19 @@ router.post('/auto-response/resume', async (req, res) => {
       success: false,
       error: 'Session ID is required',
     });
+  }
+
+  // Update device heartbeat if device context provided
+  if (deviceId && userId) {
+    try {
+      deviceRegistry.updateLastSeen(deviceId);
+    } catch (error) {
+      logger.warn('Failed to update device heartbeat during resume', {
+        requestId,
+        deviceId: `${deviceId.substring(0, 8)}...`,
+        error: error.message
+      });
+    }
   }
 
   logger.info('Resuming auto-response mode', { sessionId, requestId });
@@ -764,7 +884,7 @@ router.post('/auto-response/resume', async (req, res) => {
  * POST /api/chat/auto-response/stop - Stop auto-response mode for a session
  */
 router.post('/auto-response/stop', async (req, res) => {
-  const { sessionId, deviceToken, reason } = req.body;
+  const { sessionId, deviceToken, reason, deviceId, userId } = req.body;
   const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
 
   if (!sessionId) {
@@ -772,6 +892,19 @@ router.post('/auto-response/stop', async (req, res) => {
       success: false,
       error: 'Session ID is required',
     });
+  }
+
+  // Update device heartbeat if device context provided
+  if (deviceId && userId) {
+    try {
+      deviceRegistry.updateLastSeen(deviceId);
+    } catch (error) {
+      logger.warn('Failed to update device heartbeat during stop', {
+        requestId,
+        deviceId: `${deviceId.substring(0, 8)}...`,
+        error: error.message
+      });
+    }
   }
 
   logger.info('Stopping auto-response mode', { sessionId, reason, requestId });
@@ -962,7 +1095,7 @@ router.get('/:sessionId/messages', async (req, res) => {
  * POST /api/chat/kill - Kill/cancel a running Claude operation
  */
 router.post('/kill', async (req, res) => {
-  const { sessionId, deviceToken, reason = 'User requested cancellation' } = req.body;
+  const { sessionId, deviceToken, reason = 'User requested cancellation', deviceId, userId } = req.body;
   const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
 
   logger.info('Kill operation requested', { sessionId, requestId, reason });
@@ -972,6 +1105,19 @@ router.post('/kill', async (req, res) => {
       success: false,
       error: 'Session ID is required',
     });
+  }
+
+  // Update device heartbeat if device context provided
+  if (deviceId && userId) {
+    try {
+      deviceRegistry.updateLastSeen(deviceId);
+    } catch (error) {
+      logger.warn('Failed to update device heartbeat during kill', {
+        requestId,
+        deviceId: `${deviceId.substring(0, 8)}...`,
+        error: error.message
+      });
+    }
   }
 
   try {

@@ -6,6 +6,7 @@
 import { EventEmitter } from 'events';
 import { randomUUID } from 'crypto';
 import Debug from 'debug';
+import { duplicateDetector } from './duplicate-detector.js';
 
 const debug = Debug('aicli:message-queue');
 
@@ -75,6 +76,33 @@ class SessionQueue extends EventEmitter {
       throw error;
     }
 
+    // Check for duplicates if deviceId is provided in metadata
+    if (metadata.deviceId && message.content) {
+      const duplicateResult = duplicateDetector.processMessage(message, metadata.deviceId);
+      
+      if (duplicateResult.isDuplicate) {
+        debug(`Duplicate message detected from device ${metadata.deviceId}: ${duplicateResult.messageHash}`);
+        
+        this.emit('duplicate-message', {
+          sessionId: this.sessionId,
+          deviceId: metadata.deviceId,
+          messageHash: duplicateResult.messageHash,
+          duplicateInfo: duplicateResult.duplicateInfo
+        });
+
+        // Return without enqueuing
+        return {
+          queued: false,
+          reason: 'duplicate',
+          messageHash: duplicateResult.messageHash,
+          duplicateInfo: duplicateResult.duplicateInfo
+        };
+      }
+
+      // Add hash to metadata for tracking
+      metadata.messageHash = duplicateResult.messageHash;
+    }
+
     const queuedMessage = new QueuedMessage(message, priority, metadata);
 
     // Insert based on priority
@@ -113,7 +141,11 @@ class SessionQueue extends EventEmitter {
       this.processNext();
     }
 
-    return queuedMessage.id;
+    return {
+      queued: true,
+      messageId: queuedMessage.id,
+      messageHash: metadata.messageHash
+    };
   }
 
   /**

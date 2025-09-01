@@ -1,7 +1,7 @@
 # Issue #32: Intelligent Project Onboarding & Planning System
 
 **Priority**: High  
-**Component**: AI-Powered Project Creation & Planning Validation  
+**Component**: iOS App - Project Creation UI (Server: Template Storage)  
 **Beta Blocker**: No  
 **Discovered**: 2025-08-27  
 **Status**: New  
@@ -9,7 +9,7 @@
 
 ## Problem Description
 
-Need to implement a comprehensive intelligent project onboarding system that provides professional-grade project creation with built-in planning validation. The system should guide users through proper project setup, validate requirements completeness, and ensure projects start with everything needed for successful development.
+Need to implement a comprehensive intelligent project onboarding system in the iOS app that provides professional-grade project creation with built-in planning validation. The iOS app handles all UI/UX for project creation, wizards, and validation dashboards, while the server provides template storage, file operations, and validation logic APIs. The system should guide users through proper project setup, validate requirements completeness, and ensure projects start with everything needed for successful development.
 
 **Note: This is a STANDALONE feature** that can be used independently. While Issue #34 (Autonomous Coding Agent) will leverage this system for project creation, Issue #32 provides value on its own for users who want intelligent project setup without full automation.
 

@@ -33,6 +33,17 @@ final class ChatViewModel: ObservableObject {
     var queuedMessageCount: Int { queueManager.queuedMessageCount }
     var maxQueueSize: Int { queueManager.maxQueueSize }
     
+    /// Get the current session ID from the latest message
+    var currentSessionId: String? {
+        // Find the most recent message with a session ID
+        for message in messages.reversed() {
+            if let sessionId = message.metadata?.sessionId, !sessionId.isEmpty {
+                return sessionId
+            }
+        }
+        return nil
+    }
+    
     // MARK: - Initialization
     private init() {
         self.persistenceService = MessagePersistenceService.shared

@@ -1,14 +1,14 @@
 # Issue #22: Root Directory Chat Assistant
 
 **Priority**: Low  
-**Component**: Server/iOS Integration  
+**Component**: iOS App - Workspace Mode  
 **Beta Blocker**: No - Enhancement for post-beta  
 **Discovered**: 2025-08-21  
 **Status**: New  
 
 ## Problem Description
 
-Add the ability to have a conversation with Claude at the root directory level (parent of all projects) to perform cross-project operations and file management tasks. This would enable users to ask Claude to do things like move files between projects, create new project folders, search across all projects, organize files and directories, perform batch operations across multiple projects, and get an overview of the entire workspace.
+Add the ability to have a conversation with Claude at the root directory level (parent of all projects) to perform cross-project operations and file management tasks in the iOS app. The iOS app would provide the UI for workspace mode selection, while the server handles the actual root directory access. This would enable users to ask Claude to do things like move files between projects, create new project folders, search across all projects, organize files and directories, perform batch operations across multiple projects, and get an overview of the entire workspace.
 
 **Note**: This is an enhancement idea for post-beta development. Not required for beta release.
 

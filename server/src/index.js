@@ -17,6 +17,7 @@ import devicesRoutes from './routes/devices.js';
 import authRoutes from './routes/auth.js';
 import { router as messagesRouter } from './routes/messages.js';
 import filesRoutes from './routes/files.js';
+import queueRoutes from './routes/queue.js';
 import { errorHandler } from './middleware/error.js';
 import { AICLIService } from './services/aicli.js';
 import { ServerConfig } from './config/server-config.js';
@@ -122,6 +123,7 @@ class AICLICompanionServer {
     this.app.use('/api/sessions', sessionRoutes);
     this.app.use('/api/messages', messagesRouter);
     this.app.use('/api/files', filesRoutes);
+    this.app.use('/api/queue', queueRoutes);
 
     // Static files (for web interface if needed)
     this.app.use('/static', express.static(join(__dirname, '../public')));

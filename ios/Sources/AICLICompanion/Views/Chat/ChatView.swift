@@ -18,6 +18,7 @@ struct ChatView: View {
     @State private var showingPermissionAlert = false
     @State private var permissionRequest: PermissionRequestData?
     @State private var showingStopConfirmation = false
+    @State private var showingQueueStatus = false
     
     // Removed complex scroll tracking - handled by ChatMessageList now
     
@@ -68,6 +69,12 @@ struct ChatView: View {
                 // FEATURE FLAG: Auto-response controls (currently hidden)
                 if FeatureFlags.showAutoModeUI {
                     AutoResponseControls()
+                }
+                
+                // Queue Status Bar (always visible if there are queued messages)
+                if let sessionId = viewModel.currentSessionId {
+                    QueueStatusBar(sessionId: sessionId, showingDetails: $showingQueueStatus)
+                        .padding(.horizontal)
                 }
                 
                 // Message list
@@ -153,20 +160,61 @@ struct ChatView: View {
             #if os(iOS)
             if isIPad {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Menu {
-                        Button(role: .destructive) {
-                            clearCurrentSession()
-                        } label: {
-                            Label("Clear Chat", systemImage: "trash")
+                    HStack(spacing: 16) {
+                        // Queue Status Button
+                        if let sessionId = viewModel.currentSessionId {
+                            Button(action: { showingQueueStatus.toggle() }) {
+                                Image(systemName: "tray.2.fill")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(Colors.textSecondary(for: colorScheme))
+                            }
                         }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                            .font(.system(size: 18))
-                            .foregroundColor(Colors.textSecondary(for: colorScheme))
+                        
+                        // Existing menu
+                        Menu {
+                            Button(role: .destructive) {
+                                clearCurrentSession()
+                            } label: {
+                                Label("Clear Chat", systemImage: "trash")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis.circle")
+                                .font(.system(size: 18))
+                                .foregroundColor(Colors.textSecondary(for: colorScheme))
+                        }
+                    }
+                }
+            } else {
+                // iPhone toolbar - add queue button
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    if let sessionId = viewModel.currentSessionId {
+                        Button(action: { showingQueueStatus.toggle() }) {
+                            Image(systemName: "tray.2.fill")
+                                .font(.system(size: 18))
+                                .foregroundColor(Colors.textSecondary(for: colorScheme))
+                        }
                     }
                 }
             }
             #endif
+        }
+        .sheet(isPresented: $showingQueueStatus) {
+            if let sessionId = viewModel.currentSessionId {
+                NavigationView {
+                    QueueStatusView(sessionId: sessionId)
+                        .navigationTitle("Message Queue")
+                        #if os(iOS)
+                        .navigationBarTitleDisplayMode(.inline)
+                        #endif
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("Done") {
+                                    showingQueueStatus = false
+                                }
+                            }
+                        }
+                }
+            }
         }
         .onAppear {
             // Ensure proper setup on view appearance

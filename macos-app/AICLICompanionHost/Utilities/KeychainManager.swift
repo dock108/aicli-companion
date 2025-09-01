@@ -1,147 +1,281 @@
 import Foundation
 import Security
+#if os(macOS)
+import LocalAuthentication
+#endif
 
-/// Keychain manager for secure storage of sensitive data
-/// This is a copy for the macOS app until we properly integrate the shared package
+/// Unified KeychainManager for both iOS and macOS platforms
+/// This is the consolidated version based on AICLICompanionCore
 public class KeychainManager {
-    static let shared = KeychainManager()
-
-    private let service = "com.aicli.companion.host"
-    private let accessGroup: String? = nil // macOS doesn't use access groups the same way
-
-    private init() {}
-
-    // MARK: - Public Methods
-
-    /// Save data to keychain
-    public func save(_ data: Data, for key: String) -> Bool {
-        delete(for: key) // Delete any existing item first
-
+    // MARK: - Singleton
+    public static let shared = KeychainManager()
+    
+    // MARK: - Properties
+    private let serviceName: String
+    private let authTokenKey = "authToken" // Updated to match iOS/macOS versions
+    private let serverURLKey = "serverURL"
+    private let ngrokTokenKey = "ngrokAuthToken"
+    
+    // MARK: - Initialization
+    private init() {
+        // Use consistent service names across platforms
+        #if os(iOS)
+        self.serviceName = "com.aicli.companion"
+        #else
+        self.serviceName = "com.aicli.companion.host"
+        #endif
+    }
+    
+    // MARK: - Custom Initialization (for testing or specific configurations)
+    public init(serviceName: String) {
+        self.serviceName = serviceName
+    }
+    
+    // MARK: - Generic Keychain Operations
+    
+    public func save(_ value: String, forKey key: String) -> Bool {
+        guard let data = value.data(using: .utf8) else { return false }
+        
         var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
+            kSecAttrService as String: serviceName,
             kSecAttrAccount as String: key,
-            kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked
+            kSecValueData as String: data
         ]
-
+        
+        // Add platform-specific accessibility
+        #if os(iOS)
+        query[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        #else
+        query[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlocked
+        #endif
+        
+        // Delete existing item first
+        SecItemDelete(query as CFDictionary)
+        
+        // Add new item
         let status = SecItemAdd(query as CFDictionary, nil)
-        return status == errSecSuccess
+        
+        if status != errSecSuccess {
+            print("Keychain save failed for key '\(key)' with status: \(status)")
+            return false
+        }
+        
+        return true
     }
-
-    /// Save string to keychain
-    public func save(_ string: String, for key: String) -> Bool {
-        guard let data = string.data(using: .utf8) else { return false }
-        return save(data, for: key)
-    }
-
-    /// Retrieve data from keychain
-    public func retrieve(for key: String) -> Data? {
-        var query: [String: Any] = [
+    
+    public func load(forKey key: String) -> String? {
+        let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
+            kSecAttrService as String: serviceName,
             kSecAttrAccount as String: key,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
-
+        
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
-
+        
+        guard status == errSecSuccess,
+              let data = result as? Data,
+              let string = String(data: data, encoding: .utf8) else {
+            return nil
+        }
+        
+        return string
+    }
+    
+    @discardableResult
+    public func delete(forKey key: String) -> Bool {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: serviceName,
+            kSecAttrAccount as String: key
+        ]
+        
+        let status = SecItemDelete(query as CFDictionary)
+        
+        if status != errSecSuccess && status != errSecItemNotFound {
+            print("Keychain delete failed for key '\(key)' with status: \(status)")
+            return false
+        }
+        
+        return true
+    }
+    
+    @discardableResult
+    public func deleteAll() -> Bool {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: serviceName
+        ]
+        
+        let status = SecItemDelete(query as CFDictionary)
+        
+        if status != errSecSuccess && status != errSecItemNotFound {
+            print("Keychain deleteAll failed with status: \(status)")
+            return false
+        }
+        
+        return true
+    }
+    
+    public func exists(forKey key: String) -> Bool {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: serviceName,
+            kSecAttrAccount as String: key,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        
+        let status = SecItemCopyMatching(query as CFDictionary, nil)
+        return status == errSecSuccess
+    }
+    
+    // MARK: - Data Operations (matching iOS/macOS interface)
+    
+    public func save(_ data: Data, for key: String) -> Bool {
+        var query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: serviceName,
+            kSecAttrAccount as String: key,
+            kSecValueData as String: data
+        ]
+        
+        // Add platform-specific accessibility
+        #if os(iOS)
+        query[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        #else
+        query[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlocked
+        #endif
+        
+        // Delete existing item first
+        SecItemDelete(query as CFDictionary)
+        
+        // Add new item
+        let status = SecItemAdd(query as CFDictionary, nil)
+        
+        if status != errSecSuccess {
+            print("Keychain save failed for key '\(key)' with status: \(status)")
+            return false
+        }
+        
+        return true
+    }
+    
+    public func save(_ string: String, for key: String) -> Bool {
+        guard let data = string.data(using: .utf8) else { return false }
+        return save(data, for: key)
+    }
+    
+    public func retrieve(for key: String) -> Data? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: serviceName,
+            kSecAttrAccount as String: key,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        
         guard status == errSecSuccess,
               let data = result as? Data else {
             return nil
         }
-
+        
         return data
     }
-
-    /// Retrieve string from keychain
+    
     public func retrieveString(for key: String) -> String? {
         guard let data = retrieve(for: key) else { return nil }
         return String(data: data, encoding: .utf8)
     }
-
-    /// Delete item from keychain
-    @discardableResult
-    public func delete(for key: String) -> Bool {
-        var query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key
-        ]
-
-        let status = SecItemDelete(query as CFDictionary)
-        return status == errSecSuccess || status == errSecItemNotFound
-    }
-
-    /// Delete all items from keychain
-    @discardableResult
-    public func deleteAll() -> Bool {
-        var query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service
-        ]
-
-        let status = SecItemDelete(query as CFDictionary)
-        return status == errSecSuccess || status == errSecItemNotFound
-    }
-
-    /// Check if a key exists in keychain
+    
     public func exists(for key: String) -> Bool {
-        var query: [String: Any] = [
+        let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
+            kSecAttrService as String: serviceName,
             kSecAttrAccount as String: key,
             kSecReturnData as String: false,
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
-
+        
         let status = SecItemCopyMatching(query as CFDictionary, nil)
         return status == errSecSuccess
     }
-
-    // MARK: - Convenience Methods
-
-    /// Save authentication token
+    
+    // MARK: - Auth Token Convenience Methods
+    
     public func saveAuthToken(_ token: String) -> Bool {
-        return save(token, for: "authToken")
+        return save(token, for: authTokenKey)
     }
-
-    /// Retrieve authentication token
+    
     public func getAuthToken() -> String? {
-        return retrieveString(for: "authToken")
+        return retrieveString(for: authTokenKey)
     }
-
-    /// Delete authentication token
+    
+    public func loadAuthToken() -> String? {
+        return getAuthToken() // Alias for backward compatibility
+    }
+    
     @discardableResult
     public func deleteAuthToken() -> Bool {
-        return delete(for: "authToken")
+        return delete(forKey: authTokenKey)
     }
-
-    /// Save server URL
+    
+    // MARK: - Server URL Convenience Methods
+    
     public func saveServerURL(_ url: String) -> Bool {
-        return save(url, for: "serverURL")
+        return save(url, for: serverURLKey)
     }
-
-    /// Retrieve server URL
+    
     public func getServerURL() -> String? {
-        return retrieveString(for: "serverURL")
+        return retrieveString(for: serverURLKey)
     }
-
-    /// Save ngrok auth token
+    
+    // MARK: - Ngrok Token Convenience Methods (primarily for macOS)
+    
     public func saveNgrokToken(_ token: String) -> Bool {
-        return save(token, for: "ngrokAuthToken")
+        return save(token, for: ngrokTokenKey)
     }
-
-    /// Retrieve ngrok auth token
+    
     public func getNgrokToken() -> String? {
-        return retrieveString(for: "ngrokAuthToken")
+        return retrieveString(for: ngrokTokenKey)
     }
-
-    /// Delete ngrok auth token
+    
     @discardableResult
     public func deleteNgrokToken() -> Bool {
-        return delete(for: "ngrokAuthToken")
+        return delete(forKey: ngrokTokenKey)
     }
+    
+    // MARK: - Platform-Specific Features
+    
+    #if os(macOS)
+    public func authenticateWithTouchID(reason: String) async -> Bool {
+        // Note: SettingsManager dependency needs to be injected or handled differently
+        // For now, we'll check if Touch ID is available
+        
+        let context = LAContext()
+        var error: NSError?
+        
+        // Check if Touch ID is available
+        guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
+            print("Touch ID not available: \(error?.localizedDescription ?? "Unknown error")")
+            return true // Fall back to no authentication
+        }
+        
+        do {
+            let success = try await context.evaluatePolicy(
+                .deviceOwnerAuthenticationWithBiometrics,
+                localizedReason: reason
+            )
+            return success
+        } catch {
+            print("Touch ID authentication failed: \(error.localizedDescription)")
+            return false
+        }
+    }
+    #endif
 }

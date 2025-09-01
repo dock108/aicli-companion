@@ -1,5 +1,6 @@
 import XCTest
 @testable import AICLICompanion
+import AICLICompanionCore
 
 @available(iOS 17.0, macOS 14.0, *)
 final class KeychainManagerTests: XCTestCase {

@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import AICLICompanionCore
 
 @available(iOS 16.0, macOS 13.0, *)
 public class SettingsManager: ObservableObject {
@@ -124,7 +125,7 @@ public class SettingsManager: ObservableObject {
     func clearConnection() {
         if let connection = currentConnection {
             // Remove auth token from keychain
-            keychain.delete(for: "auth_token_\(connection.address)_\(connection.port)")
+            keychain.delete(forKey: "auth_token_\(connection.address)_\(connection.port)")
         }
 
         currentConnection = nil

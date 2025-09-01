@@ -296,6 +296,21 @@ router.post('/content', async (req, res) => {
         };
       }
 
+      // Security: Always validate the found path is within the safe root
+      try {
+        validatedPath = await PathValidator.validatePath(baseDirectory, path.relative(baseDirectory, validatedPath), {
+          allowSymlinks: false,
+          mustExist: true,
+          mustBeDirectory: false,
+        });
+      } catch (pathError) {
+        logger.warn(`Path validation failed for found file ${validatedPath}: ${pathError.message}`);
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied to file path',
+          error: 'PATH_VALIDATION_FAILED',
+        });
+      }
       logger.info(
         `Using file at: ${validatedPath}${allMatches.length > 1 ? ` (selected most recent of ${allMatches.length} matches)` : ''}`
       );

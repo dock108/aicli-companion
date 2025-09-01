@@ -29,14 +29,7 @@ router.get('/:sessionId/status', (req, res) => {
   res.json({
     success: true,
     sessionId,
-    queue: {
-      length: status.queueLength,
-      processing: status.processing,
-      paused: status.paused,
-      currentMessage: status.currentMessage,
-      stats: status.stats,
-      deadLetterQueueSize: status.deadLetterQueueSize,
-    },
+    queue: status.queue,
     requestId,
     timestamp: new Date().toISOString(),
   });
@@ -52,9 +45,9 @@ router.get('/:sessionId/messages', (req, res) => {
 
   logger.info('Getting queued messages', { sessionId, requestId });
 
-  const queue = messageQueueManager.getQueue(sessionId);
-
-  if (!queue) {
+  // Check if queue exists first (getQueue creates one if it doesn't exist)
+  const queues = messageQueueManager.queues;
+  if (!queues.has(sessionId)) {
     return res.status(404).json({
       success: false,
       error: 'Queue not found for session',
@@ -62,6 +55,8 @@ router.get('/:sessionId/messages', (req, res) => {
       requestId,
     });
   }
+
+  const queue = messageQueueManager.getQueue(sessionId);
 
   const messages = queue.queue.map((msg) => ({
     id: msg.id,
@@ -122,8 +117,8 @@ router.post('/:sessionId/pause', (req, res) => {
     success: true,
     sessionId,
     action: 'pause',
-    paused: status?.paused || true,
-    queueLength: status?.queueLength || 0,
+    paused: status?.queue?.paused || true,
+    queueLength: status?.queue?.length || 0,
     requestId,
     timestamp: new Date().toISOString(),
   });
@@ -147,8 +142,8 @@ router.post('/:sessionId/resume', (req, res) => {
     success: true,
     sessionId,
     action: 'resume',
-    paused: status?.paused || false,
-    queueLength: status?.queueLength || 0,
+    paused: status?.queue?.paused || false,
+    queueLength: status?.queue?.length || 0,
     requestId,
     timestamp: new Date().toISOString(),
   });
@@ -165,7 +160,7 @@ router.post('/:sessionId/clear', (req, res) => {
   logger.info('Clearing queue', { sessionId, requestId });
 
   const statusBefore = messageQueueManager.getQueueStatus(sessionId);
-  const clearedCount = statusBefore?.queueLength || 0;
+  const clearedCount = statusBefore?.queue?.length || 0;
 
   messageQueueManager.clearQueue(sessionId);
 
@@ -232,16 +227,16 @@ router.get('/metrics', (req, res) => {
   };
 
   for (const [sessionId, status] of Object.entries(allStatuses)) {
-    metrics.totalMessages += status.queueLength;
-    if (status.processing) metrics.totalProcessing++;
-    if (status.paused) metrics.totalPaused++;
-    metrics.totalDeadLetter += status.deadLetterQueueSize;
+    metrics.totalMessages += status.queue.length;
+    if (status.queue.processing) metrics.totalProcessing++;
+    if (status.queue.paused) metrics.totalPaused++;
+    metrics.totalDeadLetter += status.queue.deadLetterQueueSize;
 
     metrics.queues[sessionId] = {
-      queueLength: status.queueLength,
-      processing: status.processing,
-      paused: status.paused,
-      stats: status.stats,
+      queueLength: status.queue.length,
+      processing: status.queue.processing,
+      paused: status.queue.paused,
+      stats: status.queue.stats,
     };
   }
 
@@ -274,9 +269,9 @@ router.put('/:sessionId/message/:messageId/priority', (req, res) => {
     });
   }
 
-  const queue = messageQueueManager.getQueue(sessionId);
-
-  if (!queue) {
+  // Check if queue exists first
+  const queues = messageQueueManager.queues;
+  if (!queues.has(sessionId)) {
     return res.status(404).json({
       success: false,
       error: 'Queue not found for session',
@@ -284,6 +279,8 @@ router.put('/:sessionId/message/:messageId/priority', (req, res) => {
       requestId,
     });
   }
+
+  const queue = messageQueueManager.getQueue(sessionId);
 
   // Find and update message priority
   const messageIndex = queue.queue.findIndex((msg) => msg.id === messageId);

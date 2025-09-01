@@ -186,7 +186,7 @@ jobs:
       contents: read
       checks: write
     runs-on: macos-14
-    timeout-minutes: 45
+    timeout-minutes: 60
     
     steps:
     - uses: actions/checkout@v4
@@ -218,8 +218,12 @@ jobs:
         path: |
           ~/Library/Developer/Xcode/DerivedData/**/SourcePackages
           ~/.swiftpm
-        key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+          ios/build/SourcePackages
+          ios/.build
+        key: ${{ runner.os }}-spm-${{ hashFiles('ios/Package.resolved', 'ios/Package.swift') }}-${{ env.XCODE_VERSION }}-v2
         restore-keys: |
+          ${{ runner.os }}-spm-${{ hashFiles('ios/Package.resolved') }}-${{ env.XCODE_VERSION }}
+          ${{ runner.os }}-spm-${{ hashFiles('ios/Package.resolved') }}
           ${{ runner.os }}-spm-
     
     - name: Cache Derived Data
@@ -284,85 +288,90 @@ jobs:
         echo "=== Available build destinations ==="
         xcodebuild -showBuildSettings -project AICLICompanion.xcodeproj -scheme AICLICompanion | grep -i platform || true
         
+    - name: Early Swift Package Resolution
+      run: |
+        cd ios
+        swift package resolve
+        swift package show-dependencies
+    
     - name: Resolve Swift Package Dependencies
       run: |
         cd ios
-        xcodebuild -resolvePackageDependencies -project AICLICompanion.xcodeproj -scheme AICLICompanion
+        xcodebuild -resolvePackageDependencies \
+          -project AICLICompanion.xcodeproj \
+          -scheme AICLICompanion \
+          -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest'
     
     - name: List Available Simulators
       run: |
         echo "=== Available Simulators ==="
         xcrun simctl list devices available
         
+    - name: Pre-build Heavy Dependencies
+      run: |
+        cd ios
+        # Pre-build just the dependencies that are causing timeouts
+        xcodebuild build-for-testing \
+          -project AICLICompanion.xcodeproj \
+          -scheme AICLICompanion \
+          -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
+          -configuration Release \
+          CODE_SIGNING_ALLOWED=NO \
+          IDEBuildOperationMaxNumberOfConcurrentCompileTasks=8 \
+          -derivedDataPath build \
+          -skipPackageSignatureValidation \
+          -quiet
+      timeout-minutes: 25
+    
     - name: Build iOS App
       run: |
         cd ios
-        # Get the first available iOS Simulator
-        SIMULATOR_ID=$(xcrun simctl list devices available -j | jq -r '.devices | to_entries | map(select(.key | contains("iOS"))) | .[0].value[0].udid' || echo "")
-        
-        if [ -z "$SIMULATOR_ID" ]; then
-          echo "No iOS simulators found, trying to use generic platform"
-          xcodebuild build \
-            -project AICLICompanion.xcodeproj \
-            -scheme AICLICompanion \
-            -destination 'generic/platform=iOS' \
-            -configuration Release \
-            CODE_SIGNING_ALLOWED=NO \
-            ONLY_ACTIVE_ARCH=NO \
-            -derivedDataPath build
-        else
-          echo "Using simulator: $SIMULATOR_ID"
-          xcodebuild build \
-            -project AICLICompanion.xcodeproj \
-            -scheme AICLICompanion \
-            -destination "id=$SIMULATOR_ID" \
-            -configuration Release \
-            CODE_SIGNING_ALLOWED=NO \
-            ONLY_ACTIVE_ARCH=NO \
-            -derivedDataPath build
-        fi
+        # Use iOS Simulator explicitly instead of generic platform
+        xcodebuild build \
+          -project AICLICompanion.xcodeproj \
+          -scheme AICLICompanion \
+          -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
+          -configuration Release \
+          CODE_SIGNING_ALLOWED=NO \
+          ONLY_ACTIVE_ARCH=NO \
+          IDEBuildOperationMaxNumberOfConcurrentCompileTasks=8 \
+          SWIFT_COMPILATION_MODE=wholemodule \
+          -derivedDataPath build \
+          -skipPackageSignatureValidation
     
     - name: Run iOS Tests with Coverage
       run: |
         cd ios
-        # Get the first available iOS Simulator for tests
-        SIMULATOR_ID=$(xcrun simctl list devices available -j | jq -r '.devices | to_entries | map(select(.key | contains("iOS"))) | .[0].value[0].udid' || echo "")
-        
-        if [ -z "$SIMULATOR_ID" ]; then
-          echo "No iOS simulators found, skipping tests"
-          exit 0
-        else
-          echo "Running tests on simulator: $SIMULATOR_ID"
-          xcodebuild -project AICLICompanion.xcodeproj \
-            -scheme AICLICompanion \
-            -destination "id=$SIMULATOR_ID" \
-            test \
-            -enableCodeCoverage YES \
-            CODE_SIGNING_ALLOWED=NO \
-            -resultBundlePath ios-test.xcresult \
-            -parallel-testing-enabled NO \
-            -maximum-concurrent-test-simulator-destinations 1 \
-            IDEBuildOperationMaxNumberOfConcurrentCompileTasks=4 \
-            ONLY_ACTIVE_ARCH=NO \
-            -skip-testing:AICLICompanionTests/KeychainManagerTests \
-            -skip-testing:AICLICompanionTests/ConnectionReliabilityManagerTests/testExponentialBackoffProgression \
-            -skip-testing:AICLICompanionTests/ConnectionReliabilityManagerTests/testHandleConnectionLost \
-            -skip-testing:AICLICompanionTests/ConnectionReliabilityManagerTests/testRecordDisconnection \
-            -skip-testing:AICLICompanionTests/MessageQueueManagerTests/testInitialState \
-            -skip-testing:AICLICompanionTests/MessageQueueManagerTests/testTrackQueuedMessage \
-            -skip-testing:AICLICompanionTests/MessageQueueManagerTests/testConcurrentQueueOperations \
-            -skip-testing:AICLICompanionTests/MessageQueueManagerTests/testConcurrentDeliveryOperations \
-            -skip-testing:AICLICompanionTests/LoggingManagerTests/testConcurrentLogging \
-            -skip-testing:AICLICompanionTests/WebSocketManagerTests/testConcurrentMessageProcessing \
-            -skip-testing:AICLICompanionTests/ServiceDiscoveryManagerTests/testPerformanceOfManualConfigCreation \
-            -skip-testing:AICLICompanionTests/ServiceDiscoveryManagerTests/testPerformanceOfServerCreation \
-            -skip-testing:AICLICompanionTests/ServiceDiscoveryManagerTests/testRefreshDiscoveryBasic \
-            -skip-testing:AICLICompanionTests/ServiceDiscoveryManagerTests/testStartDiscoveryBasic \
-            -skip-testing:AICLICompanionTests/ServiceDiscoveryManagerTests/testStopDiscoveryBasic \
-            -skip-testing:AICLICompanionTests/ServiceDiscoveryManagerTests/testDiscoveryLifecycleBasic \
-            -skip-testing:AICLICompanionTests/ServiceDiscoveryManagerTests/testDiscoveryCleanup \
-            -skip-testing:AICLICompanionTests/WebSocketManagerTests/testPerformanceOfMessageSerialization
-        fi
+        # Use consistent destination for tests
+        xcodebuild -project AICLICompanion.xcodeproj \
+          -scheme AICLICompanion \
+          -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
+          test \
+          -enableCodeCoverage YES \
+          CODE_SIGNING_ALLOWED=NO \
+          -resultBundlePath ios-test.xcresult \
+          -parallel-testing-enabled NO \
+          -maximum-concurrent-test-simulator-destinations 1 \
+          IDEBuildOperationMaxNumberOfConcurrentCompileTasks=8 \
+          ONLY_ACTIVE_ARCH=NO \
+          -skip-testing:AICLICompanionTests/KeychainManagerTests \
+          -skip-testing:AICLICompanionTests/ConnectionReliabilityManagerTests/testExponentialBackoffProgression \
+          -skip-testing:AICLICompanionTests/ConnectionReliabilityManagerTests/testHandleConnectionLost \
+          -skip-testing:AICLICompanionTests/ConnectionReliabilityManagerTests/testRecordDisconnection \
+          -skip-testing:AICLICompanionTests/MessageQueueManagerTests/testInitialState \
+          -skip-testing:AICLICompanionTests/MessageQueueManagerTests/testTrackQueuedMessage \
+          -skip-testing:AICLICompanionTests/MessageQueueManagerTests/testConcurrentQueueOperations \
+          -skip-testing:AICLICompanionTests/MessageQueueManagerTests/testConcurrentDeliveryOperations \
+          -skip-testing:AICLICompanionTests/LoggingManagerTests/testConcurrentLogging \
+          -skip-testing:AICLICompanionTests/WebSocketManagerTests/testConcurrentMessageProcessing \
+          -skip-testing:AICLICompanionTests/ServiceDiscoveryManagerTests/testPerformanceOfManualConfigCreation \
+          -skip-testing:AICLICompanionTests/ServiceDiscoveryManagerTests/testPerformanceOfServerCreation \
+          -skip-testing:AICLICompanionTests/ServiceDiscoveryManagerTests/testRefreshDiscoveryBasic \
+          -skip-testing:AICLICompanionTests/ServiceDiscoveryManagerTests/testStartDiscoveryBasic \
+          -skip-testing:AICLICompanionTests/ServiceDiscoveryManagerTests/testStopDiscoveryBasic \
+          -skip-testing:AICLICompanionTests/ServiceDiscoveryManagerTests/testDiscoveryLifecycleBasic \
+          -skip-testing:AICLICompanionTests/ServiceDiscoveryManagerTests/testDiscoveryCleanup \
+          -skip-testing:AICLICompanionTests/WebSocketManagerTests/testPerformanceOfMessageSerialization
     
     - name: Generate iOS Coverage Report
       run: |

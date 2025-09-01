@@ -198,9 +198,9 @@ final class KeychainManagerTests: XCTestCase {
         let allData = mockKeychainManager.getAllStoredData()
 
         XCTAssertEqual(allData.count, 3)
-        XCTAssertEqual(allData["key1"], "value1")
-        XCTAssertEqual(allData["key2"], "value2")
-        XCTAssertEqual(allData["authToken"], "auth-token")
+        XCTAssertEqual(allData["key1"] as? String, "value1")
+        XCTAssertEqual(allData["key2"] as? String, "value2")
+        XCTAssertEqual(allData["authToken"] as? String, "auth-token")
     }
 
     func testResetClearsAllData() throws {

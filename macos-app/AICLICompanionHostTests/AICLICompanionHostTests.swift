@@ -35,7 +35,7 @@ final class AICLICompanionHostTests: XCTestCase {
 
         XCTAssertNotNil(keychain)
         // Test keychain operations don't crash
-        _ = keychain.loadAuthToken()
+        _ = keychain.getAuthToken()
     }
 
     @MainActor

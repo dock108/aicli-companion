@@ -277,7 +277,7 @@ router.post('/content', async (req, res) => {
 
       // Use the first match (most recently modified if same name)
       allMatches.sort((a, b) => b.lastModified - a.lastModified);
-      validatedPath = allMatches[0].path;
+      const foundPath = allMatches[0].path;
 
       // Check for duplicates
       if (allMatches.length > 1) {
@@ -298,18 +298,17 @@ router.post('/content', async (req, res) => {
 
       // Security: Always validate the found path is within the safe root
       try {
-        const safeValidatedPath = await PathValidator.validatePath(
+        validatedPath = await PathValidator.validatePath(
           baseDirectory,
-          path.relative(baseDirectory, validatedPath),
+          path.relative(baseDirectory, foundPath),
           {
             allowSymlinks: false,
             mustExist: true,
             mustBeDirectory: false,
           }
         );
-        validatedPath = safeValidatedPath;
       } catch (pathError) {
-        logger.warn(`Path validation failed for found file ${validatedPath}: ${pathError.message}`);
+        logger.warn(`Path validation failed for found file ${foundPath}: ${pathError.message}`);
         return res.status(403).json({
           success: false,
           message: 'Access denied to file path',
@@ -322,12 +321,11 @@ router.post('/content', async (req, res) => {
     } else {
       // Validate and resolve the path securely for paths with directories
       try {
-        const safeValidatedPath = await PathValidator.validatePath(baseDirectory, requestedPath, {
+        validatedPath = await PathValidator.validatePath(baseDirectory, requestedPath, {
           allowSymlinks: false,
           mustExist: true,
           mustBeDirectory: false,
         });
-        validatedPath = safeValidatedPath;
       } catch (pathError) {
         logger.warn(`Path validation failed for ${requestedPath}: ${pathError.message}`);
         return res.status(403).json({
@@ -499,12 +497,11 @@ router.get('/info', async (req, res) => {
     // Validate path
     let validatedPath;
     try {
-      const safeValidatedPath = await PathValidator.validatePath(baseDirectory, requestedPath, {
+      validatedPath = await PathValidator.validatePath(baseDirectory, requestedPath, {
         allowSymlinks: false,
         mustExist: true,
         mustBeDirectory: false,
       });
-      validatedPath = safeValidatedPath;
     } catch (pathError) {
       return res.status(403).json({
         success: false,

@@ -97,18 +97,7 @@ export class PathValidator {
 
       // If target must exist or we need to check symlinks, validate using safe operations
       if (mustExist || !allowSymlinks) {
-        try {
-          await access(resolvedTarget, constants.F_OK);
-        } catch (error) {
-          if (mustExist) {
-            throw new PathSecurityError(`Path '${targetPath}' does not exist`, 'PATH_NOT_FOUND');
-          }
-          // If path doesn't exist and we don't require it to exist,
-          // we can't check for symlinks, so just return the resolved path
-          return resolvedTarget;
-        }
-
-        // For symlink checking, build a safe target path
+        // For symlink checking, build a safe target path first
         const relativePath = path.relative(resolvedBase, resolvedTarget);
 
         // SECURITY: Extra validation - ensure relative path doesn't escape
@@ -121,12 +110,23 @@ export class PathValidator {
 
         const safeTargetPath = path.resolve(realBase, relativePath);
 
-        // SECURITY: Final check before realpath - ensure constructed path is within base
+        // SECURITY: Final check before filesystem access - ensure constructed path is within base
         if (!safeTargetPath.startsWith(realBase + path.sep) && safeTargetPath !== realBase) {
           throw new PathSecurityError(
             `Constructed path escapes base directory`,
             'CONSTRUCTED_PATH_ESCAPE'
           );
+        }
+
+        try {
+          await access(safeTargetPath, constants.F_OK);
+        } catch (error) {
+          if (mustExist) {
+            throw new PathSecurityError(`Path '${targetPath}' does not exist`, 'PATH_NOT_FOUND');
+          }
+          // If path doesn't exist and we don't require it to exist,
+          // we can't check for symlinks, so just return the resolved path
+          return resolvedTarget;
         }
 
         // Get real path using our safe constructed path

@@ -13,13 +13,13 @@ struct SettingsView: View {
     @State private var selectedTab: Tabs = .general
     @EnvironmentObject private var serverManager: ServerManager
     @EnvironmentObject private var settingsManager: SettingsManager
-    
+
     enum Tabs: String, CaseIterable {
-        case general = "general"
-        case server = "server"
-        case security = "security"
-        case logs = "logs"
-        case advanced = "advanced"
+        case general
+        case server
+        case security
+        case logs
+        case advanced
     }
 
     var body: some View {

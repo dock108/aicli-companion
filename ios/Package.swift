@@ -30,7 +30,11 @@ let package = Package(
         .testTarget(
             name: "AICLICompanionTests",
             dependencies: [
-                "AICLICompanion"
+                "AICLICompanion",
+                "Starscream",
+                .product(name: "Markdown", package: "swift-markdown"),
+                "KeychainAccess",
+                .product(name: "Crypto", package: "swift-crypto")
             ])
     ]
 )

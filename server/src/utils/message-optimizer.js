@@ -2,6 +2,8 @@
  * Message optimization utilities for improved performance
  */
 
+import { randomUUID } from 'crypto';
+
 class MessageOptimizer {
   constructor() {
     // Cache for processed messages
@@ -119,7 +121,7 @@ class MessageOptimizer {
    * Generate unique ID for messages without one
    */
   generateId() {
-    return `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return `msg_${randomUUID()}`;
   }
 
   /**

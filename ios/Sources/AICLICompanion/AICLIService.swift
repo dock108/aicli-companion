@@ -22,6 +22,11 @@ public class AICLIService: ObservableObject {
         AICLIConnectionManager(urlSession: urlSession)
     }()
     
+    // Public accessor for FileContentService
+    public var activeConnectionManager: AICLIConnectionManager {
+        return connectionManager
+    }
+    
     private lazy var pushNotificationManager: AICLIPushNotificationManager = {
         AICLIPushNotificationManager(urlSession: urlSession, connectionManager: connectionManager)
     }()
@@ -84,7 +89,15 @@ public class AICLIService: ObservableObject {
     
     public func connect(to address: String, port: Int, authToken: String?, completion: @escaping (Result<Void, AICLICompanionError>) -> Void) {
         setupPropertyForwardingIfNeeded()
-        connectionManager.connect(to: address, port: port, authToken: authToken, completion: completion)
+        connectionManager.connect(to: address, port: port, authToken: authToken) { [weak self] result in
+            // Update FileContentService with connection manager when connection succeeds
+            if case .success = result {
+                DispatchQueue.main.async {
+                    FileContentService.shared.updateConnection(self?.connectionManager ?? AICLIConnectionManager(urlSession: URLSession.shared))
+                }
+            }
+            completion(result)
+        }
     }
     
     public func disconnect() {

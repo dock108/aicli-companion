@@ -3,7 +3,7 @@ import { InputValidator } from './aicli-utils.js';
 import { AICLIMessageHandler } from './aicli-message-handler.js';
 // Session persistence removed - server is stateless
 import { getTelemetryService } from './telemetry.js';
-// Message queue removed - server is stateless
+import { messageQueueManager } from './message-queue.js';
 
 /**
  * Manages AICLI CLI session lifecycle, timeout handling, and cleanup
@@ -392,6 +392,9 @@ export class AICLISessionManager extends EventEmitter {
     this.activeSessions.delete(sessionId);
     this.sessionMessageBuffers.delete(sessionId);
 
+    // Clean up message queue for this session
+    messageQueueManager.removeQueue(sessionId);
+
     // Emit event
     this.emit('sessionClosed', {
       sessionId,
@@ -573,6 +576,9 @@ export class AICLISessionManager extends EventEmitter {
       this.activeSessions.delete(sessionId);
       this.sessionMessageBuffers.delete(sessionId);
 
+      // Clean up message queue for this session
+      messageQueueManager.removeQueue(sessionId);
+
       // Emit session cleaned event for other components to handle cleanup
       this.emit('sessionCleaned', {
         sessionId,
@@ -607,6 +613,9 @@ export class AICLISessionManager extends EventEmitter {
       this.sessionMessageBuffers.delete(sessionId);
       this.interactiveSessions.delete(sessionId);
       this.claudeSessions.delete(sessionId);
+
+      // Clean up message queue for this session
+      messageQueueManager.removeQueue(sessionId);
 
       // Find and clear project session mapping
       for (const [projectPath, sid] of this.projectSessions.entries()) {
@@ -972,6 +981,9 @@ export class AICLISessionManager extends EventEmitter {
       this.activeSessions.delete(sessionId);
       this.sessionMessageBuffers.delete(sessionId);
 
+      // Clean up message queue for this session
+      messageQueueManager.removeQueue(sessionId);
+
       this.emit('sessionCleaned', {
         sessionId,
         reason: 'process_died',
@@ -1007,6 +1019,9 @@ export class AICLISessionManager extends EventEmitter {
     this.claudeSessions.clear();
     this.interactiveSessions.clear();
     this.projectSessions.clear();
+
+    // Clean up all message queues
+    messageQueueManager.destroy();
 
     console.log('✅ AICLI Session Manager shut down complete');
   }

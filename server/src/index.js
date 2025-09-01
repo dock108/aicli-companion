@@ -19,7 +19,7 @@ import { router as messagesRouter } from './routes/messages.js';
 import filesRoutes from './routes/files.js';
 import queueRoutes from './routes/queue.js';
 import { errorHandler } from './middleware/error.js';
-import { AICLIService } from './services/aicli.js';
+import { aicliService } from './services/aicli-instance.js';
 import { ServerConfig } from './config/server-config.js';
 import { MiddlewareConfig } from './config/middleware-config.js';
 import { TLSConfig } from './config/tls-config.js';
@@ -37,7 +37,7 @@ class AICLICompanionServer {
   constructor() {
     this.app = express();
     this.config = new ServerConfig();
-    this.aicliService = new AICLIService();
+    this.aicliService = aicliService;
     this.aicliService.safeRootDirectory = this.config.configPath; // Set project directory as safe root
 
     // Configure AICLI permission settings from environment or config

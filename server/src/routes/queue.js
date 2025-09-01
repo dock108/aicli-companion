@@ -179,7 +179,9 @@ router.delete('/:sessionId', (req, res) => {
 
   logger.info('Removing queue', { sessionId, requestId });
 
-  if (!statusBefore.queue) {
+  const statusBefore = messageQueueManager.getQueueStatus(sessionId);
+
+  if (!statusBefore || !statusBefore.queue) {
     return res.status(404).json({
       success: false,
       error: 'Queue not found for session',

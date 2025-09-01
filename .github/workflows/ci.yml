@@ -216,23 +216,20 @@ jobs:
       uses: actions/cache@v4
       with:
         path: |
-          ~/Library/Developer/Xcode/DerivedData/**/SourcePackages
           ~/.swiftpm
           ios/build/SourcePackages
-          ios/.build
-        key: ${{ runner.os }}-spm-${{ hashFiles('ios/Package.resolved', 'ios/Package.swift') }}-${{ env.XCODE_VERSION }}-v2
+        key: ${{ runner.os }}-spm-${{ hashFiles('ios/Package.resolved', 'ios/Package.swift') }}-${{ env.XCODE_VERSION }}-v3
         restore-keys: |
           ${{ runner.os }}-spm-${{ hashFiles('ios/Package.resolved') }}-${{ env.XCODE_VERSION }}
           ${{ runner.os }}-spm-${{ hashFiles('ios/Package.resolved') }}
-          ${{ runner.os }}-spm-
     
     - name: Cache Derived Data
       uses: actions/cache@v4
       with:
-        path: ~/Library/Developer/Xcode/DerivedData
-        key: ${{ runner.os }}-derived-data-${{ hashFiles('**/*.swift', '**/*.h', '**/*.m') }}
+        path: ios/build
+        key: ${{ runner.os }}-ios-build-${{ hashFiles('ios/**/*.swift', 'ios/Package.resolved') }}-v2
         restore-keys: |
-          ${{ runner.os }}-derived-data-
+          ${{ runner.os }}-ios-build-${{ hashFiles('ios/Package.resolved') }}
     
     - name: Cache SwiftLint
       uses: actions/cache@v4
@@ -270,11 +267,18 @@ jobs:
     - name: Clean build and reset package cache
       run: |
         cd ios
-        # Clean any previous builds
+        # Clean any previous builds and derived data
         xcodebuild clean -scheme AICLICompanion -destination 'generic/platform=iOS' || true
+        # Remove problematic build artifacts
+        rm -rf build/SourcePackages || true
+        rm -rf .build || true
+        # Clear Xcode derived data that might conflict
+        rm -rf ~/Library/Developer/Xcode/DerivedData/AICLICompanion* || true
         # Reset package cache to force fresh resolution
         swift package reset
         swift package resolve
+        # Verify packages resolved correctly
+        swift package show-dependencies
     
     - name: Check Available SDKs and Destinations
       run: |
@@ -291,16 +295,22 @@ jobs:
     - name: Early Swift Package Resolution
       run: |
         cd ios
+        # Clean up any existing checkouts that might be in a bad state
+        rm -rf .build/checkouts || true
         swift package resolve
         swift package show-dependencies
+        # Verify package integrity
+        swift package dump-package > /dev/null
     
     - name: Resolve Swift Package Dependencies
       run: |
         cd ios
+        # Resolve packages using xcodebuild with explicit cleanup
         xcodebuild -resolvePackageDependencies \
           -project AICLICompanion.xcodeproj \
           -scheme AICLICompanion \
-          -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest'
+          -destination 'platform=iOS Simulator,name=iPhone 15' \
+          -clonedSourcePackagesDirPath build/SourcePackages
     
     - name: List Available Simulators
       run: |
@@ -314,11 +324,12 @@ jobs:
         xcodebuild build-for-testing \
           -project AICLICompanion.xcodeproj \
           -scheme AICLICompanion \
-          -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
+          -destination 'platform=iOS Simulator,name=iPhone 15' \
           -configuration Release \
           CODE_SIGNING_ALLOWED=NO \
           IDEBuildOperationMaxNumberOfConcurrentCompileTasks=8 \
           -derivedDataPath build \
+          -clonedSourcePackagesDirPath build/SourcePackages \
           -skipPackageSignatureValidation \
           -quiet
       timeout-minutes: 25
@@ -330,13 +341,14 @@ jobs:
         xcodebuild build \
           -project AICLICompanion.xcodeproj \
           -scheme AICLICompanion \
-          -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
+          -destination 'platform=iOS Simulator,name=iPhone 15' \
           -configuration Release \
           CODE_SIGNING_ALLOWED=NO \
           ONLY_ACTIVE_ARCH=NO \
           IDEBuildOperationMaxNumberOfConcurrentCompileTasks=8 \
           SWIFT_COMPILATION_MODE=wholemodule \
           -derivedDataPath build \
+          -clonedSourcePackagesDirPath build/SourcePackages \
           -skipPackageSignatureValidation
     
     - name: Run iOS Tests with Coverage
@@ -345,7 +357,7 @@ jobs:
         # Use consistent destination for tests
         xcodebuild -project AICLICompanion.xcodeproj \
           -scheme AICLICompanion \
-          -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
+          -destination 'platform=iOS Simulator,name=iPhone 15' \
           test \
           -enableCodeCoverage YES \
           CODE_SIGNING_ALLOWED=NO \
@@ -354,6 +366,8 @@ jobs:
           -maximum-concurrent-test-simulator-destinations 1 \
           IDEBuildOperationMaxNumberOfConcurrentCompileTasks=8 \
           ONLY_ACTIVE_ARCH=NO \
+          -derivedDataPath build \
+          -clonedSourcePackagesDirPath build/SourcePackages \
           -skip-testing:AICLICompanionTests/KeychainManagerTests \
           -skip-testing:AICLICompanionTests/ConnectionReliabilityManagerTests/testExponentialBackoffProgression \
           -skip-testing:AICLICompanionTests/ConnectionReliabilityManagerTests/testHandleConnectionLost \

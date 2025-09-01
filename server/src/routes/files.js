@@ -298,15 +298,17 @@ router.post('/content', async (req, res) => {
 
       // Security: Always validate the found path is within the safe root
       try {
-        secureFilePath = await PathValidator.validatePath(
-          baseDirectory,
-          path.relative(baseDirectory, foundPath),
-          {
-            allowSymlinks: false,
-            mustExist: true,
-            mustBeDirectory: false,
-          }
-        );
+        const relativePath = path.relative(baseDirectory, foundPath);
+
+        // Validate the path first (this may throw if invalid)
+        await PathValidator.validatePath(baseDirectory, relativePath, {
+          allowSymlinks: false,
+          mustExist: true,
+          mustBeDirectory: false,
+        });
+
+        // Create a clean path from trusted components only
+        secureFilePath = PathValidator.createUntaintedPath(baseDirectory, relativePath);
       } catch (pathError) {
         logger.warn(`Path validation failed for found file ${foundPath}: ${pathError.message}`);
         return res.status(403).json({
@@ -321,11 +323,15 @@ router.post('/content', async (req, res) => {
     } else {
       // Validate and resolve the path securely for paths with directories
       try {
-        secureFilePath = await PathValidator.validatePath(baseDirectory, requestedPath, {
+        // Validate the path first (this may throw if invalid)
+        await PathValidator.validatePath(baseDirectory, requestedPath, {
           allowSymlinks: false,
           mustExist: true,
           mustBeDirectory: false,
         });
+
+        // Create a clean path from trusted components only
+        secureFilePath = PathValidator.createUntaintedPath(baseDirectory, requestedPath);
       } catch (pathError) {
         logger.warn(`Path validation failed for ${requestedPath}: ${pathError.message}`);
         return res.status(403).json({
@@ -336,8 +342,12 @@ router.post('/content', async (req, res) => {
       }
     }
 
-    // Check if file extension is supported
-    const fileExtension = path.extname(secureFilePath).toLowerCase();
+    // Check if file extension is supported using secure operations
+    const fileExtension = await PathValidator.performSecureFileOperation(
+      baseDirectory,
+      path.relative(baseDirectory, secureFilePath),
+      (safePath) => path.extname(safePath).toLowerCase()
+    );
     if (!SUPPORTED_EXTENSIONS.has(fileExtension) && fileExtension !== '') {
       logger.warn(`Unsupported file extension: ${fileExtension} for file: ${requestedPath}`);
       return res.status(415).json({
@@ -347,12 +357,16 @@ router.post('/content', async (req, res) => {
       });
     }
 
-    // Get file stats first - secureFilePath is safe after PathValidator.validatePath()
+    // Get file stats using secure file operation wrapper
     let stats;
     try {
-      stats = await fs.stat(secureFilePath);
+      stats = await PathValidator.performSecureFileOperation(
+        baseDirectory,
+        path.relative(baseDirectory, secureFilePath),
+        async (safePath) => fs.stat(safePath)
+      );
     } catch (statError) {
-      logger.warn(`File stat failed for ${secureFilePath}: ${statError.message}`);
+      logger.warn(`File stat failed: ${statError.message}`);
 
       if (statError.code === 'ENOENT') {
         return res.status(404).json({
@@ -389,12 +403,16 @@ router.post('/content', async (req, res) => {
       });
     }
 
-    // Read file content using the securely validated path
+    // Read file content using secure file operation wrapper
     let content;
     try {
-      content = await fs.readFile(secureFilePath, 'utf8');
+      content = await PathValidator.performSecureFileOperation(
+        baseDirectory,
+        path.relative(baseDirectory, secureFilePath),
+        async (safePath) => fs.readFile(safePath, 'utf8')
+      );
     } catch (readError) {
-      logger.error(`File read failed for ${secureFilePath}: ${readError.message}`);
+      logger.error(`File read failed: ${readError.message}`);
 
       if (readError.code === 'ENOENT') {
         return res.status(404).json({
@@ -427,8 +445,12 @@ router.post('/content', async (req, res) => {
       }
     }
 
-    // Create response
-    const fileName = path.basename(secureFilePath);
+    // Create response using secure operations for path metadata
+    const fileName = await PathValidator.performSecureFileOperation(
+      baseDirectory,
+      path.relative(baseDirectory, secureFilePath),
+      (safePath) => path.basename(safePath)
+    );
     const mimeType = getMimeType(fileExtension);
 
     const fileContentData = {
@@ -495,9 +517,9 @@ router.get('/info', async (req, res) => {
     }
 
     // Validate path
-    let secureFilePath;
     try {
-      secureFilePath = await PathValidator.validatePath(baseDirectory, requestedPath, {
+      // Validate the path first (this may throw if invalid)
+      await PathValidator.validatePath(baseDirectory, requestedPath, {
         allowSymlinks: false,
         mustExist: true,
         mustBeDirectory: false,
@@ -510,10 +532,23 @@ router.get('/info', async (req, res) => {
       });
     }
 
-    // Get file stats using the securely validated path
-    const stats = await fs.stat(secureFilePath);
-    const fileName = path.basename(secureFilePath);
-    const fileExtension = path.extname(secureFilePath).toLowerCase();
+    // Get file stats using secure file operation wrapper
+    const stats = await PathValidator.performSecureFileOperation(
+      baseDirectory,
+      requestedPath,
+      async (safePath) => fs.stat(safePath)
+    );
+    // Get file metadata using secure operations
+    const fileName = await PathValidator.performSecureFileOperation(
+      baseDirectory,
+      requestedPath,
+      (safePath) => path.basename(safePath)
+    );
+    const fileExtension = await PathValidator.performSecureFileOperation(
+      baseDirectory,
+      requestedPath,
+      (safePath) => path.extname(safePath).toLowerCase()
+    );
     const mimeType = getMimeType(fileExtension);
 
     res.json({

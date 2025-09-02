@@ -107,7 +107,12 @@ export function createChatMessageHandler(services) {
         resultKeys: result ? Object.keys(result) : [],
         hasSessionId: !!result?.sessionId,
         hasResponse: !!result?.response,
-        responseKeys: result?.response ? Object.keys(result.response) : [],
+        responseType: typeof result?.response,
+        // Only log keys if response is an object, not a string
+        responseKeys: result?.response && typeof result?.response === 'object' 
+          ? Object.keys(result.response).slice(0, 10) // Limit to first 10 keys
+          : [],
+        responseLength: typeof result?.response === 'string' ? result?.response?.length : undefined,
         responseHasResult: !!result?.response?.result,
         responseResultType: typeof result?.response?.result,
         // New fields for enhanced text accumulation
@@ -139,7 +144,15 @@ export function createChatMessageHandler(services) {
           contentLength: content.length,
         });
       }
-      // Priority 2: Check nested response.result (non-streaming)
+      // Priority 2: Check if response itself is a string (plain text response)
+      else if (result?.response && typeof result.response === 'string') {
+        content = result.response;
+        logger.info('Using plain text response', {
+          requestId: msgRequestId,
+          contentLength: content.length,
+        });
+      }
+      // Priority 3: Check nested response.result (non-streaming structured response)
       else if (result?.response?.result && typeof result.response.result === 'string') {
         content = result.response.result;
         logger.info('Using nested response result', {
@@ -147,7 +160,7 @@ export function createChatMessageHandler(services) {
           contentLength: content.length,
         });
       }
-      // Priority 3: Check for streaming scenarios
+      // Priority 4: Check for streaming scenarios
       else if (result?.source === 'streaming') {
         // Streaming was enabled but we need to check for content
         if (result?.result && result.result.length > 0) {
@@ -179,8 +192,9 @@ export function createChatMessageHandler(services) {
         logger.warn('Non-streaming response was empty', {
           requestId: msgRequestId,
           sessionId: claudeSessionId,
-          hasResponses: !!result?.response?.responses,
-          responsesCount: result?.response?.responses?.length || 0,
+          hasResponses: typeof result?.response === 'object' ? !!result?.response?.responses : false,
+          responsesCount: typeof result?.response === 'object' ? result?.response?.responses?.length || 0 : 0,
+          responseType: typeof result?.response,
         });
 
         // Don't send fallback - let stall detection handle truly stuck operations

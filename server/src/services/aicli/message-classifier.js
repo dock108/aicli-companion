@@ -138,7 +138,9 @@ export class MessageClassifier {
 
   static containsPermissionRequest(content) {
     const contentText = content?.content || content?.text || content;
-    return (typeof contentText === 'string' && contentText.toLowerCase().includes('permission')) || false;
+    return (
+      (typeof contentText === 'string' && contentText.toLowerCase().includes('permission')) || false
+    );
   }
 
   static containsToolUse(content) {
@@ -162,7 +164,10 @@ export class MessageClassifier {
 
   static extractPermissionPrompt(text) {
     // Extract clean permission prompt from Claude's response
-    return text.split('\n').filter((line) => line.trim()).join('\n');
+    return text
+      .split('\n')
+      .filter((line) => line.trim())
+      .join('\n');
   }
 
   static extractPermissionPromptFromMessage(message) {

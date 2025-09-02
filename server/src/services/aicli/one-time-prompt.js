@@ -51,7 +51,7 @@ export class OneTimePrompt {
 
       let stdout = '';
       let stderr = '';
-      let resolvePromise = resolve;
+      const resolvePromise = resolve;
 
       // Handle spawn errors
       aicliProcess.on('error', (error) => {

@@ -16,10 +16,10 @@ describe('WebSocket Device Coordination Logic', () => {
     deviceRegistry.userDevices.clear();
     deviceRegistry.primaryDevices.clear();
     deviceRegistry.deviceSessions.clear();
-    
+
     // Restart monitoring
     deviceRegistry.startDeviceMonitoring();
-    
+
     messageQueueManager.removeAllListeners();
   });
 
@@ -33,7 +33,7 @@ describe('WebSocket Device Coordination Logic', () => {
     it('should register device successfully', () => {
       const result = deviceRegistry.registerDevice(userId1, deviceId1, {
         platform: 'iOS',
-        appVersion: '1.0.0'
+        appVersion: '1.0.0',
       });
 
       assert.strictEqual(result.success, true);
@@ -42,7 +42,7 @@ describe('WebSocket Device Coordination Logic', () => {
 
       // Verify device is active
       assert.ok(deviceRegistry.isDeviceActive(deviceId1));
-      
+
       const activeDevices = deviceRegistry.getActiveDevices(userId1);
       assert.strictEqual(activeDevices.length, 1);
       assert.strictEqual(activeDevices[0].deviceId, deviceId1);
@@ -56,7 +56,7 @@ describe('WebSocket Device Coordination Logic', () => {
       const activeDevices = deviceRegistry.getActiveDevices(userId1);
       assert.strictEqual(activeDevices.length, 2);
 
-      const deviceIds = activeDevices.map(d => d.deviceId);
+      const deviceIds = activeDevices.map((d) => d.deviceId);
       assert.ok(deviceIds.includes(deviceId1));
       assert.ok(deviceIds.includes(deviceId2));
     });
@@ -84,7 +84,7 @@ describe('WebSocket Device Coordination Logic', () => {
       // Wait a bit then update
       setTimeout(() => {
         deviceRegistry.updateLastSeen(deviceId1);
-        
+
         const updatedDevice = deviceRegistry.registeredDevices.get(deviceId1);
         assert.ok(updatedDevice.lastSeen >= initialLastSeen);
       }, 10);
@@ -92,10 +92,10 @@ describe('WebSocket Device Coordination Logic', () => {
 
     it('should maintain device as active with regular heartbeats', () => {
       assert.ok(deviceRegistry.isDeviceActive(deviceId1));
-      
+
       // Update heartbeat
       deviceRegistry.updateLastSeen(deviceId1);
-      
+
       // Should still be active
       assert.ok(deviceRegistry.isDeviceActive(deviceId1));
     });
@@ -113,7 +113,7 @@ describe('WebSocket Device Coordination Logic', () => {
       assert.strictEqual(result.success, true);
       assert.strictEqual(result.isPrimary, true);
       assert.strictEqual(result.primaryDeviceId, deviceId1);
-      
+
       // Verify primary status
       assert.ok(deviceRegistry.isPrimaryDevice(deviceId1));
       assert.strictEqual(deviceRegistry.getPrimaryDevice(sessionId1), deviceId1);
@@ -122,7 +122,7 @@ describe('WebSocket Device Coordination Logic', () => {
     it('should reject second device when primary exists', () => {
       // First device becomes primary
       deviceRegistry.electPrimary(userId1, sessionId1, deviceId1);
-      
+
       // Second device should be rejected
       const result = deviceRegistry.electPrimary(userId1, sessionId1, deviceId2);
 
@@ -155,7 +155,7 @@ describe('WebSocket Device Coordination Logic', () => {
 
       assert.strictEqual(result.success, true);
       assert.strictEqual(result.newPrimaryDeviceId, deviceId2);
-      
+
       // Verify transfer
       assert.strictEqual(deviceRegistry.getPrimaryDevice(sessionId1), deviceId2);
       assert.ok(!deviceRegistry.isPrimaryDevice(deviceId1));
@@ -178,7 +178,7 @@ describe('WebSocket Device Coordination Logic', () => {
 
       assert.strictEqual(result.success, false);
       assert.strictEqual(result.reason, 'not_current_primary');
-      
+
       // Primary should remain unchanged
       assert.strictEqual(deviceRegistry.getPrimaryDevice(sessionId1), deviceId1);
     });
@@ -193,7 +193,7 @@ describe('WebSocket Device Coordination Logic', () => {
       // No primary initially
       assert.strictEqual(deviceRegistry.getPrimaryDevice(sessionId1), null);
       assert.ok(!deviceRegistry.isPrimaryDevice(deviceId1));
-      
+
       // Get active devices
       const activeDevices = deviceRegistry.getActiveDevices(userId1);
       assert.strictEqual(activeDevices.length, 1);
@@ -204,7 +204,7 @@ describe('WebSocket Device Coordination Logic', () => {
     it('should update device status in active devices list', () => {
       // Elect as primary
       deviceRegistry.electPrimary(userId1, sessionId1, deviceId1);
-      
+
       const activeDevices = deviceRegistry.getActiveDevices(userId1);
       assert.strictEqual(activeDevices.length, 1);
       assert.strictEqual(activeDevices[0].isPrimary, true);
@@ -223,7 +223,7 @@ describe('WebSocket Device Coordination Logic', () => {
       // Device should be removed
       assert.ok(!deviceRegistry.isDeviceActive(deviceId1));
       assert.strictEqual(deviceRegistry.getActiveDevices(userId1).length, 0);
-      
+
       // Primary status should be removed
       assert.ok(!deviceRegistry.isPrimaryDevice(deviceId1));
       assert.strictEqual(deviceRegistry.getPrimaryDevice(sessionId1), null);
@@ -269,16 +269,13 @@ describe('WebSocket Device Coordination Logic', () => {
       const message = {
         content: 'Test message from device',
         sessionId,
-        projectPath: '/test/project'
+        projectPath: '/test/project',
       };
 
       // Queue message with device context
-      const result = messageQueueManager.queueMessage(
-        sessionId,
-        message,
-        MessagePriority.NORMAL,
-        { deviceId: deviceId1 }
-      );
+      const result = messageQueueManager.queueMessage(sessionId, message, MessagePriority.NORMAL, {
+        deviceId: deviceId1,
+      });
 
       assert.strictEqual(result.queued, true);
       assert.strictEqual(typeof result.messageId, 'string');
@@ -296,24 +293,18 @@ describe('WebSocket Device Coordination Logic', () => {
       const message = {
         content: 'Duplicate test message',
         sessionId,
-        projectPath: '/test/project'
+        projectPath: '/test/project',
       };
 
       // First message from device1
-      const result1 = messageQueueManager.queueMessage(
-        sessionId,
-        message,
-        MessagePriority.NORMAL,
-        { deviceId: deviceId1 }
-      );
+      const result1 = messageQueueManager.queueMessage(sessionId, message, MessagePriority.NORMAL, {
+        deviceId: deviceId1,
+      });
 
       // Second identical message from device2
-      const result2 = messageQueueManager.queueMessage(
-        sessionId,
-        message,
-        MessagePriority.NORMAL,
-        { deviceId: deviceId2 }
-      );
+      const result2 = messageQueueManager.queueMessage(sessionId, message, MessagePriority.NORMAL, {
+        deviceId: deviceId2,
+      });
 
       assert.strictEqual(result1.queued, true);
       assert.strictEqual(result2.queued, false);
@@ -342,24 +333,18 @@ describe('WebSocket Device Coordination Logic', () => {
       const message = {
         content: 'Event test message',
         sessionId,
-        projectPath: '/test/project'
+        projectPath: '/test/project',
       };
 
       // First message
-      messageQueueManager.queueMessage(
-        sessionId,
-        message,
-        MessagePriority.NORMAL,
-        { deviceId: deviceId1 }
-      );
+      messageQueueManager.queueMessage(sessionId, message, MessagePriority.NORMAL, {
+        deviceId: deviceId1,
+      });
 
       // Duplicate message should emit event
-      messageQueueManager.queueMessage(
-        sessionId,
-        message,
-        MessagePriority.NORMAL,
-        { deviceId: deviceId2 }
-      );
+      messageQueueManager.queueMessage(sessionId, message, MessagePriority.NORMAL, {
+        deviceId: deviceId2,
+      });
     });
   });
 
@@ -414,7 +399,7 @@ describe('WebSocket Device Coordination Logic', () => {
 
       // Device1 becomes primary for session1
       deviceRegistry.electPrimary(userId1, sessionId1, deviceId1);
-      
+
       // Device2 becomes primary for session2
       const sessionId2 = 'session-test-456';
       deviceRegistry.electPrimary(userId1, sessionId2, deviceId2);

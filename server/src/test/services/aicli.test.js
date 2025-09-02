@@ -60,21 +60,21 @@ describe('AICLIService Integration Tests', () => {
       allowedTools: [],
       disallowedTools: [],
       skipPermissions: false,
-      setPermissionMode: mock.fn(function(mode) {
+      setPermissionMode: mock.fn(function (mode) {
         this.permissionMode = mode;
       }),
-      setAllowedTools: mock.fn(function(tools) {
+      setAllowedTools: mock.fn(function (tools) {
         this.allowedTools = tools;
       }),
-      setDisallowedTools: mock.fn(function(tools) {
+      setDisallowedTools: mock.fn(function (tools) {
         this.disallowedTools = tools;
       }),
-      setSkipPermissions: mock.fn(function(skip) {
+      setSkipPermissions: mock.fn(function (skip) {
         this.skipPermissions = skip;
       }),
       executeAICLICommand: mock.fn(async (session, prompt, attachmentPaths) => ({
         success: true,
-        response: { 
+        response: {
           type: 'result',
           result: `Processed: ${prompt}`,
           session_id: session.sessionId,
@@ -154,7 +154,7 @@ describe('AICLIService Integration Tests', () => {
 
       assert.ok(result.success);
       assert.equal(mockProcessRunner.executeAICLICommand.mock.calls.length, 1);
-      
+
       // Check that attachment paths were passed
       const call = mockProcessRunner.executeAICLICommand.mock.calls[0];
       assert.ok(call.arguments[2]); // attachmentPaths parameter
@@ -206,22 +206,16 @@ describe('AICLIService Integration Tests', () => {
     });
 
     it('should validate input', async () => {
-      await assert.rejects(
-        aicliService.sendPrompt(null),
-        /Invalid input: Prompt must be a string/
-      );
+      await assert.rejects(aicliService.sendPrompt(null), /Invalid input: Prompt must be a string/);
 
-      await assert.rejects(
-        aicliService.sendPrompt(''),
-        /Invalid input: Prompt cannot be empty/
-      );
+      await assert.rejects(aicliService.sendPrompt(''), /Invalid input: Prompt cannot be empty/);
     });
   });
 
   describe('Session Management', () => {
     it('should create and track sessions', async () => {
       await aicliService.sendPrompt('Test', { streaming: true });
-      
+
       const sessions = aicliService.getActiveSessions();
       assert.equal(sessions.length, 1);
       assert.ok(sessions[0].sessionId);
@@ -311,7 +305,7 @@ describe('AICLIService Integration Tests', () => {
     it('should apply permissions to prompts', async () => {
       aicliService.setPermissionMode('strict');
       aicliService.setAllowedTools(['Read']);
-      
+
       await aicliService.sendPrompt('Test', {
         streaming: true,
         skipPermissions: false,
@@ -332,7 +326,7 @@ describe('AICLIService Integration Tests', () => {
       }));
 
       const health = await aicliService.healthCheck();
-      
+
       assert.equal(health.status, 'healthy');
       assert.ok(health.checks.aicli);
       assert.ok(health.checks.sessions);
@@ -348,7 +342,7 @@ describe('AICLIService Integration Tests', () => {
       }));
 
       const health = await aicliService.healthCheck();
-      
+
       assert.equal(health.status, 'unhealthy');
       assert.equal(health.checks.aicli, false);
     });
@@ -391,20 +385,17 @@ describe('AICLIService Integration Tests', () => {
       await aicliService.sendPrompt('Test2', { streaming: true });
 
       await aicliService.shutdown();
-      
+
       assert.equal(mockSessionManager.cleanupAllSessions.mock.calls.length, 1);
       assert.equal(aicliService.listenerCount('sessionCleaned'), 0);
     });
 
     it('should handle shutdown timeout', async () => {
       mockSessionManager.cleanupAllSessions = mock.fn(async () => {
-        await new Promise(resolve => setTimeout(resolve, 11000));
+        await new Promise((resolve) => setTimeout(resolve, 11000));
       });
 
-      await assert.rejects(
-        aicliService.shutdown(),
-        /Shutdown timeout/
-      );
+      await assert.rejects(aicliService.shutdown(), /Shutdown timeout/);
     });
   });
 
@@ -416,13 +407,13 @@ describe('AICLIService Integration Tests', () => {
 
       // Simulate process events
       const processStartHandler = mockProcessRunner.on.mock.calls.find(
-        call => call.arguments[0] === 'processStart'
+        (call) => call.arguments[0] === 'processStart'
       );
       if (processStartHandler) {
         processStartHandler.arguments[1]({ sessionId: 'test', pid: 123 });
       }
 
-      assert.ok(events.some(e => e.type === 'start'));
+      assert.ok(events.some((e) => e.type === 'start'));
     });
 
     it('should emit security violations', async () => {
@@ -431,10 +422,10 @@ describe('AICLIService Integration Tests', () => {
 
       // Simulate security violation
       const securityHandler = mockProcessRunner.on.mock.calls.find(
-        call => call.arguments[0] === 'securityViolation'
+        (call) => call.arguments[0] === 'securityViolation'
       );
       if (securityHandler) {
-        securityHandler.arguments[1]({ 
+        securityHandler.arguments[1]({
           type: 'forbidden_path',
           path: '/etc/passwd',
         });
@@ -455,7 +446,7 @@ describe('AICLIService Integration Tests', () => {
       });
       await aicliService.killSession('event-test', 'Test cancellation');
 
-      assert.ok(events.some(e => e.reason === 'Test cancellation'));
+      assert.ok(events.some((e) => e.reason === 'Test cancellation'));
     });
   });
 
@@ -473,7 +464,7 @@ describe('AICLIService Integration Tests', () => {
 
     it('should handle invalid working directory', async () => {
       aicliService.setSafeRootDirectory('/safe/path');
-      
+
       // This would normally be validated in the actual implementation
       assert.ok(aicliService.safeRootDirectory);
     });
@@ -481,12 +472,11 @@ describe('AICLIService Integration Tests', () => {
     it('should handle missing sessions gracefully', () => {
       const session = aicliService.getSession('non-existent');
       assert.equal(session, undefined);
-      
+
       const hasSession = aicliService.hasSession('non-existent');
       assert.equal(hasSession, false);
     });
   });
-
 
   describe('Message Handling and Classification', () => {
     it('should handle text message with proper classification', async () => {
@@ -525,7 +515,7 @@ describe('AICLIService Integration Tests', () => {
     it('should handle streaming responses with chunks', async () => {
       let chunkCount = 0;
       const chunks = ['Chunk 1', 'Chunk 2', 'Chunk 3'];
-      
+
       // Mock streaming response
       mockProcessRunner.executeAICLICommand = mock.fn(async (session, prompt, attachments) => {
         // Simulate streaming by emitting chunks
@@ -533,7 +523,7 @@ describe('AICLIService Integration Tests', () => {
           chunks.forEach((chunk, i) => {
             setTimeout(() => {
               const handler = mockProcessRunner.on.mock.calls.find(
-                call => call.arguments[0] === 'streamingData'
+                (call) => call.arguments[0] === 'streamingData'
               );
               if (handler) {
                 handler.arguments[1]({
@@ -549,7 +539,7 @@ describe('AICLIService Integration Tests', () => {
           success: true,
           response: {
             type: 'streaming',
-            chunks: chunks,
+            chunks,
             session_id: session.sessionId,
           },
           claudeSessionId: session.sessionId,
@@ -568,7 +558,7 @@ describe('AICLIService Integration Tests', () => {
       });
 
       // Wait for streaming events
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       assert.ok(result.success);
       assert.ok(streamingData.length > 0 || result.response.chunks);
@@ -716,7 +706,7 @@ describe('AICLIService Integration Tests', () => {
     it('should validate and sanitize prompt input', async () => {
       // Test with special characters
       const specialPrompt = 'Test with <script>alert("xss")</script> content';
-      
+
       const result = await aicliService.sendPrompt(specialPrompt, {
         streaming: true,
         sessionId: 'sanitize-test',

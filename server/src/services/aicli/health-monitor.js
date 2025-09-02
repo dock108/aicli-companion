@@ -45,11 +45,16 @@ export class HealthMonitor {
             }
 
             if (health.critical.length > 0) {
-              console.error(`🚨 Process health critical for session ${sessionId}:`, health.critical);
+              console.error(
+                `🚨 Process health critical for session ${sessionId}:`,
+                health.critical
+              );
               unhealthySessions.push({ sessionId, reason: health.critical.join(', ') });
             }
           } else {
-            console.warn(`Process ${session.process.pid} for session ${sessionId} no longer exists`);
+            console.warn(
+              `Process ${session.process.pid} for session ${sessionId} no longer exists`
+            );
             unhealthySessions.push({ sessionId, reason: 'Process terminated unexpectedly' });
           }
         } catch (error) {

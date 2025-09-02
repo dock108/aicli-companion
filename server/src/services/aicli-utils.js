@@ -11,12 +11,12 @@ export class InputValidator {
       const processedPrompt = this.sanitizePrompt(prompt);
       return {
         isValid: true,
-        processedPrompt
+        processedPrompt,
       };
     } catch (error) {
       return {
         isValid: false,
-        error: error.message
+        error: error.message,
       };
     }
   }

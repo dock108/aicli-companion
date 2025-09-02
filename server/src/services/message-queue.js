@@ -79,15 +79,17 @@ class SessionQueue extends EventEmitter {
     // Check for duplicates if deviceId is provided in metadata
     if (metadata.deviceId && message.content) {
       const duplicateResult = duplicateDetector.processMessage(message, metadata.deviceId);
-      
+
       if (duplicateResult.isDuplicate) {
-        debug(`Duplicate message detected from device ${metadata.deviceId}: ${duplicateResult.messageHash}`);
-        
+        debug(
+          `Duplicate message detected from device ${metadata.deviceId}: ${duplicateResult.messageHash}`
+        );
+
         this.emit('duplicate-message', {
           sessionId: this.sessionId,
           deviceId: metadata.deviceId,
           messageHash: duplicateResult.messageHash,
-          duplicateInfo: duplicateResult.duplicateInfo
+          duplicateInfo: duplicateResult.duplicateInfo,
         });
 
         // Return without enqueuing
@@ -95,7 +97,7 @@ class SessionQueue extends EventEmitter {
           queued: false,
           reason: 'duplicate',
           messageHash: duplicateResult.messageHash,
-          duplicateInfo: duplicateResult.duplicateInfo
+          duplicateInfo: duplicateResult.duplicateInfo,
         };
       }
 
@@ -144,7 +146,7 @@ class SessionQueue extends EventEmitter {
     return {
       queued: true,
       messageId: queuedMessage.id,
-      messageHash: metadata.messageHash
+      messageHash: metadata.messageHash,
     };
   }
 

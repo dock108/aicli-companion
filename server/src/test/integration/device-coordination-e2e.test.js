@@ -24,7 +24,7 @@ describe('Device Coordination End-to-End Integration', () => {
         trackSessionForRouting: async () => {},
         getSessionBuffer: () => ({
           userMessages: [],
-          assistantMessages: []
+          assistantMessages: [],
         }),
         storeMessage: () => {},
       },
@@ -32,11 +32,11 @@ describe('Device Coordination End-to-End Integration', () => {
         success: true,
         sessionId: 'test-session-123',
         response: {
-          result: 'This is a test response from Claude.'
-        }
+          result: 'This is a test response from Claude.',
+        },
       }),
       on: () => {},
-      removeListener: () => {}
+      removeListener: () => {},
     };
 
     // Mock push notification service
@@ -83,13 +83,13 @@ describe('Device Coordination End-to-End Integration', () => {
           message: 'Hello Claude, please help me with this code.',
           projectPath,
           sessionId,
-          deviceToken: deviceToken + '1',
+          deviceToken: `${deviceToken}1`,
           deviceId: deviceId1,
           userId,
           deviceInfo: {
             platform: 'iOS',
-            appVersion: '1.0.0'
-          }
+            appVersion: '1.0.0',
+          },
         })
         .expect(200);
 
@@ -112,20 +112,23 @@ describe('Device Coordination End-to-End Integration', () => {
           message: 'Hello Claude, please help me with this code.',
           projectPath,
           sessionId,
-          deviceToken: deviceToken + '2',
+          deviceToken: `${deviceToken}2`,
           deviceId: deviceId2,
           userId,
           deviceInfo: {
             platform: 'macOS',
-            appVersion: '1.0.0'
-          }
+            appVersion: '1.0.0',
+          },
         })
         .expect(200);
 
       // Verify duplicate detection
       assert.strictEqual(message2Response.body.success, true);
       assert.strictEqual(message2Response.body.duplicate, true);
-      assert.strictEqual(message2Response.body.message, 'Duplicate message detected - not processed');
+      assert.strictEqual(
+        message2Response.body.message,
+        'Duplicate message detected - not processed'
+      );
       assert(message2Response.body.duplicateInfo);
       assert(message2Response.body.duplicateInfo.messageHash);
       assert(message2Response.body.duplicateInfo.originalDevice);
@@ -134,8 +137,8 @@ describe('Device Coordination End-to-End Integration', () => {
       // Verify both devices are registered but message was deduplicated
       const activeDevicesAfter = deviceRegistry.getActiveDevices(userId);
       assert.strictEqual(activeDevicesAfter.length, 2);
-      
-      const deviceIds = activeDevicesAfter.map(d => d.deviceId);
+
+      const deviceIds = activeDevicesAfter.map((d) => d.deviceId);
       assert.ok(deviceIds.includes(deviceId1));
       assert.ok(deviceIds.includes(deviceId2));
 
@@ -146,13 +149,13 @@ describe('Device Coordination End-to-End Integration', () => {
           message: 'Can you also review my test files?',
           projectPath,
           sessionId,
-          deviceToken: deviceToken + '2',
+          deviceToken: `${deviceToken}2`,
           deviceId: deviceId2,
           userId,
           deviceInfo: {
             platform: 'macOS',
-            appVersion: '1.0.0'
-          }
+            appVersion: '1.0.0',
+          },
         })
         .expect(200);
 
@@ -171,7 +174,7 @@ describe('Device Coordination End-to-End Integration', () => {
           deviceToken,
           deviceId: deviceId1,
           userId,
-          deviceInfo: { platform: 'iOS' }
+          deviceInfo: { platform: 'iOS' },
         })
         .expect(200);
 
@@ -180,7 +183,7 @@ describe('Device Coordination End-to-End Integration', () => {
       const initialLastSeen = initialDevice.lastSeen;
 
       // Wait a bit then send another request
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, 50));
 
       await request(app)
         .post('/api/chat/auto-response/pause')
@@ -188,7 +191,7 @@ describe('Device Coordination End-to-End Integration', () => {
           sessionId: 'test-session',
           deviceToken,
           deviceId: deviceId1,
-          userId
+          userId,
         })
         .expect(200);
 
@@ -205,7 +208,7 @@ describe('Device Coordination End-to-End Integration', () => {
           sessionId,
           deviceToken,
           deviceId: deviceId1,
-          userId
+          userId,
         })
         .expect(200);
 
@@ -219,7 +222,7 @@ describe('Device Coordination End-to-End Integration', () => {
           sessionId,
           deviceToken,
           deviceId: deviceId1,
-          userId
+          userId,
         })
         .expect(200);
 
@@ -234,7 +237,7 @@ describe('Device Coordination End-to-End Integration', () => {
           deviceToken,
           deviceId: deviceId1,
           userId,
-          reason: 'user_requested'
+          reason: 'user_requested',
         })
         .expect(200);
 
@@ -257,7 +260,7 @@ describe('Device Coordination End-to-End Integration', () => {
           deviceToken,
           deviceId: deviceId1,
           userId,
-          deviceInfo: { platform: 'iOS' }
+          deviceInfo: { platform: 'iOS' },
         })
         .expect(200);
 
@@ -280,7 +283,7 @@ describe('Device Coordination End-to-End Integration', () => {
         .send({
           deviceToken,
           deviceId: deviceId1,
-          userId
+          userId,
         })
         .expect(400);
 
@@ -293,12 +296,15 @@ describe('Device Coordination End-to-End Integration', () => {
         .send({
           message: 'Test message',
           deviceId: deviceId1,
-          userId
+          userId,
         })
         .expect(400);
 
       assert.strictEqual(missingTokenResponse.body.success, false);
-      assert.strictEqual(missingTokenResponse.body.error, 'Device token is required for APNS message delivery');
+      assert.strictEqual(
+        missingTokenResponse.body.error,
+        'Device token is required for APNS message delivery'
+      );
 
       // Test missing session ID for auto-response controls
       const missingSessionResponse = await request(app)
@@ -306,7 +312,7 @@ describe('Device Coordination End-to-End Integration', () => {
         .send({
           deviceToken,
           deviceId: deviceId1,
-          userId
+          userId,
         })
         .expect(400);
 
@@ -321,13 +327,13 @@ describe('Device Coordination End-to-End Integration', () => {
         .send({
           message: 'Backward compatibility test',
           deviceToken,
-          sessionId
+          sessionId,
         })
         .expect(200);
 
       assert.strictEqual(response.body.success, true);
       assert.strictEqual(response.body.deliveryMethod, 'apns');
-      
+
       // Should work without device context
       assert(response.body.requestId);
       assert(response.body.timestamp);
@@ -339,10 +345,10 @@ describe('Device Coordination End-to-End Integration', () => {
         .post('/api/chat')
         .send({
           message: 'Message from device 1',
-          deviceToken: deviceToken + '1',
+          deviceToken: `${deviceToken}1`,
           deviceId: deviceId1,
           userId,
-          deviceInfo: { platform: 'iOS' }
+          deviceInfo: { platform: 'iOS' },
         })
         .expect(200);
 
@@ -350,10 +356,10 @@ describe('Device Coordination End-to-End Integration', () => {
         .post('/api/chat')
         .send({
           message: 'Message from device 2',
-          deviceToken: deviceToken + '2',
+          deviceToken: `${deviceToken}2`,
           deviceId: deviceId2,
           userId,
-          deviceInfo: { platform: 'macOS' }
+          deviceInfo: { platform: 'macOS' },
         })
         .expect(200);
 
@@ -371,25 +377,22 @@ describe('Device Coordination End-to-End Integration', () => {
         message: 'Duplicate detection test',
         sessionId,
         projectPath,
-        deviceToken: deviceToken + '1',
+        deviceToken: `${deviceToken}1`,
         deviceId: deviceId1,
         userId,
-        deviceInfo: { platform: 'iOS' }
+        deviceInfo: { platform: 'iOS' },
       };
 
       // First message
-      await request(app)
-        .post('/api/chat')
-        .send(baseMessage)
-        .expect(200);
+      await request(app).post('/api/chat').send(baseMessage).expect(200);
 
       // Duplicate message
       await request(app)
         .post('/api/chat')
         .send({
           ...baseMessage,
-          deviceToken: deviceToken + '2',
-          deviceId: deviceId2
+          deviceToken: `${deviceToken}2`,
+          deviceId: deviceId2,
         })
         .expect(200);
 
@@ -416,7 +419,7 @@ describe('Device Coordination End-to-End Integration', () => {
           deviceToken: 'queue-device-token',
           deviceId: 'queue-device-id',
           userId: 'queue-user-id',
-          deviceInfo: { platform: 'iOS' }
+          deviceInfo: { platform: 'iOS' },
         })
         .expect(200);
 
@@ -442,7 +445,7 @@ describe('Device Coordination End-to-End Integration', () => {
           sessionId: testSessionId,
           deviceToken: 'priority-device-token',
           deviceId: 'priority-device-id',
-          userId: 'priority-user-id'
+          userId: 'priority-user-id',
         })
         .expect(200);
 
@@ -454,7 +457,7 @@ describe('Device Coordination End-to-End Integration', () => {
           sessionId: testSessionId,
           deviceToken: 'priority-device-token',
           deviceId: 'priority-device-id',
-          userId: 'priority-user-id'
+          userId: 'priority-user-id',
         })
         .expect(200);
 

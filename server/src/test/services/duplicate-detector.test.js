@@ -13,7 +13,7 @@ describe('DuplicateDetector', () => {
     detector = new DuplicateDetector({
       timeWindow: 1000, // 1 second for testing
       maxEntries: 100,
-      cleanupInterval: 500 // 0.5 seconds for testing
+      cleanupInterval: 500, // 0.5 seconds for testing
     });
   });
 
@@ -26,13 +26,13 @@ describe('DuplicateDetector', () => {
       const message1 = {
         content: 'Hello world',
         sessionId: 'session-123',
-        projectPath: '/path/to/project'
+        projectPath: '/path/to/project',
       };
 
       const message2 = {
         content: 'Hello world',
         sessionId: 'session-123',
-        projectPath: '/path/to/project'
+        projectPath: '/path/to/project',
       };
 
       const hash1 = detector.generateMessageHash(message1);
@@ -58,7 +58,7 @@ describe('DuplicateDetector', () => {
         sessionId: 'session-123',
         deviceId: 'device-1',
         timestamp: Date.now(),
-        requestId: 'req-1'
+        requestId: 'req-1',
       };
 
       const message2 = {
@@ -66,7 +66,7 @@ describe('DuplicateDetector', () => {
         sessionId: 'session-123',
         deviceId: 'device-2',
         timestamp: Date.now() + 1000,
-        requestId: 'req-2'
+        requestId: 'req-2',
       };
 
       const hash1 = detector.generateMessageHash(message1);
@@ -80,16 +80,16 @@ describe('DuplicateDetector', () => {
         content: 'Check this file',
         attachments: [
           { name: 'test.txt', type: 'text/plain', size: 100 },
-          { name: 'image.png', type: 'image/png', size: 2000 }
-        ]
+          { name: 'image.png', type: 'image/png', size: 2000 },
+        ],
       };
 
       const message2 = {
         content: 'Check this file',
         attachments: [
           { name: 'image.png', type: 'image/png', size: 2000 },
-          { name: 'test.txt', type: 'text/plain', size: 100 }
-        ]
+          { name: 'test.txt', type: 'text/plain', size: 100 },
+        ],
       };
 
       const hash1 = detector.generateMessageHash(message1);
@@ -103,7 +103,7 @@ describe('DuplicateDetector', () => {
   describe('Duplicate Detection', () => {
     it('should detect duplicates within time window', () => {
       const messageHash = 'test-hash-123';
-      
+
       // First message should not be duplicate
       const result1 = detector.isDuplicate(messageHash, deviceId1, sessionId);
       assert.strictEqual(result1.isDuplicate, false);
@@ -117,12 +117,12 @@ describe('DuplicateDetector', () => {
 
     it('should not detect duplicates outside time window', async () => {
       const messageHash = 'test-hash-456';
-      
+
       // First message
       detector.isDuplicate(messageHash, deviceId1, sessionId);
 
       // Wait for time window to pass
-      await new Promise(resolve => setTimeout(resolve, 1100));
+      await new Promise((resolve) => setTimeout(resolve, 1100));
 
       // Second message should not be duplicate (outside window)
       const result = detector.isDuplicate(messageHash, deviceId2, sessionId);
@@ -131,13 +131,13 @@ describe('DuplicateDetector', () => {
 
     it('should update hash timestamp when outside window', async () => {
       const messageHash = 'test-hash-789';
-      
+
       // Record initial hash
       const initialResult = detector.isDuplicate(messageHash, deviceId1, sessionId);
       assert.strictEqual(initialResult.isDuplicate, false);
 
       // Wait for window to pass
-      await new Promise(resolve => setTimeout(resolve, 1100));
+      await new Promise((resolve) => setTimeout(resolve, 1100));
 
       // Hash should be updated with new timestamp
       const updateResult = detector.isDuplicate(messageHash, deviceId2, sessionId);
@@ -165,7 +165,7 @@ describe('DuplicateDetector', () => {
       const message = {
         content: 'New message',
         sessionId,
-        projectPath: '/test/path'
+        projectPath: '/test/path',
       };
 
       const result = detector.processMessage(message, deviceId1);
@@ -180,7 +180,7 @@ describe('DuplicateDetector', () => {
       const message = {
         content: 'Duplicate message',
         sessionId,
-        projectPath: '/test/path'
+        projectPath: '/test/path',
       };
 
       // First processing
@@ -206,18 +206,18 @@ describe('DuplicateDetector', () => {
 
     it('should clear device data', () => {
       const result = detector.clearDeviceData(deviceId1);
-      
+
       assert.ok(result.clearedHashes >= 2);
-      
+
       const stats = detector.getStats();
       assert.strictEqual(stats.trackedDevices, 1); // Only device2 remains
     });
 
     it('should clear session data', () => {
       const result = detector.clearSessionData('session1');
-      
+
       assert.ok(result.clearedHashes >= 2);
-      
+
       // Messages from session2 should remain
       const stats = detector.getStats();
       assert.ok(stats.totalHashesStored >= 1);
@@ -225,20 +225,20 @@ describe('DuplicateDetector', () => {
 
     it('should perform cleanup of old entries', async () => {
       const initialStats = detector.getStats();
-      
+
       // Wait for entries to age out
-      await new Promise(resolve => setTimeout(resolve, 1100));
-      
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+
       const cleanupResult = detector.performCleanup();
       assert.ok(cleanupResult.removedEntries >= 0);
-      
+
       const finalStats = detector.getStats();
       assert.ok(finalStats.totalHashesStored <= initialStats.totalHashesStored);
     });
 
     it('should reset all data', () => {
       detector.reset();
-      
+
       const stats = detector.getStats();
       assert.strictEqual(stats.totalHashesStored, 0);
       assert.strictEqual(stats.trackedDevices, 0);
@@ -268,7 +268,7 @@ describe('DuplicateDetector', () => {
       const testDetector = new DuplicateDetector({
         timeWindow: 1000,
         maxEntries: 100,
-        cleanupInterval: 999999 // Very long interval to prevent auto-cleanup during test
+        cleanupInterval: 999999, // Very long interval to prevent auto-cleanup during test
       });
 
       // Add data that will become old
@@ -276,27 +276,43 @@ describe('DuplicateDetector', () => {
       testDetector.processMessage({ content: 'old2' }, deviceId1);
 
       // Wait for time window to pass
-      await new Promise(resolve => setTimeout(resolve, 1100));
+      await new Promise((resolve) => setTimeout(resolve, 1100));
 
       // Check stats - should show old hashes (no auto-cleanup happened)
       const statsBeforeCleanup = testDetector.getStats();
-      assert.ok(statsBeforeCleanup.oldHashes >= 2, `Expected at least 2 old hashes, got ${statsBeforeCleanup.oldHashes}`);
+      assert.ok(
+        statsBeforeCleanup.oldHashes >= 2,
+        `Expected at least 2 old hashes, got ${statsBeforeCleanup.oldHashes}`
+      );
 
       // Add recent data
       testDetector.processMessage({ content: 'recent1' }, deviceId2);
 
       // Check stats with mixed data
       const statsWithMixed = testDetector.getStats();
-      assert.ok(statsWithMixed.oldHashes >= 2, `Expected at least 2 old hashes, got ${statsWithMixed.oldHashes}`);
-      assert.ok(statsWithMixed.recentHashes >= 1, `Expected at least 1 recent hash, got ${statsWithMixed.recentHashes}`);
+      assert.ok(
+        statsWithMixed.oldHashes >= 2,
+        `Expected at least 2 old hashes, got ${statsWithMixed.oldHashes}`
+      );
+      assert.ok(
+        statsWithMixed.recentHashes >= 1,
+        `Expected at least 1 recent hash, got ${statsWithMixed.recentHashes}`
+      );
 
       // Manually trigger cleanup - should remove old hashes
       testDetector.performCleanup();
 
       // After cleanup, should only have recent hashes
       const statsAfterCleanup = testDetector.getStats();
-      assert.strictEqual(statsAfterCleanup.oldHashes, 0, `Expected 0 old hashes after cleanup, got ${statsAfterCleanup.oldHashes}`);
-      assert.ok(statsAfterCleanup.recentHashes >= 1, `Expected at least 1 recent hash after cleanup, got ${statsAfterCleanup.recentHashes}`);
+      assert.strictEqual(
+        statsAfterCleanup.oldHashes,
+        0,
+        `Expected 0 old hashes after cleanup, got ${statsAfterCleanup.oldHashes}`
+      );
+      assert.ok(
+        statsAfterCleanup.recentHashes >= 1,
+        `Expected at least 1 recent hash after cleanup, got ${statsAfterCleanup.recentHashes}`
+      );
 
       testDetector.shutdown();
     });
@@ -306,7 +322,7 @@ describe('DuplicateDetector', () => {
     it('should handle empty messages gracefully', () => {
       const emptyMessage = {};
       const result = detector.processMessage(emptyMessage, deviceId1);
-      
+
       assert.strictEqual(result.isDuplicate, false);
       assert.strictEqual(typeof result.messageHash, 'string');
     });
@@ -314,13 +330,13 @@ describe('DuplicateDetector', () => {
     it('should handle messages without deviceId', () => {
       const message = { content: 'test message' };
       const result = detector.checkMessage(message, deviceId1);
-      
+
       assert.strictEqual(result.isDuplicate, false);
     });
 
     it('should handle concurrent operations safely', () => {
       const message = { content: 'concurrent test' };
-      
+
       // Simulate concurrent processing
       const results = [];
       for (let i = 0; i < 10; i++) {
@@ -328,8 +344,8 @@ describe('DuplicateDetector', () => {
       }
 
       // First should not be duplicate, rest should be
-      const nonDuplicates = results.filter(r => !r.isDuplicate);
-      const duplicates = results.filter(r => r.isDuplicate);
+      const nonDuplicates = results.filter((r) => !r.isDuplicate);
+      const duplicates = results.filter((r) => r.isDuplicate);
 
       assert.strictEqual(nonDuplicates.length, 1);
       assert.strictEqual(duplicates.length, 9);
@@ -339,7 +355,7 @@ describe('DuplicateDetector', () => {
       const smallDetector = new DuplicateDetector({
         timeWindow: 10000, // Long window
         maxEntries: 5,
-        cleanupInterval: 100
+        cleanupInterval: 100,
       });
 
       // Add more than max entries
@@ -378,15 +394,12 @@ describe('DuplicateDetector Integration with MessageQueue', () => {
       const message = {
         content: 'Unique message',
         sessionId,
-        projectPath: '/test/project'
+        projectPath: '/test/project',
       };
 
-      const result = messageQueueManager.queueMessage(
-        sessionId, 
-        message, 
-        MessagePriority.NORMAL, 
-        { deviceId: deviceId1 }
-      );
+      const result = messageQueueManager.queueMessage(sessionId, message, MessagePriority.NORMAL, {
+        deviceId: deviceId1,
+      });
 
       assert.strictEqual(result.queued, true);
       assert.strictEqual(typeof result.messageId, 'string');
@@ -404,26 +417,20 @@ describe('DuplicateDetector Integration with MessageQueue', () => {
       const message = {
         content: 'Duplicate test message',
         sessionId,
-        projectPath: '/test/project'
+        projectPath: '/test/project',
       };
 
       // First message should be queued
-      const result1 = messageQueueManager.queueMessage(
-        sessionId, 
-        message, 
-        MessagePriority.NORMAL, 
-        { deviceId: deviceId1 }
-      );
+      const result1 = messageQueueManager.queueMessage(sessionId, message, MessagePriority.NORMAL, {
+        deviceId: deviceId1,
+      });
 
       assert.strictEqual(result1.queued, true);
 
       // Second identical message should be rejected
-      const result2 = messageQueueManager.queueMessage(
-        sessionId, 
-        message, 
-        MessagePriority.NORMAL, 
-        { deviceId: deviceId2 }
-      );
+      const result2 = messageQueueManager.queueMessage(sessionId, message, MessagePriority.NORMAL, {
+        deviceId: deviceId2,
+      });
 
       assert.strictEqual(result2.queued, false);
       assert.strictEqual(result2.reason, 'duplicate');
@@ -443,7 +450,7 @@ describe('DuplicateDetector Integration with MessageQueue', () => {
 
       const message = {
         content: 'No device ID message',
-        sessionId
+        sessionId,
       };
 
       // Both messages should be queued (no deduplication without deviceId)
@@ -473,24 +480,18 @@ describe('DuplicateDetector Integration with MessageQueue', () => {
       const message = {
         content: 'Event test message',
         sessionId,
-        projectPath: '/test/project'
+        projectPath: '/test/project',
       };
 
       // First message
-      messageQueueManager.queueMessage(
-        sessionId, 
-        message, 
-        MessagePriority.NORMAL, 
-        { deviceId: deviceId1 }
-      );
+      messageQueueManager.queueMessage(sessionId, message, MessagePriority.NORMAL, {
+        deviceId: deviceId1,
+      });
 
       // Second duplicate message should emit event
-      messageQueueManager.queueMessage(
-        sessionId, 
-        message, 
-        MessagePriority.NORMAL, 
-        { deviceId: deviceId2 }
-      );
+      messageQueueManager.queueMessage(sessionId, message, MessagePriority.NORMAL, {
+        deviceId: deviceId2,
+      });
     });
 
     it('should allow duplicate messages after time window expires', async () => {
@@ -501,28 +502,22 @@ describe('DuplicateDetector Integration with MessageQueue', () => {
       const message = {
         content: 'Time window test message',
         sessionId,
-        projectPath: '/test/project'
+        projectPath: '/test/project',
       };
 
       // First message
-      const result1 = messageQueueManager.queueMessage(
-        sessionId, 
-        message, 
-        MessagePriority.NORMAL, 
-        { deviceId: deviceId1 }
-      );
+      const result1 = messageQueueManager.queueMessage(sessionId, message, MessagePriority.NORMAL, {
+        deviceId: deviceId1,
+      });
       assert.strictEqual(result1.queued, true);
 
       // Wait for duplicate detection window to expire (5 seconds default)
-      await new Promise(resolve => setTimeout(resolve, 5100));
+      await new Promise((resolve) => setTimeout(resolve, 5100));
 
       // Second message should now be allowed
-      const result2 = messageQueueManager.queueMessage(
-        sessionId, 
-        message, 
-        MessagePriority.NORMAL, 
-        { deviceId: deviceId2 }
-      );
+      const result2 = messageQueueManager.queueMessage(sessionId, message, MessagePriority.NORMAL, {
+        deviceId: deviceId2,
+      });
 
       assert.strictEqual(result2.queued, true);
 
@@ -537,24 +532,18 @@ describe('DuplicateDetector Integration with MessageQueue', () => {
 
       const message = {
         content: 'Priority test message',
-        sessionId
+        sessionId,
       };
 
       // Queue high priority message first
-      const result1 = messageQueueManager.queueMessage(
-        sessionId, 
-        message, 
-        MessagePriority.HIGH, 
-        { deviceId: deviceId1 }
-      );
+      const result1 = messageQueueManager.queueMessage(sessionId, message, MessagePriority.HIGH, {
+        deviceId: deviceId1,
+      });
 
       // Try to queue same message with low priority - should be rejected
-      const result2 = messageQueueManager.queueMessage(
-        sessionId, 
-        message, 
-        MessagePriority.LOW, 
-        { deviceId: deviceId2 }
-      );
+      const result2 = messageQueueManager.queueMessage(sessionId, message, MessagePriority.LOW, {
+        deviceId: deviceId2,
+      });
 
       assert.strictEqual(result1.queued, true);
       assert.strictEqual(result2.queued, false);

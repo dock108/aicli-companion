@@ -391,9 +391,7 @@ export class AICLIService extends EventEmitter {
     // Give sessions time to clean up gracefully
     await Promise.race([
       this.sessionManager.cleanupAllSessions(),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Shutdown timeout')), 10000)
-      ),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Shutdown timeout')), 10000)),
     ]);
 
     // Remove all listeners
@@ -409,5 +407,4 @@ export class AICLIService extends EventEmitter {
   checkSessionTimeout(sessionId) {
     return this.healthMonitor.checkSessionTimeout(sessionId);
   }
-
 }

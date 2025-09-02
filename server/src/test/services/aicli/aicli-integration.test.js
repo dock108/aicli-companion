@@ -104,13 +104,13 @@ describe('AICLIService Integration Tests', () => {
     it('should forward events from session manager', () => {
       const listener = mock.fn();
       aicliService.on('sessionCleaned', listener);
-      
+
       // Simulate event from session manager
       const sessionManagerOn = mockSessionManager.on.mock.calls[0];
       if (sessionManagerOn && sessionManagerOn.arguments[0] === 'sessionCleaned') {
         sessionManagerOn.arguments[1]({ sessionId: 'test' });
       }
-      
+
       assert.equal(listener.mock.calls.length, 1);
     });
   });
@@ -176,7 +176,7 @@ describe('AICLIService Integration Tests', () => {
       const result = await aicliService.sendPrompt('Test prompt', {
         streaming: true,
       });
-      
+
       assert.equal(mockSessionManager.createInteractiveSession.mock.calls.length, 1);
       assert.equal(mockProcessRunner.executeAICLICommand.mock.calls.length, 1);
       assert.equal(result.success, true);
@@ -189,12 +189,12 @@ describe('AICLIService Integration Tests', () => {
         process: { pid: 12345 },
       };
       mockSessionManager.activeSessions.set('existing-session', session);
-      
+
       const result = await aicliService.sendPrompt('Test prompt', {
         sessionId: 'existing-session',
         streaming: true,
       });
-      
+
       assert.equal(mockProcessRunner.sendToInteractiveSession.mock.calls.length, 1);
       assert.equal(result.success, true);
     });
@@ -206,20 +206,17 @@ describe('AICLIService Integration Tests', () => {
           data: Buffer.from('test').toString('base64'),
         },
       ];
-      
+
       const result = await aicliService.sendPrompt('Test prompt', {
         streaming: true,
         attachments,
       });
-      
+
       assert.equal(result.success, true);
     });
 
     it('should validate input', async () => {
-      await assert.rejects(
-        aicliService.sendPrompt(null, { streaming: true }),
-        /Invalid input/
-      );
+      await assert.rejects(aicliService.sendPrompt(null, { streaming: true }), /Invalid input/);
     });
   });
 
@@ -241,7 +238,7 @@ describe('AICLIService Integration Tests', () => {
       const session2 = { sessionId: 'session2' };
       mockSessionManager.activeSessions.set('session1', session1);
       mockSessionManager.activeSessions.set('session2', session2);
-      
+
       const sessions = aicliService.getActiveSessions();
       assert.equal(sessions.length, 2);
     });
@@ -249,7 +246,7 @@ describe('AICLIService Integration Tests', () => {
     it('should kill session', async () => {
       const session = { sessionId: 'test-session', process: { pid: 12345 } };
       mockSessionManager.activeSessions.set('test-session', session);
-      
+
       const result = await aicliService.killSession('test-session');
       assert.equal(result, true);
       assert.equal(mockProcessRunner.killProcess.mock.calls.length, 1);
@@ -264,7 +261,7 @@ describe('AICLIService Integration Tests', () => {
     it('should close session', async () => {
       const session = { sessionId: 'test-session', process: { pid: 12345 } };
       mockSessionManager.activeSessions.set('test-session', session);
-      
+
       await aicliService.closeSession('test-session');
       assert.equal(mockProcessRunner.killProcess.mock.calls.length, 1);
       assert.equal(mockSessionManager.removeSession.mock.calls.length, 1);
@@ -275,10 +272,10 @@ describe('AICLIService Integration Tests', () => {
     it('should start process health monitoring', () => {
       const originalEnv = process.env.NODE_ENV;
       process.env.NODE_ENV = 'production';
-      
+
       aicliService.startProcessHealthMonitoring();
       assert.ok(aicliService.healthMonitor.processHealthCheckInterval);
-      
+
       aicliService.stopProcessHealthMonitoring();
       process.env.NODE_ENV = originalEnv;
     });
@@ -289,7 +286,7 @@ describe('AICLIService Integration Tests', () => {
         lastActivity: new Date().toISOString(),
       };
       mockSessionManager.activeSessions.set('test-session', session);
-      
+
       const result = aicliService.checkSessionTimeout('test-session');
       assert.equal(result.timedOut, false);
     });
@@ -314,14 +311,8 @@ describe('AICLIService Integration Tests', () => {
     });
 
     it.skip('should detect permission prompts', () => {
-      assert.equal(
-        aicliService.isPermissionPrompt({ type: 'permission_request' }),
-        true
-      );
-      assert.equal(
-        aicliService.isPermissionPrompt({ type: 'other' }),
-        false
-      );
+      assert.equal(aicliService.isPermissionPrompt({ type: 'permission_request' }), true);
+      assert.equal(aicliService.isPermissionPrompt({ type: 'other' }), false);
     });
 
     it('should extract code blocks', () => {

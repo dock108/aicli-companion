@@ -7,12 +7,7 @@ export class SessionOperations {
 
   async sendStreamingPrompt(
     prompt,
-    {
-      sessionId = null,
-      skipPermissions = false,
-      attachmentPaths = [],
-      retryCount = 3,
-    }
+    { sessionId = null, skipPermissions = false, attachmentPaths = [], retryCount = 3 }
   ) {
     // Check if we have an existing session
     if (sessionId && this.sessionManager.hasSession(sessionId)) {
@@ -45,7 +40,13 @@ export class SessionOperations {
 
   async sendPromptToClaude(
     prompt,
-    { sessionId = null, skipPermissions = false, attachmentPaths = [], defaultWorkingDirectory = process.cwd(), retryCount = 3 }
+    {
+      sessionId = null,
+      skipPermissions = false,
+      attachmentPaths = [],
+      defaultWorkingDirectory = process.cwd(),
+      retryCount = 3,
+    }
   ) {
     try {
       // Create a new session
@@ -95,7 +96,12 @@ export class SessionOperations {
         );
 
         console.log(`🆕 Created fresh session: ${newSession.sessionId}`);
-        const response = await this.executeAICLICommand(newSession, prompt, attachmentPaths, retryCount);
+        const response = await this.executeAICLICommand(
+          newSession,
+          prompt,
+          attachmentPaths,
+          retryCount
+        );
 
         // Track the new Claude session if method exists
         if (response.claudeSessionId && this.sessionManager.mapClaudeSession) {
@@ -144,19 +150,26 @@ export class SessionOperations {
           console.log(`🔄 Rate limited, retrying attempt ${attempts}/${maxAttempts}...`);
           // Wait before retrying (exponential backoff)
           const delay = Math.min(1000 * Math.pow(2, attempts - 1), 5000);
-          await new Promise(resolve => setTimeout(resolve, delay));
+          await new Promise((resolve) => setTimeout(resolve, delay));
           continue;
         }
 
         // Check for init response in error (happens when Claude auto-creates session)
-        if (error.response && error.response.type === 'system' && error.response.subtype === 'init') {
+        if (
+          error.response &&
+          error.response.type === 'system' &&
+          error.response.subtype === 'init'
+        ) {
           console.log('🔄 Claude auto-created session, tracking it...');
 
           // Extract the Claude session ID
           const claudeSessionId = error.response.session_id;
           if (claudeSessionId) {
             // Track session for routing
-            await this.sessionManager.trackSessionForRouting(claudeSessionId, session.workingDirectory || process.cwd());
+            await this.sessionManager.trackSessionForRouting(
+              claudeSessionId,
+              session.workingDirectory || process.cwd()
+            );
 
             // Also track activity
             this.sessionManager.trackClaudeSessionActivity(claudeSessionId);

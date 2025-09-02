@@ -12,9 +12,9 @@ describe('DeviceRegistry', () => {
   const sessionId2 = 'session-456';
 
   beforeEach(() => {
-    registry = new DeviceRegistry({ 
+    registry = new DeviceRegistry({
       deviceTimeout: 1000, // 1 second for testing
-      heartbeatInterval: 100 // 100ms for testing
+      heartbeatInterval: 100, // 100ms for testing
     });
   });
 
@@ -26,13 +26,13 @@ describe('DeviceRegistry', () => {
     it('should register a device successfully', () => {
       const result = registry.registerDevice(userId1, deviceId1, {
         platform: 'iOS',
-        appVersion: '1.0.0'
+        appVersion: '1.0.0',
       });
 
       assert.strictEqual(result.success, true);
       assert.strictEqual(result.device.deviceId, deviceId1);
       assert.strictEqual(result.device.platform, 'iOS');
-      
+
       // Verify device is stored
       const activeDevices = registry.getActiveDevices(userId1);
       assert.strictEqual(activeDevices.length, 1);
@@ -45,8 +45,8 @@ describe('DeviceRegistry', () => {
 
       const activeDevices = registry.getActiveDevices(userId1);
       assert.strictEqual(activeDevices.length, 2);
-      
-      const deviceIds = activeDevices.map(d => d.deviceId);
+
+      const deviceIds = activeDevices.map((d) => d.deviceId);
       assert.ok(deviceIds.includes(deviceId1));
       assert.ok(deviceIds.includes(deviceId2));
     });
@@ -87,7 +87,7 @@ describe('DeviceRegistry', () => {
       // Wait a bit then update
       setTimeout(() => {
         registry.updateLastSeen(deviceId1);
-        
+
         const updatedDevice = registry.registeredDevices.get(deviceId1);
         assert.ok(updatedDevice.lastSeen > initialLastSeen);
       }, 10);
@@ -95,7 +95,7 @@ describe('DeviceRegistry', () => {
 
     it('should check device active status', () => {
       assert.ok(registry.isDeviceActive(deviceId1));
-      
+
       // Should be inactive for non-existent device
       assert.ok(!registry.isDeviceActive('non-existent'));
     });
@@ -104,7 +104,7 @@ describe('DeviceRegistry', () => {
       // Device should timeout after 1 second (configured in beforeEach)
       setTimeout(() => {
         assert.ok(!registry.isDeviceActive(deviceId1));
-        
+
         const activeDevices = registry.getActiveDevices(userId1);
         assert.strictEqual(activeDevices.length, 0);
         done();
@@ -124,7 +124,7 @@ describe('DeviceRegistry', () => {
       assert.strictEqual(result.success, true);
       assert.strictEqual(result.isPrimary, true);
       assert.strictEqual(result.primaryDeviceId, deviceId1);
-      
+
       // Verify primary status
       assert.ok(registry.isPrimaryDevice(deviceId1));
       assert.strictEqual(registry.getPrimaryDevice(sessionId1), deviceId1);
@@ -133,7 +133,7 @@ describe('DeviceRegistry', () => {
     it('should reject second device when primary exists', () => {
       // First device becomes primary
       registry.electPrimary(userId1, sessionId1, deviceId1);
-      
+
       // Second device should be rejected
       const result = registry.electPrimary(userId1, sessionId1, deviceId2);
 
@@ -145,7 +145,7 @@ describe('DeviceRegistry', () => {
     it('should confirm existing primary device', () => {
       // First device becomes primary
       registry.electPrimary(userId1, sessionId1, deviceId1);
-      
+
       // Same device requests primary again
       const result = registry.electPrimary(userId1, sessionId1, deviceId1);
 
@@ -175,9 +175,9 @@ describe('DeviceRegistry', () => {
     });
 
     it('should reject election for inactive device', () => {
-      // Unregister device1 to make it inactive  
+      // Unregister device1 to make it inactive
       registry.unregisterDevice(deviceId1);
-      
+
       const result = registry.electPrimary(userId1, sessionId1, deviceId1);
       assert.strictEqual(result.success, false);
       assert.strictEqual(result.reason, 'device_not_active');
@@ -196,7 +196,7 @@ describe('DeviceRegistry', () => {
 
       assert.strictEqual(result.success, true);
       assert.strictEqual(result.newPrimaryDeviceId, deviceId2);
-      
+
       // Verify transfer
       assert.strictEqual(registry.getPrimaryDevice(sessionId1), deviceId2);
       assert.ok(!registry.isPrimaryDevice(deviceId1));
@@ -208,7 +208,7 @@ describe('DeviceRegistry', () => {
 
       assert.strictEqual(result.success, false);
       assert.strictEqual(result.reason, 'not_current_primary');
-      
+
       // Primary should remain unchanged
       assert.strictEqual(registry.getPrimaryDevice(sessionId1), deviceId1);
     });
@@ -216,7 +216,7 @@ describe('DeviceRegistry', () => {
     it('should reject transfer to inactive device', () => {
       // Unregister device2 to make it inactive
       registry.unregisterDevice(deviceId2);
-      
+
       const result = registry.transferPrimary(sessionId1, deviceId1, deviceId2);
       assert.strictEqual(result.success, false);
       assert.strictEqual(result.reason, 'target_device_inactive');
@@ -246,7 +246,7 @@ describe('DeviceRegistry', () => {
       // Device should be removed
       assert.ok(!registry.isDeviceActive(deviceId1));
       assert.strictEqual(registry.getActiveDevices(userId1).length, 0);
-      
+
       // Primary status should be removed
       assert.ok(!registry.isPrimaryDevice(deviceId1));
       assert.strictEqual(registry.getPrimaryDevice(sessionId1), null);
@@ -283,7 +283,7 @@ describe('DeviceRegistry', () => {
       registry.once('primaryDeviceTimeout', (event) => {
         assert.strictEqual(event.sessionId, sessionId1);
         assert.strictEqual(event.deviceId, deviceId1);
-        
+
         // Primary status should be removed
         assert.ok(!registry.isPrimaryDevice(deviceId1));
         assert.strictEqual(registry.getPrimaryDevice(sessionId1), null);
@@ -300,7 +300,7 @@ describe('DeviceRegistry', () => {
       registry.registerDevice(userId1, deviceId1, { platform: 'iOS' });
       registry.registerDevice(userId1, deviceId2, { platform: 'macOS' });
       registry.registerDevice(userId2, 'device-ghi', { platform: 'Android' });
-      
+
       registry.electPrimary(userId1, sessionId1, deviceId1);
     });
 
@@ -319,7 +319,7 @@ describe('DeviceRegistry', () => {
       // Wait for devices to timeout
       setTimeout(() => {
         const stats = registry.getStats();
-        
+
         assert.strictEqual(stats.totalDevices, 3);
         assert.strictEqual(stats.activeDevices, 0);
         assert.strictEqual(stats.inactiveDevices, 3);
@@ -332,7 +332,7 @@ describe('DeviceRegistry', () => {
     it('should handle operations on non-existent devices gracefully', () => {
       registry.updateLastSeen('non-existent');
       registry.unregisterDevice('non-existent');
-      
+
       assert.strictEqual(registry.getActiveDevices('non-existent-user').length, 0);
       assert.ok(!registry.isDeviceActive('non-existent'));
       assert.ok(!registry.isPrimaryDevice('non-existent'));
@@ -357,7 +357,7 @@ describe('DeviceRegistry', () => {
       const result3 = registry.electPrimary(userId1, sessionId1, 'device-3');
 
       // Only one should succeed
-      const successes = [result1, result2, result3].filter(r => r.success);
+      const successes = [result1, result2, result3].filter((r) => r.success);
       assert.strictEqual(successes.length, 1);
 
       // Should have exactly one primary device for the session

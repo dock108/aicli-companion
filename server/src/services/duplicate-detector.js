@@ -15,7 +15,7 @@ export class DuplicateDetector {
     // Storage for message hashes with timestamps
     this.messageHashes = new Map(); // hash -> { timestamp, deviceId, sessionId }
     this.deviceMessageCount = new Map(); // deviceId -> count
-    
+
     // Start periodic cleanup
     this.startCleanup();
   }
@@ -38,10 +38,10 @@ export class DuplicateDetector {
     // Sort attachments to ensure consistent hashing
     if (hashContent.attachments && hashContent.attachments.length > 0) {
       hashContent.attachments = hashContent.attachments
-        .map(att => ({
+        .map((att) => ({
           name: att.name || '',
           type: att.type || '',
-          size: att.size || 0
+          size: att.size || 0,
           // Exclude actual data/content for privacy and performance
         }))
         .sort((a, b) => a.name.localeCompare(b.name));
@@ -64,32 +64,32 @@ export class DuplicateDetector {
 
     // Check if hash exists within time window
     const existingEntry = this.messageHashes.get(messageHash);
-    
+
     if (existingEntry) {
       const timeDiff = now - existingEntry.timestamp;
-      
+
       if (timeDiff <= this.timeWindow) {
         // Duplicate detected
         telemetry.trackEvent('duplicate_message_detected', {
-          messageHash: messageHash.substring(0, 8) + '...',
-          deviceId: deviceId.substring(0, 8) + '...',
-          originalDeviceId: existingEntry.deviceId.substring(0, 8) + '...',
+          messageHash: `${messageHash.substring(0, 8)}...`,
+          deviceId: `${deviceId.substring(0, 8)}...`,
+          originalDeviceId: `${existingEntry.deviceId.substring(0, 8)}...`,
           timeDiff,
-          sessionId: sessionId.substring(0, 8) + '...'
+          sessionId: `${sessionId.substring(0, 8)}...`,
         });
 
         return {
           isDuplicate: true,
           originalDeviceId: existingEntry.deviceId,
           originalTimestamp: existingEntry.timestamp,
-          timeDifference: timeDiff
+          timeDifference: timeDiff,
         };
       } else {
         // Hash exists but outside time window - update with new entry
         this.messageHashes.set(messageHash, {
           timestamp: now,
           deviceId,
-          sessionId
+          sessionId,
         });
       }
     } else {
@@ -97,7 +97,7 @@ export class DuplicateDetector {
       this.messageHashes.set(messageHash, {
         timestamp: now,
         deviceId,
-        sessionId
+        sessionId,
       });
     }
 
@@ -106,7 +106,7 @@ export class DuplicateDetector {
 
     return {
       isDuplicate: false,
-      messageHash
+      messageHash,
     };
   }
 
@@ -118,11 +118,11 @@ export class DuplicateDetector {
    */
   recordMessage(messageHash, deviceId, sessionId) {
     const now = Date.now();
-    
+
     this.messageHashes.set(messageHash, {
       timestamp: now,
       deviceId,
-      sessionId
+      sessionId,
     });
 
     // Update device count
@@ -154,7 +154,7 @@ export class DuplicateDetector {
   processMessage(message, deviceId) {
     const messageHash = this.generateMessageHash(message);
     const duplicateCheck = this.isDuplicate(messageHash, deviceId, message.sessionId || 'unknown');
-    
+
     if (!duplicateCheck.isDuplicate) {
       // Record the message hash
       this.recordMessage(messageHash, deviceId, message.sessionId || 'unknown');
@@ -164,11 +164,13 @@ export class DuplicateDetector {
       messageHash,
       isDuplicate: duplicateCheck.isDuplicate,
       shouldProcess: !duplicateCheck.isDuplicate,
-      duplicateInfo: duplicateCheck.isDuplicate ? {
-        originalDeviceId: duplicateCheck.originalDeviceId,
-        originalTimestamp: duplicateCheck.originalTimestamp,
-        timeDifference: duplicateCheck.timeDifference
-      } : null
+      duplicateInfo: duplicateCheck.isDuplicate
+        ? {
+            originalDeviceId: duplicateCheck.originalDeviceId,
+            originalTimestamp: duplicateCheck.originalTimestamp,
+            timeDifference: duplicateCheck.timeDifference,
+          }
+        : null,
     };
   }
 
@@ -193,8 +195,8 @@ export class DuplicateDetector {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
       .map(([deviceId, count]) => ({
-        deviceId: deviceId.substring(0, 8) + '...',
-        messageCount: count
+        deviceId: `${deviceId.substring(0, 8)}...`,
+        messageCount: count,
       }));
 
     return {
@@ -203,7 +205,7 @@ export class DuplicateDetector {
       oldHashes,
       duplicateDetectionWindow: this.timeWindow,
       trackedDevices: this.deviceMessageCount.size,
-      topDevicesByMessageCount: topDevices
+      topDevicesByMessageCount: topDevices,
     };
   }
 
@@ -228,8 +230,8 @@ export class DuplicateDetector {
 
     if (cleared > 0) {
       telemetry.trackEvent('device_data_cleared', {
-        deviceId: deviceId.substring(0, 8) + '...',
-        clearedHashes: cleared
+        deviceId: `${deviceId.substring(0, 8)}...`,
+        clearedHashes: cleared,
       });
     }
 
@@ -283,7 +285,7 @@ export class DuplicateDetector {
     if (this.messageHashes.size > this.maxEntries) {
       const entries = Array.from(this.messageHashes.entries());
       entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
-      
+
       const toRemove = this.messageHashes.size - this.maxEntries;
       for (let i = 0; i < toRemove; i++) {
         this.messageHashes.delete(entries[i][0]);
@@ -296,13 +298,13 @@ export class DuplicateDetector {
       telemetry.trackEvent('duplicate_detector_cleanup', {
         removedEntries: removed,
         beforeSize,
-        afterSize: this.messageHashes.size
+        afterSize: this.messageHashes.size,
       });
     }
 
     return {
       removedEntries: removed,
-      remainingEntries: this.messageHashes.size
+      remainingEntries: this.messageHashes.size,
     };
   }
 
@@ -328,7 +330,7 @@ export class DuplicateDetector {
     this.messageHashes.set(messageHash, {
       timestamp,
       deviceId,
-      sessionId
+      sessionId,
     });
   }
 
@@ -339,7 +341,7 @@ export class DuplicateDetector {
     if (this.cleanupIntervalId) {
       clearInterval(this.cleanupIntervalId);
     }
-    
+
     this.messageHashes.clear();
     this.deviceMessageCount.clear();
   }

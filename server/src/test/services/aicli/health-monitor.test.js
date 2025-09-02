@@ -10,7 +10,7 @@ describe('HealthMonitor', () => {
 
   beforeEach(() => {
     originalEnv = process.env.NODE_ENV;
-    
+
     mockSessionManager = {
       activeSessions: new Map(),
       getActiveSessions: mock.fn(() => []),
@@ -18,11 +18,11 @@ describe('HealthMonitor', () => {
       cleanupDeadSession: mock.fn(),
       sessionTimeout: 24 * 60 * 60 * 1000, // 24 hours
     };
-    
+
     mockEventEmitter = {
       emit: mock.fn(),
     };
-    
+
     healthMonitor = new HealthMonitor(mockSessionManager, mockEventEmitter);
   });
 
@@ -61,7 +61,7 @@ describe('HealthMonitor', () => {
       process.env.NODE_ENV = 'production';
       healthMonitor.startProcessHealthMonitoring();
       assert.ok(healthMonitor.processHealthCheckInterval);
-      
+
       healthMonitor.stopProcessHealthMonitoring();
       assert.equal(healthMonitor.processHealthCheckInterval, null);
     });
@@ -84,7 +84,7 @@ describe('HealthMonitor', () => {
         process: { pid: 12345 },
       };
       mockSessionManager.activeSessions.set('test-session', session);
-      
+
       // Mock processMonitor would need to be injected for full test
       // This is a simplified version
       await healthMonitor.checkAllProcessHealth();
@@ -96,7 +96,7 @@ describe('HealthMonitor', () => {
         process: { pid: 99999 }, // Non-existent process
       };
       mockSessionManager.activeSessions.set('unhealthy-session', session);
-      
+
       await healthMonitor.checkAllProcessHealth();
       // Would need process monitor mock to fully test
     });
@@ -109,7 +109,7 @@ describe('HealthMonitor', () => {
         startTime: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString(), // 25 hours ago
       };
       mockSessionManager.getSession = mock.fn(() => session);
-      
+
       const result = healthMonitor.checkSessionTimeout('old-session');
       assert.equal(result.timedOut, true);
       assert.ok(result.reason.includes('inactive'));
@@ -121,7 +121,7 @@ describe('HealthMonitor', () => {
         lastActivity: new Date(Date.now() - 5 * 60 * 1000).toISOString(), // 5 minutes ago
       };
       mockSessionManager.getSession = mock.fn(() => session);
-      
+
       const result = healthMonitor.checkSessionTimeout('active-session');
       assert.equal(result.timedOut, false);
       assert.ok(result.timeRemaining > 0);
@@ -129,7 +129,7 @@ describe('HealthMonitor', () => {
 
     it('should handle missing session', () => {
       mockSessionManager.getSession = mock.fn(() => null);
-      
+
       const result = healthMonitor.checkSessionTimeout('missing-session');
       assert.equal(result.timedOut, true);
       assert.equal(result.reason, 'Session not found');
@@ -141,7 +141,7 @@ describe('HealthMonitor', () => {
         startTime: new Date().toISOString(),
       };
       mockSessionManager.getSession = mock.fn(() => session);
-      
+
       const result = healthMonitor.checkSessionTimeout('new-session');
       assert.equal(result.timedOut, false);
     });
@@ -151,7 +151,7 @@ describe('HealthMonitor', () => {
         sessionId: 'no-time-session',
       };
       mockSessionManager.getSession = mock.fn(() => session);
-      
+
       const result = healthMonitor.checkSessionTimeout('no-time-session');
       assert.equal(result.timedOut, false);
     });
@@ -173,9 +173,9 @@ describe('HealthMonitor', () => {
           workingDirectory: '/test',
         },
       ]);
-      
+
       const health = await healthMonitor.healthCheck();
-      
+
       assert.equal(health.status, 'healthy');
       assert.equal(health.checks.aicli, true);
       assert.equal(health.checks.sessions, true);
@@ -190,9 +190,9 @@ describe('HealthMonitor', () => {
         available: false,
         error: 'Not found',
       }));
-      
+
       const health = await healthMonitor.healthCheck();
-      
+
       assert.equal(health.status, 'unhealthy');
       assert.equal(health.checks.aicli, false);
     });
@@ -201,16 +201,16 @@ describe('HealthMonitor', () => {
       healthMonitor.checkAvailability = mock.fn(async () => {
         throw new Error('Check failed');
       });
-      
+
       const health = await healthMonitor.healthCheck();
-      
+
       assert.equal(health.checks.aicli, false);
       assert.equal(health.details.aicli.error, 'Check failed');
     });
 
     it('should check memory usage', async () => {
       const health = await healthMonitor.healthCheck();
-      
+
       assert.ok(health.details.memory);
       assert.ok(health.details.memory.heapUsed);
       assert.ok(health.details.memory.rss);

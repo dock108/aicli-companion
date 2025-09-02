@@ -232,10 +232,7 @@ describe('MessageClassifier', () => {
 
   describe('isPermissionPrompt', () => {
     it('should detect permission prompt messages', () => {
-      assert.equal(
-        MessageClassifier.isPermissionPrompt({ type: 'permission_request' }),
-        true
-      );
+      assert.equal(MessageClassifier.isPermissionPrompt({ type: 'permission_request' }), true);
     });
 
     it('should reject non-permission messages', () => {

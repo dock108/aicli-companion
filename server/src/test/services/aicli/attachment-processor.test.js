@@ -43,19 +43,19 @@ describe('AttachmentProcessor', () => {
         name: 'test.txt',
         data: Buffer.from('Hello World').toString('base64'),
       };
-      
+
       const result = await AttachmentProcessor.processAttachments([attachment]);
-      
+
       assert.equal(result.filePaths.length, 1);
       assert.ok(result.filePaths[0].includes('test.txt'));
-      
+
       // Verify file was created
       const content = await fs.readFile(result.filePaths[0], 'utf-8');
       assert.equal(content, 'Hello World');
-      
+
       // Clean up
       await result.cleanup();
-      
+
       // Verify file was deleted
       await assert.rejects(fs.access(result.filePaths[0]));
     });
@@ -71,17 +71,17 @@ describe('AttachmentProcessor', () => {
           data: Buffer.from('Content 2').toString('base64'),
         },
       ];
-      
+
       const result = await AttachmentProcessor.processAttachments(attachments);
-      
+
       assert.equal(result.filePaths.length, 2);
-      
+
       // Verify files were created
       const content1 = await fs.readFile(result.filePaths[0], 'utf-8');
       const content2 = await fs.readFile(result.filePaths[1], 'utf-8');
       assert.ok(content1 === 'Content 1' || content1 === 'Content 2');
       assert.ok(content2 === 'Content 1' || content2 === 'Content 2');
-      
+
       // Clean up
       await result.cleanup();
     });
@@ -91,14 +91,14 @@ describe('AttachmentProcessor', () => {
         name: '../../../etc/passwd',
         data: Buffer.from('test').toString('base64'),
       };
-      
+
       const result = await AttachmentProcessor.processAttachments([attachment]);
-      
+
       assert.equal(result.filePaths.length, 1);
       // Filename should be sanitized
       assert.ok(!result.filePaths[0].includes('..'));
       assert.ok(result.filePaths[0].includes('etc_passwd'));
-      
+
       await result.cleanup();
     });
 
@@ -107,13 +107,13 @@ describe('AttachmentProcessor', () => {
         name: 'file with spaces & symbols!@#.txt',
         data: Buffer.from('test').toString('base64'),
       };
-      
+
       const result = await AttachmentProcessor.processAttachments([attachment]);
-      
+
       assert.equal(result.filePaths.length, 1);
       // Special characters should be replaced with underscores
       assert.ok(result.filePaths[0].includes('file_with_spaces___symbols___.txt'));
-      
+
       await result.cleanup();
     });
 
@@ -132,12 +132,12 @@ describe('AttachmentProcessor', () => {
           data: Buffer.from('good2').toString('base64'),
         },
       ];
-      
+
       const result = await AttachmentProcessor.processAttachments(attachments);
-      
+
       // Should process the good attachments and skip the bad one
       assert.equal(result.filePaths.length, 2);
-      
+
       await result.cleanup();
     });
 
@@ -152,13 +152,13 @@ describe('AttachmentProcessor', () => {
           data: Buffer.from('2').toString('base64'),
         },
       ];
-      
+
       const result = await AttachmentProcessor.processAttachments(attachments);
-      
+
       assert.equal(result.filePaths.length, 2);
       // Files should have different paths despite same name
       assert.notEqual(result.filePaths[0], result.filePaths[1]);
-      
+
       await result.cleanup();
     });
 
@@ -167,12 +167,12 @@ describe('AttachmentProcessor', () => {
         name: 'test.txt',
         data: Buffer.from('test').toString('base64'),
       };
-      
+
       const result = await AttachmentProcessor.processAttachments([attachment]);
-      
+
       // Delete file manually to simulate error
       await fs.unlink(result.filePaths[0]);
-      
+
       // Cleanup should not throw even if file doesn't exist
       await assert.doesNotReject(result.cleanup());
     });

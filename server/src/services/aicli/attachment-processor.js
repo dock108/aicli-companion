@@ -70,7 +70,7 @@ export class AttachmentProcessor {
     const fileList = filePaths.map((fp) => path.basename(fp)).join(', ');
     const enhancedPrompt = `[Files attached: ${fileList}]\n${prompt}`;
     console.log(`📎 Enhanced prompt with ${filePaths.length} file reference(s)`);
-    
+
     return enhancedPrompt;
   }
 }

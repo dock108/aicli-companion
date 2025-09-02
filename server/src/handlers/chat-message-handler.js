@@ -19,7 +19,6 @@ export function createChatMessageHandler(services) {
     // Process Claude request asynchronously and deliver via APNS
     const { message: msgData } = queuedMessage;
     const {
-      message: queuedMsg,
       projectPath: msgProjectPath,
       deviceToken: msgDeviceToken,
       attachments: msgAttachments,
@@ -137,7 +136,7 @@ export function createChatMessageHandler(services) {
         content = result.result;
         logger.info('Using direct result', {
           requestId: msgRequestId,
-          contentLength: content.length
+          contentLength: content.length,
         });
       }
       // Priority 2: Check nested response.result (non-streaming)
@@ -145,7 +144,7 @@ export function createChatMessageHandler(services) {
         content = result.response.result;
         logger.info('Using nested response result', {
           requestId: msgRequestId,
-          contentLength: content.length
+          contentLength: content.length,
         });
       }
       // Priority 3: Check for streaming scenarios
@@ -197,11 +196,11 @@ export function createChatMessageHandler(services) {
         requestId: msgRequestId,
         timestamp: new Date().toISOString(),
         type: 'response',
-        attachments: (msgAttachments || []).map(att => ({
+        attachments: (msgAttachments || []).map((att) => ({
           id: att.id,
           mimeType: att.mimeType,
           filename: att.filename,
-          size: att.data ? att.data.length : 0
+          size: att.data ? att.data.length : 0,
         })), // Include attachment metadata without the data
         autoResponse: msgAutoResponse, // Include auto-response metadata
       });
@@ -223,7 +222,10 @@ export function createChatMessageHandler(services) {
       if (error.message?.includes('timeout')) {
         userErrorMessage = 'Claude took too long to respond. Please try again.';
         errorType = 'TIMEOUT';
-      } else if (error.message?.includes('Session expired') || error.message?.includes('session not found')) {
+      } else if (
+        error.message?.includes('Session expired') ||
+        error.message?.includes('session not found')
+      ) {
         userErrorMessage = 'Your conversation session has expired. Starting a new one...';
         errorType = 'SESSION_EXPIRED';
       } else if (error.message?.includes('Claude CLI not found')) {

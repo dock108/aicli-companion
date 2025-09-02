@@ -30,7 +30,8 @@ router.post('/', async (req, res) => {
     deviceInfo, // Device information (platform, version, etc.)
   } = req.body;
 
-  const requestId = req.headers['x-request-id'] || `REQ_${randomUUID().replace(/-/g, '').substring(0, 8)}`;
+  const requestId =
+    req.headers['x-request-id'] || `REQ_${randomUUID().replace(/-/g, '').substring(0, 8)}`;
   const sessionId = clientSessionId; // Preserve original session ID
 
   // Log active sessions for debugging
@@ -58,13 +59,13 @@ router.post('/', async (req, res) => {
       if (registrationResult.success) {
         // Update heartbeat
         deviceRegistry.updateLastSeen(deviceId);
-        
+
         logger.info('Device registered/updated', {
           requestId,
           userId,
           deviceId: deviceId ? `${deviceId.substring(0, 8)}...` : 'undefined',
           isNewDevice: registrationResult.isNew,
-          platform: registrationResult.device.platform
+          platform: registrationResult.device.platform,
         });
       }
     } catch (error) {
@@ -72,7 +73,7 @@ router.post('/', async (req, res) => {
         requestId,
         userId,
         deviceId: deviceId ? `${deviceId.substring(0, 8)}...` : 'undefined',
-        error: error.message
+        error: error.message,
       });
       // Continue without device coordination
     }
@@ -82,7 +83,7 @@ router.post('/', async (req, res) => {
     if (deviceToken) {
       logger.info('Using deviceToken as deviceId for backward compatibility', {
         requestId,
-        deviceToken: `${deviceToken.substring(0, 10)}...`
+        deviceToken: `${deviceToken.substring(0, 10)}...`,
       });
     }
   }
@@ -194,13 +195,13 @@ router.post('/', async (req, res) => {
         logger.info('Device elected as primary for session', {
           requestId,
           sessionId,
-          deviceId: `${deviceId.substring(0, 8)}...`
+          deviceId: `${deviceId.substring(0, 8)}...`,
         });
       } else {
         logger.info('Device is secondary for session', {
           requestId,
           sessionId,
-          primaryDeviceId: `${electionResult.primaryDeviceId?.substring(0, 8)}...`
+          primaryDeviceId: `${electionResult.primaryDeviceId?.substring(0, 8)}...`,
         });
       }
     }
@@ -223,7 +224,7 @@ router.post('/', async (req, res) => {
   if (!messageQueueManager.getQueue(queueSessionId).listenerCount('process-message')) {
     const handler = createChatMessageHandler({
       aicliService,
-      pushNotificationService
+      pushNotificationService,
     });
     messageQueueManager.setMessageHandler(queueSessionId, handler);
   }
@@ -233,8 +234,8 @@ router.post('/', async (req, res) => {
     requestId,
     timestamp: new Date().toISOString(),
     deviceId: resolvedDeviceId,
-    userId: userId,
-    deviceInfo: deviceInfo
+    userId,
+    deviceInfo,
   };
 
   const queueResult = messageQueueManager.queueMessage(
@@ -262,7 +263,7 @@ router.post('/', async (req, res) => {
         messageHash: queueResult.messageHash,
         originalDevice: queueResult.duplicateInfo?.originalDeviceId,
         currentDevice: resolvedDeviceId,
-        timeDifference: queueResult.duplicateInfo?.timeDifference
+        timeDifference: queueResult.duplicateInfo?.timeDifference,
       });
 
       // Return success but indicate it was a duplicate
@@ -277,23 +278,23 @@ router.post('/', async (req, res) => {
         duplicate: true,
         duplicateInfo: {
           messageHash: queueResult.messageHash,
-          originalDevice: queueResult.duplicateInfo?.originalDeviceId?.substring(0, 8) + '...',
-          timeDifference: queueResult.duplicateInfo?.timeDifference
-        }
+          originalDevice: `${queueResult.duplicateInfo?.originalDeviceId?.substring(0, 8)}...`,
+          timeDifference: queueResult.duplicateInfo?.timeDifference,
+        },
       });
     } else {
       // Other queue rejection reasons
       logger.error('Message queue rejected message', {
         requestId,
         reason: queueResult.reason,
-        sessionId: queueSessionId
+        sessionId: queueSessionId,
       });
 
       return res.status(500).json({
         success: false,
         error: 'Failed to queue message for processing',
         reason: queueResult.reason,
-        requestId
+        requestId,
       });
     }
   }
@@ -345,7 +346,7 @@ router.post('/auto-response/pause', async (req, res) => {
       logger.warn('Failed to update device heartbeat', {
         requestId,
         deviceId: `${deviceId.substring(0, 8)}...`,
-        error: error.message
+        error: error.message,
       });
     }
   }
@@ -386,7 +387,7 @@ router.post('/auto-response/resume', async (req, res) => {
       logger.warn('Failed to update device heartbeat', {
         requestId,
         deviceId: `${deviceId.substring(0, 8)}...`,
-        error: error.message
+        error: error.message,
       });
     }
   }
@@ -413,10 +414,12 @@ router.post('/auto-response/resume', async (req, res) => {
     message: 'Auto-response mode resumed',
     sessionId,
     requestId,
-    queueStatus: queueStatus ? {
-      queueLength: queueStatus.queue.length,
-      processing: queueStatus.processing,
-    } : null,
+    queueStatus: queueStatus
+      ? {
+          queueLength: queueStatus.queue.length,
+          processing: queueStatus.processing,
+        }
+      : null,
   });
 });
 
@@ -442,7 +445,7 @@ router.post('/auto-response/stop', async (req, res) => {
       logger.warn('Failed to update device heartbeat', {
         requestId,
         deviceId: deviceId ? `${deviceId.substring(0, 8)}...` : 'undefined',
-        error: error.message
+        error: error.message,
       });
     }
   }
@@ -469,34 +472,34 @@ router.post('/auto-response/stop', async (req, res) => {
 router.get('/:sessionId/progress', async (req, res) => {
   const { sessionId } = req.params;
   const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
-  
+
   // Get AICLI service
   const aicliServiceInstance = req.app.get('aicliService') || aicliService;
-  
+
   if (!aicliServiceInstance || !aicliServiceInstance.sessionManager) {
     return res.status(404).json({
       success: false,
       error: 'Service not available',
-      requestId
+      requestId,
     });
   }
 
   // Get session buffer/metadata
   const sessionBuffer = aicliServiceInstance.sessionManager.getSessionBuffer(sessionId);
-  
+
   if (!sessionBuffer) {
     return res.status(404).json({
       success: false,
       error: 'Session not found',
       sessionId,
-      requestId
+      requestId,
     });
   }
 
   // Get thinking metadata
   const thinkingMetadata = sessionBuffer.thinkingMetadata || {};
   const isThinking = thinkingMetadata.isThinking || false;
-  
+
   res.json({
     success: true,
     sessionId,
@@ -504,7 +507,7 @@ router.get('/:sessionId/progress', async (req, res) => {
     activity: thinkingMetadata.activity || null,
     duration: thinkingMetadata.duration || 0,
     tokenCount: thinkingMetadata.tokenCount || 0,
-    requestId
+    requestId,
   });
 });
 
@@ -515,15 +518,15 @@ router.get('/:sessionId/messages', async (req, res) => {
   const { sessionId } = req.params;
   const { limit = 50, offset = 0 } = req.query;
   const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
-  
+
   // Get AICLI service
   const aicliServiceInstance = req.app.get('aicliService') || aicliService;
-  
+
   if (!aicliServiceInstance || !aicliServiceInstance.sessionManager) {
     return res.status(500).json({
       success: false,
       error: 'Service not available',
-      requestId
+      requestId,
     });
   }
 
@@ -534,7 +537,7 @@ router.get('/:sessionId/messages', async (req, res) => {
       parseInt(limit),
       parseInt(offset)
     );
-    
+
     res.json({
       success: true,
       sessionId,
@@ -542,19 +545,19 @@ router.get('/:sessionId/messages', async (req, res) => {
       limit: parseInt(limit),
       offset: parseInt(offset),
       total: messages ? messages.length : 0,
-      requestId
+      requestId,
     });
   } catch (error) {
     logger.error('Failed to get session messages', {
       requestId,
       sessionId,
-      error: error.message
+      error: error.message,
     });
-    
+
     res.status(500).json({
       success: false,
       error: 'Failed to retrieve messages',
-      requestId
+      requestId,
     });
   }
 });
@@ -581,7 +584,7 @@ router.post('/interrupt', async (req, res) => {
       logger.warn('Failed to update device heartbeat', {
         requestId,
         deviceId: `${deviceId.substring(0, 8)}...`,
-        error: error.message
+        error: error.message,
       });
     }
   }

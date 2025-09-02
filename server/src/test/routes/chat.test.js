@@ -54,7 +54,7 @@ describe('Chat Routes', () => {
   });
 
   afterEach(() => {
-    // Restore originals  
+    // Restore originals
     pushNotificationService.registerDevice = originalRegisterDevice;
     pushNotificationService.sendClaudeResponseNotification = originalSendResponseNotification;
     if (pushNotificationService.sendAutoResponseControlNotification?.mock) {
@@ -164,7 +164,7 @@ describe('Chat Routes', () => {
       // Should continue processing even if push registration fails
       assert.strictEqual(response.status, 200);
       assert.strictEqual(response.body.success, true);
-      
+
       // Verify the registration was attempted
       // Notification mock check removed
     });

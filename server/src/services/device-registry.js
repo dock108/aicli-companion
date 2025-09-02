@@ -34,7 +34,7 @@ export class DeviceRegistry extends EventEmitter {
    */
   registerDevice(userId, deviceId, deviceInfo = {}) {
     const telemetry = getTelemetryService();
-    
+
     const device = {
       deviceId,
       userId,
@@ -43,7 +43,7 @@ export class DeviceRegistry extends EventEmitter {
       registeredAt: Date.now(),
       lastSeen: Date.now(),
       isActive: true,
-      metadata: deviceInfo
+      metadata: deviceInfo,
     };
 
     this.registeredDevices.set(deviceId, device);
@@ -55,9 +55,9 @@ export class DeviceRegistry extends EventEmitter {
     this.userDevices.get(userId).add(deviceId);
 
     telemetry.trackEvent('device_registered', {
-      deviceId: deviceId.substring(0, 8) + '...',
-      userId: userId.substring(0, 8) + '...',
-      platform: device.platform
+      deviceId: `${deviceId.substring(0, 8)}...`,
+      userId: `${userId.substring(0, 8)}...`,
+      platform: device.platform,
     });
 
     this.emit('deviceRegistered', { device, userId });
@@ -67,8 +67,8 @@ export class DeviceRegistry extends EventEmitter {
       device: {
         deviceId,
         platform: device.platform,
-        registeredAt: device.registeredAt
-      }
+        registeredAt: device.registeredAt,
+      },
     };
   }
 
@@ -98,12 +98,12 @@ export class DeviceRegistry extends EventEmitter {
 
     for (const deviceId of deviceIds) {
       const device = this.registeredDevices.get(deviceId);
-      if (device && device.isActive && (now - device.lastSeen) < this.deviceTimeout) {
+      if (device && device.isActive && now - device.lastSeen < this.deviceTimeout) {
         activeDevices.push({
           deviceId: device.deviceId,
           platform: device.platform,
           lastSeen: device.lastSeen,
-          isPrimary: this.isPrimaryDevice(deviceId)
+          isPrimary: this.isPrimaryDevice(deviceId),
         });
       }
     }
@@ -132,24 +132,24 @@ export class DeviceRegistry extends EventEmitter {
     if (currentPrimary && this.isDeviceActive(currentPrimary)) {
       // If requesting device is already primary, confirm
       if (currentPrimary === requestingDeviceId) {
-        return { 
-          success: true, 
-          isPrimary: true, 
-          primaryDeviceId: requestingDeviceId 
+        return {
+          success: true,
+          isPrimary: true,
+          primaryDeviceId: requestingDeviceId,
         };
       }
-      
+
       // Otherwise, another device is primary
-      return { 
-        success: false, 
-        reason: 'primary_exists', 
-        primaryDeviceId: currentPrimary 
+      return {
+        success: false,
+        reason: 'primary_exists',
+        primaryDeviceId: currentPrimary,
       };
     }
 
     // Elect this device as primary
     this.primaryDevices.set(sessionId, requestingDeviceId);
-    
+
     // Track device sessions
     if (!this.deviceSessions.has(requestingDeviceId)) {
       this.deviceSessions.set(requestingDeviceId, new Set());
@@ -157,21 +157,21 @@ export class DeviceRegistry extends EventEmitter {
     this.deviceSessions.get(requestingDeviceId).add(sessionId);
 
     telemetry.trackEvent('primary_device_elected', {
-      sessionId: sessionId.substring(0, 8) + '...',
-      deviceId: requestingDeviceId.substring(0, 8) + '...',
-      userId: userId.substring(0, 8) + '...'
+      sessionId: `${sessionId.substring(0, 8)}...`,
+      deviceId: `${requestingDeviceId.substring(0, 8)}...`,
+      userId: `${userId.substring(0, 8)}...`,
     });
 
-    this.emit('primaryElected', { 
-      sessionId, 
-      deviceId: requestingDeviceId, 
-      userId 
+    this.emit('primaryElected', {
+      sessionId,
+      deviceId: requestingDeviceId,
+      userId,
     });
 
-    return { 
-      success: true, 
-      isPrimary: true, 
-      primaryDeviceId: requestingDeviceId 
+    return {
+      success: true,
+      isPrimary: true,
+      primaryDeviceId: requestingDeviceId,
     };
   }
 
@@ -210,15 +210,15 @@ export class DeviceRegistry extends EventEmitter {
     this.deviceSessions.get(toDeviceId).add(sessionId);
 
     telemetry.trackEvent('primary_device_transferred', {
-      sessionId: sessionId.substring(0, 8) + '...',
-      fromDeviceId: fromDeviceId.substring(0, 8) + '...',
-      toDeviceId: toDeviceId.substring(0, 8) + '...'
+      sessionId: `${sessionId.substring(0, 8)}...`,
+      fromDeviceId: `${fromDeviceId.substring(0, 8)}...`,
+      toDeviceId: `${toDeviceId.substring(0, 8)}...`,
     });
 
-    this.emit('primaryTransferred', { 
-      sessionId, 
-      fromDeviceId, 
-      toDeviceId 
+    this.emit('primaryTransferred', {
+      sessionId,
+      fromDeviceId,
+      toDeviceId,
     });
 
     return { success: true, newPrimaryDeviceId: toDeviceId };
@@ -253,9 +253,9 @@ export class DeviceRegistry extends EventEmitter {
   isDeviceActive(deviceId) {
     const device = this.registeredDevices.get(deviceId);
     if (!device) return false;
-    
+
     const now = Date.now();
-    return device.isActive && (now - device.lastSeen) < this.deviceTimeout;
+    return device.isActive && now - device.lastSeen < this.deviceTimeout;
   }
 
   /**
@@ -292,8 +292,8 @@ export class DeviceRegistry extends EventEmitter {
     this.registeredDevices.delete(deviceId);
 
     telemetry.trackEvent('device_unregistered', {
-      deviceId: deviceId.substring(0, 8) + '...',
-      userId: device.userId.substring(0, 8) + '...'
+      deviceId: `${deviceId.substring(0, 8)}...`,
+      userId: `${device.userId.substring(0, 8)}...`,
     });
 
     this.emit('deviceUnregistered', { deviceId, userId: device.userId });
@@ -316,10 +316,10 @@ export class DeviceRegistry extends EventEmitter {
     const timedOutDevices = [];
 
     for (const [deviceId, device] of this.registeredDevices) {
-      if (device.isActive && (now - device.lastSeen) > this.deviceTimeout) {
+      if (device.isActive && now - device.lastSeen > this.deviceTimeout) {
         device.isActive = false;
         timedOutDevices.push(deviceId);
-        
+
         // Remove primary status for timed-out devices
         const deviceSessionSet = this.deviceSessions.get(deviceId);
         if (deviceSessionSet) {
@@ -337,7 +337,7 @@ export class DeviceRegistry extends EventEmitter {
     if (timedOutDevices.length > 0) {
       const telemetry = getTelemetryService();
       telemetry.trackEvent('devices_timed_out', {
-        count: timedOutDevices.length
+        count: timedOutDevices.length,
       });
     }
   }
@@ -352,7 +352,7 @@ export class DeviceRegistry extends EventEmitter {
     let inactiveCount = 0;
 
     for (const device of this.registeredDevices.values()) {
-      if (device.isActive && (now - device.lastSeen) < this.deviceTimeout) {
+      if (device.isActive && now - device.lastSeen < this.deviceTimeout) {
         activeCount++;
       } else {
         inactiveCount++;
@@ -365,8 +365,8 @@ export class DeviceRegistry extends EventEmitter {
       inactiveDevices: inactiveCount,
       totalUsers: this.userDevices.size,
       primaryDevices: this.primaryDevices.size,
-      averageDevicesPerUser: this.userDevices.size > 0 ? 
-        this.registeredDevices.size / this.userDevices.size : 0
+      averageDevicesPerUser:
+        this.userDevices.size > 0 ? this.registeredDevices.size / this.userDevices.size : 0,
     };
   }
 
@@ -377,7 +377,7 @@ export class DeviceRegistry extends EventEmitter {
     if (this.monitoringInterval) {
       clearInterval(this.monitoringInterval);
     }
-    
+
     this.registeredDevices.clear();
     this.userDevices.clear();
     this.primaryDevices.clear();

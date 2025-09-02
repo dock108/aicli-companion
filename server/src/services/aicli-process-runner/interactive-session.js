@@ -53,6 +53,24 @@ export class InteractiveSession {
 
       sessionLogger.info('Interactive process started', { pid: claudeProcess.pid });
 
+      // Set a timeout for initialization (skip in test environment)
+      let initTimeout;
+      if (process.env.NODE_ENV !== 'test') {
+        initTimeout = setTimeout(() => {
+          if (!initComplete) {
+            sessionLogger.error('Interactive session initialization timeout');
+            claudeProcess.kill();
+            reject(new Error('Timeout waiting for Claude CLI to initialize'));
+          }
+        }, 30000); // 30 second timeout
+      }
+
+      // Wrap resolve to clear timeout on success
+      const wrappedResolve = (value) => {
+        if (initTimeout) clearTimeout(initTimeout);
+        resolve(value);
+      };
+
       // Create stream parser for this session
       const streamParser = new UnifiedMessageParser();
 
@@ -93,7 +111,7 @@ export class InteractiveSession {
               if (!initComplete) {
                 initComplete = true;
                 // Resolve with process and session info
-                resolve({
+                wrappedResolve({
                   process: claudeProcess,
                   sessionId: initialSessionId || parsed.session_id,
                   pid: claudeProcess.pid,
@@ -138,25 +156,6 @@ export class InteractiveSession {
           reject(new Error(`Claude CLI process error: ${error.message}`));
         }
       });
-
-      // Set a timeout for initialization (skip in test environment)
-      let initTimeout;
-      if (process.env.NODE_ENV !== 'test') {
-        initTimeout = setTimeout(() => {
-          if (!initComplete) {
-            sessionLogger.error('Interactive session initialization timeout');
-            claudeProcess.kill();
-            reject(new Error('Timeout waiting for Claude CLI to initialize'));
-          }
-        }, 30000); // 30 second timeout
-      }
-
-      // Clear timeout on success
-      const originalResolve = resolve;
-      resolve = (value) => {
-        if (initTimeout) clearTimeout(initTimeout);
-        originalResolve(value);
-      };
     });
   }
 

@@ -328,7 +328,7 @@ router.post('/', async (req, res) => {
  * POST /api/chat/auto-response/pause - Pause auto-response mode for a session
  */
 router.post('/auto-response/pause', async (req, res) => {
-  const { sessionId, deviceToken, deviceId, userId } = req.body;
+  const { sessionId, deviceId, userId } = req.body;
   const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
 
   if (!sessionId) {
@@ -369,7 +369,7 @@ router.post('/auto-response/pause', async (req, res) => {
  * POST /api/chat/auto-response/resume - Resume auto-response mode for a session
  */
 router.post('/auto-response/resume', async (req, res) => {
-  const { sessionId, deviceToken, deviceId, userId } = req.body;
+  const { sessionId, deviceId, userId } = req.body;
   const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
 
   if (!sessionId) {
@@ -427,7 +427,7 @@ router.post('/auto-response/resume', async (req, res) => {
  * POST /api/chat/auto-response/stop - Stop auto-response mode for a session
  */
 router.post('/auto-response/stop', async (req, res) => {
-  const { sessionId, deviceToken, deviceId, userId, reason } = req.body;
+  const { sessionId, deviceId, userId, reason } = req.body;
   const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
 
   if (!sessionId) {
@@ -566,7 +566,7 @@ router.get('/:sessionId/messages', async (req, res) => {
  * POST /api/chat/interrupt - Interrupt current processing for a session
  */
 router.post('/interrupt', async (req, res) => {
-  const { sessionId, deviceToken, deviceId, userId } = req.body;
+  const { sessionId, deviceId, userId } = req.body;
   const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
 
   if (!sessionId) {

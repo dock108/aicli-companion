@@ -1,5 +1,4 @@
 import { EventEmitter } from 'events';
-import { randomUUID } from 'crypto';
 import { getTelemetryService } from './telemetry.js';
 
 /**
@@ -230,7 +229,7 @@ export class DeviceRegistry extends EventEmitter {
    * @returns {boolean} True if device is primary
    */
   isPrimaryDevice(deviceId) {
-    for (const [sessionId, primaryDeviceId] of this.primaryDevices) {
+    for (const [_sessionId, primaryDeviceId] of this.primaryDevices) {
       if (primaryDeviceId === deviceId) return true;
     }
     return false;

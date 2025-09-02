@@ -4,7 +4,6 @@
  */
 
 import { createLogger } from '../../utils/logger.js';
-import { MessageProcessor } from '../aicli-utils.js';
 import { UnifiedMessageParser } from '../message-parser.js';
 
 const logger = createLogger('OutputProcessor');
@@ -118,7 +117,7 @@ export class OutputProcessor {
   /**
    * Process streaming JSON response
    */
-  processStreamingResponse(jsonObjects, sessionId) {
+  processStreamingResponse(jsonObjects, _sessionId) {
     let responseText = '';
     let claudeSessionId = null;
     const metadata = {
@@ -180,13 +179,14 @@ export class OutputProcessor {
   /**
    * Process plain text output (fallback)
    */
-  processPlainTextOutput(output, sessionId) {
+  processPlainTextOutput(output, _sessionId) {
     if (!output || output.trim().length === 0) {
       return null;
     }
 
     // Remove any control characters or ANSI codes
     const cleanOutput = output
+      // eslint-disable-next-line no-control-regex
       .replace(/\x1b\[[0-9;]*m/g, '') // Remove ANSI color codes
       .replace(/\r/g, '') // Remove carriage returns
       .trim();

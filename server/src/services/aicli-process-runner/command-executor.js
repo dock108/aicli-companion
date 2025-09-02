@@ -4,7 +4,6 @@
  */
 
 import { createLogger } from '../../utils/logger.js';
-import { InputValidator, MessageProcessor } from '../aicli-utils.js';
 import { commandSecurity } from '../command-security.js';
 import { OutputProcessor } from './output-processor.js';
 import { HealthMonitor } from './health-monitor.js';

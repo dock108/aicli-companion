@@ -1,7 +1,6 @@
 import { describe, it, mock, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import { AICLIService } from '../../services/aicli.js';
-import { EventEmitter } from 'events';
 
 /**
  * Integration tests for AICLIService
@@ -72,7 +71,7 @@ describe('AICLIService Integration Tests', () => {
       setSkipPermissions: mock.fn(function (skip) {
         this.skipPermissions = skip;
       }),
-      executeAICLICommand: mock.fn(async (session, prompt, attachmentPaths) => ({
+      executeAICLICommand: mock.fn(async (session, prompt, _attachmentPaths) => ({
         success: true,
         response: {
           type: 'result',
@@ -513,11 +512,10 @@ describe('AICLIService Integration Tests', () => {
     });
 
     it('should handle streaming responses with chunks', async () => {
-      let chunkCount = 0;
       const chunks = ['Chunk 1', 'Chunk 2', 'Chunk 3'];
 
       // Mock streaming response
-      mockProcessRunner.executeAICLICommand = mock.fn(async (session, prompt, attachments) => {
+      mockProcessRunner.executeAICLICommand = mock.fn(async (session, _prompt, _attachments) => {
         // Simulate streaming by emitting chunks
         setTimeout(() => {
           chunks.forEach((chunk, i) => {
@@ -549,7 +547,6 @@ describe('AICLIService Integration Tests', () => {
       const streamingData = [];
       aicliService.on('streamingData', (data) => {
         streamingData.push(data);
-        chunkCount++;
       });
 
       const result = await aicliService.sendPrompt('Stream test', {

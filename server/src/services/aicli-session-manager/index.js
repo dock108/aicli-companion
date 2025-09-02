@@ -136,7 +136,6 @@ export class AICLISessionManager extends EventEmitter {
 
         // Ensure message buffer exists
         if (!this.storage.getMessageBuffer(sessionId)) {
-          const { AICLIMessageHandler } = await import('../aicli-message-handler.js');
           this.storage.addMessageBuffer(sessionId, AICLIMessageHandler.createSessionBuffer());
         }
         return;
@@ -156,7 +155,6 @@ export class AICLISessionManager extends EventEmitter {
       this.storage.addActiveSession(sessionId, session);
 
       // Create message buffer
-      const { AICLIMessageHandler } = await import('../aicli-message-handler.js');
       this.storage.addMessageBuffer(sessionId, AICLIMessageHandler.createSessionBuffer());
     } else {
       return this.router.trackForRouting(sessionId, workingDirectory, ourSessionId);
@@ -242,9 +240,9 @@ export class AICLISessionManager extends EventEmitter {
         // Set new timeout for message expiry (5 minutes)
         const timeoutId = setTimeout(
           () => {
-            const buffer = this.storage.getMessageBuffer(sessionId);
-            if (buffer && buffer.messagesById) {
-              buffer.messagesById.clear();
+            const msgBuffer = this.storage.getMessageBuffer(sessionId);
+            if (msgBuffer && msgBuffer.messagesById) {
+              msgBuffer.messagesById.clear();
             }
             this.messageExpiryTimeouts.delete(sessionId);
           },
@@ -335,7 +333,7 @@ export class AICLISessionManager extends EventEmitter {
     });
   }
 
-  async killSession(sessionId, reason = 'User requested termination') {
+  async killSession(sessionId, _reason = 'User requested termination') {
     const interactiveSession = this.storage.getInteractiveSession(sessionId);
     if (!interactiveSession) {
       return { success: false, message: 'Session not found' };
@@ -401,7 +399,6 @@ export class AICLISessionManager extends EventEmitter {
     if (interactiveSession) {
       const now = Date.now();
       const lastActivity = interactiveSession.lastActivity || now;
-      const createdAt = interactiveSession.createdAt || now;
       const timeSinceActivity = now - lastActivity;
       const timeRemaining = Math.max(0, this.config.sessionTimeout - timeSinceActivity);
 
@@ -492,7 +489,7 @@ export class AICLISessionManager extends EventEmitter {
     return [];
   }
 
-  async cleanupOldSessions(maxAge) {
+  async cleanupOldSessions(_maxAge) {
     // Return zero cleaned for stateless operation
     return { cleaned: 0 };
   }

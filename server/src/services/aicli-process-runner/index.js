@@ -4,7 +4,6 @@
  */
 
 import { EventEmitter } from 'events';
-import { createLogger } from '../../utils/logger.js';
 import { ProcessManager } from './process-manager.js';
 import { InteractiveSession } from './interactive-session.js';
 import { CommandExecutor } from './command-executor.js';
@@ -13,7 +12,7 @@ import { OutputProcessor } from './output-processor.js';
 import { HealthMonitor } from './health-monitor.js';
 import { AICLIConfig } from './config.js';
 
-const logger = createLogger('AICLIProcess');
+// Logger will be created in components that need it
 
 export class AICLIProcessRunner extends EventEmitter {
   constructor(options = {}) {

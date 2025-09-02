@@ -60,12 +60,12 @@ describe('AICLIService Integration Tests', () => {
       setSkipPermissions: mock.fn((skip) => {
         mockProcessRunner.skipPermissions = skip;
       }),
-      executeAICLICommand: mock.fn(async (session, prompt) => ({
+      executeAICLICommand: mock.fn(async (session, _prompt) => ({
         success: true,
         response: { result: 'Test response' },
         claudeSessionId: session.sessionId,
       })),
-      sendToInteractiveSession: mock.fn(async (session, prompt) => ({
+      sendToInteractiveSession: mock.fn(async (_session, _prompt) => ({
         success: true,
         response: 'Interactive response',
       })),

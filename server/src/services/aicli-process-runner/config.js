@@ -11,6 +11,7 @@ const logger = createLogger('AICLIConfig');
 export class AICLIConfig {
   constructor(options = {}) {
     this._aicliCommand = null;
+    this._aicliCommandPromise = null;
     this.spawnFunction = options.spawnFunction || spawn;
 
     // Permission configuration
@@ -18,15 +19,51 @@ export class AICLIConfig {
     this.allowedTools = ['Read', 'Write', 'Edit'];
     this.disallowedTools = [];
     this.skipPermissions = false;
+    
+    // Initialize the command immediately
+    this.initializeCommand();
+  }
+  
+  async initializeCommand() {
+    if (process.env.NODE_ENV === 'test') {
+      this._aicliCommand = 'claude';
+    } else if (!this._aicliCommandPromise) {
+      this._aicliCommandPromise = this.findAICLICommand();
+      this._aicliCommand = await this._aicliCommandPromise;
+    }
   }
 
-  // Lazy getter for AICLI command
+  // Lazy getter for AICLI command - returns the resolved value or 'claude' as fallback
   get aicliCommand() {
-    if (!this._aicliCommand) {
-      // Skip command detection in test environment to avoid spawning processes
-      this._aicliCommand = process.env.NODE_ENV === 'test' ? 'claude' : this.findAICLICommand();
+    // If already resolved, return it
+    if (this._aicliCommand) {
+      return this._aicliCommand;
     }
-    return this._aicliCommand;
+    
+    // In test environment, just return 'claude'
+    if (process.env.NODE_ENV === 'test') {
+      this._aicliCommand = 'claude';
+      return this._aicliCommand;
+    }
+    
+    // Otherwise, return 'claude' as a fallback and let initializeCommand handle async resolution
+    // This prevents [object Promise] from being used as a command
+    return 'claude';
+  }
+  
+  // Async getter for when we need to ensure the command is resolved
+  async getAicliCommand() {
+    if (this._aicliCommand) {
+      return this._aicliCommand;
+    }
+    
+    if (this._aicliCommandPromise) {
+      return await this._aicliCommandPromise;
+    }
+    
+    // Reinitialize if needed
+    await this.initializeCommand();
+    return this._aicliCommand || 'claude';
   }
 
   /**

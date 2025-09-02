@@ -150,6 +150,7 @@ export class AICLIService extends EventEmitter {
       return { available: true, version: 'test' };
     }
 
+    // Get the AICLI command - now returns a string fallback immediately
     const aicliPath = this.aicliCommand || (await AICLIConfig.findAICLICommand());
     try {
       const { stdout } = await execAsync(`"${aicliPath}" --version`);

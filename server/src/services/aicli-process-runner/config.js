@@ -19,11 +19,11 @@ export class AICLIConfig {
     this.allowedTools = ['Read', 'Write', 'Edit'];
     this.disallowedTools = [];
     this.skipPermissions = false;
-    
+
     // Initialize the command immediately
     this.initializeCommand();
   }
-  
+
   async initializeCommand() {
     if (process.env.NODE_ENV === 'test') {
       this._aicliCommand = 'claude';
@@ -39,28 +39,28 @@ export class AICLIConfig {
     if (this._aicliCommand) {
       return this._aicliCommand;
     }
-    
+
     // In test environment, just return 'claude'
     if (process.env.NODE_ENV === 'test') {
       this._aicliCommand = 'claude';
       return this._aicliCommand;
     }
-    
+
     // Otherwise, return 'claude' as a fallback and let initializeCommand handle async resolution
     // This prevents [object Promise] from being used as a command
     return 'claude';
   }
-  
+
   // Async getter for when we need to ensure the command is resolved
   async getAicliCommand() {
     if (this._aicliCommand) {
       return this._aicliCommand;
     }
-    
+
     if (this._aicliCommandPromise) {
-      return await this._aicliCommandPromise;
+      return this._aicliCommandPromise;
     }
-    
+
     // Reinitialize if needed
     await this.initializeCommand();
     return this._aicliCommand || 'claude';

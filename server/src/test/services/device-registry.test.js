@@ -175,12 +175,12 @@ describe('DeviceRegistry', () => {
     });
 
     it('should reject election for inactive device', () => {
-      // Mark device as inactive by not updating last seen and waiting
-      setTimeout(() => {
-        const result = registry.electPrimary(userId1, sessionId1, deviceId1);
-        assert.strictEqual(result.success, false);
-        assert.strictEqual(result.reason, 'device_not_active');
-      }, 1100);
+      // Unregister device1 to make it inactive  
+      registry.unregisterDevice(deviceId1);
+      
+      const result = registry.electPrimary(userId1, sessionId1, deviceId1);
+      assert.strictEqual(result.success, false);
+      assert.strictEqual(result.reason, 'device_not_active');
     });
   });
 
@@ -214,13 +214,12 @@ describe('DeviceRegistry', () => {
     });
 
     it('should reject transfer to inactive device', () => {
-      // Make device2 inactive by waiting for timeout
-      setTimeout(() => {
-        const result = registry.transferPrimary(sessionId1, deviceId1, deviceId2);
-        
-        assert.strictEqual(result.success, false);
-        assert.strictEqual(result.reason, 'target_device_inactive');
-      }, 1100);
+      // Unregister device2 to make it inactive
+      registry.unregisterDevice(deviceId2);
+      
+      const result = registry.transferPrimary(sessionId1, deviceId1, deviceId2);
+      assert.strictEqual(result.success, false);
+      assert.strictEqual(result.reason, 'target_device_inactive');
     });
 
     it('should emit primaryTransferred event', (t, done) => {

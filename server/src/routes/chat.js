@@ -30,7 +30,7 @@ router.post('/', async (req, res) => {
     deviceInfo, // Device information (platform, version, etc.)
   } = req.body;
 
-  const requestId = req.headers['x-request-id'] || `REQ_${randomUUID().substring(0, 8)}`;
+  const requestId = req.headers['x-request-id'] || `REQ_${randomUUID().replace(/-/g, '').substring(0, 8)}`;
   const sessionId = clientSessionId; // Preserve original session ID
 
   // Log active sessions for debugging
@@ -62,7 +62,7 @@ router.post('/', async (req, res) => {
         logger.info('Device registered/updated', {
           requestId,
           userId,
-          deviceId: `${deviceId.substring(0, 8)}...`,
+          deviceId: deviceId ? `${deviceId.substring(0, 8)}...` : 'undefined',
           isNewDevice: registrationResult.isNew,
           platform: registrationResult.device.platform
         });
@@ -71,7 +71,7 @@ router.post('/', async (req, res) => {
       logger.error('Device registration failed', {
         requestId,
         userId,
-        deviceId: `${deviceId.substring(0, 8)}...`,
+        deviceId: deviceId ? `${deviceId.substring(0, 8)}...` : 'undefined',
         error: error.message
       });
       // Continue without device coordination
@@ -79,10 +79,12 @@ router.post('/', async (req, res) => {
   } else {
     // Fallback: use deviceToken as deviceId for backward compatibility
     resolvedDeviceId = deviceToken;
-    logger.info('Using deviceToken as deviceId for backward compatibility', {
-      requestId,
-      deviceToken: `${deviceToken.substring(0, 10)}...`
-    });
+    if (deviceToken) {
+      logger.info('Using deviceToken as deviceId for backward compatibility', {
+        requestId,
+        deviceToken: `${deviceToken.substring(0, 10)}...`
+      });
+    }
   }
 
   // Validate message content
@@ -416,6 +418,145 @@ router.post('/auto-response/resume', async (req, res) => {
       processing: queueStatus.processing,
     } : null,
   });
+});
+
+/**
+ * POST /api/chat/auto-response/stop - Stop auto-response mode for a session
+ */
+router.post('/auto-response/stop', async (req, res) => {
+  const { sessionId, deviceToken, deviceId, userId, reason } = req.body;
+  const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
+
+  if (!sessionId) {
+    return res.status(400).json({
+      success: false,
+      error: 'Session ID is required',
+    });
+  }
+
+  // Update device heartbeat if device context provided
+  if (deviceId && userId) {
+    try {
+      deviceRegistry.updateLastSeen(deviceId);
+    } catch (error) {
+      logger.warn('Failed to update device heartbeat', {
+        requestId,
+        deviceId: deviceId ? `${deviceId.substring(0, 8)}...` : 'undefined',
+        error: error.message
+      });
+    }
+  }
+
+  logger.info('Stopping auto-response mode', { sessionId, requestId, reason });
+
+  // Stop the message queue for this session
+  messageQueueManager.pauseQueue(sessionId);
+  messageQueueManager.clearQueue(sessionId);
+
+  res.json({
+    success: true,
+    message: 'Auto-response mode stopped',
+    action: 'stop',
+    sessionId,
+    requestId,
+    reason: reason || 'user_requested',
+  });
+});
+
+/**
+ * GET /api/chat/:sessionId/progress - Get thinking progress for a session
+ */
+router.get('/:sessionId/progress', async (req, res) => {
+  const { sessionId } = req.params;
+  const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
+  
+  // Get AICLI service
+  const aicliServiceInstance = req.app.get('aicliService') || aicliService;
+  
+  if (!aicliServiceInstance || !aicliServiceInstance.sessionManager) {
+    return res.status(404).json({
+      success: false,
+      error: 'Service not available',
+      requestId
+    });
+  }
+
+  // Get session buffer/metadata
+  const sessionBuffer = aicliServiceInstance.sessionManager.getSessionBuffer(sessionId);
+  
+  if (!sessionBuffer) {
+    return res.status(404).json({
+      success: false,
+      error: 'Session not found',
+      sessionId,
+      requestId
+    });
+  }
+
+  // Get thinking metadata
+  const thinkingMetadata = sessionBuffer.thinkingMetadata || {};
+  const isThinking = thinkingMetadata.isThinking || false;
+  
+  res.json({
+    success: true,
+    sessionId,
+    isThinking,
+    activity: thinkingMetadata.activity || null,
+    duration: thinkingMetadata.duration || 0,
+    tokenCount: thinkingMetadata.tokenCount || 0,
+    requestId
+  });
+});
+
+/**
+ * GET /api/chat/:sessionId/messages - Get messages for a session
+ */
+router.get('/:sessionId/messages', async (req, res) => {
+  const { sessionId } = req.params;
+  const { limit = 50, offset = 0 } = req.query;
+  const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
+  
+  // Get AICLI service
+  const aicliServiceInstance = req.app.get('aicliService') || aicliService;
+  
+  if (!aicliServiceInstance || !aicliServiceInstance.sessionManager) {
+    return res.status(500).json({
+      success: false,
+      error: 'Service not available',
+      requestId
+    });
+  }
+
+  try {
+    // Get session messages
+    const messages = aicliServiceInstance.sessionManager.getSessionMessages(
+      sessionId,
+      parseInt(limit),
+      parseInt(offset)
+    );
+    
+    res.json({
+      success: true,
+      sessionId,
+      messages: messages || [],
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      total: messages ? messages.length : 0,
+      requestId
+    });
+  } catch (error) {
+    logger.error('Failed to get session messages', {
+      requestId,
+      sessionId,
+      error: error.message
+    });
+    
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve messages',
+      requestId
+    });
+  }
 });
 
 /**

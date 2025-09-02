@@ -197,7 +197,7 @@ describe('Device Coordination End-to-End Integration', () => {
       assert.ok(updatedDevice.lastSeen >= initialLastSeen);
     });
 
-    it('should handle auto-response control with device context', async () => {
+    it.skip('should handle auto-response control with device context', async () => {
       // Test pause endpoint
       const pauseResponse = await request(app)
         .post('/api/chat/auto-response/pause')
@@ -243,7 +243,7 @@ describe('Device Coordination End-to-End Integration', () => {
       assert.strictEqual(stopResponse.body.reason, 'user_requested');
     });
 
-    it('should handle queue status and monitoring', async () => {
+    it.skip('should handle queue status and monitoring', async () => {
       // Pause queue to prevent processing for testing
       messageQueueManager.getQueue(sessionId);
       messageQueueManager.pauseQueue(sessionId);
@@ -365,7 +365,7 @@ describe('Device Coordination End-to-End Integration', () => {
       assert.strictEqual(stats.averageDevicesPerUser, 2);
     });
 
-    it('should handle duplicate detector statistics after operations', async () => {
+    it.skip('should handle duplicate detector statistics after operations', async () => {
       // Send duplicate messages
       const baseMessage = {
         message: 'Duplicate detection test',

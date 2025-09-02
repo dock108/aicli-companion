@@ -198,7 +198,14 @@ export class AICLIProcessRunner extends EventEmitter {
    * Send a message to an interactive Claude session and get response
    */
   async sendToInteractiveSession(sessionInfo, message) {
-    const { process: claudeProcess, sessionId } = sessionInfo;
+    // Handle both full session info (with process) and session metadata
+    const claudeProcess = sessionInfo.process || sessionInfo.claudeProcess;
+    const sessionId = sessionInfo.sessionId;
+    
+    if (!claudeProcess) {
+      throw new Error(`No active process for session ${sessionId}`);
+    }
+    
     const sessionLogger = logger.child({ sessionId });
 
     return new Promise((resolve, reject) => {

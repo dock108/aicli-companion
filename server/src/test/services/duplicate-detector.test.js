@@ -264,19 +264,41 @@ describe('DuplicateDetector', () => {
     });
 
     it('should categorize recent vs old hashes', async () => {
-      // Add data that will become old
-      detector.processMessage({ content: 'old1' }, deviceId1);
-      detector.processMessage({ content: 'old2' }, deviceId1);
+      // Create a detector with no automatic cleanup for this test
+      const testDetector = new DuplicateDetector({
+        timeWindow: 1000,
+        maxEntries: 100,
+        cleanupInterval: 999999 // Very long interval to prevent auto-cleanup during test
+      });
 
-      // Wait for time window
+      // Add data that will become old
+      testDetector.processMessage({ content: 'old1' }, deviceId1);
+      testDetector.processMessage({ content: 'old2' }, deviceId1);
+
+      // Wait for time window to pass
       await new Promise(resolve => setTimeout(resolve, 1100));
 
-      // Add recent data
-      detector.processMessage({ content: 'recent1' }, deviceId2);
+      // Check stats - should show old hashes (no auto-cleanup happened)
+      const statsBeforeCleanup = testDetector.getStats();
+      assert.ok(statsBeforeCleanup.oldHashes >= 2, `Expected at least 2 old hashes, got ${statsBeforeCleanup.oldHashes}`);
 
-      const stats = detector.getStats();
-      assert.ok(stats.oldHashes >= 2);
-      assert.ok(stats.recentHashes >= 1);
+      // Add recent data
+      testDetector.processMessage({ content: 'recent1' }, deviceId2);
+
+      // Check stats with mixed data
+      const statsWithMixed = testDetector.getStats();
+      assert.ok(statsWithMixed.oldHashes >= 2, `Expected at least 2 old hashes, got ${statsWithMixed.oldHashes}`);
+      assert.ok(statsWithMixed.recentHashes >= 1, `Expected at least 1 recent hash, got ${statsWithMixed.recentHashes}`);
+
+      // Manually trigger cleanup - should remove old hashes
+      testDetector.performCleanup();
+
+      // After cleanup, should only have recent hashes
+      const statsAfterCleanup = testDetector.getStats();
+      assert.strictEqual(statsAfterCleanup.oldHashes, 0, `Expected 0 old hashes after cleanup, got ${statsAfterCleanup.oldHashes}`);
+      assert.ok(statsAfterCleanup.recentHashes >= 1, `Expected at least 1 recent hash after cleanup, got ${statsAfterCleanup.recentHashes}`);
+
+      testDetector.shutdown();
     });
   });
 

@@ -6,6 +6,21 @@ import { AICLIMessageHandler } from './aicli-message-handler.js';
 
 // Input validation and sanitization utilities
 export class InputValidator {
+  static validateInput(prompt) {
+    try {
+      const processedPrompt = this.sanitizePrompt(prompt);
+      return {
+        isValid: true,
+        processedPrompt
+      };
+    } catch (error) {
+      return {
+        isValid: false,
+        error: error.message
+      };
+    }
+  }
+
   static sanitizePrompt(prompt) {
     if (typeof prompt !== 'string') {
       throw new Error('Prompt must be a string');

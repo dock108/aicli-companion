@@ -1,251 +1,259 @@
-# Issue #2: CloudKit Sync & Cross-Device Coordination - Implementation Plan
+# AICLI Companion Server Refactoring Plan
 
-## 🎯 **Goal**
-Implement cross-device message synchronization and device coordination to eliminate duplicate auto-responses and enable seamless conversation handoff between iPhone, iPad, and Mac.
+## Overview
+This plan addresses refactoring all server files exceeding 500 lines to improve maintainability, testability, and code organization.
 
-## 📋 **Core Problems to Solve**
-1. **No Cross-Device Sync**: Messages don't appear on all devices
-2. **Duplicate Auto-Responses**: Multiple devices send same response
-3. **Lost Context**: No session coordination between devices
-4. **No Primary Device**: No clear ownership of auto-response duties
+## Current State Analysis
 
-## 🏗️ **Implementation Strategy**
+### Files Exceeding 500 Lines (excluding tests)
 
-### **Phase 1: Server-Side Device Coordination (Foundation)**
-**Duration**: 3-4 days  
-**Approach**: Build on existing WebSocket infrastructure
+| File | Lines | Primary Concerns | Priority |
+|------|-------|------------------|----------|
+| `services/aicli.js` | 1436 | Monolithic service with mixed responsibilities | HIGH |
+| `services/aicli-process-runner.js` | 1384 | Process management + monitoring + permissions | HIGH |
+| `services/aicli-session-manager.js` | 1066 | Session lifecycle + buffer management + telemetry | HIGH |
+| `services/push-notification.js` | 895 | Multiple notification types in single file | MEDIUM |
+| `services/aicli-utils.js` | 759 | Mixed utility functions | MEDIUM |
+| `index.js` | 716 | Server initialization + config + middleware | MEDIUM |
+| `services/command-security.js` | 707 | Security validation + permission management | LOW |
+| `services/aicli-message-handler.js` | 633 | Message processing logic | LOW |
+| `routes/files.js` | 628 | File operations endpoint | LOW |
+| `services/activity-monitor.js` | 565 | Activity tracking | LOW |
+| `services/message-queue.js` | 552 | Queue management | LOW |
 
-#### **1.1 Device Registry Service**
-- Create `server/src/services/device-registry.js`
-- Simple device tracking with last-seen timestamps  
-- Primary device election (first-come, first-served)
-- Duplicate message detection using message hashes
+## Refactoring Strategy
 
-#### **1.2 Enhanced WebSocket Protocol**
-- Add device identification to existing WebSocket connections
-- Implement device announcement and coordination messages
-- Extend current message broadcasting for device sync
+### Phase 1: Critical Service Decomposition (Week 1)
 
-#### **1.3 Deduplication Layer**  
-- Add message hash checking in existing chat routes
-- 5-second window for duplicate detection
-- Integration with current message queue system
-
-### **Phase 2: iOS CloudKit Integration (Data Sync)**
-**Duration**: 4-5 days  
-**Approach**: Leverage existing message persistence patterns
-
-#### **2.1 CloudKit Schema Design**
-- Message records (map to existing MessageCore model)
-- Session records (extend current session model)  
-- Simple sync state tracking
-- Device records for coordination
-
-#### **2.2 CloudKit Sync Service**
-- Build on existing `MessagePersistenceService` patterns
-- Incremental sync (not full refresh)
-- Conflict resolution: last-write-wins initially
-- Offline queue using existing patterns
-
-#### **2.3 Device Coordinator**
-- Simple coordinator integrated with existing `SettingsManager`
-- Primary device status as @Published property
-- Connect to server device registry via WebSocket
-
-### **Phase 3: Integration & Testing (Polish)**  
-**Duration**: 2-3 days
-**Approach**: End-to-end validation and optimization
-
-#### **3.1 UI Integration**
-- Primary device indicator in existing ChatView
-- Settings toggle for device coordination
-- Simple conflict resolution UI
-
-#### **3.2 Performance Optimization**
-- Batch sync operations
-- Smart sync triggers (foreground, message events)
-- Connection reliability improvements
-
-## 🛠️ **Implementation Details**
-
-### **Key Files to Create**
+#### 1.1 Refactor `services/aicli.js` (1436 → ~400 lines each)
+**Target Structure:**
 ```
-server/src/services/device-registry.js        # Device tracking & coordination
-server/src/services/duplicate-detector.js     # Message deduplication  
-ios/Sources/.../CloudKit/CloudKitSyncService.swift  # CloudKit integration
-ios/Sources/.../DeviceCoordinator.swift       # Device coordination logic
+services/
+├── aicli/
+│   ├── index.js (main service ~400 lines)
+│   ├── message-classifier.js (~250 lines)
+│   ├── permission-handler.js (~300 lines)
+│   ├── attachment-processor.js (~200 lines)
+│   └── response-emitter.js (~300 lines)
 ```
 
-### **Key Files to Modify**
+**Extraction Plan:**
+- Move message classification methods to `message-classifier.js`
+- Extract permission handling to `permission-handler.js`
+- Move attachment processing to `attachment-processor.js`
+- Extract response emission logic to `response-emitter.js`
+- Keep core prompt sending and session coordination in main file
+
+#### 1.2 Refactor `services/aicli-process-runner.js` (1384 → ~400 lines each)
+**Target Structure:**
 ```
-server/src/routes/chat.js                     # Add deduplication
-server/src/index.js                           # WebSocket device messages
-ios/.../MessagePersistenceService.swift       # CloudKit integration
-ios/.../ChatViewModel.swift                   # Device coordination
+services/
+├── aicli-process/
+│   ├── index.js (main runner ~400 lines)
+│   ├── process-monitor.js (~350 lines)
+│   ├── interactive-session.js (~300 lines)
+│   ├── permission-validator.js (~250 lines)
+│   └── health-monitor.js (~200 lines)
 ```
 
-## 🧪 **Testing Strategy**
+**Extraction Plan:**
+- Move process monitoring to `process-monitor.js`
+- Extract interactive session management to `interactive-session.js`
+- Move permission validation to `permission-validator.js`
+- Extract health monitoring to `health-monitor.js`
 
-### **Phase 1 Testing**
-- Device registration/tracking
-- Duplicate message rejection  
-- Primary device election
-- WebSocket device coordination
+#### 1.3 Refactor `services/aicli-session-manager.js` (1066 → ~350 lines each)
+**Target Structure:**
+```
+services/
+├── session/
+│   ├── index.js (main manager ~350 lines)
+│   ├── session-buffer.js (~300 lines)
+│   ├── session-cleanup.js (~250 lines)
+│   └── session-tracker.js (~200 lines)
+```
 
-### **Phase 2 Testing**
-- CloudKit container setup
-- Message sync between devices
-- Offline sync queue
-- Basic conflict resolution
+**Extraction Plan:**
+- Move buffer management to `session-buffer.js`
+- Extract cleanup logic to `session-cleanup.js`
+- Move tracking/routing to `session-tracker.js`
 
-### **Phase 3 Testing**  
-- End-to-end 2-device scenarios
-- Primary device handoff
-- Network interruption recovery
-- Manual testing checklist (basic sync, auto-response coordination, conflicts)
+### Phase 2: Service Layer Cleanup (Week 2)
 
-## ⚡ **Success Criteria**
-- **Sync Latency**: Messages appear on other devices within 3 seconds
-- **Duplicate Prevention**: 100% elimination of duplicate auto-responses
-- **Primary Handoff**: Clean device transfer within 5 seconds  
-- **Reliability**: 99%+ sync success rate under normal conditions
+#### 2.1 Refactor `services/push-notification.js` (895 → ~300 lines each)
+**Target Structure:**
+```
+services/
+├── notifications/
+│   ├── index.js (main service ~300 lines)
+│   ├── apns-client.js (~200 lines)
+│   ├── message-formatter.js (~250 lines)
+│   └── notification-types.js (~200 lines)
+```
 
-## 🚦 **Risk Mitigation**
-- **Incremental Rollout**: Server changes first, then iOS integration
-- **Fallback Strategy**: Maintain existing single-device functionality
-- **Simple First**: Last-write-wins conflict resolution initially
-- **Monitoring**: Comprehensive logging for sync operations
+#### 2.2 Refactor `services/aicli-utils.js` (759 → ~250 lines each)
+**Target Structure:**
+```
+services/
+├── utils/
+│   ├── stream-utils.js (~250 lines)
+│   ├── json-utils.js (~250 lines)
+│   └── text-utils.js (~250 lines)
+```
 
-## 📦 **Dependencies**
-- Apple Developer CloudKit container setup
-- No new server dependencies (uses existing infrastructure)
-- No new iOS dependencies (uses existing CloudKit/SwiftUI)
+### Phase 3: Application Layer (Week 3)
 
-## 🔄 **Rollback Plan**
-- Feature flag for device coordination (can disable)
-- CloudKit integration isolated in separate service
-- Server changes backward compatible with existing clients
+#### 3.1 Refactor `index.js` (716 → ~350 lines each)
+**Target Structure:**
+```
+src/
+├── index.js (~350 lines - main server)
+├── config/
+│   └── server-setup.js (~200 lines)
+└── middleware/
+    └── middleware-setup.js (~200 lines)
+```
 
-## 📋 **Detailed Task Breakdown**
+#### 3.2 Refactor `routes/files.js` (628 → ~400 lines)
+**Target Structure:**
+```
+routes/
+├── files/
+│   ├── index.js (~400 lines)
+│   └── file-validators.js (~250 lines)
+```
 
-### **Phase 1: Server Foundation (Days 1-4)**
+### Phase 4: Support Services (Week 4)
 
-#### **Day 1: Device Registry Service**
-- [ ] Create `server/src/services/device-registry.js`
-- [ ] Implement device registration and tracking
-- [ ] Add primary device election logic
-- [ ] Create comprehensive tests
+#### 4.1 Optimize remaining files
+- `services/command-security.js` - Extract validation rules
+- `services/aicli-message-handler.js` - Split response types
+- `services/activity-monitor.js` - Keep as is (just over limit)
+- `services/message-queue.js` - Keep as is (just over limit)
 
-#### **Day 2: Message Deduplication**
-- [ ] Create `server/src/services/duplicate-detector.js`
-- [ ] Add message hashing and duplicate detection
-- [ ] Integrate with existing message queue
-- [ ] Test duplicate prevention scenarios
+## Implementation Order
 
-#### **Day 3: WebSocket Protocol Enhancement**
-- [ ] Extend WebSocket handlers in `server/src/index.js`
-- [ ] Add device announcement messages
-- [ ] Implement device coordination broadcasts
-- [ ] Test multi-device WebSocket scenarios
+### Week 1: Core AICLI Services
+1. **Day 1-2**: Refactor `aicli.js`
+   - Create directory structure
+   - Extract message classifier
+   - Extract permission handler
+   - Test thoroughly
 
-#### **Day 4: Chat Route Integration**
-- [ ] Modify `server/src/routes/chat.js` for deduplication
-- [ ] Add device context to message processing
-- [ ] Integrate with device registry
-- [ ] End-to-end server testing
+2. **Day 3-4**: Refactor `aicli-process-runner.js`
+   - Extract monitoring components
+   - Separate session management
+   - Validate all process operations
 
-### **Phase 2: iOS CloudKit Integration (Days 5-9)**
+3. **Day 5**: Refactor `aicli-session-manager.js`
+   - Extract buffer management
+   - Separate cleanup logic
 
-#### **Day 5: CloudKit Container Setup**
-- [ ] Configure CloudKit container in Apple Developer
-- [ ] Enable CloudKit capability in Xcode project
-- [ ] Update Info.plist with container ID
-- [ ] Test basic CloudKit connection
+### Week 2: Supporting Services
+1. **Day 1-2**: Refactor `push-notification.js`
+   - Extract notification types
+   - Separate APNS client logic
 
-#### **Day 6: CloudKit Schema & Models**
-- [ ] Create `ios/Sources/.../CloudKit/CloudKitModels.swift`
-- [ ] Define record types (Message, Session, Device, SyncState)
-- [ ] Create mapping between local and CloudKit models
-- [ ] Test record creation and retrieval
+2. **Day 3**: Refactor `aicli-utils.js`
+   - Categorize utilities
+   - Create focused utility modules
 
-#### **Day 7: CloudKit Sync Service**
-- [ ] Create `ios/Sources/.../CloudKit/CloudKitSyncService.swift`
-- [ ] Implement push/pull sync operations
-- [ ] Add subscription handlers for real-time updates
-- [ ] Create offline sync queue
+3. **Day 4-5**: Testing and validation
+   - Run full test suite
+   - Performance testing
 
-#### **Day 8: Device Coordinator**
-- [ ] Create `ios/Sources/.../DeviceCoordinator.swift`
-- [ ] Connect to server device registry via WebSocket
-- [ ] Implement primary device status tracking
-- [ ] Add device coordination UI state
+### Week 3: Application Layer
+1. **Day 1-2**: Refactor `index.js`
+   - Extract setup logic
+   - Modularize middleware
 
-#### **Day 9: Message Persistence Integration**
-- [ ] Modify `MessagePersistenceService.swift` for CloudKit
-- [ ] Add sync triggers (foreground, message events)
-- [ ] Implement conflict resolution (last-write-wins)
-- [ ] Test offline/online sync scenarios
+2. **Day 3**: Refactor `routes/files.js`
+   - Extract validators
+   - Optimize route handlers
 
-### **Phase 3: Integration & Polish (Days 10-12)**
+3. **Day 4-5**: Integration testing
 
-#### **Day 10: UI Integration**
-- [ ] Add primary device indicator to ChatView
-- [ ] Create device coordination settings UI
-- [ ] Add sync status indicators
-- [ ] Implement manual sync triggers
+### Week 4: Finalization
+1. **Day 1-2**: Minor optimizations
+2. **Day 3-4**: Documentation updates
+3. **Day 5**: Final testing and deployment prep
 
-#### **Day 11: End-to-End Testing**
-- [ ] Test 2-device sync scenarios
-- [ ] Validate auto-response coordination
-- [ ] Test primary device handoff
-- [ ] Network interruption recovery testing
+## Success Criteria
 
-#### **Day 12: Performance & Polish**
-- [ ] Optimize sync performance and batching
-- [ ] Add comprehensive error handling
-- [ ] Final integration testing
-- [ ] Documentation and code cleanup
+### Code Quality Metrics
+- [ ] No source file exceeds 500 lines (excluding tests)
+- [ ] All tests passing (1251/1251)
+- [ ] Test coverage maintained at >80%
+- [ ] No circular dependencies introduced
 
-## 🎯 **CLAUDE.md Alignment**
+### Functional Requirements
+- [ ] All API endpoints functioning identically
+- [ ] WebSocket connections stable
+- [ ] Message queue processing unchanged
+- [ ] Push notifications working
+- [ ] Session management intact
 
-### **1. PERSISTENCE AND COMPLETION**
-- Complete 3-phase implementation with full testing
-- 80%+ test coverage for new components
-- Fix all test failures, no "good enough" compromises
+### Performance Targets
+- [ ] Server startup time < 3 seconds
+- [ ] Memory usage not increased by >10%
+- [ ] Response times unchanged or improved
 
-### **2. User First**
-- Solves core user problem: seamless cross-device experience
-- Eliminates frustrating duplicate auto-responses
-- Enables natural device handoff workflow
+## Risk Mitigation
 
-### **3. Keep It Simple**
-- Build on existing WebSocket and message persistence patterns
-- Last-write-wins conflict resolution initially (can enhance later)
-- No complex distributed consensus algorithms
+### Potential Risks
+1. **Breaking API contracts**: Mitigate with comprehensive testing
+2. **Circular dependencies**: Use dependency injection patterns
+3. **Performance degradation**: Profile before/after each phase
+4. **Test failures**: Fix immediately, don't accumulate debt
 
-### **4. Follow Existing Patterns**
-- Uses existing WebSocket infrastructure for coordination
-- Extends current MessagePersistenceService patterns
-- Integrates with existing SettingsManager for device state
+### Rollback Strategy
+- Each phase commits separately
+- Tag releases before major refactors
+- Keep original files during transition
+- Gradual migration with feature flags if needed
 
-### **5. No Defensive Coding**
-- Clear error handling only for recoverable scenarios
-- Fast failure for CloudKit connectivity issues
-- Simple, predictable sync behavior
+## Testing Strategy
 
-## 🏁 **Definition of Done**
-- [ ] Messages sync between devices within 3 seconds
-- [ ] Zero duplicate auto-responses in multi-device scenarios
-- [ ] Primary device election and handoff working reliably
-- [ ] Offline sync queue processes correctly on reconnection
-- [ ] All tests passing with >80% coverage
-- [ ] Manual testing checklist completed
-- [ ] Performance metrics met (sync latency, reliability)
-- [ ] Rollback capability verified
+### Unit Tests
+- Update imports in existing tests
+- Add new tests for extracted modules
+- Maintain >80% coverage
+
+### Integration Tests
+- Full API endpoint testing after each phase
+- WebSocket connection tests
+- Message queue processing tests
+- Push notification delivery tests
+
+### Performance Tests
+- Memory usage profiling
+- Response time benchmarks
+- Concurrent connection stress tests
+
+## Documentation Updates
+
+### Required Updates
+1. Update module documentation
+2. Update API documentation if paths change
+3. Update developer setup guide
+4. Create module dependency diagram
+
+## Next Steps
+
+1. **Review and approve this plan**
+2. **Create feature branch**: `refactor/modularize-large-files`
+3. **Begin Phase 1**: Start with `aicli.js` decomposition
+4. **Daily progress updates**: Track completion in GitHub issues
+
+## Notes
+
+- Prioritize maintaining functionality over arbitrary line limits
+- Some files at 550-650 lines may be acceptable if cohesive
+- Consider future growth when creating new structure
+- Keep related functionality together for maintainability
 
 ---
 
-**Created**: 2025-09-01  
-**Estimated Effort**: 12 days  
-**Success Metrics**: <3s sync latency, 100% duplicate prevention, 99%+ reliability  
-**Risk Level**: Medium (CloudKit dependency, multi-device complexity)
+**Estimated Total Time**: 4 weeks (part-time) or 2 weeks (full-time)
+**Risk Level**: Medium (extensive changes but good test coverage)
+**Impact**: High (significantly improved maintainability)

@@ -7,33 +7,31 @@ export class SessionOperations {
 
   async sendStreamingPrompt(
     prompt,
-    { sessionId = null, skipPermissions = false, attachmentPaths = [], retryCount = 3 }
+    { sessionId = null, skipPermissions = false, attachmentPaths = [], retryCount = 3, workingDirectory = process.cwd() }
   ) {
-    // Check if we have an existing session
-    if (sessionId && this.sessionManager.hasSession(sessionId)) {
-      const session = this.sessionManager.getSession(sessionId);
-      console.log(`📤 Sending prompt to existing session ${sessionId}`);
-      return this.processRunner.sendToInteractiveSession(session, prompt);
+    // The sessionId from iOS is the Claude session ID from previous response
+    // We just use it directly - no internal session IDs needed
+    const claudeSessionId = sessionId;
+    
+    if (claudeSessionId && claudeSessionId !== 'new' && claudeSessionId !== 'null') {
+      console.log(`📤 Continuing Claude conversation with session: ${claudeSessionId}`);
+      // Create a simple session object with just what we need
+      const session = {
+        sessionId: claudeSessionId,  // This will be used for logging
+        claudeSessionId: claudeSessionId,  // This will be used for --resume flag
+        workingDirectory: workingDirectory,
+        conversationStarted: true
+      };
+      return this.executeAICLICommand(session, prompt, attachmentPaths);
     }
 
-    // Check if we need to route to an existing Claude session
-    if (sessionId) {
-      // Check if we have an active session
-      const session = this.sessionManager.getSession(sessionId);
-      if (session && session.conversationStarted) {
-        console.log(`📤 Sending prompt to existing session ${sessionId}`);
-        // For existing sessions, we need to use executeAICLICommand with the session
-        // since we don't maintain persistent processes anymore
-        return this.executeAICLICommand(session, prompt, attachmentPaths);
-      }
-    }
-
-    // Start a new session
-    console.log(`🆕 Starting new Claude session${sessionId ? ` (requested: ${sessionId})` : ''}`);
+    // Start a new conversation (no Claude session ID yet)
+    console.log(`🆕 Starting new Claude conversation`);
     return this.sendPromptToClaude(prompt, {
-      sessionId,
+      sessionId: null,  // No Claude session ID yet
       skipPermissions,
-      attachmentPaths, // Pass attachment file paths
+      attachmentPaths,
+      workingDirectory,
       retryCount,
     });
   }
@@ -44,58 +42,49 @@ export class SessionOperations {
       sessionId = null,
       skipPermissions = false,
       attachmentPaths = [],
+      workingDirectory = process.cwd(),
       defaultWorkingDirectory = process.cwd(),
       retryCount = 3,
     }
   ) {
     try {
-      // Create a new session
-      const session = await this.sessionManager.createInteractiveSession(
-        sessionId,
-        prompt,
-        defaultWorkingDirectory,
-        { skipPermissions, attachmentPaths }
-      );
+      // Create a minimal session object for a new conversation
+      const session = {
+        sessionId: null,  // No session ID yet - will get from Claude
+        claudeSessionId: null,  // No Claude session yet
+        workingDirectory: workingDirectory || defaultWorkingDirectory,
+        skipPermissions,
+        attachmentPaths
+      };
 
-      console.log(`🚀 Starting Claude session: ${session.sessionId}`);
+      console.log(`🚀 Starting new Claude conversation`);
 
       // Execute the AICLI command
       const response = await this.executeAICLICommand(session, prompt, attachmentPaths, retryCount);
 
-      // Track the Claude session if it gave us a different ID
-      if (response.claudeSessionId && response.claudeSessionId !== session.sessionId) {
-        console.log(
-          `🔄 Claude assigned session ID: ${response.claudeSessionId} (our ID: ${session.sessionId})`
-        );
-        // Store mapping if mapClaudeSession method exists
-        if (this.sessionManager.mapClaudeSession) {
-          await this.sessionManager.mapClaudeSession(session.sessionId, response.claudeSessionId);
-        }
+      // Log the Claude session ID we got back
+      if (response.claudeSessionId) {
+        console.log(`🔑 Claude session ID: ${response.claudeSessionId}`);
       }
 
       return response;
     } catch (error) {
-      // Check if error is due to expired session
+      // For session errors, just retry without a session
       if (
         error.message &&
         (error.message.includes('Session expired') || error.message.includes('session not found'))
       ) {
-        console.log('🔄 Session expired, creating new session...');
+        console.log('🔄 Session expired, starting fresh conversation...');
 
-        // Clean up the expired session
-        if (sessionId) {
-          await this.sessionManager.cleanupDeadSession(sessionId);
-        }
+        // Retry with no session
+        const newSession = {
+          sessionId: null,  // No session ID - will get from Claude
+          claudeSessionId: null,
+          workingDirectory: workingDirectory || defaultWorkingDirectory,
+          skipPermissions,
+          attachmentPaths
+        };
 
-        // Retry with a new session
-        const newSession = await this.sessionManager.createInteractiveSession(
-          null, // Force new session ID
-          prompt,
-          defaultWorkingDirectory,
-          { skipPermissions, attachmentPaths }
-        );
-
-        console.log(`🆕 Created fresh session: ${newSession.sessionId}`);
         const response = await this.executeAICLICommand(
           newSession,
           prompt,
@@ -103,17 +92,8 @@ export class SessionOperations {
           retryCount
         );
 
-        // Track the new Claude session if method exists
-        if (response.claudeSessionId && this.sessionManager.mapClaudeSession) {
-          await this.sessionManager.mapClaudeSession(
-            newSession.sessionId,
-            response.claudeSessionId
-          );
-
-          // Also track that the new session handles messages for the old session
-          if (sessionId && sessionId !== newSession.sessionId) {
-            await this.sessionManager.mapClaudeSession(sessionId, response.claudeSessionId);
-          }
+        if (response.claudeSessionId) {
+          console.log(`🔑 New Claude session ID: ${response.claudeSessionId}`);
         }
 
         return response;

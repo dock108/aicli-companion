@@ -218,6 +218,7 @@ export class AICLIService extends EventEmitter {
           sessionId,
           skipPermissions,
           attachmentPaths: attachmentData.filePaths, // Pass file paths
+          workingDirectory: options.workingDirectory || this.defaultWorkingDirectory,
         });
       } else {
         return await this.sendOneTimePrompt(enhancedPrompt, {

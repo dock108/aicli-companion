@@ -87,6 +87,8 @@ export class NotificationTypes {
         timestamp: new Date().toISOString(),
         requestId: data.requestId,
         deliveryMethod: 'apns_signal',
+        sessionId: data.sessionId, // Include sessionId for large messages
+        claudeSessionId: data.sessionId, // Also as claudeSessionId for compatibility
       };
       console.log(
         `📱 Large message (${data.message.length} chars) - sending signal with messageId: ${messageId}`
@@ -104,6 +106,8 @@ export class NotificationTypes {
         attachmentInfo: data.attachmentInfo || null,
         autoResponse: data.autoResponse || null,
         thinkingMetadata: data.thinkingMetadata || null,
+        sessionId: data.sessionId, // Include sessionId for small messages
+        claudeSessionId: data.sessionId, // Also as claudeSessionId for compatibility
       };
     }
 
@@ -257,10 +261,13 @@ export class NotificationTypes {
     notification.category = 'CLAUDE_MESSAGE';
     notification.threadId = data.projectPath || 'default';
 
+    // Explicitly include sessionId in the payload
     notification.payload = {
       ...data,
       type: 'message',
       deliveryMethod: 'apns_message',
+      sessionId: data.sessionId, // Ensure sessionId is explicitly included
+      claudeSessionId: data.sessionId, // Also include as claudeSessionId for compatibility
     };
 
     return notification;

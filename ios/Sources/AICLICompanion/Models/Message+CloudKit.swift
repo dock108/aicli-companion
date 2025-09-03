@@ -74,7 +74,8 @@ extension Message {
             record[CloudKitSchema.MessageFields.sessionId] = sessionId
         }
         
-        if let projectPath = projectPath ?? extractProjectPath() {
+        // Use the instance projectPath first, then parameter, then try to extract
+        if let projectPath = self.projectPath ?? projectPath ?? extractProjectPath() {
             record[CloudKitSchema.MessageFields.projectPath] = projectPath
         }
         

@@ -49,6 +49,74 @@ final class ChatMessageManager: ObservableObject {
             messages = loadedMessages
             print("📝 MessageManager: Loaded \(messages.count) messages (clean load)")
         }
+        
+        // Also fetch from CloudKit and merge
+        Task {
+            await fetchAndMergeCloudKitMessages(for: project)
+        }
+    }
+    
+    private func fetchAndMergeCloudKitMessages(for project: Project) async {
+        let cloudKitManager = CloudKitSyncManager.shared
+        guard cloudKitManager.iCloudAvailable else {
+            print("☁️ MessageManager: CloudKit not available, skipping sync")
+            return
+        }
+        
+        do {
+            print("☁️ MessageManager: Fetching messages from CloudKit for project: \(project.path)")
+            let cloudMessages = try await cloudKitManager.fetchMessages(for: project.path)
+            
+            await MainActor.run {
+                // Merge CloudKit messages with local messages
+                mergeCloudKitMessages(cloudMessages, for: project)
+            }
+        } catch {
+            print("❌ MessageManager: Failed to fetch CloudKit messages: \(error.localizedDescription)")
+            // Don't fail - local messages are enough
+        }
+    }
+    
+    private func mergeCloudKitMessages(_ cloudMessages: [Message], for project: Project) {
+        guard !cloudMessages.isEmpty else {
+            print("☁️ MessageManager: No CloudKit messages to merge")
+            return
+        }
+        
+        // Create a set of existing message IDs (use messageHash for better duplicate detection)
+        var existingHashes = Set<String>()
+        var existingIds = Set<UUID>()
+        
+        for message in messages {
+            existingIds.insert(message.id)
+            let hash = message.messageHash ?? message.generateMessageHash()
+            existingHashes.insert(hash)
+        }
+        
+        // Filter out duplicates from cloud messages
+        var newMessages: [Message] = []
+        for cloudMessage in cloudMessages {
+            // Check by both ID and hash to avoid duplicates
+            let messageHash = cloudMessage.messageHash ?? cloudMessage.generateMessageHash()
+            if !existingIds.contains(cloudMessage.id) && !existingHashes.contains(messageHash) {
+                newMessages.append(cloudMessage)
+                existingIds.insert(cloudMessage.id)
+                existingHashes.insert(messageHash)
+            }
+        }
+        
+        if !newMessages.isEmpty {
+            // Combine and sort
+            let allMessages = messages + newMessages
+            messages = allMessages.sorted { $0.timestamp < $1.timestamp }
+            
+            print("☁️ MessageManager: Merged \(newMessages.count) CloudKit messages, total: \(messages.count)")
+            
+            // Save merged messages back to local persistence
+            persistenceService.saveMessages(for: project.path, messages: messages)
+        } else {
+            print("☁️ MessageManager: All CloudKit messages already exist locally")
+        }
     }
     
     func saveMessages(for project: Project) {

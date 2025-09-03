@@ -4,8 +4,8 @@
 **Component**: iOS CloudKit + Server Device Management  
 **Beta Blocker**: No  
 **Discovered**: 2025-08-19  
-**Status**: In Progress  
-**Resolved**: [YYYY-MM-DD if resolved]
+**Status**: Partially Complete  
+**Resolved**: [In Progress - 2025-09-03]
 
 ## Problem Description
 
@@ -254,25 +254,43 @@ Info.plist - CloudKit container ID
    - [ ] Server restart handling
    - [ ] 10+ devices stress test
 
+## Current Status (2025-09-03)
+
+### ✅ Completed
+1. **Session ID Persistence** - Claude session IDs now properly persist between messages
+2. **Server Session Management** - Simplified to use Claude's session IDs directly
+3. **CloudKit Infrastructure** - Base CloudKit models and sync manager implemented
+4. **Device Coordination Base** - DeviceCoordinator and WebSocket extensions created
+
+### 🔧 Issues Fixed
+- Server was returning placeholder "new" instead of actual Claude session IDs
+- Session ID mapping between server internal IDs and Claude IDs was overly complex
+- Removed unnecessary internal session ID generation
+
+### ⚠️ Current Problem
+- **Messages save locally but don't sync to CloudKit automatically**
+- Each device maintains its own conversation history
+- No cross-device message synchronization yet
+
 ## Implementation Phases
 
 **Phase 1: Server Device Coordination (Week 1)**
 - [x] Design device registry schema
-- [ ] Implement device-registry.js
-- [ ] Add session-sync.js service
-- [ ] Update WebSocket handlers
-- [ ] Add duplicate detection
+- [x] Implement device-registry.js
+- [ ] Add session-sync.js service (partial)
+- [x] Update WebSocket handlers
+- [x] Add duplicate detection
 
 **Phase 2: CloudKit Setup (Week 2)**
-- [ ] Enable CloudKit capability
-- [ ] Design record schemas
-- [ ] Create CloudKitSyncService
-- [ ] Add subscription handlers
-- [ ] Implement conflict resolution
+- [x] Enable CloudKit capability
+- [x] Design record schemas
+- [x] Create CloudKitSyncService
+- [ ] Add subscription handlers (needs activation)
+- [x] Implement conflict resolution
 
-**Phase 3: Integration (Week 3)**
-- [ ] Connect iOS to device registry
-- [ ] Implement sync triggers
+**Phase 3: Integration (Week 3) - CURRENT**
+- [x] Connect iOS to device registry
+- [ ] Implement sync triggers (IN PROGRESS)
 - [ ] Add primary device UI
 - [ ] Test end-to-end sync
 - [ ] Performance optimization
@@ -298,6 +316,31 @@ Info.plist - CloudKit container ID
 - **Blocks**: #33 (macOS Companion) - Needs sync infrastructure
 - **Related**: #3 (Message Queue) - May need queue coordination
 
+## Next Steps (Implementation Plan)
+
+### Immediate Actions Required:
+1. **Add CloudKit sync when messages are received** (PushNotificationService.swift)
+   - After saving message locally, trigger CloudKit save
+   - Include projectPath in CloudKit record
+
+2. **Sync messages on app launch/resume** (ChatViewModel.swift)
+   - When loading messages for a project, also fetch from CloudKit
+   - Merge CloudKit messages with local, handling duplicates by messageHash
+
+3. **Configure CloudKit subscriptions** (CloudKitSyncManager.swift)
+   - Set up CKQuerySubscription for new messages
+   - Handle remote notifications to trigger UI updates
+
+4. **Add sync status indicators** (Already has SyncStatusView)
+   - Update sync status during upload/download
+   - Show sync progress in UI
+
+### Technical Details:
+- Messages already have CloudKit conversion methods (Message+CloudKit.swift)
+- CloudKitSyncManager has saveMessage() method ready
+- DeviceCoordinator tracks device state
+- Just need to connect the pieces
+
 ## Notes
 
 This issue is critical infrastructure that blocks several other features. The combination of CloudKit for data sync and server-side device coordination ensures:
@@ -308,8 +351,10 @@ This issue is critical infrastructure that blocks several other features. The co
 
 The server remains stateless for individual requests but maintains device registry for coordination.
 
+**Session ID Fix**: The server now properly uses Claude's session IDs directly without internal mapping, ensuring conversation continuity works correctly on individual devices.
+
 ---
 
-**Last Updated**: 2025-08-31  
-**Assigned To**: [Unassigned]  
-**Labels**: enhancement, infrastructure, cloudkit, device-coordinatio a go
+**Last Updated**: 2025-09-03  
+**Assigned To**: [Active Development]  
+**Labels**: enhancement, infrastructure, cloudkit, device-coordination

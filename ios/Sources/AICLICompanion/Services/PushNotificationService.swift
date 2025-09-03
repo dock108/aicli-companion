@@ -315,6 +315,22 @@ extension PushNotificationService {
         // Clean up old entries if set gets too large (keep last 100)
         await cleanupProcessedMessageIds()
         
+        // Extract and store session ID if present
+        if let projectPath = userInfo["projectPath"] as? String {
+            // Check for claudeSessionId (new format) or sessionId (legacy)
+            let sessionId = userInfo["claudeSessionId"] as? String ?? userInfo["sessionId"] as? String
+            
+            if let sessionId = sessionId {
+                // Store session ID for this project
+                let key = "claude_session_\(projectPath.replacingOccurrences(of: "/", with: "_"))"
+                UserDefaults.standard.set(sessionId, forKey: key)
+                print("✅ Stored Claude session ID from APNS: \(sessionId) for project: \(projectPath)")
+            } else {
+                print("⚠️ No session ID in APNS message for project: \(projectPath)")
+                print("⚠️ Available keys: \(userInfo.keys.map { String(describing: $0) }.joined(separator: ", "))")
+            }
+        }
+        
         // 1. Extract message data
         if let requiresFetch = userInfo["requiresFetch"] as? Bool,
            requiresFetch,
@@ -631,6 +647,26 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
         )
         
         print("💾 Claude message saved to local storage")
+        
+        // Sync to CloudKit for cross-device availability
+        Task { @MainActor in
+            do {
+                var mutableMessage = claudeMessage
+                let cloudKitManager = CloudKitSyncManager.shared
+                if cloudKitManager.iCloudAvailable {
+                    // Include projectPath for CloudKit record
+                    mutableMessage.projectPath = projectPath
+                    try await cloudKitManager.saveMessage(mutableMessage)
+                    print("☁️ Message synced to CloudKit for project: \(projectPath)")
+                } else {
+                    print("⚠️ CloudKit not available, message saved locally only")
+                }
+            } catch {
+                print("❌ Failed to sync message to CloudKit: \(error.localizedDescription)")
+                // Don't fail the whole operation - local save was successful
+            }
+        }
+        
         return claudeMessage
     }
     

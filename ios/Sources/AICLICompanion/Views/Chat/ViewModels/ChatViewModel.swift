@@ -154,6 +154,23 @@ final class ChatViewModel: ObservableObject {
         // Add to UI immediately (local-first pattern)
         messageManager.appendMessage(userMessage, for: project)
         
+        // Sync user message to CloudKit for cross-device availability
+        Task {
+            do {
+                var mutableMessage = userMessage
+                let cloudKitManager = CloudKitSyncManager.shared
+                if cloudKitManager.iCloudAvailable {
+                    // Include projectPath for CloudKit record
+                    mutableMessage.projectPath = project.path
+                    try await cloudKitManager.saveMessage(mutableMessage)
+                    print("☁️ User message synced to CloudKit for project: \(project.path)")
+                }
+            } catch {
+                print("⚠️ Failed to sync user message to CloudKit: \(error.localizedDescription)")
+                // Don't fail - local save is enough
+            }
+        }
+        
         // Send to server
         aicliService.sendMessage(
             text,

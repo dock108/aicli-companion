@@ -79,15 +79,19 @@ public class CloudKitSyncManager: ObservableObject {
     
     /// Initialize CloudKit services
     public func initializeCloudKit() async {
+        print("☁️ CloudKitSyncManager: Starting CloudKit initialization...")
         logger.info("Initializing CloudKit services")
         
         do {
             // Check iCloud account status
+            print("☁️ CloudKitSyncManager: Checking iCloud account status...")
             let accountStatus = try await container.accountStatus()
+            print("☁️ CloudKitSyncManager: Account status: \(accountStatus)")
             
             switch accountStatus {
             case .available:
                 iCloudAvailable = true
+                print("✅ CloudKitSyncManager: iCloud account available")
                 logger.info("iCloud account available")
                 
                 await setupCloudKitServices()
@@ -95,21 +99,25 @@ public class CloudKitSyncManager: ObservableObject {
             case .noAccount:
                 iCloudAvailable = false
                 errorMessage = "No iCloud account found. Please sign in to iCloud."
+                print("❌ CloudKitSyncManager: No iCloud account")
                 logger.error("No iCloud account")
                 
             case .restricted:
                 iCloudAvailable = false
                 errorMessage = "iCloud access is restricted on this device."
+                print("❌ CloudKitSyncManager: iCloud access restricted")
                 logger.error("iCloud access restricted")
                 
             case .couldNotDetermine:
                 iCloudAvailable = false
                 errorMessage = "Could not determine iCloud status."
+                print("❌ CloudKitSyncManager: Could not determine iCloud status")
                 logger.error("Could not determine iCloud status")
                 
             case .temporarilyUnavailable:
                 iCloudAvailable = false
                 errorMessage = "iCloud is temporarily unavailable. Please try again later."
+                print("❌ CloudKitSyncManager: iCloud temporarily unavailable")
                 logger.error("iCloud temporarily unavailable")
                 
             @unknown default:
@@ -121,6 +129,7 @@ public class CloudKitSyncManager: ObservableObject {
         } catch {
             iCloudAvailable = false
             errorMessage = "Failed to check iCloud status: \(error.localizedDescription)"
+            print("❌ CloudKitSyncManager: Failed to check iCloud status: \(error.localizedDescription)")
             logger.error("Failed to check iCloud status: \(error.localizedDescription)")
         }
     }
@@ -172,9 +181,55 @@ public class CloudKitSyncManager: ObservableObject {
         }
     }
     
+    /// Fetch messages for a specific project from CloudKit
+    public func fetchMessages(for projectPath: String) async throws -> [Message] {
+        print("☁️ CloudKitSyncManager.fetchMessages called. iCloudAvailable: \(iCloudAvailable)")
+        guard iCloudAvailable else {
+            print("❌ CloudKitSyncManager: iCloud not available, cannot fetch messages")
+            throw CloudKitSchema.SyncError.iCloudUnavailable
+        }
+        
+        print("☁️ CloudKitSyncManager: Fetching messages from CloudKit for project: \(projectPath)")
+        logger.info("Fetching messages from CloudKit for project: \(projectPath)")
+        
+        do {
+            // Create predicate to fetch messages for this project
+            let predicate = NSPredicate(format: "%K == %@", CloudKitSchema.MessageFields.projectPath, projectPath)
+            let query = CKQuery(recordType: CloudKitSchema.RecordType.message, predicate: predicate)
+            query.sortDescriptors = [NSSortDescriptor(key: CloudKitSchema.MessageFields.timestamp, ascending: true)]
+            
+            // Fetch records from CloudKit
+            let (records, _) = try await privateDatabase.records(matching: query)
+            
+            logger.info("Fetched \(records.count) message records from CloudKit for project")
+            
+            // Convert CloudKit records to messages
+            var messages: [Message] = []
+            for (_, result) in records {
+                switch result {
+                case .success(let record):
+                    if let message = Message.from(ckRecord: record) {
+                        messages.append(message)
+                    }
+                case .failure(let error):
+                    logger.error("Failed to fetch record: \(error.localizedDescription)")
+                }
+            }
+            
+            logger.info("Successfully converted \(messages.count) CloudKit messages")
+            return messages
+            
+        } catch {
+            logger.error("Failed to fetch messages from CloudKit: \(error.localizedDescription)")
+            throw error
+        }
+    }
+    
     /// Save a message to CloudKit
     public func saveMessage(_ message: Message) async throws {
+        print("☁️ CloudKitSyncManager.saveMessage called. iCloudAvailable: \(iCloudAvailable)")
         guard iCloudAvailable else {
+            print("❌ CloudKitSyncManager: iCloud not available, cannot save message")
             throw CloudKitSchema.SyncError.iCloudUnavailable
         }
         
@@ -182,6 +237,7 @@ public class CloudKitSyncManager: ObservableObject {
         pendingOperations.insert(operationId)
         defer { pendingOperations.remove(operationId) }
         
+        print("☁️ CloudKitSyncManager: Saving message to CloudKit: \(message.id)")
         logger.info("Saving message to CloudKit: \(message.id)")
         
         do {
@@ -189,9 +245,11 @@ public class CloudKitSyncManager: ObservableObject {
             let record = mutableMessage.toCKRecord()
             let savedRecord = try await privateDatabase.save(record)
             
+            print("✅ CloudKitSyncManager: Message saved to CloudKit successfully: \(savedRecord.recordID)")
             logger.info("Message saved to CloudKit successfully: \(savedRecord.recordID)")
             
         } catch {
+            print("❌ CloudKitSyncManager: Failed to save message to CloudKit: \(error.localizedDescription)")
             logger.error("Failed to save message to CloudKit: \(error.localizedDescription)")
             
             if let ckError = error as? CKError {

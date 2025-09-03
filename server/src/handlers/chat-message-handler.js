@@ -123,8 +123,9 @@ export function createChatMessageHandler(services) {
         directResultLength: result?.result?.length || 0,
       });
 
-      // Extract the Claude session ID from the first response
-      const claudeSessionId = result?.sessionId || msgSessionId || result?.response?.session_id;
+      // Extract the Claude session ID from the response
+      // Priority: 1. Claude's actual session ID, 2. Existing session ID from request
+      const claudeSessionId = result?.claudeSessionId || result?.response?.session_id || result?.sessionId || msgSessionId;
 
       if (!msgSessionId && claudeSessionId) {
         logger.info('New conversation - using Claude-generated session ID', {

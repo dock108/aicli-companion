@@ -348,6 +348,7 @@ extension DeviceCoordinator {
 
 @available(iOS 16.0, macOS 13.0, *)
 extension CloudKitSyncManager {
+    @MainActor
     static let shared = CloudKitSyncManager()
 }
 

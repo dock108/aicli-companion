@@ -22,7 +22,7 @@ export class CommandExecutor {
    * Execute a one-time AICLI command
    */
   async execute(session, prompt, attachmentPaths = []) {
-    const { sessionId, workingDirectory, requestId, deviceToken } = session;
+    const { sessionId, workingDirectory, requestId, deviceToken, claudeSessionId } = session;
 
     // Create logger with session context
     const sessionLogger = logger.child({ sessionId });
@@ -41,6 +41,15 @@ export class CommandExecutor {
     // Build AICLI CLI arguments - use stream-json to avoid buffer limits
     // Include --print flag as required by AICLI CLI for stdin input
     const args = ['--print', '--output-format', 'stream-json', '--verbose'];
+    
+    // Add --resume flag with Claude session ID if this is a continuing conversation
+    // Use the claudeSessionId from the session, which is the ID from Claude's previous response
+    if (claudeSessionId && claudeSessionId !== 'null' && claudeSessionId !== 'new') {
+      args.push('--resume', claudeSessionId);
+      sessionLogger.info('Using --resume with Claude session ID', { claudeSessionId, ourSessionId: sessionId });
+    } else {
+      sessionLogger.info('Starting new Claude conversation (no --resume flag)', { sessionId, claudeSessionId });
+    }
 
     // Add permission configuration
     this.config.addPermissionArgs(args);

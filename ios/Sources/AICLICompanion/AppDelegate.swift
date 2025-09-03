@@ -55,11 +55,16 @@ public class AppDelegate: NSObject, UIApplicationDelegate {
                     await self.performSessionCleanupAsync()
                 }
                 
-                group.addTask {
+                group.addTask { @MainActor in
                     // Initialize CloudKit sync manager
+                    print("☁️ AppDelegate: Initializing CloudKitSyncManager...")
                     let cloudKitManager = CloudKitSyncManager.shared
+                    print("☁️ AppDelegate: CloudKitSyncManager instance created")
                     await cloudKitManager.initializeCloudKit()
-                    print("☁️ CloudKit sync manager initialized asynchronously")
+                    print("☁️ AppDelegate: CloudKit initialization completed. iCloudAvailable: \(cloudKitManager.iCloudAvailable)")
+                    if let errorMsg = cloudKitManager.errorMessage {
+                        print("⚠️ CloudKit error: \(errorMsg)")
+                    }
                 }
             }
             

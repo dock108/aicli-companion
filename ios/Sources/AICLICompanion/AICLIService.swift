@@ -178,6 +178,10 @@ public class AICLIService: ObservableObject {
         messageOperations.clearSessionId(for: projectPath)
     }
     
+    public func storeSessionId(_ sessionId: String, for projectPath: String) {
+        messageOperations.storeSessionId(sessionId, for: projectPath)
+    }
+    
     public func getSessionId(for projectPath: String) -> String? {
         return sessionManager.getSessionId(for: projectPath)
     }

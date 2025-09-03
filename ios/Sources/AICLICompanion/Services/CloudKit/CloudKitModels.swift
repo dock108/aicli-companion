@@ -4,11 +4,11 @@ import CloudKit
 // MARK: - CloudKit Sync Status
 
 public enum SyncStatus: String, CaseIterable, Codable {
-    case pending = "pending"
-    case syncing = "syncing" 
-    case synced = "synced"
-    case failed = "failed"
-    case conflicted = "conflicted"
+    case pending
+    case syncing
+    case synced
+    case failed
+    case conflicted
 }
 
 // MARK: - Device Info for CloudKit
@@ -110,7 +110,6 @@ public struct SyncMetadata: Codable {
 // MARK: - CloudKit Conversion Extensions
 
 extension DeviceInfo {
-    
     /// Convert DeviceInfo to CloudKit record
     public func toCKRecord(recordName: String? = nil) -> CKRecord {
         let record = CKRecord.deviceRecord(recordName: recordName)
@@ -154,7 +153,6 @@ extension DeviceInfo {
 }
 
 extension SessionInfo {
-    
     /// Convert SessionInfo to CloudKit record
     public func toCKRecord(recordName: String? = nil) -> CKRecord {
         let record = CKRecord.sessionRecord(recordName: recordName)
@@ -199,7 +197,6 @@ extension SessionInfo {
 }
 
 extension SyncMetadata {
-    
     /// Convert SyncMetadata to CloudKit record
     public func toCKRecord(recordName: String? = nil) -> CKRecord {
         let record = CKRecord.syncMetadataRecord(recordName: recordName)
@@ -249,7 +246,6 @@ extension SyncMetadata {
 // MARK: - CloudKit Query Helpers
 
 extension CloudKitSchema {
-    
     /// Create a predicate to fetch messages for a specific session
     public static func messageQuery(for sessionId: String) -> CKQuery {
         let predicate = NSPredicate(format: "%K == %@", MessageFields.sessionId, sessionId)

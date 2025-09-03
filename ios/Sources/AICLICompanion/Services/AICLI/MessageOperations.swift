@@ -184,7 +184,7 @@ public class AICLIMessageOperations {
         return UserDefaults.standard.string(forKey: key)
     }
     
-    private func storeSessionId(_ sessionId: String, for projectPath: String) {
+    public func storeSessionId(_ sessionId: String, for projectPath: String) {
         let key = "claude_session_\(projectPath.replacingOccurrences(of: "/", with: "_"))"
         UserDefaults.standard.set(sessionId, forKey: key)
         print("💾 Stored session ID \(sessionId) for project \(projectPath)")
@@ -328,8 +328,8 @@ public class AICLIMessageOperations {
             if let jsonObject = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
                 // First, always try to extract and store the session ID regardless of delivery method
                 // Check for claudeSessionId first (new format), then sessionId, then session_id (legacy)
-                let sessionId = jsonObject["claudeSessionId"] as? String 
-                    ?? jsonObject["sessionId"] as? String 
+                let sessionId = jsonObject["claudeSessionId"] as? String
+                    ?? jsonObject["sessionId"] as? String
                     ?? jsonObject["session_id"] as? String
                 
                 // Store session ID if we have one and a project path

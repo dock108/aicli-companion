@@ -341,6 +341,46 @@ Info.plist - CloudKit container ID
 - DeviceCoordinator tracks device state
 - Just need to connect the pieces
 
+## Outstanding Issues (2025-09-03)
+
+### 1. Message Sender Identification
+**Problem**: Messages sent from one device (e.g., iPhone) appear as received messages on other devices (e.g., iPad) instead of showing as sent messages from the user.
+
+**Root Cause**: The Message model doesn't properly identify which device sent a user message, so when synced to CloudKit and retrieved on another device, user messages are being displayed as if they came from someone else.
+
+**Solution Required**:
+- Add device identifier to user messages when saving to CloudKit
+- When fetching from CloudKit, check if message was sent by current user (any device)
+- Properly set sender as .user for all user messages regardless of originating device
+- May need to track user ID separate from device ID
+
+### 2. Chat Clear Synchronization
+**Problem**: When clearing chat on one device, need to:
+- Clear the server-side session for that project
+- Keep local messages on other devices until they also clear
+- Prevent new messages from being sent in a cleared session
+
+**Solution Required**:
+- When clearing chat on Device A:
+  1. Call server kill session endpoint
+  2. Clear local messages on Device A only
+  3. Clear CloudKit messages for that project/session
+  4. Other devices keep their local copy until manually cleared
+- Server should reject messages for killed sessions
+- Need to handle session state synchronization
+
+### Implementation Tasks:
+1. **Fix Message Sender Identification**:
+   - Modify Message+CloudKit to include sender device ID
+   - Add logic to identify user messages regardless of source device
+   - Update Message.from(ckRecord:) to properly set sender
+
+2. **Implement Proper Chat Clear**:
+   - Ensure killSession actually clears server state
+   - Don't auto-clear messages on other devices
+   - Add session state check before sending messages
+   - Handle "session killed" errors gracefully
+
 ## Notes
 
 This issue is critical infrastructure that blocks several other features. The combination of CloudKit for data sync and server-side device coordination ensures:

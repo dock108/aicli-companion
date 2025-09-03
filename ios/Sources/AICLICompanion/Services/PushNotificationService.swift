@@ -649,20 +649,27 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
         print("💾 Claude message saved to local storage")
         
         // Sync to CloudKit for cross-device availability
+        print("☁️ PushNotificationService: Starting CloudKit sync task...")
         Task { @MainActor in
             do {
+                print("☁️ PushNotificationService: Getting CloudKitSyncManager instance...")
                 var mutableMessage = claudeMessage
                 let cloudKitManager = CloudKitSyncManager.shared
+                print("☁️ PushNotificationService: CloudKitSyncManager.iCloudAvailable = \(cloudKitManager.iCloudAvailable)")
                 if cloudKitManager.iCloudAvailable {
                     // Include projectPath for CloudKit record
                     mutableMessage.projectPath = projectPath
+                    print("☁️ PushNotificationService: Attempting to save message to CloudKit...")
                     try await cloudKitManager.saveMessage(mutableMessage)
-                    print("☁️ Message synced to CloudKit for project: \(projectPath)")
+                    print("☁️ PushNotificationService: Message synced to CloudKit for project: \(projectPath)")
                 } else {
-                    print("⚠️ CloudKit not available, message saved locally only")
+                    print("⚠️ PushNotificationService: CloudKit not available, message saved locally only")
+                    if let errorMsg = cloudKitManager.errorMessage {
+                        print("⚠️ CloudKit error: \(errorMsg)")
+                    }
                 }
             } catch {
-                print("❌ Failed to sync message to CloudKit: \(error.localizedDescription)")
+                print("❌ PushNotificationService: Failed to sync message to CloudKit: \(error.localizedDescription)")
                 // Don't fail the whole operation - local save was successful
             }
         }

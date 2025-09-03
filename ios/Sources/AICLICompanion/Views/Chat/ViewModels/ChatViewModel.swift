@@ -155,18 +155,27 @@ final class ChatViewModel: ObservableObject {
         messageManager.appendMessage(userMessage, for: project)
         
         // Sync user message to CloudKit for cross-device availability
+        print("☁️ ChatViewModel: Starting CloudKit sync task for user message...")
         Task {
             do {
+                print("☁️ ChatViewModel: Getting CloudKitSyncManager instance...")
                 var mutableMessage = userMessage
-                let cloudKitManager = CloudKitSyncManager.shared
-                if cloudKitManager.iCloudAvailable {
+                let cloudKitManager = await CloudKitSyncManager.shared
+                print("☁️ ChatViewModel: CloudKitSyncManager.iCloudAvailable = \(await cloudKitManager.iCloudAvailable)")
+                if await cloudKitManager.iCloudAvailable {
                     // Include projectPath for CloudKit record
                     mutableMessage.projectPath = project.path
+                    print("☁️ ChatViewModel: Attempting to save user message to CloudKit...")
                     try await cloudKitManager.saveMessage(mutableMessage)
-                    print("☁️ User message synced to CloudKit for project: \(project.path)")
+                    print("☁️ ChatViewModel: User message synced to CloudKit for project: \(project.path)")
+                } else {
+                    print("⚠️ ChatViewModel: CloudKit not available for user message sync")
+                    if let errorMsg = await cloudKitManager.errorMessage {
+                        print("⚠️ CloudKit error: \(errorMsg)")
+                    }
                 }
             } catch {
-                print("⚠️ Failed to sync user message to CloudKit: \(error.localizedDescription)")
+                print("⚠️ ChatViewModel: Failed to sync user message to CloudKit: \(error.localizedDescription)")
                 // Don't fail - local save is enough
             }
         }

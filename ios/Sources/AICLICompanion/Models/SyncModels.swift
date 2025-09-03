@@ -34,21 +34,21 @@ public struct SyncOperation: Identifiable {
 }
 
 public enum SyncOperationType: String, CaseIterable, Codable {
-    case save = "save"
-    case fetch = "fetch"
-    case delete = "delete"
-    case update = "update"
-    case fullSync = "fullSync"
-    case incrementalSync = "incrementalSync"
+    case save
+    case fetch
+    case delete
+    case update
+    case fullSync
+    case incrementalSync
 }
 
 public enum SyncOperationStatus: String, CaseIterable, Codable {
-    case pending = "pending"
-    case inProgress = "inProgress"
-    case completed = "completed"
-    case failed = "failed"
-    case conflicted = "conflicted"
-    case cancelled = "cancelled"
+    case pending
+    case inProgress
+    case completed
+    case failed
+    case conflicted
+    case cancelled
 }
 
 // MARK: - Sync Statistics
@@ -192,16 +192,16 @@ public struct SyncProgress {
 }
 
 public enum SyncPhase: String, CaseIterable {
-    case initializing = "initializing"
-    case fetchingChanges = "fetchingChanges"
-    case processingMessages = "processingMessages"
-    case processingSessions = "processingSessions"
-    case processingDevices = "processingDevices"
-    case resolvingConflicts = "resolvingConflicts"
-    case uploadingChanges = "uploadingChanges"
-    case finalizingSync = "finalizingSync"
-    case completed = "completed"
-    case failed = "failed"
+    case initializing
+    case fetchingChanges
+    case processingMessages
+    case processingSessions
+    case processingDevices
+    case resolvingConflicts
+    case uploadingChanges
+    case finalizingSync
+    case completed
+    case failed
     
     public var displayName: String {
         switch self {
@@ -340,20 +340,20 @@ public struct SyncEvent {
 }
 
 public enum SyncEventType: String, CaseIterable {
-    case syncStarted = "syncStarted"
-    case syncCompleted = "syncCompleted"
-    case syncFailed = "syncFailed"
-    case recordSaved = "recordSaved"
-    case recordFetched = "recordFetched"
-    case recordDeleted = "recordDeleted"
-    case conflictDetected = "conflictDetected"
-    case conflictResolved = "conflictResolved"
-    case operationQueued = "operationQueued"
-    case operationRetried = "operationRetried"
-    case deviceRegistered = "deviceRegistered"
-    case deviceUnregistered = "deviceUnregistered"
-    case subscriptionCreated = "subscriptionCreated"
-    case notificationReceived = "notificationReceived"
+    case syncStarted
+    case syncCompleted
+    case syncFailed
+    case recordSaved
+    case recordFetched
+    case recordDeleted
+    case conflictDetected
+    case conflictResolved
+    case operationQueued
+    case operationRetried
+    case deviceRegistered
+    case deviceUnregistered
+    case subscriptionCreated
+    case notificationReceived
 }
 
 // MARK: - Sync Configuration
@@ -381,7 +381,6 @@ public struct SyncConfiguration: Codable {
 // MARK: - Helper Extensions
 
 extension Array where Element == SyncOperation {
-    
     public var pendingOperations: [SyncOperation] {
         return filter { $0.status == .pending }
     }
@@ -400,7 +399,6 @@ extension Array where Element == SyncOperation {
 }
 
 extension Array where Element == SyncQueueItem {
-    
     public var sortedByPriority: [SyncQueueItem] {
         return sorted { $0.priority.rawValue > $1.priority.rawValue }
     }

@@ -11,6 +11,9 @@ import AppKit
 /// Main CloudKit synchronization service for AICLI Companion
 @MainActor
 public class CloudKitSyncManager: ObservableObject {
+    // MARK: - Singleton
+    
+    public static let shared = CloudKitSyncManager()
     
     // MARK: - Published Properties
     
@@ -125,7 +128,6 @@ public class CloudKitSyncManager: ObservableObject {
                 errorMessage = "Unknown iCloud account status."
                 logger.error("Unknown iCloud status")
             }
-            
         } catch {
             iCloudAvailable = false
             errorMessage = "Failed to check iCloud status: \(error.localizedDescription)"
@@ -170,7 +172,6 @@ public class CloudKitSyncManager: ObservableObject {
             }
             
             logger.info("Message sync completed successfully")
-            
         } catch {
             await MainActor.run {
                 syncStatus = .failed
@@ -192,6 +193,9 @@ public class CloudKitSyncManager: ObservableObject {
         print("☁️ CloudKitSyncManager: Fetching messages from CloudKit for project: \(projectPath)")
         logger.info("Fetching messages from CloudKit for project: \(projectPath)")
         
+        // Get current device ID for filtering deleted messages (consistent with DeviceCoordinator)
+        let currentDeviceId = DeviceCoordinator.shared.currentDeviceId
+        
         do {
             // Create predicate to fetch messages for this project
             let predicate = NSPredicate(format: "%K == %@", CloudKitSchema.MessageFields.projectPath, projectPath)
@@ -203,11 +207,26 @@ public class CloudKitSyncManager: ObservableObject {
             
             logger.info("Fetched \(records.count) message records from CloudKit for project")
             
-            // Convert CloudKit records to messages
+            // Convert CloudKit records to messages, filtering out deleted ones
             var messages: [Message] = []
+            var deletedCount = 0
+            
             for (_, result) in records {
                 switch result {
                 case .success(let record):
+                    // Check if this message has been marked as deleted by current device
+                    if let deletedByDevices = record[CloudKitSchema.MessageFields.deletedByDevices] as? [String] {
+                        print("☁️ CloudKitSyncManager: Message \(record.recordID.recordName) deletedByDevices: \(deletedByDevices), currentDeviceId: \(currentDeviceId)")
+                        if deletedByDevices.contains(currentDeviceId) {
+                            deletedCount += 1
+                            print("☁️ CloudKitSyncManager: Skipping message marked as deleted by current device")
+                            logger.debug("Skipping message marked as deleted by current device")
+                            continue
+                        }
+                    } else {
+                        print("☁️ CloudKitSyncManager: Message \(record.recordID.recordName) has no deletedByDevices array")
+                    }
+                    
                     if let message = Message.from(ckRecord: record) {
                         messages.append(message)
                     }
@@ -216,9 +235,9 @@ public class CloudKitSyncManager: ObservableObject {
                 }
             }
             
-            logger.info("Successfully converted \(messages.count) CloudKit messages")
+            logger.info("Successfully converted \(messages.count) CloudKit messages (filtered \(deletedCount) deleted)")
+            print("☁️ CloudKitSyncManager: Fetched \(messages.count) messages, filtered out \(deletedCount) deleted")
             return messages
-            
         } catch {
             logger.error("Failed to fetch messages from CloudKit: \(error.localizedDescription)")
             throw error
@@ -247,7 +266,6 @@ public class CloudKitSyncManager: ObservableObject {
             
             print("✅ CloudKitSyncManager: Message saved to CloudKit successfully: \(savedRecord.recordID)")
             logger.info("Message saved to CloudKit successfully: \(savedRecord.recordID)")
-            
         } catch {
             print("❌ CloudKitSyncManager: Failed to save message to CloudKit: \(error.localizedDescription)")
             logger.error("Failed to save message to CloudKit: \(error.localizedDescription)")
@@ -271,9 +289,79 @@ public class CloudKitSyncManager: ObservableObject {
         do {
             _ = try await privateDatabase.deleteRecord(withID: recordID)
             logger.info("Message deleted from CloudKit successfully")
-            
         } catch {
             logger.error("Failed to delete message from CloudKit: \(error.localizedDescription)")
+            throw error
+        }
+    }
+    
+    /// Mark all messages for a project as deleted for the current device
+    public func markMessagesAsDeleted(for projectPath: String) async throws {
+        print("☁️ CloudKitSyncManager: Marking messages as deleted for project: \(projectPath)")
+        guard iCloudAvailable else {
+            print("❌ CloudKitSyncManager: iCloud not available, cannot mark messages as deleted")
+            throw CloudKitSchema.SyncError.iCloudUnavailable
+        }
+        
+        // Get current device ID (consistent with DeviceCoordinator)
+        let deviceId = DeviceCoordinator.shared.currentDeviceId
+        print("☁️ CloudKitSyncManager: Using device ID: \(deviceId)")
+        
+        do {
+            // Fetch all messages for this project
+            let predicate = NSPredicate(format: "%K == %@", CloudKitSchema.MessageFields.projectPath, projectPath)
+            let query = CKQuery(recordType: CloudKitSchema.RecordType.message, predicate: predicate)
+            
+            let (records, _) = try await privateDatabase.records(matching: query)
+            print("☁️ CloudKitSyncManager: Found \(records.count) messages to mark as deleted")
+            
+            // Update each message to mark as deleted for this device
+            var recordsToUpdate: [CKRecord] = []
+            
+            for (_, result) in records {
+                switch result {
+                case .success(let record):
+                    // Get existing deletedByDevices array
+                    var deletedByDevices = record[CloudKitSchema.MessageFields.deletedByDevices] as? [String] ?? []
+                    
+                    // Add this device if not already marked
+                    if !deletedByDevices.contains(deviceId) {
+                        deletedByDevices.append(deviceId)
+                        record[CloudKitSchema.MessageFields.deletedByDevices] = deletedByDevices
+                        recordsToUpdate.append(record)
+                    }
+                    
+                case .failure(let error):
+                    print("❌ Failed to fetch record: \(error.localizedDescription)")
+                }
+            }
+            
+            // Batch update all records
+            if !recordsToUpdate.isEmpty {
+                print("☁️ CloudKitSyncManager: Updating \(recordsToUpdate.count) messages with deletion marker")
+                
+                let operation = CKModifyRecordsOperation(recordsToSave: recordsToUpdate, recordIDsToDelete: nil)
+                operation.savePolicy = .changedKeys
+                operation.qualityOfService = .userInitiated
+                
+                await withCheckedContinuation { continuation in
+                    operation.modifyRecordsResultBlock = { result in
+                        switch result {
+                        case .success:
+                            print("✅ CloudKitSyncManager: Successfully marked \(recordsToUpdate.count) messages as deleted")
+                        case .failure(let error):
+                            print("❌ CloudKitSyncManager: Failed to mark messages as deleted: \(error.localizedDescription)")
+                        }
+                        continuation.resume()
+                    }
+                    
+                    privateDatabase.add(operation)
+                }
+            } else {
+                print("☁️ CloudKitSyncManager: No messages needed updating")
+            }
+        } catch {
+            print("❌ CloudKitSyncManager: Failed to mark messages as deleted: \(error.localizedDescription)")
             throw error
         }
     }
@@ -314,7 +402,6 @@ public class CloudKitSyncManager: ObservableObject {
             }
             
             logger.info("Full sync completed successfully")
-            
         } catch {
             await MainActor.run {
                 syncStatus = .failed
@@ -345,7 +432,6 @@ public class CloudKitSyncManager: ObservableObject {
             if !isInitialSyncComplete {
                 try await performFullSync()
             }
-            
         } catch {
             logger.error("Failed to setup CloudKit services: \(error.localizedDescription)")
             await MainActor.run {
@@ -362,7 +448,6 @@ public class CloudKitSyncManager: ObservableObject {
             customZone = savedZone
             
             logger.info("Custom zone created/verified: \(savedZone.zoneID)")
-            
         } catch let error as CKError where error.code == .zoneNotFound {
             logger.error("Failed to create custom zone: \(error.localizedDescription)")
         } catch {
@@ -398,7 +483,6 @@ public class CloudKitSyncManager: ObservableObject {
             sessionSubscription.notificationInfo = notificationInfo
             _ = try await privateDatabase.save(sessionSubscription)
             logger.info("Session subscription created")
-            
         } catch let error as CKError where error.code == .serverRejectedRequest {
             // Check if it's a duplicate subscription error
             let errorMessage = error.localizedDescription
@@ -521,7 +605,6 @@ public class CloudKitSyncManager: ObservableObject {
 // MARK: - Remote Notifications
 
 extension CloudKitSyncManager {
-    
     /// Handle CloudKit remote notification
     public func handleRemoteNotification(_ userInfo: [AnyHashable: Any]) async {
         guard let notification = CKNotification(fromRemoteNotificationDictionary: userInfo) else {
@@ -602,7 +685,6 @@ extension CloudKitSyncManager {
 // MARK: - Public Utilities
 
 extension CloudKitSyncManager {
-    
     /// Get current sync statistics
     public var syncStats: (pending: Int, synced: Int, failed: Int) {
         // This would be implemented to return actual stats

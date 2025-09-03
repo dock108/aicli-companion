@@ -3,7 +3,6 @@ import CloudKit
 
 /// Centralized CloudKit schema definitions for AICLI Companion
 public enum CloudKitSchema {
-    
     // MARK: - Record Types
     
     public enum RecordType {
@@ -22,6 +21,7 @@ public enum CloudKitSchema {
         public static let projectPath = "projectPath"
         public static let deviceId = "deviceId"
         public static let messageType = "messageType"
+        public static let sender = "sender"  // Added to properly identify message sender
         public static let requestId = "requestId"
         public static let attachments = "attachments"
         public static let readByDevices = "readByDevices"
@@ -99,15 +99,14 @@ public enum CloudKitSchema {
     // MARK: - Conflict Resolution
     
     public enum ConflictResolutionPolicy: String, Codable {
-        case lastWriterWins = "lastWriterWins"
-        case firstWriterWins = "firstWriterWins"
-        case merge = "merge"
+        case lastWriterWins
+        case firstWriterWins
+        case merge
     }
 }
 
 /// CloudKit error handling extensions
 extension CloudKitSchema {
-    
     public enum SyncError: Error, LocalizedError {
         case iCloudUnavailable
         case accountNotAvailable
@@ -149,7 +148,6 @@ extension CloudKitSchema {
 
 /// CloudKit record convenience extensions
 extension CKRecord {
-    
     /// Create a Message record with proper field types
     public static func messageRecord(
         recordName: String? = nil,

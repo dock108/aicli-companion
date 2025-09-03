@@ -129,7 +129,7 @@ public struct SyncStatusView: View {
                         .fontWeight(.medium)
                         .foregroundColor(deviceStatusColor)
                     
-                    Text("\(deviceCoordinator.activeDevices.count + 1) device\(deviceCoordinator.activeDevices.count == 0 ? "" : "s")")
+                    Text("\(deviceCoordinator.activeDevices.count + 1) device\(deviceCoordinator.activeDevices.isEmpty ? "" : "s")")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }

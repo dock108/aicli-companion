@@ -57,19 +57,27 @@ final class ChatMessageManager: ObservableObject {
     }
     
     private func fetchAndMergeCloudKitMessages(for project: Project) async {
+        print("☁️ MessageManager: fetchAndMergeCloudKitMessages called for project: \(project.path)")
+        print("☁️ MessageManager: Current local messages count: \(messages.count)")
         let cloudKitManager = CloudKitSyncManager.shared
+        print("☁️ MessageManager: CloudKitSyncManager.iCloudAvailable = \(cloudKitManager.iCloudAvailable)")
         guard cloudKitManager.iCloudAvailable else {
             print("☁️ MessageManager: CloudKit not available, skipping sync")
+            if let errorMsg = cloudKitManager.errorMessage {
+                print("⚠️ CloudKit error: \(errorMsg)")
+            }
             return
         }
         
         do {
-            print("☁️ MessageManager: Fetching messages from CloudKit for project: \(project.path)")
+            print("☁️ MessageManager: Attempting to fetch messages from CloudKit for project: \(project.path)")
             let cloudMessages = try await cloudKitManager.fetchMessages(for: project.path)
+            print("☁️ MessageManager: Fetched \(cloudMessages.count) messages from CloudKit")
             
             await MainActor.run {
                 // Merge CloudKit messages with local messages
                 mergeCloudKitMessages(cloudMessages, for: project)
+                print("☁️ MessageManager: After merge, total messages count: \(messages.count)")
             }
         } catch {
             print("❌ MessageManager: Failed to fetch CloudKit messages: \(error.localizedDescription)")
@@ -116,6 +124,30 @@ final class ChatMessageManager: ObservableObject {
             persistenceService.saveMessages(for: project.path, messages: messages)
         } else {
             print("☁️ MessageManager: All CloudKit messages already exist locally")
+        }
+        
+        // Extract and sync session ID from CloudKit messages
+        syncSessionIdFromMessages(messages, for: project)
+    }
+    
+    /// Extract session ID from messages and store locally for cross-device continuity
+    private func syncSessionIdFromMessages(_ allMessages: [Message], for project: Project) {
+        // Find the most recent message with a session ID
+        for message in allMessages.reversed() {
+            if let sessionId = message.metadata?.sessionId, !sessionId.isEmpty {
+                print("☁️ MessageManager: Found session ID '\(sessionId)' from CloudKit messages")
+                
+                // Check if we already have this session ID locally
+                let currentSessionId = AICLIService.shared.getSessionId(for: project.path)
+                if currentSessionId != sessionId {
+                    print("☁️ MessageManager: Syncing session ID '\(sessionId)' to local storage for cross-device continuity")
+                    // Store session ID for cross-device continuity
+                    AICLIService.shared.storeSessionId(sessionId, for: project.path)
+                } else {
+                    print("☁️ MessageManager: Session ID already synced locally")
+                }
+                break
+            }
         }
     }
     

@@ -6,7 +6,6 @@ import OSLog
 
 @available(iOS 16.0, macOS 13.0, *)
 extension WebSocketManager {
-    
     // MARK: - Device Message Publisher
     
     /// Publisher for device coordination messages
@@ -20,10 +19,10 @@ extension WebSocketManager {
     
     /// Connection status enum for device coordination
     public enum ConnectionStatus: String, CaseIterable {
-        case disconnected = "disconnected"
-        case connecting = "connecting"
-        case connected = "connected"
-        case error = "error"
+        case disconnected
+        case connecting
+        case connected
+        case error
     }
     
     /// Current connection status
@@ -94,7 +93,7 @@ extension WebSocketManager {
     private func isDeviceCoordinationMessage(_ type: String) -> Bool {
         return [
             "device-registered",
-            "device-unregistered", 
+            "device-unregistered",
             "session-joined",
             "session-left",
             "primary-elected",
@@ -210,12 +209,12 @@ extension WebSocketManager {
     // MARK: - Connection Status Updates
     
     public enum DeviceConnectionStatus: String, CaseIterable {
-        case disconnected = "disconnected"
-        case connecting = "connecting" 
-        case connected = "connected"
-        case deviceRegistered = "deviceRegistered"
-        case sessionJoined = "sessionJoined"
-        case error = "error"
+        case disconnected
+        case connecting
+        case connected
+        case deviceRegistered
+        case sessionJoined
+        case error
     }
     
     /// Update device connection status
@@ -269,7 +268,6 @@ private extension os.Logger {
 
 @available(iOS 16.0, macOS 13.0, *)
 extension WebSocketManager {
-    
     /// Enhanced WebSocket delegate for device coordination
     class DeviceAwareWebSocketDelegate: NSObject, URLSessionWebSocketDelegate {
         weak var webSocketManager: WebSocketManager?
@@ -315,7 +313,6 @@ extension WebSocketManager {
 
 @available(iOS 16.0, macOS 13.0, *)
 extension WebSocketManager {
-    
     /// Get current device ID
     public var currentDeviceId: String? {
         return UserDefaults.standard.string(forKey: "device_id")

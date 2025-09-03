@@ -107,10 +107,10 @@ public struct DeviceCoordinationIndicator: View {
     // MARK: - Combined Status Text
     
     private var combinedStatusText: String {
-        let deviceStatus = deviceCoordinator.isPrimary ? "Primary" : 
+        let deviceStatus = deviceCoordinator.isPrimary ? "Primary" :
                           !deviceCoordinator.activeDevices.isEmpty ? "Secondary" : "Solo"
         
-        let syncStatus = cloudKitSync.iCloudAvailable ? 
+        let syncStatus = cloudKitSync.iCloudAvailable ?
                         (cloudKitSync.syncStatus == .synced ? "Synced" : "Sync") :
                         "Offline"
         

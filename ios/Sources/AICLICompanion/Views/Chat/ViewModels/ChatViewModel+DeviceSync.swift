@@ -6,7 +6,6 @@ import CloudKit
 
 @available(iOS 16.0, macOS 13.0, *)
 extension ChatViewModel {
-    
     // MARK: - Device Coordination Properties
     
     /// Device coordinator for multi-device synchronization
@@ -46,7 +45,6 @@ extension ChatViewModel {
             }
             
             print("✅ Device coordination services initialized")
-            
         } catch {
             print("❌ Failed to initialize device coordination: \(error)")
         }
@@ -346,11 +344,7 @@ extension DeviceCoordinator {
     static let shared = DeviceCoordinator()
 }
 
-@available(iOS 16.0, macOS 13.0, *)
-extension CloudKitSyncManager {
-    @MainActor
-    static let shared = CloudKitSyncManager()
-}
+// CloudKitSyncManager.shared is already defined in CloudKitSyncManager.swift
 
 // MARK: - String Hashing Extension
 

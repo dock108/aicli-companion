@@ -7,20 +7,26 @@ export class SessionOperations {
 
   async sendStreamingPrompt(
     prompt,
-    { sessionId = null, skipPermissions = false, attachmentPaths = [], retryCount = 3, workingDirectory = process.cwd() }
+    {
+      sessionId = null,
+      skipPermissions = false,
+      attachmentPaths = [],
+      retryCount = 3,
+      workingDirectory = process.cwd(),
+    }
   ) {
     // The sessionId from iOS is the Claude session ID from previous response
     // We just use it directly - no internal session IDs needed
     const claudeSessionId = sessionId;
-    
+
     if (claudeSessionId && claudeSessionId !== 'new' && claudeSessionId !== 'null') {
       console.log(`📤 Continuing Claude conversation with session: ${claudeSessionId}`);
       // Create a simple session object with just what we need
       const session = {
-        sessionId: claudeSessionId,  // This will be used for logging
-        claudeSessionId: claudeSessionId,  // This will be used for --resume flag
-        workingDirectory: workingDirectory,
-        conversationStarted: true
+        sessionId: claudeSessionId, // This will be used for logging
+        claudeSessionId, // This will be used for --resume flag
+        workingDirectory,
+        conversationStarted: true,
       };
       return this.executeAICLICommand(session, prompt, attachmentPaths);
     }
@@ -28,7 +34,7 @@ export class SessionOperations {
     // Start a new conversation (no Claude session ID yet)
     console.log(`🆕 Starting new Claude conversation`);
     return this.sendPromptToClaude(prompt, {
-      sessionId: null,  // No Claude session ID yet
+      sessionId: null, // No Claude session ID yet
       skipPermissions,
       attachmentPaths,
       workingDirectory,
@@ -39,7 +45,7 @@ export class SessionOperations {
   async sendPromptToClaude(
     prompt,
     {
-      sessionId = null,
+      _sessionId = null,
       skipPermissions = false,
       attachmentPaths = [],
       workingDirectory = process.cwd(),
@@ -50,11 +56,11 @@ export class SessionOperations {
     try {
       // Create a minimal session object for a new conversation
       const session = {
-        sessionId: null,  // No session ID yet - will get from Claude
-        claudeSessionId: null,  // No Claude session yet
+        sessionId: null, // No session ID yet - will get from Claude
+        claudeSessionId: null, // No Claude session yet
         workingDirectory: workingDirectory || defaultWorkingDirectory,
         skipPermissions,
-        attachmentPaths
+        attachmentPaths,
       };
 
       console.log(`🚀 Starting new Claude conversation`);
@@ -78,11 +84,11 @@ export class SessionOperations {
 
         // Retry with no session
         const newSession = {
-          sessionId: null,  // No session ID - will get from Claude
+          sessionId: null, // No session ID - will get from Claude
           claudeSessionId: null,
           workingDirectory: workingDirectory || defaultWorkingDirectory,
           skipPermissions,
-          attachmentPaths
+          attachmentPaths,
         };
 
         const response = await this.executeAICLICommand(

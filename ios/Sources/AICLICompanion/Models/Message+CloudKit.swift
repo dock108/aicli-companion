@@ -4,15 +4,14 @@ import CloudKit
 // MARK: - CloudKit Extensions for Message Model
 
 extension Message {
-    
     // MARK: - CloudKit Properties (Internal)
     
     /// CloudKit record ID (not part of Codable)
     internal var cloudKitRecordID: CKRecord.ID? {
-        get { 
+        get {
             return objc_getAssociatedObject(self, &AssociatedKeys.cloudKitRecordID) as? CKRecord.ID
         }
-        set { 
+        set {
             objc_setAssociatedObject(self, &AssociatedKeys.cloudKitRecordID, newValue, .OBJC_ASSOCIATION_RETAIN)
         }
     }
@@ -67,6 +66,7 @@ extension Message {
         record[CloudKitSchema.MessageFields.content] = content
         record[CloudKitSchema.MessageFields.timestamp] = timestamp
         record[CloudKitSchema.MessageFields.messageType] = type.rawValue
+        record[CloudKitSchema.MessageFields.sender] = sender.rawValue  // Save sender to CloudKit
         record[CloudKitSchema.MessageFields.requestId] = requestId
         
         // Session and project info
@@ -124,6 +124,10 @@ extension Message {
             return nil
         }
         
+        // Extract sender from CloudKit record
+        let senderString = ckRecord[CloudKitSchema.MessageFields.sender] as? String ?? "assistant"
+        let sender = MessageSender(rawValue: senderString) ?? .assistant
+        
         // Extract session info for metadata
         let sessionId = ckRecord[CloudKitSchema.MessageFields.sessionId] as? String ?? ""
         let metadata = AICLIMessageMetadata(sessionId: sessionId, duration: 0)
@@ -134,7 +138,7 @@ extension Message {
         var message = Message(
             id: UUID(uuidString: ckRecord.recordID.recordName) ?? UUID(),
             content: content,
-            sender: .assistant, // Default, could be inferred from content or stored separately
+            sender: sender,  // Use the sender from CloudKit
             timestamp: timestamp,
             type: messageType,
             metadata: metadata,
@@ -247,7 +251,6 @@ import CommonCrypto
 // MARK: - CloudKit Query Helpers for Messages
 
 extension Message {
-    
     /// Create a query to find messages by session ID
     public static func cloudKitQueryForSession(_ sessionId: String) -> CKQuery {
         return CloudKitSchema.messageQuery(for: sessionId)
@@ -267,7 +270,6 @@ extension Message {
 // MARK: - Batch Operations
 
 extension Array where Element == Message {
-    
     /// Convert array of messages to CloudKit records
     public mutating func toCKRecords(projectPath: String? = nil, deviceId: String? = nil) -> [CKRecord] {
         return compactMap { message in

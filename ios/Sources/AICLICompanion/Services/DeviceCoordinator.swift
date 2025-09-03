@@ -10,7 +10,6 @@ import AppKit
 /// Coordinates device registration and primary device election with server
 @MainActor
 public class DeviceCoordinator: ObservableObject {
-    
     // MARK: - Published Properties
     
     @Published public var isPrimary: Bool = false
@@ -425,8 +424,8 @@ public class DeviceCoordinator: ObservableObject {
             primaryElectionStatus = isPrimary ? .primary : .secondary
             
             // Update active devices primary status
-            for i in activeDevices.indices {
-                activeDevices[i].isPrimary = (activeDevices[i].deviceId == deviceId)
+            for index in activeDevices.indices {
+                activeDevices[index].isPrimary = (activeDevices[index].deviceId == deviceId)
             }
         }
     }
@@ -445,8 +444,8 @@ public class DeviceCoordinator: ObservableObject {
             primaryElectionStatus = isPrimary ? .primary : .secondary
             
             // Update active devices
-            for i in activeDevices.indices {
-                activeDevices[i].isPrimary = (activeDevices[i].deviceId == toDeviceId)
+            for index in activeDevices.indices {
+                activeDevices[index].isPrimary = (activeDevices[index].deviceId == toDeviceId)
             }
         }
     }
@@ -516,26 +515,26 @@ public struct ActiveDevice: Identifiable, Codable {
 }
 
 public enum RegistrationStatus: String, CaseIterable {
-    case unregistered = "unregistered"
-    case registering = "registering"
-    case registered = "registered"
-    case failed = "failed"
+    case unregistered
+    case registering
+    case registered
+    case failed
 }
 
 public enum PrimaryElectionStatus: String, CaseIterable {
-    case none = "none"
-    case requesting = "requesting"
-    case primary = "primary"
-    case secondary = "secondary"
-    case transferring = "transferring"
-    case failed = "failed"
+    case none
+    case requesting
+    case primary
+    case secondary
+    case transferring
+    case failed
 }
 
 public enum DeviceConnectionStatus: String, CaseIterable {
-    case disconnected = "disconnected"
-    case connecting = "connecting"
-    case connected = "connected"
-    case error = "error"
+    case disconnected
+    case connecting
+    case connected
+    case error
 }
 
 public enum DeviceCoordinationError: Error, LocalizedError {

@@ -4,7 +4,6 @@ import OSLog
 
 /// Handles CloudKit sync conflicts using various resolution strategies
 public class ConflictResolver {
-    
     // MARK: - Properties
     
     private let logger = os.Logger(subsystem: Bundle.main.bundleIdentifier ?? "AICLICompanion", category: "ConflictResolver")
@@ -100,7 +99,10 @@ public class ConflictResolver {
         
         // For messages, we generally want to preserve the original content
         // and merge metadata like read/deleted status
-        let resolvedRecord = clientRecord.copy() as! CKRecord
+        guard let resolvedRecord = clientRecord.copy() as? CKRecord else {
+            logger.error("Failed to copy client record for merge resolution")
+            return clientRecord
+        }
         
         // Merge read and deleted device arrays
         mergeDeviceArrays(
@@ -135,7 +137,10 @@ public class ConflictResolver {
     private func resolveSessionWithMerge(clientRecord: CKRecord, serverRecord: CKRecord) -> CKRecord {
         logger.debug("Performing merge resolution for session record")
         
-        let resolvedRecord = clientRecord.copy() as! CKRecord
+        guard let resolvedRecord = clientRecord.copy() as? CKRecord else {
+            logger.error("Failed to copy client record for session merge resolution")
+            return clientRecord
+        }
         
         // Merge active devices arrays
         mergeDeviceArrays(
@@ -175,7 +180,10 @@ public class ConflictResolver {
     private func resolveDeviceWithMerge(clientRecord: CKRecord, serverRecord: CKRecord) -> CKRecord {
         logger.debug("Performing merge resolution for device record")
         
-        let resolvedRecord = clientRecord.copy() as! CKRecord
+        guard let resolvedRecord = clientRecord.copy() as? CKRecord else {
+            logger.error("Failed to copy client record for device merge resolution")
+            return clientRecord
+        }
         
         // Take the latest last seen timestamp
         let clientLastSeen = clientRecord[CloudKitSchema.DeviceFields.lastSeen] as? Date ?? Date.distantPast
@@ -216,7 +224,6 @@ public class ConflictResolver {
 // MARK: - Error Handling
 
 extension ConflictResolver {
-    
     public enum ConflictResolutionError: Error, LocalizedError {
         case incompatibleRecordTypes
         case missingRequiredFields

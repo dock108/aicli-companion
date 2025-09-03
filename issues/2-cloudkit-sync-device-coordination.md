@@ -312,4 +312,4 @@ The server remains stateless for individual requests but maintains device regist
 
 **Last Updated**: 2025-08-31  
 **Assigned To**: [Unassigned]  
-**Labels**: enhancement, infrastructure, cloudkit, device-coordination
+**Labels**: enhancement, infrastructure, cloudkit, device-coordinatio a go

@@ -404,7 +404,7 @@ export class PushNotificationService extends EventEmitter {
           });
 
           const result = await this.sendNotification(device.token, notification);
-          
+
           if (result.success) {
             results.sent++;
             console.log(`✅ Push notification sent to client ${clientId}`);

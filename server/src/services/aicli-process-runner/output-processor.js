@@ -55,22 +55,22 @@ export class OutputProcessor {
         // Process streaming JSON response
         const result = this.processStreamingResponse(jsonObjects, sessionId);
 
-        if (result) {
-          sessionLogger.info('Processed streaming response', {
-            hasContent: !!result.response,
-            messageCount: jsonObjects.length,
-          });
+        sessionLogger.info('Processed streaming response', {
+          hasContent: !!result.response?.result,
+          contentLength: result.response?.result?.length || 0,
+          messageCount: jsonObjects.length,
+          claudeSessionId: result.claudeSessionId,
+        });
 
-          promiseResolve({
-            success: true,
-            response: result.response,
-            claudeSessionId: result.claudeSessionId,
-            sessionId,
-            isStreaming: true,
-            metadata: result.metadata,
-          });
-          return true;
-        }
+        promiseResolve({
+          success: true,
+          response: result.response,
+          claudeSessionId: result.claudeSessionId,
+          sessionId,
+          isStreaming: true,
+          metadata: result.metadata,
+        });
+        return true;
       }
 
       // Fallback to plain text processing
@@ -117,7 +117,7 @@ export class OutputProcessor {
   /**
    * Process streaming JSON response
    */
-  processStreamingResponse(jsonObjects, _sessionId) {
+  processStreamingResponse(jsonObjects, sessionId) {
     let responseText = '';
     let claudeSessionId = null;
     const metadata = {
@@ -126,6 +126,8 @@ export class OutputProcessor {
       stopReason: null,
       toolUse: [],
     };
+
+    const sessionLogger = logger.child({ sessionId });
 
     for (const obj of jsonObjects) {
       // Extract session ID
@@ -141,9 +143,30 @@ export class OutputProcessor {
         }
       }
 
-      // Extract text content
+      // Extract text content from streaming deltas
       if (obj.type === 'content_block_delta' && obj.delta?.type === 'text_delta') {
         responseText += obj.delta.text || '';
+      }
+
+      // Extract final text content from completed message (this is the key fix!)
+      if (obj.type === 'message' && obj.content) {
+        // Handle array of content blocks
+        if (Array.isArray(obj.content)) {
+          for (const content of obj.content) {
+            if (content.type === 'text' && content.text) {
+              responseText += content.text;
+            }
+          }
+        }
+        // Handle single text content
+        else if (obj.content.type === 'text' && obj.content.text) {
+          responseText += obj.content.text;
+        }
+      }
+
+      // Extract text from result field (alternative format)
+      if (obj.type === 'result' && obj.result && typeof obj.result === 'string') {
+        responseText = obj.result; // Use assignment, not concatenation for final result
       }
 
       // Track tool use
@@ -165,15 +188,21 @@ export class OutputProcessor {
       }
     }
 
-    if (responseText || metadata.toolUse.length > 0) {
-      return {
-        response: responseText,
-        claudeSessionId,
-        metadata,
-      };
-    }
+    sessionLogger.debug('Streaming response processing result', {
+      responseLength: responseText.length,
+      claudeSessionId,
+      objectsProcessed: jsonObjects.length,
+      hasContent: !!responseText,
+    });
 
-    return null;
+    // Always return a result structure with the extracted content
+    return {
+      response: {
+        result: responseText, // Put text in result field where chat handler expects it
+      },
+      claudeSessionId,
+      metadata,
+    };
   }
 
   /**

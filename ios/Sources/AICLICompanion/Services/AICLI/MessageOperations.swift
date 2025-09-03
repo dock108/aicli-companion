@@ -326,19 +326,26 @@ public class AICLIMessageOperations {
         } catch {
             // Try to parse as a simple success response
             if let jsonObject = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                // First, always try to extract and store the session ID regardless of delivery method
+                // Check for claudeSessionId first (new format), then sessionId, then session_id (legacy)
+                let sessionId = jsonObject["claudeSessionId"] as? String 
+                    ?? jsonObject["sessionId"] as? String 
+                    ?? jsonObject["session_id"] as? String
+                
+                // Store session ID if we have one and a project path
+                if let sessionId = sessionId, let projectPath = projectPath {
+                    storeSessionId(sessionId, for: projectPath)
+                    print("✅ Stored Claude session ID: \(sessionId) for project: \(projectPath)")
+                } else {
+                    print("⚠️ No session ID found in response. Keys: \(jsonObject.keys.joined(separator: ", "))")
+                }
+                
                 // Handle APNS delivery acknowledgment response
                 if let success = jsonObject["success"] as? Bool,
                    success,
                    let deliveryMethod = jsonObject["deliveryMethod"] as? String,
                    deliveryMethod == "apns" {
                     // This is an acknowledgment that the message will be delivered via APNS
-                    let sessionId = jsonObject["sessionId"] as? String
-                    
-                    // Store session ID if we have one and a project path
-                    if let sessionId = sessionId, let projectPath = projectPath {
-                        storeSessionId(sessionId, for: projectPath)
-                    }
-                    
                     let response = ClaudeChatResponse(
                         content: "", // Content will come via APNS
                         sessionId: sessionId,
@@ -348,13 +355,6 @@ public class AICLIMessageOperations {
                     completion(.success(response))
                 } else if let content = jsonObject["content"] as? String {
                     // Legacy response format with content
-                    let sessionId = jsonObject["session_id"] as? String ?? jsonObject["sessionId"] as? String
-                    
-                    // Store session ID if we have one and a project path
-                    if let sessionId = sessionId, let projectPath = projectPath {
-                        storeSessionId(sessionId, for: projectPath)
-                    }
-                    
                     let response = ClaudeChatResponse(
                         content: content,
                         sessionId: sessionId,

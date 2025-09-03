@@ -109,9 +109,10 @@ export function createChatMessageHandler(services) {
         hasResponse: !!result?.response,
         responseType: typeof result?.response,
         // Only log keys if response is an object, not a string
-        responseKeys: result?.response && typeof result?.response === 'object' 
-          ? Object.keys(result.response).slice(0, 10) // Limit to first 10 keys
-          : [],
+        responseKeys:
+          result?.response && typeof result?.response === 'object'
+            ? Object.keys(result.response).slice(0, 10) // Limit to first 10 keys
+            : [],
         responseLength: typeof result?.response === 'string' ? result?.response?.length : undefined,
         responseHasResult: !!result?.response?.result,
         responseResultType: typeof result?.response?.result,
@@ -192,8 +193,10 @@ export function createChatMessageHandler(services) {
         logger.warn('Non-streaming response was empty', {
           requestId: msgRequestId,
           sessionId: claudeSessionId,
-          hasResponses: typeof result?.response === 'object' ? !!result?.response?.responses : false,
-          responsesCount: typeof result?.response === 'object' ? result?.response?.responses?.length || 0 : 0,
+          hasResponses:
+            typeof result?.response === 'object' ? !!result?.response?.responses : false,
+          responsesCount:
+            typeof result?.response === 'object' ? result?.response?.responses?.length || 0 : 0,
           responseType: typeof result?.response,
         });
 

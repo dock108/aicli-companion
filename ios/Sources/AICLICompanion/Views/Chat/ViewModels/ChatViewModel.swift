@@ -10,7 +10,7 @@ final class ChatViewModel: ObservableObject {
     static let shared = ChatViewModel()
     
     // MARK: - Managers (Composition Pattern)
-    private let messageManager = ChatMessageManager()
+    internal let messageManager = ChatMessageManager()
     private let projectStateManager = ChatProjectStateManager()
     private let loadingStateManager = ChatLoadingStateManager()
     private let queueManager = ChatMessageQueueManager()
@@ -18,9 +18,12 @@ final class ChatViewModel: ObservableObject {
     
     // MARK: - Dependencies
     private let persistenceService: MessagePersistenceService
-    private let aicliService: AICLIService
-    private let hapticManager: HapticManager
+    internal let aicliService: AICLIService
+    internal let hapticManager: HapticManager
     private let performanceMonitor: PerformanceMonitor
+    
+    // MARK: - Combine
+    internal var cancellables = Set<AnyCancellable>()
     
     // MARK: - Published Properties (Delegated to Managers)
     @Published var messages: [Message] = []

@@ -117,9 +117,10 @@ public class AICLIService: ObservableObject {
         _ text: String,
         projectPath: String? = nil,
         attachments: [AttachmentData]? = nil,
+        mode: ChatMode = .normal,
         completion: @escaping (Result<ClaudeChatResponse, AICLICompanionError>) -> Void
     ) {
-        messageOperations.sendMessage(text, projectPath: projectPath, attachments: attachments, completion: completion)
+        messageOperations.sendMessage(text, projectPath: projectPath, attachments: attachments, mode: mode, completion: completion)
     }
     
     public func fetchMessage(messageId: String) async throws -> Message {

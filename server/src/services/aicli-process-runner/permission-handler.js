@@ -57,6 +57,9 @@ export class PermissionHandler extends EventEmitter {
    * Validate tool use with permission manager
    */
   async validateToolUse(toolName, toolInput, sessionId) {
+    // Planning mode is now handled via prompt prefix, not permission validation
+    // Claude will self-regulate based on the planning mode instructions
+
     // Check with permission manager
     const permissionResult = await permissionManager.checkToolPermission(
       toolName,
@@ -130,6 +133,40 @@ export class PermissionHandler extends EventEmitter {
 
     // Default to allowed
     return true;
+  }
+
+  /**
+   * Build permission arguments for CLI command
+   */
+  buildPermissionArgs(skipPermissions) {
+    const args = [];
+
+    // Check if permissions should be skipped
+    const shouldSkip =
+      skipPermissions !== undefined ? skipPermissions : this.config.skipPermissions;
+
+    if (shouldSkip) {
+      args.push('--dangerously-skip-permissions');
+      return args;
+    }
+
+    // Add permission mode if not default
+    // Note: Planning mode is handled via prompt prefix, not permission restrictions
+    if (this.config.permissionMode && this.config.permissionMode !== 'default') {
+      args.push('--permission-mode', this.config.permissionMode);
+    }
+
+    // Add allowed tools if specified
+    if (this.config.allowedTools && this.config.allowedTools.length > 0) {
+      args.push('--allow-tools', this.config.allowedTools.join(','));
+    }
+
+    // Add disallowed tools if specified
+    if (this.config.disallowedTools && this.config.disallowedTools.length > 0) {
+      args.push('--disallow-tools', this.config.disallowedTools.join(','));
+    }
+
+    return args;
   }
 
   /**

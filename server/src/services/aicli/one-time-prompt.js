@@ -29,13 +29,8 @@ export class OneTimePrompt {
     const permissionArgs = this.permissionHandler.buildPermissionArgs(skipPermissions);
     args.unshift(...permissionArgs);
 
-    // Sanitize prompt for shell execution
-    const sanitizedPrompt = prompt.replace(/"/g, '\\"').replace(/\$/g, '\\$');
-
-    // Double-check sanitization
-    if (!args.includes(sanitizedPrompt)) {
-      args[args.indexOf(prompt)] = sanitizedPrompt;
-    }
+    // No sanitization needed when using spawn with shell: false
+    // The prompt is passed directly as an argument, not through a shell
 
     // Build spawn options
     const spawnOptions = {

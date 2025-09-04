@@ -19,6 +19,7 @@ struct ChatView: View {
     @State private var permissionRequest: PermissionRequestData?
     @State private var showingStopConfirmation = false
     @State private var showingQueueStatus = false
+    @State private var selectedMode: ChatMode = ChatMode.loadSavedMode()
     
     // Removed complex scroll tracking - handled by ChatMessageList now
     
@@ -144,7 +145,8 @@ struct ChatView: View {
                     isProcessing: selectedProject.map { statusManager.statusFor($0).isProcessing } ?? false,
                     onStopProcessing: selectedProject != nil ? {
                         stopProcessing()
-                    } : nil
+                    } : nil,
+                    selectedMode: $selectedMode
                 )
                 .offset(y: inputBarOffset)
             }
@@ -377,7 +379,7 @@ struct ChatView: View {
         }
         
         // Send message directly - sessions are managed by the server
-        viewModel.sendMessage(text, for: project, attachments: attachments)
+        viewModel.sendMessage(text, for: project, attachments: attachments, mode: selectedMode)
     }
     
     private func clearCurrentSession() {

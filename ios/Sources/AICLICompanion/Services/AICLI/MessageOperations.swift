@@ -30,6 +30,7 @@ public class AICLIMessageOperations {
         _ text: String,
         projectPath: String? = nil,
         attachments: [AttachmentData]? = nil,
+        mode: ChatMode = .normal,
         completion: @escaping (Result<ClaudeChatResponse, AICLICompanionError>) -> Void
     ) {
         guard connectionManager.hasValidConnection,
@@ -38,7 +39,7 @@ public class AICLIMessageOperations {
             return
         }
         
-        guard let request = createChatRequest(baseURL: baseURL, message: text, projectPath: projectPath, attachments: attachments) else {
+        guard let request = createChatRequest(baseURL: baseURL, message: text, projectPath: projectPath, attachments: attachments, mode: mode) else {
             completion(.failure(.invalidInput("Failed to create request")))
             return
         }
@@ -195,14 +196,15 @@ public class AICLIMessageOperations {
     
     // MARK: - Private Helper Methods
     
-    private func createChatRequest(baseURL: URL, message: String, projectPath: String?, attachments: [AttachmentData]? = nil) -> URLRequest? {
+    private func createChatRequest(baseURL: URL, message: String, projectPath: String?, attachments: [AttachmentData]? = nil, mode: ChatMode = .normal) -> URLRequest? {
         let chatURL = baseURL.appendingPathComponent("/api/chat")
         var request = connectionManager.createAuthenticatedRequest(url: chatURL, method: "POST")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
         var requestBody: [String: Any] = [
             "message": message,
-            "timestamp": ISO8601DateFormatter().string(from: Date())
+            "timestamp": ISO8601DateFormatter().string(from: Date()),
+            "mode": mode.rawValue  // Include the mode in the request
         ]
         
         if let projectPath = projectPath {

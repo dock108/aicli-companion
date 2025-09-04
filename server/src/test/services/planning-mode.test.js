@@ -67,6 +67,20 @@ describe('PlanningModeService', () => {
     });
   });
 
+  describe('getPlanningModePrefix', () => {
+    it('should return the planning mode instruction prefix', () => {
+      const prefix = planningModeService.getPlanningModePrefix();
+
+      assert(prefix.includes('PLANNING MODE ACTIVE'), 'Should include planning mode indicator');
+      assert(prefix.includes('MUST NOT modify any code files'), 'Should include restriction');
+      assert(
+        prefix.includes('*.md, *.txt, README, TODO, CHANGELOG, *.plan'),
+        'Should list allowed files'
+      );
+      assert(prefix.includes('User request:'), 'Should end with user request prompt');
+    });
+  });
+
   describe('wrapPromptForPlanning', () => {
     it('should wrap user prompt with planning mode instructions', () => {
       const userPrompt = 'Create a new feature';

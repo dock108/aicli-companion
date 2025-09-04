@@ -96,6 +96,14 @@ export class PlanningModeService {
   }
 
   /**
+   * Get the planning mode instruction prefix for messages
+   * @returns {string} The planning mode prefix to prepend to user messages
+   */
+  getPlanningModePrefix() {
+    return `PLANNING MODE ACTIVE: You MUST NOT modify any code files. You can ONLY create or edit documentation files (*.md, *.txt, README, TODO, CHANGELOG, *.plan). If the user asks you to modify code, politely refuse and offer to create a plan or documentation instead.\n\nUser request: `;
+  }
+
+  /**
    * Wrap user prompt with planning mode restrictions
    */
   wrapPromptForPlanning(userPrompt) {

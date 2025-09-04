@@ -90,8 +90,8 @@ struct ChatInputBar: View {
                 Spacer()
                 
                 // Mode indicator when not normal
-                if selectedMode != .normal {
-                    Text(selectedMode == .planning ? "📝 Docs Only" : "⚡ Fast Mode")
+                if !selectedMode.shortDescription.isEmpty {
+                    Text(selectedMode.shortDescription)
                         .font(.system(size: 12))
                         .foregroundColor(selectedMode.foregroundColor)
                         .padding(.horizontal, 8)

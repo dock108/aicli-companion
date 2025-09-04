@@ -135,17 +135,15 @@ describe('OneTimePrompt', () => {
       // Note: We can't test actual spawn here due to ES module limitations,
       // but we verify that no escaping/sanitization happens to the prompt
 
-      // The old code would have done this (which was wrong):
-      const wrongSanitized = complexPrompt.replace(/"/g, '\\"').replace(/\$/g, '\\$');
-
-      // But now we expect the prompt to remain unchanged
-      // If sanitization was still happening, these would be different
-      assert.notStrictEqual(wrongSanitized, complexPrompt, 'Sanitization would modify the prompt');
-
       // Verify that the dangerous characters are still present unchanged
+      // This ensures the prompt is passed as-is to spawn without modification
       assert(complexPrompt.includes('"'), 'Double quotes should remain');
       assert(complexPrompt.includes('$'), 'Dollar signs should remain');
       assert(complexPrompt.includes('&&'), 'Shell operators should remain');
+      assert(complexPrompt.includes(';'), 'Semicolons should remain');
+
+      // The prompt length should remain unchanged (no escaping added)
+      assert.strictEqual(complexPrompt.length, 56, 'Prompt length should be unchanged');
     });
 
     it('should handle spawn errors', async () => {

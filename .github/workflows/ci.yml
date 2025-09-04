@@ -212,6 +212,15 @@ jobs:
         cd ios
         swiftlint lint --strict --reporter github-actions-logging || exit 1
     
+    - name: Resolve Dependencies
+      run: |
+        cd ios
+        # Resolve Swift Package Manager dependencies first
+        xcodebuild -resolvePackageDependencies \
+          -project AICLICompanion.xcodeproj \
+          -scheme AICLICompanion \
+          -derivedDataPath build
+    
     - name: Build
       run: |
         cd ios

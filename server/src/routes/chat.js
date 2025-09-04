@@ -7,12 +7,16 @@ import { deviceRegistry } from '../services/device-registry.js';
 import { pushNotificationService } from '../services/push-notification.js';
 import { createChatMessageHandler } from '../handlers/chat-message-handler.js';
 import { sendErrorResponse } from '../utils/response-utils.js';
+import { PlanningModeService } from '../services/planning-mode.js';
 
 const logger = createLogger('ChatAPI');
 const router = express.Router();
 
 // Import AICLI service singleton instance
 import { aicliService } from '../services/aicli-instance.js';
+
+// Initialize planning mode service
+const planningModeService = new PlanningModeService();
 
 /**
  * POST /api/chat - Send message to Claude and get response via APNS (always async)
@@ -240,8 +244,8 @@ router.post('/', async (req, res) => {
   // If in planning mode, prefix the message with instructions
   let processedMessage = message;
   if (mode === 'planning') {
-    // Clear, direct instruction that Claude must follow
-    const planningPrefix = `PLANNING MODE ACTIVE: You MUST NOT modify any code files. You can ONLY create or edit documentation files (*.md, *.txt, README, TODO, CHANGELOG, *.plan). If the user asks you to modify code, politely refuse and offer to create a plan or documentation instead.\n\nUser request: `;
+    // Use centralized planning mode prefix from PlanningModeService
+    const planningPrefix = planningModeService.getPlanningModePrefix();
     processedMessage = planningPrefix + message;
     logger.info('Planning mode activated - added instruction prefix', {
       requestId,

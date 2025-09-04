@@ -50,6 +50,18 @@ public enum ChatMode: String, CaseIterable, Codable {
         }
     }
     
+    /// Short description for compact UI display
+    public var shortDescription: String {
+        switch self {
+        case .normal:
+            return "" // No badge for normal mode
+        case .planning:
+            return "📝 Docs Only"
+        case .code:
+            return "⚡ Fast Mode"
+        }
+    }
+    
     /// Background color for the mode indicator
     public var backgroundColor: Color {
         switch self {

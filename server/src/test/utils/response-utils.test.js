@@ -33,7 +33,7 @@ describe('Response Utils', () => {
       assert.strictEqual(mockRes.status.mock.callCount(), 1);
       assert.strictEqual(mockRes.status.mock.calls[0].arguments[0], 200);
       assert.strictEqual(mockRes.json.mock.callCount(), 1);
-      
+
       const response = mockRes.json.mock.calls[0].arguments[0];
       assert.strictEqual(response.success, true);
       assert.strictEqual(response.id, 1);
@@ -58,7 +58,7 @@ describe('Response Utils', () => {
 
       assert.strictEqual(mockRes.status.mock.callCount(), 1);
       assert.strictEqual(mockRes.status.mock.calls[0].arguments[0], 400);
-      
+
       const response = mockRes.json.mock.calls[0].arguments[0];
       assert.strictEqual(response.success, false);
       assert.strictEqual(response.error, 'INVALID_REQUEST');

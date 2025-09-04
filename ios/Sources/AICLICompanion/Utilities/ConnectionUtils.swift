@@ -10,7 +10,6 @@ import Foundation
 /// Utility functions for connection management
 /// Eliminates duplicate connection checking logic across views
 public enum ConnectionUtils {
-    
     /// Check if there is a valid connection using SettingsManager
     /// - Parameter settings: The settings manager to check
     /// - Returns: True if connection settings are valid

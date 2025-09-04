@@ -3,10 +3,7 @@
  */
 
 import express from 'express';
-import {
-  sendSuccessResponse,
-  sendNotFoundResponse,
-} from '../utils/response-utils.js';
+import { sendSuccessResponse, sendNotFoundResponse } from '../utils/response-utils.js';
 const router = express.Router();
 
 // Global message store (messageId -> message content)

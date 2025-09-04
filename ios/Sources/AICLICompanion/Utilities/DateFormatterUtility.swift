@@ -9,7 +9,6 @@ import Foundation
 
 /// Centralized utility for common date formatters to avoid duplication across the codebase
 public enum DateFormatterUtility {
-    
     // MARK: - Common Formatters
     
     /// Short date and time formatter (e.g., "12/25/23, 2:30 PM")

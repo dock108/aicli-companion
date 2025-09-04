@@ -11,7 +11,6 @@ import os
 /// Centralized factory for creating consistent loggers throughout the app
 /// Eliminates inconsistent logger initialization patterns
 public enum LoggerFactory {
-    
     // MARK: - Constants
     
     /// Default subsystem identifier for the app

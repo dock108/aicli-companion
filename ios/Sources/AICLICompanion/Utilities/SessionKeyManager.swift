@@ -10,7 +10,6 @@ import Foundation
 /// Centralized utility for session key generation and management
 /// Eliminates duplicate session key formatting logic across the codebase
 public enum SessionKeyManager {
-    
     // MARK: - Session Key Generation
     
     /// Generates a UserDefaults key for storing Claude session ID for a given project path

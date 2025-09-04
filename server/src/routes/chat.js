@@ -7,7 +7,6 @@ import { deviceRegistry } from '../services/device-registry.js';
 import { pushNotificationService } from '../services/push-notification.js';
 import { createChatMessageHandler } from '../handlers/chat-message-handler.js';
 import { sendErrorResponse } from '../utils/response-utils.js';
-import { planningMode } from '../services/planning-mode.js';
 
 const logger = createLogger('ChatAPI');
 const router = express.Router();
@@ -238,16 +237,21 @@ router.post('/', async (req, res) => {
     deviceInfo,
   };
 
-  // If in planning mode, wrap the message
+  // If in planning mode, prefix the message with instructions
   let processedMessage = message;
   if (mode === 'planning') {
-    processedMessage = planningMode.wrapPromptForPlanning(message);
-    logger.info('Planning mode activated', {
+    // Clear, direct instruction that Claude must follow
+    const planningPrefix = `PLANNING MODE ACTIVE: You MUST NOT modify any code files. You can ONLY create or edit documentation files (*.md, *.txt, README, TODO, CHANGELOG, *.plan). If the user asks you to modify code, politely refuse and offer to create a plan or documentation instead.\n\nUser request: `;
+    processedMessage = planningPrefix + message;
+    logger.info('Planning mode activated - added instruction prefix', {
       requestId,
       mode,
       originalLength: message.length,
-      wrappedLength: processedMessage.length,
+      prefixedLength: processedMessage.length,
     });
+  } else if (mode === 'code') {
+    // Optional prefix for code mode
+    processedMessage = message; // No prefix needed for code mode
   }
 
   const queueResult = messageQueueManager.queueMessage(
@@ -261,7 +265,7 @@ router.post('/', async (req, res) => {
       requestId,
       sessionId,
       mode, // Include mode for handler
-      validatedMessage: messageValidation.message ?? processedMessage,
+      validatedMessage: processedMessage, // Use the processed (prefixed) message
       content: message, // Duplicate detector needs original message
     },
     messagePriority,

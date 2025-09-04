@@ -192,10 +192,9 @@ export class AICLIService extends EventEmitter {
       mode = 'normal', // Add mode parameter
     } = options;
 
-    // Set permission mode based on the mode parameter
-    if (mode === 'planning') {
-      this.setPermissionMode('planning');
-    } else if (mode === 'code') {
+    // For code mode, set bypass permissions for faster operation
+    // Planning mode is now handled via prompt prefix, not permission restrictions
+    if (mode === 'code') {
       this.setPermissionMode('bypassPermissions');
     } else {
       this.setPermissionMode('default');

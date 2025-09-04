@@ -44,9 +44,9 @@ public enum ChatMode: String, CaseIterable, Codable {
         case .normal:
             return "Full access to all operations"
         case .planning:
-            return "Documentation files only"
+            return "Can only modify docs (*.md, *.txt, etc.)"
         case .code:
-            return "Code generation with fewer restrictions"
+            return "Fast code generation mode"
         }
     }
     
@@ -80,9 +80,9 @@ public enum ChatMode: String, CaseIterable, Codable {
         case .normal:
             return "Claude can read and modify any files"
         case .planning:
-            return "Claude can only create or modify documentation files (*.md, *.txt, *.plan, etc.)"
+            return "Claude will only modify documentation files (*.md, *.txt, README, TODO, etc.) but can still read code"
         case .code:
-            return "Optimized for code generation with bypassed permission prompts"
+            return "Faster responses with fewer permission prompts"
         }
     }
 }

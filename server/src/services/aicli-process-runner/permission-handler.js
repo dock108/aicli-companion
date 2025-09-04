@@ -7,7 +7,6 @@ import { EventEmitter } from 'events';
 import { createLogger } from '../../utils/logger.js';
 import { permissionManager } from '../permission-manager.js';
 import { commandSecurity } from '../command-security.js';
-import { planningMode } from '../planning-mode.js';
 
 const logger = createLogger('PermissionHandler');
 
@@ -58,32 +57,8 @@ export class PermissionHandler extends EventEmitter {
    * Validate tool use with permission manager
    */
   async validateToolUse(toolName, toolInput, sessionId) {
-    // Check planning mode restrictions first
-    if (this.config.permissionMode === 'planning') {
-      const planningCheck = planningMode.validateFileOperation(
-        toolName,
-        toolInput?.file_path || toolInput?.path,
-        'planning'
-      );
-
-      if (!planningCheck.allowed) {
-        logger.warn('Tool use denied by planning mode', {
-          tool: toolName,
-          path: toolInput?.file_path,
-          reason: planningCheck.reason,
-          sessionId,
-        });
-
-        this.emit('permissionDenied', {
-          tool: toolName,
-          reason: planningCheck.reason,
-          suggestion: planningCheck.suggestion,
-          sessionId,
-        });
-
-        return false;
-      }
-    }
+    // Planning mode is now handled via prompt prefix, not permission validation
+    // Claude will self-regulate based on the planning mode instructions
 
     // Check with permission manager
     const permissionResult = await permissionManager.checkToolPermission(
@@ -176,18 +151,8 @@ export class PermissionHandler extends EventEmitter {
     }
 
     // Add permission mode if not default
+    // Note: Planning mode is handled via prompt prefix, not permission restrictions
     if (this.config.permissionMode && this.config.permissionMode !== 'default') {
-      // Handle planning mode specifically
-      if (this.config.permissionMode === 'planning') {
-        // For planning mode, use restrictive tool settings
-        args.push(
-          '--allow-tools',
-          'Read,Grep,Bash:ls,Bash:find,Bash:cat,Bash:head,Bash:tail,Bash:pwd,Bash:tree'
-        );
-        // Note: Write/Edit will be validated per-file by planning-mode service
-        return args;
-      }
-
       args.push('--permission-mode', this.config.permissionMode);
     }
 

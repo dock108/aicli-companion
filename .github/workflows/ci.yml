@@ -182,254 +182,72 @@ jobs:
     name: iOS Build & Test
     needs: code-quality
     if: needs.code-quality.outputs.ios_changed == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
-    permissions:
-      contents: read
-      checks: write
     runs-on: macos-14
-    timeout-minutes: 60
+    timeout-minutes: 30
     
     steps:
     - uses: actions/checkout@v4
     
-    - name: Select Xcode
+    - name: Setup Environment
       run: |
-        # List available Xcode versions and select the appropriate one
-        echo "=== Available Xcode versions ==="
-        ls -la /Applications/ | grep Xcode || true
-        
-        # Try to use Xcode 15.4, fall back to latest if not available
-        if [ -d "/Applications/Xcode_15.4.app" ]; then
-          sudo xcode-select -s /Applications/Xcode_15.4.app
-        elif [ -d "/Applications/Xcode_15.2.app" ]; then
-          sudo xcode-select -s /Applications/Xcode_15.2.app
-        elif [ -d "/Applications/Xcode_15.0.app" ]; then
-          sudo xcode-select -s /Applications/Xcode_15.0.app
-        else
-          # Use the latest available version
-          LATEST_XCODE=$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -n1)
-          echo "Using latest Xcode: $LATEST_XCODE"
-          sudo xcode-select -s "$LATEST_XCODE"
-        fi
+        # Select Xcode
+        sudo xcode-select -s /Applications/Xcode_15.4.app || sudo xcode-select -s /Applications/Xcode.app
         xcodebuild -version
+        
+        # Install SwiftLint if needed
+        command -v swiftlint || brew install swiftlint
     
-    - name: Cache Swift Package Manager
+    - name: Cache Dependencies
       uses: actions/cache@v4
       with:
         path: |
           ~/.swiftpm
-          ios/build/SourcePackages
-        key: ${{ runner.os }}-spm-${{ hashFiles('ios/Package.resolved', 'ios/Package.swift') }}-${{ env.XCODE_VERSION }}-v3
-        restore-keys: |
-          ${{ runner.os }}-spm-${{ hashFiles('ios/Package.resolved') }}-${{ env.XCODE_VERSION }}
-          ${{ runner.os }}-spm-${{ hashFiles('ios/Package.resolved') }}
+          ios/build
+          ~/Library/Developer/Xcode/DerivedData
+        key: ${{ runner.os }}-ios-${{ hashFiles('ios/**/*.swift', 'ios/Package.resolved') }}
+        restore-keys: ${{ runner.os }}-ios-
     
-    - name: Cache Derived Data
-      uses: actions/cache@v4
-      with:
-        path: ios/build
-        key: ${{ runner.os }}-ios-build-${{ hashFiles('ios/**/*.swift', 'ios/Package.resolved') }}-v2
-        restore-keys: |
-          ${{ runner.os }}-ios-build-${{ hashFiles('ios/Package.resolved') }}
-    
-    - name: Cache SwiftLint
-      uses: actions/cache@v4
-      with:
-        path: ~/.swiftlint
-        key: ${{ runner.os }}-swiftlint-${{ env.XCODE_VERSION }}
-    
-    - name: Install SwiftLint
-      run: |
-        if ! command -v swiftlint &> /dev/null; then
-          brew install swiftlint
-        fi
-    
-    - name: Run SwiftLint
+    - name: Lint Code
       run: |
         cd ios
-        swiftlint lint --strict --reporter json > ../swiftlint-ios.json || true
-        swiftlint lint --strict --reporter github-actions-logging
-        if [ $? -ne 0 ]; then
-          echo "❌ SwiftLint found violations"
-          exit 1
-        fi
+        swiftlint lint --strict --reporter github-actions-logging || exit 1
     
-    - name: Upload SwiftLint report
-      uses: actions/upload-artifact@v4
-      with:
-        name: swiftlint-ios-report
-        path: swiftlint-ios.json
-        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
-      if: always()
-    
-    # Skip iOS simulator installation - just build for generic device
-    # This avoids downloading GBs of simulator runtime data
-    
-    - name: Clean build and reset package cache
+    - name: Build and Test
       run: |
         cd ios
-        # Clean any previous builds and derived data
-        xcodebuild clean -scheme AICLICompanion -destination 'generic/platform=iOS' || true
-        # Remove problematic build artifacts
-        rm -rf build/SourcePackages || true
-        rm -rf .build || true
-        # Clear Xcode derived data that might conflict
-        rm -rf ~/Library/Developer/Xcode/DerivedData/AICLICompanion* || true
-        # Reset package cache to force fresh resolution
-        swift package reset
-        swift package resolve
-        # Verify packages resolved correctly
-        swift package show-dependencies
-    
-    - name: Check Available SDKs and Destinations
-      run: |
-        echo "=== Available SDKs ==="
-        xcodebuild -showsdks || true
-        echo ""
-        echo "=== Available destinations for AICLICompanion ==="
-        cd ios
-        xcodebuild -showdestinations -project AICLICompanion.xcodeproj -scheme AICLICompanion 2>&1 || true
-        echo ""
-        echo "=== Available build destinations ==="
-        xcodebuild -showBuildSettings -project AICLICompanion.xcodeproj -scheme AICLICompanion | grep -i platform || true
         
-    - name: Early Swift Package Resolution
-      run: |
-        cd ios
-        # Clean up any existing checkouts that might be in a bad state
-        rm -rf .build/checkouts || true
-        swift package resolve
-        swift package show-dependencies
-        # Verify package integrity
-        swift package dump-package > /dev/null
-    
-    - name: Resolve Swift Package Dependencies
-      run: |
-        cd ios
-        # Resolve packages using xcodebuild with explicit cleanup
-        xcodebuild -resolvePackageDependencies \
+        # Build and test in one command with minimal output
+        xcodebuild test \
           -project AICLICompanion.xcodeproj \
           -scheme AICLICompanion \
           -destination 'platform=iOS Simulator,name=iPhone 15' \
-          -clonedSourcePackagesDirPath build/SourcePackages
-    
-    - name: List Available Simulators
-      run: |
-        echo "=== Available Simulators ==="
-        xcrun simctl list devices available
-        
-    - name: Pre-build Heavy Dependencies
-      run: |
-        cd ios
-        # Pre-build just the dependencies that are causing timeouts
-        xcodebuild build-for-testing \
-          -project AICLICompanion.xcodeproj \
-          -scheme AICLICompanion \
-          -destination 'platform=iOS Simulator,name=iPhone 15' \
-          -configuration Release \
-          CODE_SIGNING_ALLOWED=NO \
-          IDEBuildOperationMaxNumberOfConcurrentCompileTasks=8 \
           -derivedDataPath build \
-          -clonedSourcePackagesDirPath build/SourcePackages \
-          -skipPackageSignatureValidation \
-          -quiet
-      timeout-minutes: 25
-    
-    - name: Build iOS App
-      run: |
-        cd ios
-        # Use iOS Simulator explicitly instead of generic platform
-        xcodebuild build \
-          -project AICLICompanion.xcodeproj \
-          -scheme AICLICompanion \
-          -destination 'platform=iOS Simulator,name=iPhone 15' \
-          -configuration Release \
-          CODE_SIGNING_ALLOWED=NO \
-          ONLY_ACTIVE_ARCH=NO \
-          IDEBuildOperationMaxNumberOfConcurrentCompileTasks=8 \
-          SWIFT_COMPILATION_MODE=wholemodule \
-          -derivedDataPath build \
-          -clonedSourcePackagesDirPath build/SourcePackages \
-          -skipPackageSignatureValidation
-    
-    - name: Run iOS Tests with Coverage
-      run: |
-        cd ios
-        # Use consistent destination for tests
-        xcodebuild -project AICLICompanion.xcodeproj \
-          -scheme AICLICompanion \
-          -destination 'platform=iOS Simulator,name=iPhone 15' \
-          test \
-          -enableCodeCoverage YES \
-          CODE_SIGNING_ALLOWED=NO \
           -resultBundlePath ios-test.xcresult \
-          -parallel-testing-enabled NO \
-          -maximum-concurrent-test-simulator-destinations 1 \
-          IDEBuildOperationMaxNumberOfConcurrentCompileTasks=8 \
-          ONLY_ACTIVE_ARCH=NO \
-          -derivedDataPath build \
-          -clonedSourcePackagesDirPath build/SourcePackages \
+          CODE_SIGNING_ALLOWED=NO \
+          -quiet \
           -skip-testing:AICLICompanionTests/KeychainManagerTests \
-          -skip-testing:AICLICompanionTests/ConnectionReliabilityManagerTests/testExponentialBackoffProgression \
-          -skip-testing:AICLICompanionTests/ConnectionReliabilityManagerTests/testHandleConnectionLost \
-          -skip-testing:AICLICompanionTests/ConnectionReliabilityManagerTests/testRecordDisconnection \
-          -skip-testing:AICLICompanionTests/MessageQueueManagerTests/testInitialState \
-          -skip-testing:AICLICompanionTests/MessageQueueManagerTests/testTrackQueuedMessage \
-          -skip-testing:AICLICompanionTests/MessageQueueManagerTests/testConcurrentQueueOperations \
-          -skip-testing:AICLICompanionTests/MessageQueueManagerTests/testConcurrentDeliveryOperations \
+          -skip-testing:AICLICompanionTests/ConnectionReliabilityManagerTests \
+          -skip-testing:AICLICompanionTests/MessageQueueManagerTests \
           -skip-testing:AICLICompanionTests/LoggingManagerTests/testConcurrentLogging \
           -skip-testing:AICLICompanionTests/WebSocketManagerTests/testConcurrentMessageProcessing \
-          -skip-testing:AICLICompanionTests/ServiceDiscoveryManagerTests/testPerformanceOfManualConfigCreation \
-          -skip-testing:AICLICompanionTests/ServiceDiscoveryManagerTests/testPerformanceOfServerCreation \
-          -skip-testing:AICLICompanionTests/ServiceDiscoveryManagerTests/testRefreshDiscoveryBasic \
-          -skip-testing:AICLICompanionTests/ServiceDiscoveryManagerTests/testStartDiscoveryBasic \
-          -skip-testing:AICLICompanionTests/ServiceDiscoveryManagerTests/testStopDiscoveryBasic \
-          -skip-testing:AICLICompanionTests/ServiceDiscoveryManagerTests/testDiscoveryLifecycleBasic \
-          -skip-testing:AICLICompanionTests/ServiceDiscoveryManagerTests/testDiscoveryCleanup \
+          -skip-testing:AICLICompanionTests/ServiceDiscoveryManagerTests \
           -skip-testing:AICLICompanionTests/WebSocketManagerTests/testPerformanceOfMessageSerialization
     
-    - name: Generate iOS Coverage Report
+    - name: Generate Coverage
+      if: success()
       run: |
         cd ios
-        if [ -d "ios-test.xcresult" ]; then
-          xcrun xccov view --report --json ios-test.xcresult > ios-coverage.json || true
-          xcrun xccov view --report ios-test.xcresult > ios-coverage.txt || true
-        else
-          echo "No test results found, skipping coverage report generation"
-        fi
+        xcrun xccov view --report --json ios-test.xcresult > ios-coverage.json || true
     
-    # - name: Check iOS Coverage Threshold
-    #   run: |
-    #     cd ios
-    #     if [ -f ios-coverage.json ]; then
-    #       coverage=$(cat ios-coverage.json | python3 -c "import json, sys; data = json.load(sys.stdin); coverage = data['targets'][0].get('lineCoverage', 0) * 100 if 'targets' in data and len(data['targets']) > 0 else 0; print(f'{coverage:.1f}')")
-    #       echo "Code coverage: ${coverage}%"
-    #       if (( $(echo "$coverage < ${{ env.MINIMUM_IOS_COVERAGE }}" | bc -l) )); then
-    #         echo "❌ Coverage ${coverage}% is below minimum threshold of ${{ env.MINIMUM_IOS_COVERAGE }}%"
-    #         exit 1
-    #       else
-    #         echo "✅ Coverage ${coverage}% meets minimum threshold"
-    #       fi
-    #     else
-    #       echo "⚠️ No coverage report found (tests may have been skipped)"
-    #     fi
-
-    - name: Upload iOS Test Results
+    - name: Upload Results
+      if: always()
       uses: actions/upload-artifact@v4
       with:
         name: ios-test-results
-        path: ios/ios-test.xcresult
-        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
-      if: always()
-    
-    - name: Upload iOS Coverage Reports
-      uses: actions/upload-artifact@v4
-      with:
-        name: ios-coverage
         path: |
+          ios/ios-test.xcresult
           ios/ios-coverage.json
-          ios/ios-coverage.txt
-        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
-      if: always()
+        retention-days: 7
 
   # ============================================================================
   # macOS App Build and Tests

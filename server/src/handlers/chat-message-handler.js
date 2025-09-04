@@ -26,6 +26,7 @@ export function createChatMessageHandler(services) {
       requestId: msgRequestId,
       sessionId: msgSessionId,
       validatedMessage,
+      mode = 'normal', // Extract mode
     } = msgData;
 
     // NO TIMEOUT - Claude operations can take as long as needed
@@ -97,6 +98,7 @@ export function createChatMessageHandler(services) {
         attachments: msgAttachments,
         streaming: true, // Use streaming to get processRunner with --resume
         deviceToken: msgDeviceToken, // Pass device token for stall notifications
+        mode, // Pass mode to AICLI service
       });
 
       // Log the full result structure for debugging

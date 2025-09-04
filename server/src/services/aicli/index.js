@@ -189,7 +189,17 @@ export class AICLIService extends EventEmitter {
       streaming = true,
       skipPermissions = false,
       attachments = null,
+      mode = 'normal', // Add mode parameter
     } = options;
+
+    // Set permission mode based on the mode parameter
+    if (mode === 'planning') {
+      this.setPermissionMode('planning');
+    } else if (mode === 'code') {
+      this.setPermissionMode('bypassPermissions');
+    } else {
+      this.setPermissionMode('default');
+    }
 
     // Process attachments first
     let attachmentData = { filePaths: [], cleanup: () => {} };
@@ -219,12 +229,14 @@ export class AICLIService extends EventEmitter {
           skipPermissions,
           attachmentPaths: attachmentData.filePaths, // Pass file paths
           workingDirectory: options.workingDirectory || this.defaultWorkingDirectory,
+          mode, // Pass mode through
         });
       } else {
         return await this.sendOneTimePrompt(enhancedPrompt, {
           ...options,
           skipPermissions,
           attachmentPaths: attachmentData.filePaths, // Pass file paths
+          mode, // Pass mode through
         });
       }
     } finally {

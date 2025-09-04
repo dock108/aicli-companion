@@ -7,6 +7,7 @@ import { EventEmitter } from 'events';
 import { createLogger } from '../../utils/logger.js';
 import { permissionManager } from '../permission-manager.js';
 import { commandSecurity } from '../command-security.js';
+import { planningMode } from '../planning-mode.js';
 
 const logger = createLogger('PermissionHandler');
 
@@ -57,6 +58,33 @@ export class PermissionHandler extends EventEmitter {
    * Validate tool use with permission manager
    */
   async validateToolUse(toolName, toolInput, sessionId) {
+    // Check planning mode restrictions first
+    if (this.config.permissionMode === 'planning') {
+      const planningCheck = planningMode.validateFileOperation(
+        toolName,
+        toolInput?.file_path || toolInput?.path,
+        'planning'
+      );
+
+      if (!planningCheck.allowed) {
+        logger.warn('Tool use denied by planning mode', {
+          tool: toolName,
+          path: toolInput?.file_path,
+          reason: planningCheck.reason,
+          sessionId,
+        });
+
+        this.emit('permissionDenied', {
+          tool: toolName,
+          reason: planningCheck.reason,
+          suggestion: planningCheck.suggestion,
+          sessionId,
+        });
+
+        return false;
+      }
+    }
+
     // Check with permission manager
     const permissionResult = await permissionManager.checkToolPermission(
       toolName,
@@ -130,6 +158,50 @@ export class PermissionHandler extends EventEmitter {
 
     // Default to allowed
     return true;
+  }
+
+  /**
+   * Build permission arguments for CLI command
+   */
+  buildPermissionArgs(skipPermissions) {
+    const args = [];
+
+    // Check if permissions should be skipped
+    const shouldSkip =
+      skipPermissions !== undefined ? skipPermissions : this.config.skipPermissions;
+
+    if (shouldSkip) {
+      args.push('--dangerously-skip-permissions');
+      return args;
+    }
+
+    // Add permission mode if not default
+    if (this.config.permissionMode && this.config.permissionMode !== 'default') {
+      // Handle planning mode specifically
+      if (this.config.permissionMode === 'planning') {
+        // For planning mode, use restrictive tool settings
+        args.push(
+          '--allow-tools',
+          'Read,Grep,Bash:ls,Bash:find,Bash:cat,Bash:head,Bash:tail,Bash:pwd,Bash:tree'
+        );
+        // Note: Write/Edit will be validated per-file by planning-mode service
+        return args;
+      }
+
+      args.push('--permission-mode', this.config.permissionMode);
+    }
+
+    // Add allowed tools if specified
+    if (this.config.allowedTools && this.config.allowedTools.length > 0) {
+      args.push('--allow-tools', this.config.allowedTools.join(','));
+    }
+
+    // Add disallowed tools if specified
+    if (this.config.disallowedTools && this.config.disallowedTools.length > 0) {
+      args.push('--disallow-tools', this.config.disallowedTools.join(','));
+    }
+
+    return args;
   }
 
   /**

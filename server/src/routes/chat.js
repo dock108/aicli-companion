@@ -7,6 +7,7 @@ import { deviceRegistry } from '../services/device-registry.js';
 import { pushNotificationService } from '../services/push-notification.js';
 import { createChatMessageHandler } from '../handlers/chat-message-handler.js';
 import { sendErrorResponse } from '../utils/response-utils.js';
+import { planningMode } from '../services/planning-mode.js';
 
 const logger = createLogger('ChatAPI');
 const router = express.Router();
@@ -29,6 +30,7 @@ router.post('/', async (req, res) => {
     deviceId, // Device identifier for coordination
     userId, // User identifier for device coordination
     deviceInfo, // Device information (platform, version, etc.)
+    mode = 'normal', // Chat mode: normal, planning, code
   } = req.body;
 
   const requestId =
@@ -236,18 +238,31 @@ router.post('/', async (req, res) => {
     deviceInfo,
   };
 
+  // If in planning mode, wrap the message
+  let processedMessage = message;
+  if (mode === 'planning') {
+    processedMessage = planningMode.wrapPromptForPlanning(message);
+    logger.info('Planning mode activated', {
+      requestId,
+      mode,
+      originalLength: message.length,
+      wrappedLength: processedMessage.length,
+    });
+  }
+
   const queueResult = messageQueueManager.queueMessage(
     queueSessionId,
     {
-      message,
+      message: processedMessage,
       projectPath,
       deviceToken,
       attachments,
       autoResponse,
       requestId,
       sessionId,
-      validatedMessage: messageValidation.message ?? message,
-      content: message, // Duplicate detector needs this field
+      mode, // Include mode for handler
+      validatedMessage: messageValidation.message ?? processedMessage,
+      content: message, // Duplicate detector needs original message
     },
     messagePriority,
     messageMetadata

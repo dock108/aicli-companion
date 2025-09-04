@@ -124,8 +124,8 @@ final class ChatViewModel: ObservableObject {
     }
     
     // MARK: Message Sending
-    func sendMessage(_ text: String, for project: Project, attachments: [AttachmentData] = []) {
-        print("📤 ChatViewModel: Sending message for project: \(project.name)")
+    func sendMessage(_ text: String, for project: Project, attachments: [AttachmentData] = [], mode: ChatMode = .normal) {
+        print("📤 ChatViewModel: Sending message for project: \(project.name) in mode: \(mode.displayName)")
         
         // Set loading state and waiting for response
         loadingStateManager.setLoading(true, for: project.path)
@@ -184,7 +184,8 @@ final class ChatViewModel: ObservableObject {
         aicliService.sendMessage(
             text,
             projectPath: project.path,
-            attachments: attachments
+            attachments: attachments,
+            mode: mode
         ) { [weak self] result in
             Task { @MainActor in
                 guard let self = self else { return }

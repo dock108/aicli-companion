@@ -10,7 +10,7 @@ final class ChatViewModel: ObservableObject {
     static let shared = ChatViewModel()
     
     // MARK: - Managers (Composition Pattern)
-    private let messageManager = ChatMessageManager()
+    internal let messageManager = ChatMessageManager()
     private let projectStateManager = ChatProjectStateManager()
     private let loadingStateManager = ChatLoadingStateManager()
     private let queueManager = ChatMessageQueueManager()
@@ -18,9 +18,12 @@ final class ChatViewModel: ObservableObject {
     
     // MARK: - Dependencies
     private let persistenceService: MessagePersistenceService
-    private let aicliService: AICLIService
-    private let hapticManager: HapticManager
+    internal let aicliService: AICLIService
+    internal let hapticManager: HapticManager
     private let performanceMonitor: PerformanceMonitor
+    
+    // MARK: - Combine
+    internal var cancellables = Set<AnyCancellable>()
     
     // MARK: - Published Properties (Delegated to Managers)
     @Published var messages: [Message] = []
@@ -150,6 +153,32 @@ final class ChatViewModel: ObservableObject {
         
         // Add to UI immediately (local-first pattern)
         messageManager.appendMessage(userMessage, for: project)
+        
+        // Sync user message to CloudKit for cross-device availability
+        print("☁️ ChatViewModel: Starting CloudKit sync task for user message...")
+        Task {
+            do {
+                print("☁️ ChatViewModel: Getting CloudKitSyncManager instance...")
+                var mutableMessage = userMessage
+                let cloudKitManager = await CloudKitSyncManager.shared
+                print("☁️ ChatViewModel: CloudKitSyncManager.iCloudAvailable = \(await cloudKitManager.iCloudAvailable)")
+                if await cloudKitManager.iCloudAvailable {
+                    // Include projectPath for CloudKit record
+                    mutableMessage.projectPath = project.path
+                    print("☁️ ChatViewModel: Attempting to save user message to CloudKit...")
+                    try await cloudKitManager.saveMessage(mutableMessage)
+                    print("☁️ ChatViewModel: User message synced to CloudKit for project: \(project.path)")
+                } else {
+                    print("⚠️ ChatViewModel: CloudKit not available for user message sync")
+                    if let errorMsg = await cloudKitManager.errorMessage {
+                        print("⚠️ CloudKit error: \(errorMsg)")
+                    }
+                }
+            } catch {
+                print("⚠️ ChatViewModel: Failed to sync user message to CloudKit: \(error.localizedDescription)")
+                // Don't fail - local save is enough
+            }
+        }
         
         // Send to server
         aicliService.sendMessage(

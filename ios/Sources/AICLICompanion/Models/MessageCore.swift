@@ -18,6 +18,9 @@ public struct Message: Identifiable, Codable {
     var syncedAt: Date?
     var needsSync: Bool = true
     
+    // Project context for CloudKit sync (not persisted locally)
+    public var projectPath: String?
+    
     enum CodingKeys: String, CodingKey {
         case id, content, sender, timestamp, type, metadata, streamingState, requestId, richContent
     }

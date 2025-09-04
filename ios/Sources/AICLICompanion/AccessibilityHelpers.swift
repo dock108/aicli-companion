@@ -142,7 +142,7 @@ struct AccessibleMessage: ViewModifier {
     func body(content: Content) -> some View {
         content
             .accessibilityElement(children: .combine)
-            .accessibilityLabel(AccessibilityLabels.messageFrom(sender, at: DateFormatter.timeOnly.string(from: timestamp)))
+            .accessibilityLabel(AccessibilityLabels.messageFrom(sender, at: DateFormatterUtility.formatTimeOnly(timestamp)))
             .accessibilityValue(self.content)
             .accessibilityHint(hasRichContent ? AccessibilityHints.toolMessage : AccessibilityHints.messageOptions)
             .accessibilityIdentifier(AccessibilityIdentifiers.messageBubble)

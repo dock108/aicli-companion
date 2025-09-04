@@ -16,7 +16,8 @@ let package = Package(
         .package(url: "https://github.com/daltoniam/Starscream.git", from: "4.0.0"),
         .package(url: "https://github.com/apple/swift-markdown.git", from: "0.3.0"),
         .package(url: "https://github.com/kishikawakatsumi/KeychainAccess.git", from: "4.2.2"),
-        .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0")
+        .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
+        .package(path: "../AICLICompanionCore")
     ],
     targets: [
         .target(
@@ -25,7 +26,8 @@ let package = Package(
                 "Starscream",
                 .product(name: "Markdown", package: "swift-markdown"),
                 "KeychainAccess",
-                .product(name: "Crypto", package: "swift-crypto")
+                .product(name: "Crypto", package: "swift-crypto"),
+                "AICLICompanionCore"
             ]),
         .testTarget(
             name: "AICLICompanionTests",
@@ -34,7 +36,8 @@ let package = Package(
                 "Starscream",
                 .product(name: "Markdown", package: "swift-markdown"),
                 "KeychainAccess",
-                .product(name: "Crypto", package: "swift-crypto")
+                .product(name: "Crypto", package: "swift-crypto"),
+                "AICLICompanionCore"
             ])
     ]
 )

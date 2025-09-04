@@ -180,8 +180,14 @@ test('TelemetryService', async (t) => {
   });
 
   await t.test('should not set cleanup interval in test environment', () => {
+    // Ensure NODE_ENV is set to test
+    const originalEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'test';
+    
     const service = new TelemetryService();
     assert.strictEqual(service.cleanupInterval, undefined);
     service.shutdown();
+    
+    process.env.NODE_ENV = originalEnv;
   });
 });

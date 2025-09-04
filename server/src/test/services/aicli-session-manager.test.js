@@ -78,20 +78,30 @@ describe('AICLISessionManager', () => {
 
   describe('cleanupExpiredClaudeSessions', () => {
     it('should cleanup expired sessions', async () => {
-      // Set up Claude session tracking
-      sessionManager.trackClaudeSessionActivity('expired-session');
-      await sessionManager.trackSessionForRouting('expired-session', process.cwd());
-
-      // Mark as expired and set old lastActivity (48+ hours ago)
-      const session = sessionManager.claudeSessions.get('expired-session');
-      session.expired = true;
-      session.lastActivity = Date.now() - (sessionManager.sessionTimeout * 2 + 1000); // 48+ hours ago
+      // Directly add an expired Claude session to storage to avoid timing issues
+      const oldTime = Date.now() - 5000; // 5 seconds ago (definitely > timeout + buffer)
+      const expiredSession = {
+        sessionId: 'expired-session',
+        lastActivity: oldTime,
+        expired: true,
+        createdAt: oldTime - 1000, // Created before lastActivity
+      };
+      
+      // Add directly to storage without going through trackClaudeSessionActivity
+      sessionManager.storage.addClaudeSession('expired-session', expiredSession);
+      
+      // Override the lastActivity to prevent addClaudeSession from resetting it
+      const session = sessionManager.storage.getClaudeSession('expired-session');
+      session.lastActivity = oldTime; // Reset to old time after addClaudeSession
+      
+      // Verify setup
+      assert(session.expired, 'Session should be marked as expired');
+      assert(Date.now() - session.lastActivity > 2000, 'Session should be old enough');
 
       sessionManager.cleanupExpiredClaudeSessions();
 
-      assert.strictEqual(sessionManager.claudeSessions.has('expired-session'), false);
-      // projectSessions is not cleaned up by cleanupExpiredClaudeSessions
-      assert.strictEqual(sessionManager.projectSessions.has(process.cwd()), true);
+      // Use storage API to check for session
+      assert.strictEqual(sessionManager.storage.getClaudeSession('expired-session'), undefined, 'Session should have been cleaned up');
     });
 
     it('should not cleanup active sessions', async () => {

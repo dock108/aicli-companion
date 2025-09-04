@@ -317,6 +317,16 @@ export class TelemetryService {
   }
 
   /**
+   * Track custom events
+   */
+  trackEvent(eventName, eventData = {}) {
+    // For now, just log the event. In the future, this could send to analytics service
+    if (process.env.NODE_ENV !== 'test') {
+      console.log(`📊 [Telemetry] Event: ${eventName}`, eventData);
+    }
+  }
+
+  /**
    * Shutdown
    */
   shutdown() {

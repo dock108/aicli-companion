@@ -44,34 +44,39 @@ test('PushNotificationService Retry Logic', async (t) => {
   t.beforeEach(() => {
     service = new PushNotificationService();
     mockProvider = new MockProvider();
-    service.provider = mockProvider;
+    // Mock the apnsClient's send method
+    service.apnsClient.provider = mockProvider;
+    service.apnsClient.send = mockProvider.send.bind(mockProvider);
     service.isConfigured = true;
   });
 
   await t.test('should retry on failure', async () => {
     // Fail first 2 attempts, succeed on 3rd
     let attempt = 0;
-    mockProvider.send = mock.fn(async () => {
+    service.apnsClient.send = mock.fn(async () => {
       attempt++;
       if (attempt < 3) {
-        return { sent: [], failed: [{ response: { reason: 'TemporaryError' } }] };
+        return { success: false, error: 'TemporaryError' };
       }
-      return { sent: [{ device: 'test-token' }], failed: [] };
+      return { success: true, result: { sent: [{ device: 'test-token' }], failed: [] } };
     });
 
     const result = await service.sendNotification('test-token', {});
 
-    assert.strictEqual(mockProvider.send.mock.calls.length, 3);
+    assert.strictEqual(service.apnsClient.send.mock.calls.length, 3);
     assert.strictEqual(result.success, true);
   });
 
   await t.test('should not retry on BadDeviceToken', async () => {
-    mockProvider.shouldFail = true;
-    mockProvider.failureReason = 'BadDeviceToken';
+    let callCount = 0;
+    service.apnsClient.send = mock.fn(async () => {
+      callCount++;
+      return { success: false, error: 'BadDeviceToken' };
+    });
 
     const result = await service.sendNotification('test-token', {});
 
-    assert.strictEqual(mockProvider.sendCount, 1); // Only one attempt
+    assert.strictEqual(callCount, 1); // Only one attempt
     assert.strictEqual(result.success, false);
     assert.strictEqual(result.error, 'BadDeviceToken');
     assert.ok(service.badTokens.has('test-token'));
@@ -79,32 +84,41 @@ test('PushNotificationService Retry Logic', async (t) => {
 
   await t.test('should skip known bad tokens', async () => {
     service.badTokens.add('bad-token');
+    let callCount = 0;
+    service.apnsClient.send = mock.fn(async () => {
+      callCount++;
+      return { success: true };
+    });
 
     const result = await service.sendNotification('bad-token', {});
 
-    assert.strictEqual(mockProvider.sendCount, 0); // No attempt made
+    assert.strictEqual(callCount, 0); // No attempt made
     assert.strictEqual(result.success, false);
     assert.strictEqual(result.error, 'BadDeviceToken');
   });
 
   await t.test('should respect max retries', async () => {
-    mockProvider.shouldFail = true;
-    mockProvider.failureReason = 'NetworkError';
+    let callCount = 0;
+    service.apnsClient.send = mock.fn(async () => {
+      callCount++;
+      return { success: false, error: 'NetworkError' };
+    });
 
     const result = await service.sendNotification('test-token', {}, { retries: 2 });
 
-    assert.strictEqual(mockProvider.sendCount, 2);
+    assert.strictEqual(callCount, 2);
     assert.strictEqual(result.success, false);
     assert.strictEqual(result.error, 'MaxRetriesExceeded');
   });
 
   await t.test('should handle ExpiredProviderToken', async () => {
-    mockProvider.shouldFail = true;
-    mockProvider.failureReason = 'ExpiredProviderToken';
+    service.apnsClient.send = mock.fn(async () => {
+      return { success: false, error: 'ExpiredProviderToken' };
+    });
 
     const result = await service.sendNotification('test-token', {});
 
-    assert.strictEqual(mockProvider.sendCount, 1);
+    assert.strictEqual(service.apnsClient.send.mock.calls.length, 1);
     assert.strictEqual(result.success, false);
     assert.strictEqual(result.error, 'ExpiredProviderToken');
   });
@@ -127,7 +141,9 @@ test('PushNotificationService Retry Logic', async (t) => {
     service.registerDevice('client-3', 'token-3');
 
     // Mock successful sends
-    mockProvider.shouldFail = false;
+    service.apnsClient.send = mock.fn(async () => {
+      return { success: true, result: { sent: [{ device: 'token' }], failed: [] } };
+    });
 
     const data = {
       sessionId: 'test-session',
@@ -155,12 +171,12 @@ test('PushNotificationService Retry Logic', async (t) => {
     let maxConcurrent = 0;
 
     // Track concurrent calls
-    mockProvider.send = mock.fn(async () => {
+    service.apnsClient.send = mock.fn(async () => {
       concurrentCalls++;
       maxConcurrent = Math.max(maxConcurrent, concurrentCalls);
       await new Promise((resolve) => setTimeout(resolve, 10));
       concurrentCalls--;
-      return { sent: [{ device: 'token' }], failed: [] };
+      return { success: true, result: { sent: [{ device: 'token' }], failed: [] } };
     });
 
     const data = {
@@ -173,7 +189,7 @@ test('PushNotificationService Retry Logic', async (t) => {
 
     // Should respect concurrency limit of 10
     assert.ok(maxConcurrent <= 10);
-    assert.strictEqual(mockProvider.send.mock.calls.length, 25);
+    assert.strictEqual(service.apnsClient.send.mock.calls.length, 25);
   });
 
   await t.test('getStats should return correct statistics', () => {

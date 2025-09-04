@@ -143,7 +143,7 @@ class MockServerManager: ObservableObject {
         isProcessing = false
     }
 
-    func addLog(_ level: LogLevel, _ message: String) {
+    func addLog(_ level: AICLICompanionHost.LogLevel, _ message: String) {
         let logEntry = LogEntry(level: level, message: message)
         logs.append(logEntry)
     }

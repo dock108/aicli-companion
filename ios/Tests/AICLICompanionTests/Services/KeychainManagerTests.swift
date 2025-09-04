@@ -1,5 +1,6 @@
 import XCTest
 @testable import AICLICompanion
+import AICLICompanionCore
 
 @available(iOS 17.0, macOS 14.0, *)
 final class KeychainManagerTests: XCTestCase {
@@ -10,7 +11,8 @@ final class KeychainManagerTests: XCTestCase {
     
     // Helper to check if we're in CI
     private var isCI: Bool {
-        ProcessInfo.processInfo.environment["CI"] != nil
+        ProcessInfo.processInfo.environment["CI"] != nil ||
+        ProcessInfo.processInfo.environment["GITHUB_ACTIONS"] != nil
     }
     
     override func setUp() {
@@ -45,10 +47,14 @@ final class KeychainManagerTests: XCTestCase {
     // MARK: - Save Data Tests
     
     func testSaveDataSuccessfully() {
+        #if targetEnvironment(simulator) || os(macOS)
         guard !isCI else {
-            XCTSkip("Skipping Keychain tests in CI environment")
+            print("Skipping Keychain test in CI environment")
             return
         }
+        #else
+        return // Skip on non-simulator/macOS environments
+        #endif
         
         // Given
         let testData = "Test data".data(using: .utf8)!
@@ -65,10 +71,9 @@ final class KeychainManagerTests: XCTestCase {
         XCTAssertEqual(retrieved, testData)
     }
     
-    func testSaveStringSuccessfully() {
+    func testSaveStringSuccessfully() throws {
         guard !isCI else {
-            XCTSkip("Skipping Keychain tests in CI environment")
-            return
+            throw XCTSkip("Skipping Keychain tests in CI environment")
         }
         
         // Given
@@ -85,10 +90,9 @@ final class KeychainManagerTests: XCTestCase {
         XCTAssertEqual(retrieved, testString)
     }
     
-    func testSaveOverwritesExistingValue() {
+    func testSaveOverwritesExistingValue() throws {
         guard !isCI else {
-            XCTSkip("Skipping Keychain tests in CI environment")
-            return
+            throw XCTSkip("Skipping Keychain tests in CI environment")
         }
         
         // Given
@@ -107,10 +111,9 @@ final class KeychainManagerTests: XCTestCase {
         XCTAssertEqual(retrieved, newValue)
     }
     
-    func testSaveEmptyString() {
+    func testSaveEmptyString() throws {
         guard !isCI else {
-            XCTSkip("Skipping Keychain tests in CI environment")
-            return
+            throw XCTSkip("Skipping Keychain tests in CI environment")
         }
         
         // Given
@@ -126,10 +129,9 @@ final class KeychainManagerTests: XCTestCase {
         XCTAssertEqual(retrieved, emptyString)
     }
     
-    func testSaveLargeData() {
+    func testSaveLargeData() throws {
         guard !isCI else {
-            XCTSkip("Skipping Keychain tests in CI environment")
-            return
+            throw XCTSkip("Skipping Keychain tests in CI environment")
         }
         
         // Given - Create 1MB of data
@@ -147,10 +149,9 @@ final class KeychainManagerTests: XCTestCase {
     
     // MARK: - Retrieve Data Tests
     
-    func testRetrieveNonExistentKey() {
+    func testRetrieveNonExistentKey() throws {
         guard !isCI else {
-            XCTSkip("Skipping Keychain tests in CI environment")
-            return
+            throw XCTSkip("Skipping Keychain tests in CI environment")
         }
         
         // When
@@ -162,10 +163,9 @@ final class KeychainManagerTests: XCTestCase {
         XCTAssertNil(string)
     }
     
-    func testRetrieveDataAfterSave() {
+    func testRetrieveDataAfterSave() throws {
         guard !isCI else {
-            XCTSkip("Skipping Keychain tests in CI environment")
-            return
+            throw XCTSkip("Skipping Keychain tests in CI environment")
         }
         
         // Given
@@ -180,10 +180,9 @@ final class KeychainManagerTests: XCTestCase {
         XCTAssertEqual(retrieved, testData)
     }
     
-    func testRetrieveStringWithSpecialCharacters() {
+    func testRetrieveStringWithSpecialCharacters() throws {
         guard !isCI else {
-            XCTSkip("Skipping Keychain tests in CI environment")
-            return
+            throw XCTSkip("Skipping Keychain tests in CI environment")
         }
         
         // Given
@@ -199,10 +198,9 @@ final class KeychainManagerTests: XCTestCase {
     
     // MARK: - Delete Tests
     
-    func testDeleteExistingKey() {
+    func testDeleteExistingKey() throws {
         guard !isCI else {
-            XCTSkip("Skipping Keychain tests in CI environment")
-            return
+            throw XCTSkip("Skipping Keychain tests in CI environment")
         }
         
         // Given
@@ -217,10 +215,9 @@ final class KeychainManagerTests: XCTestCase {
         XCTAssertFalse(sut.exists(for: testKey))
     }
     
-    func testDeleteNonExistentKey() {
+    func testDeleteNonExistentKey() throws {
         guard !isCI else {
-            XCTSkip("Skipping Keychain tests in CI environment")
-            return
+            throw XCTSkip("Skipping Keychain tests in CI environment")
         }
         
         // When
@@ -230,10 +227,9 @@ final class KeychainManagerTests: XCTestCase {
         XCTAssertTrue(result) // Should return true even if item doesn't exist
     }
     
-    func testDeleteAllItems() {
+    func testDeleteAllItems() throws {
         guard !isCI else {
-            XCTSkip("Skipping Keychain tests in CI environment")
-            return
+            throw XCTSkip("Skipping Keychain tests in CI environment")
         }
         
         // Note: This test is simplified because deleteAll() behavior
@@ -262,10 +258,9 @@ final class KeychainManagerTests: XCTestCase {
     
     // MARK: - Exists Tests
     
-    func testExistsForSavedKey() {
+    func testExistsForSavedKey() throws {
         guard !isCI else {
-            XCTSkip("Skipping Keychain tests in CI environment")
-            return
+            throw XCTSkip("Skipping Keychain tests in CI environment")
         }
         
         // Given
@@ -278,10 +273,9 @@ final class KeychainManagerTests: XCTestCase {
         XCTAssertTrue(exists)
     }
     
-    func testExistsForNonExistentKey() {
+    func testExistsForNonExistentKey() throws {
         guard !isCI else {
-            XCTSkip("Skipping Keychain tests in CI environment")
-            return
+            throw XCTSkip("Skipping Keychain tests in CI environment")
         }
         
         // When
@@ -291,10 +285,9 @@ final class KeychainManagerTests: XCTestCase {
         XCTAssertFalse(exists)
     }
     
-    func testExistsAfterDelete() {
+    func testExistsAfterDelete() throws {
         guard !isCI else {
-            XCTSkip("Skipping Keychain tests in CI environment")
-            return
+            throw XCTSkip("Skipping Keychain tests in CI environment")
         }
         
         // Given
@@ -310,10 +303,9 @@ final class KeychainManagerTests: XCTestCase {
     
     // MARK: - Auth Token Tests
     
-    func testSaveAuthToken() {
+    func testSaveAuthToken() throws {
         guard !isCI else {
-            XCTSkip("Skipping Keychain tests in CI environment")
-            return
+            throw XCTSkip("Skipping Keychain tests in CI environment")
         }
         
         // Given
@@ -327,10 +319,9 @@ final class KeychainManagerTests: XCTestCase {
         XCTAssertEqual(sut.getAuthToken(), token)
     }
     
-    func testGetAuthTokenWhenNotSet() {
+    func testGetAuthTokenWhenNotSet() throws {
         guard !isCI else {
-            XCTSkip("Skipping Keychain tests in CI environment")
-            return
+            throw XCTSkip("Skipping Keychain tests in CI environment")
         }
         
         // When
@@ -340,10 +331,9 @@ final class KeychainManagerTests: XCTestCase {
         XCTAssertNil(token)
     }
     
-    func testDeleteAuthToken() {
+    func testDeleteAuthToken() throws {
         guard !isCI else {
-            XCTSkip("Skipping Keychain tests in CI environment")
-            return
+            throw XCTSkip("Skipping Keychain tests in CI environment")
         }
         
         // Given
@@ -357,10 +347,9 @@ final class KeychainManagerTests: XCTestCase {
         XCTAssertNil(sut.getAuthToken())
     }
     
-    func testUpdateAuthToken() {
+    func testUpdateAuthToken() throws {
         guard !isCI else {
-            XCTSkip("Skipping Keychain tests in CI environment")
-            return
+            throw XCTSkip("Skipping Keychain tests in CI environment")
         }
         
         // Given
@@ -378,10 +367,9 @@ final class KeychainManagerTests: XCTestCase {
     
     // MARK: - Server URL Tests
     
-    func testSaveServerURL() {
+    func testSaveServerURL() throws {
         guard !isCI else {
-            XCTSkip("Skipping Keychain tests in CI environment")
-            return
+            throw XCTSkip("Skipping Keychain tests in CI environment")
         }
         
         // Given
@@ -395,10 +383,9 @@ final class KeychainManagerTests: XCTestCase {
         XCTAssertEqual(sut.getServerURL(), url)
     }
     
-    func testGetServerURLWhenNotSet() {
+    func testGetServerURLWhenNotSet() throws {
         guard !isCI else {
-            XCTSkip("Skipping Keychain tests in CI environment")
-            return
+            throw XCTSkip("Skipping Keychain tests in CI environment")
         }
         
         // When
@@ -408,10 +395,9 @@ final class KeychainManagerTests: XCTestCase {
         XCTAssertNil(url)
     }
     
-    func testUpdateServerURL() {
+    func testUpdateServerURL() throws {
         guard !isCI else {
-            XCTSkip("Skipping Keychain tests in CI environment")
-            return
+            throw XCTSkip("Skipping Keychain tests in CI environment")
         }
         
         // Given
@@ -429,10 +415,9 @@ final class KeychainManagerTests: XCTestCase {
     
     // MARK: - Singleton Tests
     
-    func testSingletonInstance() {
+    func testSingletonInstance() throws {
         guard !isCI else {
-            XCTSkip("Skipping Keychain tests in CI environment")
-            return
+            throw XCTSkip("Skipping Keychain tests in CI environment")
         }
         
         // Given
@@ -445,10 +430,9 @@ final class KeychainManagerTests: XCTestCase {
     
     // MARK: - Concurrent Access Tests
     
-    func testConcurrentSaveAndRetrieve() {
+    func testConcurrentSaveAndRetrieve() throws {
         guard !isCI else {
-            XCTSkip("Skipping Keychain tests in CI environment")
-            return
+            throw XCTSkip("Skipping Keychain tests in CI environment")
         }
         
         // Given
@@ -477,10 +461,9 @@ final class KeychainManagerTests: XCTestCase {
     
     // MARK: - Edge Cases
     
-    func testSaveAndRetrieveUnicodeData() {
+    func testSaveAndRetrieveUnicodeData() throws {
         guard !isCI else {
-            XCTSkip("Skipping Keychain tests in CI environment")
-            return
+            throw XCTSkip("Skipping Keychain tests in CI environment")
         }
         
         // Given
@@ -495,10 +478,9 @@ final class KeychainManagerTests: XCTestCase {
         XCTAssertEqual(retrieved, unicodeString)
     }
     
-    func testKeyWithSpecialCharacters() {
+    func testKeyWithSpecialCharacters() throws {
         guard !isCI else {
-            XCTSkip("Skipping Keychain tests in CI environment")
-            return
+            throw XCTSkip("Skipping Keychain tests in CI environment")
         }
         
         // Given
@@ -517,10 +499,9 @@ final class KeychainManagerTests: XCTestCase {
         sut.delete(for: specialKey)
     }
     
-    func testVeryLongKey() {
+    func testVeryLongKey() throws {
         guard !isCI else {
-            XCTSkip("Skipping Keychain tests in CI environment")
-            return
+            throw XCTSkip("Skipping Keychain tests in CI environment")
         }
         
         // Given

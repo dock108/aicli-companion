@@ -315,6 +315,21 @@ extension PushNotificationService {
         // Clean up old entries if set gets too large (keep last 100)
         await cleanupProcessedMessageIds()
         
+        // Extract and store session ID if present
+        if let projectPath = userInfo["projectPath"] as? String {
+            // Check for claudeSessionId (new format) or sessionId (legacy)
+            let sessionId = userInfo["claudeSessionId"] as? String ?? userInfo["sessionId"] as? String
+            
+            if let sessionId = sessionId {
+                // Store session ID for this project
+                SessionKeyManager.storeSessionId(sessionId, for: projectPath)
+                print("✅ Stored Claude session ID from APNS: \(sessionId) for project: \(projectPath)")
+            } else {
+                print("⚠️ No session ID in APNS message for project: \(projectPath)")
+                print("⚠️ Available keys: \(userInfo.keys.map { String(describing: $0) }.joined(separator: ", "))")
+            }
+        }
+        
         // 1. Extract message data
         if let requiresFetch = userInfo["requiresFetch"] as? Bool,
            requiresFetch,
@@ -631,6 +646,33 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
         )
         
         print("💾 Claude message saved to local storage")
+        
+        // Sync to CloudKit for cross-device availability
+        print("☁️ PushNotificationService: Starting CloudKit sync task...")
+        Task { @MainActor in
+            do {
+                print("☁️ PushNotificationService: Getting CloudKitSyncManager instance...")
+                var mutableMessage = claudeMessage
+                let cloudKitManager = CloudKitSyncManager.shared
+                print("☁️ PushNotificationService: CloudKitSyncManager.iCloudAvailable = \(cloudKitManager.iCloudAvailable)")
+                if cloudKitManager.iCloudAvailable {
+                    // Include projectPath for CloudKit record
+                    mutableMessage.projectPath = projectPath
+                    print("☁️ PushNotificationService: Attempting to save message to CloudKit...")
+                    try await cloudKitManager.saveMessage(mutableMessage)
+                    print("☁️ PushNotificationService: Message synced to CloudKit for project: \(projectPath)")
+                } else {
+                    print("⚠️ PushNotificationService: CloudKit not available, message saved locally only")
+                    if let errorMsg = cloudKitManager.errorMessage {
+                        print("⚠️ CloudKit error: \(errorMsg)")
+                    }
+                }
+            } catch {
+                print("❌ PushNotificationService: Failed to sync message to CloudKit: \(error.localizedDescription)")
+                // Don't fail the whole operation - local save was successful
+            }
+        }
+        
         return claudeMessage
     }
     

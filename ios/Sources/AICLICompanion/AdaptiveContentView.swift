@@ -194,7 +194,7 @@ public struct AdaptiveContentView: View {
     // MARK: - Helper Methods
     private func checkConnection() {
         // Check if we have saved connection settings
-        isConnected = settings.hasValidConnection()
+        isConnected = ConnectionUtils.checkConnection(with: settings)
     }
     
     private func disconnectFromServer() {

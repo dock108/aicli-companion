@@ -16,14 +16,18 @@ import chatRoutes from './routes/chat.js';
 import devicesRoutes from './routes/devices.js';
 import authRoutes from './routes/auth.js';
 import { router as messagesRouter } from './routes/messages.js';
+import filesRoutes from './routes/files.js';
+import queueRoutes from './routes/queue.js';
 import { errorHandler } from './middleware/error.js';
-import { AICLIService } from './services/aicli.js';
+import { aicliService } from './services/aicli-instance.js';
 import { ServerConfig } from './config/server-config.js';
 import { MiddlewareConfig } from './config/middleware-config.js';
 import { TLSConfig } from './config/tls-config.js';
 import { ServerStartup } from './config/server-startup.js';
 import { pushNotificationService } from './services/push-notification.js';
 import { tunnelService } from './services/tunnel.js';
+import { deviceRegistry } from './services/device-registry.js';
+import { messageQueueManager } from './services/message-queue.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -32,7 +36,7 @@ class AICLICompanionServer {
   constructor() {
     this.app = express();
     this.config = new ServerConfig();
-    this.aicliService = new AICLIService();
+    this.aicliService = aicliService;
     this.aicliService.safeRootDirectory = this.config.configPath; // Set project directory as safe root
 
     // Configure AICLI permission settings from environment or config
@@ -120,6 +124,8 @@ class AICLICompanionServer {
     this.app.use('/api/devices', devicesRoutes);
     this.app.use('/api/sessions', sessionRoutes);
     this.app.use('/api/messages', messagesRouter);
+    this.app.use('/api/files', filesRoutes);
+    this.app.use('/api/queue', queueRoutes);
 
     // Static files (for web interface if needed)
     this.app.use('/static', express.static(join(__dirname, '../public')));
@@ -139,6 +145,7 @@ class AICLICompanionServer {
           chat: '/api/chat',
           devices: '/api/devices',
           projects: '/api/projects',
+          files: '/api/files',
           qrCode: '/api/auth/setup',
         },
       });
@@ -295,8 +302,13 @@ class AICLICompanionServer {
         }
       }
 
-      // Setup ping-pong for connection health
+      // Initialize connection metadata
+      ws.deviceId = null;
+      ws.userId = null;
+      ws.sessionIds = new Set();
       ws.isAlive = true;
+
+      // Setup ping-pong for connection health
       ws.on('pong', () => {
         ws.isAlive = true;
       });
@@ -305,19 +317,34 @@ class AICLICompanionServer {
         try {
           const message = JSON.parse(data.toString());
           console.log('📥 WebSocket message received:', message.type);
-          // Handle incoming messages if needed (currently just for heartbeat)
+          this.handleWebSocketMessage(ws, message);
         } catch (error) {
           console.error('❌ Invalid WebSocket message:', error.message);
+          ws.send(
+            JSON.stringify({
+              type: 'error',
+              error: 'Invalid message format',
+            })
+          );
         }
       });
 
       ws.on('close', () => {
         console.log('🔌 WebSocket client disconnected');
+        this.handleWebSocketDisconnection(ws);
       });
 
       ws.on('error', (error) => {
         console.error('❌ WebSocket error:', error.message);
       });
+
+      // Send welcome message
+      ws.send(
+        JSON.stringify({
+          type: 'connected',
+          message: 'WebSocket connection established',
+        })
+      );
     });
 
     // Heartbeat interval to detect disconnected clients
@@ -333,6 +360,348 @@ class AICLICompanionServer {
     }, 30000); // Check every 30 seconds
 
     console.log('🔌 WebSocket server configured on /ws path');
+
+    // Set up device registry event listeners
+    this.setupDeviceRegistryListeners();
+  }
+
+  setupDeviceRegistryListeners() {
+    // Listen for device events and broadcast to relevant clients
+    deviceRegistry.on('deviceRegistered', (event) => {
+      this.broadcastToUser(event.userId, {
+        type: 'device-registered',
+        device: event.device,
+      });
+    });
+
+    deviceRegistry.on('deviceUnregistered', (event) => {
+      this.broadcastToUser(event.userId, {
+        type: 'device-unregistered',
+        deviceId: event.deviceId,
+      });
+    });
+
+    deviceRegistry.on('primaryElected', (event) => {
+      this.broadcastToSession(event.sessionId, {
+        type: 'primary-elected',
+        sessionId: event.sessionId,
+        deviceId: event.deviceId,
+      });
+    });
+
+    deviceRegistry.on('primaryTransferred', (event) => {
+      this.broadcastToSession(event.sessionId, {
+        type: 'primary-transferred',
+        sessionId: event.sessionId,
+        fromDeviceId: event.fromDeviceId,
+        toDeviceId: event.toDeviceId,
+      });
+    });
+
+    deviceRegistry.on('primaryDeviceOffline', (event) => {
+      this.broadcastToSession(event.sessionId, {
+        type: 'primary-device-offline',
+        sessionId: event.sessionId,
+        deviceId: event.deviceId,
+      });
+    });
+
+    deviceRegistry.on('primaryDeviceTimeout', (event) => {
+      this.broadcastToSession(event.sessionId, {
+        type: 'primary-device-timeout',
+        sessionId: event.sessionId,
+        deviceId: event.deviceId,
+      });
+    });
+
+    // Listen for message queue events
+    messageQueueManager.on('duplicate-message', (event) => {
+      this.broadcastToSession(event.sessionId, {
+        type: 'duplicate-message-detected',
+        sessionId: event.sessionId,
+        deviceId: event.deviceId,
+        messageHash: event.messageHash,
+      });
+    });
+  }
+
+  handleWebSocketMessage(ws, message) {
+    try {
+      switch (message.type) {
+        case 'device-announce':
+          this.handleDeviceAnnounce(ws, message);
+          break;
+        case 'device-heartbeat':
+          this.handleDeviceHeartbeat(ws, message);
+          break;
+        case 'session-join':
+          this.handleSessionJoin(ws, message);
+          break;
+        case 'session-leave':
+          this.handleSessionLeave(ws, message);
+          break;
+        case 'primary-election-request':
+          this.handlePrimaryElectionRequest(ws, message);
+          break;
+        case 'primary-transfer-request':
+          this.handlePrimaryTransferRequest(ws, message);
+          break;
+        case 'ping':
+          ws.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
+          break;
+        default:
+          console.warn('🤔 Unknown WebSocket message type:', message.type);
+          ws.send(
+            JSON.stringify({
+              type: 'error',
+              error: `Unknown message type: ${message.type}`,
+            })
+          );
+      }
+    } catch (error) {
+      console.error('❌ Error handling WebSocket message:', error.message);
+      ws.send(
+        JSON.stringify({
+          type: 'error',
+          error: 'Failed to process message',
+        })
+      );
+    }
+  }
+
+  handleDeviceAnnounce(ws, message) {
+    const { deviceId, userId, deviceInfo = {} } = message;
+
+    if (!deviceId || !userId) {
+      ws.send(
+        JSON.stringify({
+          type: 'error',
+          error: 'deviceId and userId are required',
+        })
+      );
+      return;
+    }
+
+    // Register device with device registry
+    const result = deviceRegistry.registerDevice(userId, deviceId, deviceInfo);
+
+    if (result.success) {
+      // Store device info in WebSocket connection
+      ws.deviceId = deviceId;
+      ws.userId = userId;
+
+      // Update device heartbeat
+      deviceRegistry.updateLastSeen(deviceId);
+
+      ws.send(
+        JSON.stringify({
+          type: 'device-announced',
+          deviceId,
+          registeredAt: result.device.registeredAt,
+        })
+      );
+
+      console.log(`📱 Device announced: ${deviceId} for user ${userId}`);
+    } else {
+      ws.send(
+        JSON.stringify({
+          type: 'error',
+          error: 'Failed to register device',
+        })
+      );
+    }
+  }
+
+  handleDeviceHeartbeat(ws, _message) {
+    if (ws.deviceId) {
+      deviceRegistry.updateLastSeen(ws.deviceId);
+      ws.send(
+        JSON.stringify({
+          type: 'heartbeat-ack',
+          timestamp: Date.now(),
+        })
+      );
+    } else {
+      ws.send(
+        JSON.stringify({
+          type: 'error',
+          error: 'Device not announced',
+        })
+      );
+    }
+  }
+
+  handleSessionJoin(ws, message) {
+    const { sessionId } = message;
+
+    if (!sessionId || !ws.deviceId) {
+      ws.send(
+        JSON.stringify({
+          type: 'error',
+          error: 'sessionId required and device must be announced',
+        })
+      );
+      return;
+    }
+
+    // Add session to device's session set
+    ws.sessionIds.add(sessionId);
+
+    // Get current active devices for this user
+    const activeDevices = deviceRegistry.getActiveDevices(ws.userId);
+
+    // Check if there's already a primary device for this session
+    const primaryDeviceId = deviceRegistry.getPrimaryDevice(sessionId);
+
+    ws.send(
+      JSON.stringify({
+        type: 'session-joined',
+        sessionId,
+        activeDevices,
+        primaryDeviceId,
+        isPrimary: primaryDeviceId === ws.deviceId,
+      })
+    );
+
+    console.log(`🎯 Device ${ws.deviceId} joined session ${sessionId}`);
+  }
+
+  handleSessionLeave(ws, message) {
+    const { sessionId } = message;
+
+    if (!sessionId) {
+      ws.send(
+        JSON.stringify({
+          type: 'error',
+          error: 'sessionId is required',
+        })
+      );
+      return;
+    }
+
+    // Remove session from device's session set
+    ws.sessionIds.delete(sessionId);
+
+    ws.send(
+      JSON.stringify({
+        type: 'session-left',
+        sessionId,
+      })
+    );
+
+    console.log(`🎯 Device ${ws.deviceId} left session ${sessionId}`);
+  }
+
+  handlePrimaryElectionRequest(ws, message) {
+    const { sessionId } = message;
+
+    if (!sessionId || !ws.deviceId || !ws.userId) {
+      ws.send(
+        JSON.stringify({
+          type: 'error',
+          error: 'sessionId required and device must be announced',
+        })
+      );
+      return;
+    }
+
+    // Attempt to elect this device as primary
+    const result = deviceRegistry.electPrimary(ws.userId, sessionId, ws.deviceId);
+
+    ws.send(
+      JSON.stringify({
+        type: 'primary-election-result',
+        sessionId,
+        success: result.success,
+        isPrimary: result.isPrimary,
+        primaryDeviceId: result.primaryDeviceId,
+        reason: result.reason,
+      })
+    );
+
+    if (result.success && result.isPrimary) {
+      console.log(`👑 Device ${ws.deviceId} elected as primary for session ${sessionId}`);
+    }
+  }
+
+  handlePrimaryTransferRequest(ws, message) {
+    const { sessionId, toDeviceId } = message;
+
+    if (!sessionId || !toDeviceId || !ws.deviceId) {
+      ws.send(
+        JSON.stringify({
+          type: 'error',
+          error: 'sessionId, toDeviceId required and device must be announced',
+        })
+      );
+      return;
+    }
+
+    // Attempt to transfer primary status
+    const result = deviceRegistry.transferPrimary(sessionId, ws.deviceId, toDeviceId);
+
+    ws.send(
+      JSON.stringify({
+        type: 'primary-transfer-result',
+        sessionId,
+        success: result.success,
+        newPrimaryDeviceId: result.newPrimaryDeviceId,
+        reason: result.reason,
+      })
+    );
+
+    if (result.success) {
+      console.log(
+        `🔄 Primary transferred from ${ws.deviceId} to ${toDeviceId} for session ${sessionId}`
+      );
+    }
+  }
+
+  handleWebSocketDisconnection(ws) {
+    if (ws.deviceId) {
+      // Unregister device from registry
+      deviceRegistry.unregisterDevice(ws.deviceId);
+      console.log(`📱 Device ${ws.deviceId} unregistered due to disconnection`);
+    }
+  }
+
+  // Broadcast message to all WebSocket connections for a specific user
+  broadcastToUser(userId, message) {
+    this.wss.clients.forEach((ws) => {
+      if (ws.userId === userId && ws.readyState === ws.OPEN) {
+        try {
+          ws.send(JSON.stringify(message));
+        } catch (error) {
+          console.error('❌ Failed to send message to user:', error.message);
+        }
+      }
+    });
+  }
+
+  // Broadcast message to all WebSocket connections for a specific session
+  broadcastToSession(sessionId, message) {
+    this.wss.clients.forEach((ws) => {
+      if (ws.sessionIds && ws.sessionIds.has(sessionId) && ws.readyState === ws.OPEN) {
+        try {
+          ws.send(JSON.stringify(message));
+        } catch (error) {
+          console.error('❌ Failed to send message to session:', error.message);
+        }
+      }
+    });
+  }
+
+  // Broadcast message to all connected WebSocket clients
+  broadcastToAll(message) {
+    this.wss.clients.forEach((ws) => {
+      if (ws.readyState === ws.OPEN) {
+        try {
+          ws.send(JSON.stringify(message));
+        } catch (error) {
+          console.error('❌ Failed to broadcast message:', error.message);
+        }
+      }
+    });
   }
 
   async shutdown() {

@@ -60,21 +60,14 @@
 		D1143DDF2E49647600F6C4DD /* MockSettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DCB2E49647600F6C4DD /* MockSettingsManager.swift */; };
 		D1143DF62E4C398400F6C4DD /* ServerManagerLoggingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DED2E4C398400F6C4DD /* ServerManagerLoggingTests.swift */; };
 		D1143DF72E4C398400F6C4DD /* MenuBarViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DF22E4C398400F6C4DD /* MenuBarViewTests.swift */; };
-		D1143DF82E4C398400F6C4DD /* TestDataFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DEA2E4C398400F6C4DD /* TestDataFactory.swift */; };
 		D1143DF92E4C398400F6C4DD /* SecuritySettingsViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DEC2E4C398400F6C4DD /* SecuritySettingsViewModelTests.swift */; };
 		D1143DFA2E4C398400F6C4DD /* SettingsViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DF42E4C398400F6C4DD /* SettingsViewTests.swift */; };
 		D1143DFB2E4C398400F6C4DD /* ViewTestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DE12E4C398400F6C4DD /* ViewTestHelpers.swift */; };
-		D1143DFC2E4C398400F6C4DD /* MockNotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DE62E4C398400F6C4DD /* MockNotificationManager.swift */; };
-		D1143DFD2E4C398400F6C4DD /* MockServerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DE82E4C398400F6C4DD /* MockServerManager.swift */; };
-		D1143DFE2E4C398400F6C4DD /* MockKeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DE42E4C398400F6C4DD /* MockKeychainManager.swift */; };
 		D1143DFF2E4C398400F6C4DD /* ServerManagerNetworkingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DEE2E4C398400F6C4DD /* ServerManagerNetworkingTests.swift */; };
 		D1143E002E4C398400F6C4DD /* ActivityMonitorViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DF02E4C398400F6C4DD /* ActivityMonitorViewTests.swift */; };
-		D1143E012E4C398400F6C4DD /* MockProcess.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DE72E4C398400F6C4DD /* MockProcess.swift */; };
-		D1143E032E4C398400F6C4DD /* MockNetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DE52E4C398400F6C4DD /* MockNetworkMonitor.swift */; };
 		D1143E042E4C398400F6C4DD /* MenuBarViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DE32E4C398400F6C4DD /* MenuBarViewModelTests.swift */; };
 		D1143E052E4C398400F6C4DD /* SettingsViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DEF2E4C398400F6C4DD /* SettingsViewModelTests.swift */; };
 		D1143E062E4C398400F6C4DD /* SecuritySettingsViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DF32E4C398400F6C4DD /* SecuritySettingsViewTests.swift */; };
-		D1143E072E4C398400F6C4DD /* MockSettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DE92E4C398400F6C4DD /* MockSettingsManager.swift */; };
 		D1143E082E4C398400F6C4DD /* ActivityMonitorViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1143DE02E4C398400F6C4DD /* ActivityMonitorViewModelTests.swift */; };
 		D617AB228584EAF37011FB8F /* AICLICompanionHostTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D295461C0704190DFBDA4A9 /* AICLICompanionHostTests.swift */; };
 		D8FA16F8CCA39FC590212813 /* ServerManagerLogging.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF37DB1CB3780EBBF07CD79F /* ServerManagerLogging.swift */; };
@@ -161,13 +154,6 @@
 		D1143DE02E4C398400F6C4DD /* ActivityMonitorViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityMonitorViewModelTests.swift; sourceTree = "<group>"; };
 		D1143DE12E4C398400F6C4DD /* ViewTestHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewTestHelpers.swift; sourceTree = "<group>"; };
 		D1143DE32E4C398400F6C4DD /* MenuBarViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarViewModelTests.swift; sourceTree = "<group>"; };
-		D1143DE42E4C398400F6C4DD /* MockKeychainManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockKeychainManager.swift; sourceTree = "<group>"; };
-		D1143DE52E4C398400F6C4DD /* MockNetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockNetworkMonitor.swift; sourceTree = "<group>"; };
-		D1143DE62E4C398400F6C4DD /* MockNotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockNotificationManager.swift; sourceTree = "<group>"; };
-		D1143DE72E4C398400F6C4DD /* MockProcess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockProcess.swift; sourceTree = "<group>"; };
-		D1143DE82E4C398400F6C4DD /* MockServerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockServerManager.swift; sourceTree = "<group>"; };
-		D1143DE92E4C398400F6C4DD /* MockSettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockSettingsManager.swift; sourceTree = "<group>"; };
-		D1143DEA2E4C398400F6C4DD /* TestDataFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestDataFactory.swift; sourceTree = "<group>"; };
 		D1143DEC2E4C398400F6C4DD /* SecuritySettingsViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecuritySettingsViewModelTests.swift; sourceTree = "<group>"; };
 		D1143DED2E4C398400F6C4DD /* ServerManagerLoggingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerManagerLoggingTests.swift; sourceTree = "<group>"; };
 		D1143DEE2E4C398400F6C4DD /* ServerManagerNetworkingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerManagerNetworkingTests.swift; sourceTree = "<group>"; };
@@ -314,13 +300,6 @@
 		D1143DEB2E4C398400F6C4DD /* Mocks */ = {
 			isa = PBXGroup;
 			children = (
-				D1143DE42E4C398400F6C4DD /* MockKeychainManager.swift */,
-				D1143DE52E4C398400F6C4DD /* MockNetworkMonitor.swift */,
-				D1143DE62E4C398400F6C4DD /* MockNotificationManager.swift */,
-				D1143DE72E4C398400F6C4DD /* MockProcess.swift */,
-				D1143DE82E4C398400F6C4DD /* MockServerManager.swift */,
-				D1143DE92E4C398400F6C4DD /* MockSettingsManager.swift */,
-				D1143DEA2E4C398400F6C4DD /* TestDataFactory.swift */,
 			);
 			path = Mocks;
 			sourceTree = "<group>";
@@ -553,21 +532,14 @@
 				D617AB228584EAF37011FB8F /* AICLICompanionHostTests.swift in Sources */,
 				D1143DF62E4C398400F6C4DD /* ServerManagerLoggingTests.swift in Sources */,
 				D1143DF72E4C398400F6C4DD /* MenuBarViewTests.swift in Sources */,
-				D1143DF82E4C398400F6C4DD /* TestDataFactory.swift in Sources */,
 				D1143DF92E4C398400F6C4DD /* SecuritySettingsViewModelTests.swift in Sources */,
 				D1143DFA2E4C398400F6C4DD /* SettingsViewTests.swift in Sources */,
 				D1143DFB2E4C398400F6C4DD /* ViewTestHelpers.swift in Sources */,
-				D1143DFC2E4C398400F6C4DD /* MockNotificationManager.swift in Sources */,
-				D1143DFD2E4C398400F6C4DD /* MockServerManager.swift in Sources */,
-				D1143DFE2E4C398400F6C4DD /* MockKeychainManager.swift in Sources */,
 				D1143DFF2E4C398400F6C4DD /* ServerManagerNetworkingTests.swift in Sources */,
 				D1143E002E4C398400F6C4DD /* ActivityMonitorViewTests.swift in Sources */,
-				D1143E012E4C398400F6C4DD /* MockProcess.swift in Sources */,
-				D1143E032E4C398400F6C4DD /* MockNetworkMonitor.swift in Sources */,
 				D1143E042E4C398400F6C4DD /* MenuBarViewModelTests.swift in Sources */,
 				D1143E052E4C398400F6C4DD /* SettingsViewModelTests.swift in Sources */,
 				D1143E062E4C398400F6C4DD /* SecuritySettingsViewTests.swift in Sources */,
-				D1143E072E4C398400F6C4DD /* MockSettingsManager.swift in Sources */,
 				D1143E082E4C398400F6C4DD /* ActivityMonitorViewModelTests.swift in Sources */,
 				D1143DD42E49647600F6C4DD /* KeychainManagerTests.swift in Sources */,
 				D1143DD52E49647600F6C4DD /* MockServerManager.swift in Sources */,

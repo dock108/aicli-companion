@@ -54,6 +54,18 @@ public class AppDelegate: NSObject, UIApplicationDelegate {
                     // Session cleanup
                     await self.performSessionCleanupAsync()
                 }
+                
+                group.addTask { @MainActor in
+                    // Initialize CloudKit sync manager
+                    print("☁️ AppDelegate: Initializing CloudKitSyncManager...")
+                    let cloudKitManager = CloudKitSyncManager.shared
+                    print("☁️ AppDelegate: CloudKitSyncManager instance created")
+                    await cloudKitManager.initializeCloudKit()
+                    print("☁️ AppDelegate: CloudKit initialization completed. iCloudAvailable: \(cloudKitManager.iCloudAvailable)")
+                    if let errorMsg = cloudKitManager.errorMessage {
+                        print("⚠️ CloudKit error: \(errorMsg)")
+                    }
+                }
             }
             
             let totalTime = CFAbsoluteTimeGetCurrent() - startTime
@@ -112,28 +124,44 @@ public class AppDelegate: NSObject, UIApplicationDelegate {
         
         // Process APNS message through unified pipeline when app is backgrounded
         Task {
-            // Check if this is a Claude message that needs processing
-            let isClaudeMessage = userInfo["sessionId"] != nil ||
-                                 userInfo["message"] != nil ||
-                                 userInfo["requiresFetch"] != nil ||
-                                 userInfo["messageId"] != nil ||
-                                 userInfo["projectPath"] != nil
+            // Check if this is a CloudKit notification
+            let isCloudKitNotification = userInfo["ck"] != nil ||
+                                        (userInfo["aps"] is [String: Any] && (userInfo["aps"] as? [String: Any])?["content-available"] as? Int == 1)
             
-            if isClaudeMessage {
-                print("📨 Processing Claude message in background...")
+            if isCloudKitNotification {
+                print("☁️ Processing CloudKit notification in background...")
                 
-                // Process through PushNotificationService unified pipeline
-                // This will save to local storage and post notification to UI
-                await PushNotificationService.shared.processAPNSMessage(userInfo: userInfo)
+                // Let CloudKitSyncManager handle the notification
+                await CloudKitSyncManager.shared.handleRemoteNotification(userInfo)
                 
                 // Indicate new data was fetched
                 await MainActor.run {
                     completionHandler(.newData)
                 }
             } else {
-                print("📨 Non-Claude notification in background")
-                await MainActor.run {
-                    completionHandler(.noData)
+                // Check if this is a Claude message that needs processing
+                let isClaudeMessage = userInfo["sessionId"] != nil ||
+                                     userInfo["message"] != nil ||
+                                     userInfo["requiresFetch"] != nil ||
+                                     userInfo["messageId"] != nil ||
+                                     userInfo["projectPath"] != nil
+                
+                if isClaudeMessage {
+                    print("📨 Processing Claude message in background...")
+                    
+                    // Process through PushNotificationService unified pipeline
+                    // This will save to local storage and post notification to UI
+                    await PushNotificationService.shared.processAPNSMessage(userInfo: userInfo)
+                    
+                    // Indicate new data was fetched
+                    await MainActor.run {
+                        completionHandler(.newData)
+                    }
+                } else {
+                    print("📨 Non-Claude/CloudKit notification in background")
+                    await MainActor.run {
+                        completionHandler(.noData)
+                    }
                 }
             }
         }

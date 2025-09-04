@@ -6,6 +6,7 @@
  */
 
 import { EventEmitter } from 'events';
+import { randomUUID } from 'crypto';
 import { createLogger } from '../utils/logger.js';
 import { pushNotificationService } from './push-notification.js';
 
@@ -370,7 +371,7 @@ export class PermissionManager extends EventEmitter {
    * Generate unique request ID
    */
   generateRequestId() {
-    return `perm_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return `perm_${randomUUID()}`;
   }
 }
 

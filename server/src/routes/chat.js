@@ -2,13 +2,17 @@ import express from 'express';
 import { randomUUID } from 'crypto';
 import { createLogger } from '../utils/logger.js';
 import { ValidationUtils } from '../utils/validation.js';
+import { messageQueueManager, MessagePriority } from '../services/message-queue.js';
+import { deviceRegistry } from '../services/device-registry.js';
+import { pushNotificationService } from '../services/push-notification.js';
+import { createChatMessageHandler } from '../handlers/chat-message-handler.js';
+import { sendErrorResponse } from '../utils/response-utils.js';
 
 const logger = createLogger('ChatAPI');
-// TODO: Check what validation middleware exists
-// import { validateRequest } from '../middleware/validation.js';
-import { pushNotificationService } from '../services/push-notification.js';
-
 const router = express.Router();
+
+// Import AICLI service singleton instance
+import { aicliService } from '../services/aicli-instance.js';
 
 /**
  * POST /api/chat - Send message to Claude and get response via APNS (always async)
@@ -21,42 +25,68 @@ router.post('/', async (req, res) => {
     deviceToken,
     attachments,
     autoResponse, // Auto-response metadata
+    priority = MessagePriority.NORMAL, // Message priority for queue
+    deviceId, // Device identifier for coordination
+    userId, // User identifier for device coordination
+    deviceInfo, // Device information (platform, version, etc.)
   } = req.body;
+
   const requestId =
-    req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    req.headers['x-request-id'] || `REQ_${randomUUID().replace(/-/g, '').substring(0, 8)}`;
+  const sessionId = clientSessionId; // Preserve original session ID
 
-  // Look up existing session for this project path if client didn't send a sessionId
-  const aicliService = req.app.get('aicliService');
-  let sessionId = clientSessionId;
+  // Log active sessions for debugging
+  if (aicliService && aicliService.sessionManager) {
+    logger.info('Active sessions check', {
+      requestId,
+      projectPath,
+      activeSessions: aicliService.sessionManager.getActiveSessions().length,
+    });
+  }
 
-  if (!sessionId && projectPath) {
-    // Try to find an existing session for this project
-    const existingSession =
-      await aicliService.sessionManager.findSessionByWorkingDirectory(projectPath);
-    if (existingSession) {
-      sessionId = existingSession.sessionId;
-      logger.info('Found existing session for project', {
+  if (!message) {
+    return sendErrorResponse(res, 'INVALID_REQUEST', 'Message is required');
+  }
+
+  // Handle device registration and coordination if deviceId and userId provided
+  let resolvedDeviceId = deviceId;
+  if (deviceId && userId) {
+    try {
+      // Register or update device
+      const registrationResult = deviceRegistry.registerDevice(userId, deviceId, deviceInfo || {});
+      if (registrationResult.success) {
+        // Update heartbeat
+        deviceRegistry.updateLastSeen(deviceId);
+
+        logger.info('Device registered/updated', {
+          requestId,
+          userId,
+          deviceId: deviceId ? `${deviceId.substring(0, 8)}...` : 'undefined',
+          isNewDevice: registrationResult.isNew,
+          platform: registrationResult.device.platform,
+        });
+      }
+    } catch (error) {
+      logger.error('Device registration failed', {
         requestId,
-        projectPath,
-        sessionId,
+        userId,
+        deviceId: deviceId ? `${deviceId.substring(0, 8)}...` : 'undefined',
+        error: error.message,
       });
-    } else {
-      logger.info('No existing session found for project', {
+      // Continue without device coordination
+    }
+  } else {
+    // Fallback: use deviceToken as deviceId for backward compatibility
+    resolvedDeviceId = deviceToken;
+    if (deviceToken) {
+      logger.info('Using deviceToken as deviceId for backward compatibility', {
         requestId,
-        projectPath,
-        activeSessions: aicliService.sessionManager.getActiveSessions().length,
+        deviceToken: `${deviceToken.substring(0, 10)}...`,
       });
     }
   }
 
-  if (!message) {
-    return res.status(400).json({
-      success: false,
-      error: 'Message is required',
-    });
-  }
-
-  // Validate message content and size
+  // Validate message content
   const messageValidation = ValidationUtils.validateMessageContent(message);
   if (!messageValidation.valid) {
     logger.error('Message validation failed', {
@@ -90,59 +120,37 @@ router.post('/', async (req, res) => {
   }
 
   // Validate attachments if provided
-  if (attachments && Array.isArray(attachments)) {
-    const MAX_ATTACHMENT_SIZE = parseInt(process.env.MAX_ATTACHMENT_SIZE || '10485760'); // 10MB default
-    const ALLOWED_MIME_TYPES = [
-      'image/jpeg',
-      'image/png',
-      'image/gif',
-      'application/pdf',
-      'text/plain',
-      'text/markdown',
-      'application/json',
-      'text/javascript',
-      'text/x-python',
-      'text/x-swift',
-      'text/x-java-source',
-      'text/x-c++src',
-      'text/x-csrc',
-      'text/x-chdr',
-      'application/octet-stream',
-    ];
+  if (attachments && attachments.length > 0) {
+    const attachmentValidation = ValidationUtils.validateAttachments(attachments);
+    if (!attachmentValidation.valid) {
+      logger.error('Attachment validation failed', {
+        requestId,
+        errors: attachmentValidation.errors,
+        attachmentCount: attachments.length,
+      });
 
-    for (const attachment of attachments) {
-      if (!attachment.data || !attachment.name || !attachment.mimeType) {
-        return res.status(400).json({
-          success: false,
-          error: 'Each attachment must have data, name, and mimeType',
-        });
-      }
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid attachments',
+        details: attachmentValidation.errors,
+        requestId,
+      });
+    }
 
-      // Validate size (base64 is ~33% larger than original)
-      const estimatedSize = (attachment.data.length * 3) / 4;
-      if (estimatedSize > MAX_ATTACHMENT_SIZE) {
-        return res.status(400).json({
-          success: false,
-          error: `Attachment ${attachment.name} exceeds maximum size of ${MAX_ATTACHMENT_SIZE} bytes`,
-        });
-      }
-
-      // Validate MIME type
-      if (!ALLOWED_MIME_TYPES.includes(attachment.mimeType)) {
-        logger.warn('Unsupported MIME type for attachment', {
-          name: attachment.name,
-          mimeType: attachment.mimeType,
-          requestId,
-        });
-      }
+    if (attachmentValidation.warnings.length > 0) {
+      logger.warn('Attachment validation warnings', {
+        requestId,
+        warnings: attachmentValidation.warnings,
+      });
     }
   }
 
+  // Log the request details for debugging
   logger.info('Processing chat message for APNS delivery', {
     requestId,
+    sessionId: sessionId || 'new',
     messageLength: message.length,
     projectPath,
-    sessionId: sessionId || 'new',
     deviceToken: `${deviceToken.substring(0, 16)}...`,
     attachmentCount: attachments?.length || 0,
     autoResponse: autoResponse
@@ -155,449 +163,162 @@ router.post('/', async (req, res) => {
 
   // Register device for push notifications
   // Use the device token itself as the device ID for consistent mapping
-  const deviceId = deviceToken; // This ensures we can always find the device
+  const pushDeviceId = deviceToken; // This ensures we can always find the device
   try {
-    await pushNotificationService.registerDevice(deviceId, {
+    await pushNotificationService.registerDevice(pushDeviceId, {
       token: deviceToken,
       platform: 'ios',
     });
     logger.info('Device registered for APNS message delivery', {
       requestId,
-      deviceId: `${deviceId.substring(0, 16)}...`, // Log partial token for privacy
+      deviceId: `${pushDeviceId.substring(0, 16)}...`, // Log partial token for privacy
     });
   } catch (pushRegError) {
     logger.error('Failed to register device for push notifications', {
       requestId,
       error: pushRegError.message,
     });
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to register device for push notifications',
-      requestId,
-      timestamp: new Date().toISOString(),
-    });
+    // Continue anyway - the push might still work
   }
 
-  // If we have an existing session, immediately add the user message to the buffer
-  if (sessionId) {
-    await aicliService.sessionManager.trackSessionForRouting(sessionId, projectPath);
-    const buffer = aicliService.sessionManager.getSessionBuffer(sessionId);
-    if (buffer) {
-      if (!buffer.userMessages) {
-        buffer.userMessages = [];
+  // Queue message
+  // Use session ID for queue if provided, otherwise create a temp one
+  const queueSessionId = sessionId || `temp_${requestId}`;
+
+  // Handle device election if sessionId provided
+  if (sessionId && deviceId && userId) {
+    const electionResult = deviceRegistry.electPrimary(userId, sessionId, deviceId);
+    if (electionResult.success) {
+      if (electionResult.isPrimary) {
+        logger.info('Device elected as primary for session', {
+          requestId,
+          sessionId,
+          deviceId: `${deviceId.substring(0, 8)}...`,
+        });
+      } else {
+        logger.info('Device is secondary for session', {
+          requestId,
+          sessionId,
+          primaryDeviceId: `${electionResult.primaryDeviceId?.substring(0, 8)}...`,
+        });
       }
-      buffer.userMessages.push({
-        content: message,
-        timestamp: new Date().toISOString(),
+    }
+  }
+
+  // Adjust message priority based on context
+  let messagePriority = priority;
+  if (autoResponse?.isActive) {
+    // High priority for first auto-response or manual triggers
+    if (autoResponse.iteration === 1 || autoResponse.userTriggered) {
+      messagePriority = MessagePriority.HIGH;
+    }
+    // Low priority for auto-response generated follow-ups
+    else if (autoResponse.isActive && autoResponse.iteration > 1) {
+      messagePriority = MessagePriority.LOW;
+    }
+  }
+
+  // Set up the message handler BEFORE queuing (must be before to avoid race condition)
+  if (!messageQueueManager.getQueue(queueSessionId).listenerCount('process-message')) {
+    const handler = createChatMessageHandler({
+      aicliService,
+      pushNotificationService,
+    });
+    messageQueueManager.setMessageHandler(queueSessionId, handler);
+  }
+
+  // Queue the message with device context for deduplication
+  const messageMetadata = {
+    requestId,
+    timestamp: new Date().toISOString(),
+    deviceId: resolvedDeviceId,
+    userId,
+    deviceInfo,
+  };
+
+  const queueResult = messageQueueManager.queueMessage(
+    queueSessionId,
+    {
+      message,
+      projectPath,
+      deviceToken,
+      attachments,
+      autoResponse,
+      requestId,
+      sessionId,
+      validatedMessage: messageValidation.message ?? message,
+      content: message, // Duplicate detector needs this field
+    },
+    messagePriority,
+    messageMetadata
+  );
+
+  // Check if message was rejected due to duplication
+  if (!queueResult.queued) {
+    if (queueResult.reason === 'duplicate') {
+      logger.info('Duplicate message detected and rejected', {
         requestId,
-        attachments: attachments?.length || 0,
+        messageHash: queueResult.messageHash,
+        originalDevice: queueResult.duplicateInfo?.originalDeviceId,
+        currentDevice: resolvedDeviceId,
+        timeDifference: queueResult.duplicateInfo?.timeDifference,
       });
-      logger.info('Added user message to existing session buffer', {
+
+      // Return success but indicate it was a duplicate
+      return res.json({
+        success: true,
+        message: 'Duplicate message detected - not processed',
         requestId,
-        sessionId,
-        messageCount: buffer.userMessages.length,
+        sessionId: sessionId || null,
+        projectPath,
+        timestamp: new Date().toISOString(),
+        deliveryMethod: 'apns',
+        duplicate: true,
+        duplicateInfo: {
+          messageHash: queueResult.messageHash,
+          originalDevice: `${queueResult.duplicateInfo?.originalDeviceId?.substring(0, 8)}...`,
+          timeDifference: queueResult.duplicateInfo?.timeDifference,
+        },
+      });
+    } else {
+      // Other queue rejection reasons
+      logger.error('Message queue rejected message', {
+        requestId,
+        reason: queueResult.reason,
+        sessionId: queueSessionId,
+      });
+
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to queue message for processing',
+        reason: queueResult.reason,
+        requestId,
       });
     }
   }
 
-  // Send immediate acknowledgment
-  // For new conversations, sessionId will be null and Claude will generate one
-  const responseData = {
-    success: true,
-    message: 'Message received, processing Claude response',
+  const messageId = queueResult.messageId;
+
+  logger.info('Message queued for processing', {
     requestId,
-    sessionId: sessionId || null, // null for new conversations, Claude will provide one
+    messageId,
+    sessionId: queueSessionId,
+    priority: messagePriority,
+    queueStatus: messageQueueManager.getQueueStatus(queueSessionId),
+  });
+
+  // Return immediate response - message will be processed async
+  res.json({
+    success: true,
+    message: 'Message queued for APNS delivery',
+    requestId,
+    messageId,
+    sessionId: sessionId || null,
     projectPath,
     timestamp: new Date().toISOString(),
     deliveryMethod: 'apns',
-  };
-
-  res.json(responseData);
-
-  // Process Claude request asynchronously and deliver via APNS
-  setImmediate(async () => {
-    // NO TIMEOUT - Claude operations can take as long as needed
-    // Timeout should only come from activity monitoring (Issue #28)
-    let streamListener; // Declare streamListener in the outer scope
-
-    try {
-      logger.info('Starting async Claude processing', {
-        requestId,
-        hasSessionId: !!sessionId,
-        sessionIdValue: sessionId || 'new conversation',
-      });
-
-      // Set up streaming status updates listener
-      streamListener = async (data) => {
-        // Only process chunks for our request ID
-        if (data.requestId !== requestId) return;
-
-        const chunk = data.chunk;
-
-        // Send progress updates for interesting chunk types
-        if (chunk.type === 'system' && chunk.subtype === 'init') {
-          // Initial system message - Claude is starting
-          await pushNotificationService.sendProgressNotification(deviceToken, {
-            projectPath,
-            activity: 'Initializing',
-            duration: 0,
-            tokenCount: 0,
-            requestId,
-          });
-        } else if (chunk.type === 'assistant' && chunk.message) {
-          // Assistant is thinking/typing
-          const messageContent = chunk.message?.content?.[0]?.text || '';
-          const preview = messageContent.substring(0, 50);
-
-          await pushNotificationService.sendProgressNotification(deviceToken, {
-            projectPath,
-            activity: preview ? `Typing: ${preview}...` : 'Thinking',
-            duration: Math.floor((Date.now() - startTime) / 1000),
-            tokenCount: messageContent.length,
-            requestId,
-          });
-        } else if (chunk.type === 'tool_use') {
-          // Claude is using a tool
-          await pushNotificationService.sendProgressNotification(deviceToken, {
-            projectPath,
-            activity: `Using ${chunk.tool_name || 'tool'}`,
-            duration: Math.floor((Date.now() - startTime) / 1000),
-            tokenCount: 0,
-            requestId,
-          });
-        }
-      };
-
-      // Start time for duration tracking
-      const startTime = Date.now();
-
-      // Attach the listener
-      aicliService.on('streamChunk', streamListener);
-
-      // Use the regular AICLI service for sending prompts
-      // IMPORTANT: Set streaming: true to use the processRunner with --resume fix
-      const result = await aicliService.sendPrompt(messageValidation.message ?? message, {
-        sessionId,
-        requestId,
-        workingDirectory: projectPath || process.cwd(),
-        attachments,
-        streaming: true, // Use streaming to get processRunner with --resume
-        deviceToken, // Pass device token for stall notifications
-      });
-
-      // Log the full result structure for debugging
-      logger.info('Claude response structure', {
-        requestId,
-        hasResult: !!result,
-        resultType: typeof result,
-        resultKeys: result ? Object.keys(result) : [],
-        hasSessionId: !!result?.sessionId,
-        hasResponse: !!result?.response,
-        responseKeys: result?.response ? Object.keys(result.response) : [],
-        responseHasResult: !!result?.response?.result,
-        responseResultType: typeof result?.response?.result,
-        // New fields for enhanced text accumulation
-        resultSource: result?.source || 'unknown',
-        directResult: !!result?.result,
-        directResultType: typeof result?.result,
-        directResultLength: typeof result?.result === 'string' ? result.result.length : 0,
-      });
-
-      // Extract Claude's response and session ID
-      let content = '';
-      // The AICLI service returns { sessionId, success, response }
-      // where response contains the actual Claude response
-      let claudeSessionId = result?.sessionId || sessionId;
-
-      // Extract content from the response structure
-      // Enhanced extraction to handle new text accumulation from tool use
-      if (result?.result && typeof result.result === 'string') {
-        // New: Direct result from enhanced streaming (tool use text accumulation)
-        content = result.result;
-        logger.info('Using direct result from enhanced streaming', {
-          requestId,
-          source: result.source || 'direct',
-          contentLength: content.length,
-        });
-      } else if (result?.response?.result) {
-        // Original: The actual Claude response is in result.response.result (from Claude CLI)
-        content = result.response.result;
-        logger.info('Using nested response result', {
-          requestId,
-          contentLength: content.length,
-        });
-      } else if (result?.response?.session_id) {
-        // Also check if session_id is in the response object
-        claudeSessionId = result.response.session_id || claudeSessionId;
-        content = result.response.result || '';
-      } else if (typeof result?.response === 'string') {
-        // Fallback if response is a plain string
-        content = result.response;
-      }
-
-      // If content is still empty, try to extract from responses array
-      if ((!content || content.trim().length === 0) && result?.response?.responses) {
-        logger.info('Primary content extraction empty, checking responses array', {
-          requestId,
-          responsesCount: result.response.responses.length,
-        });
-
-        // Try to find text content in the responses array
-        for (const resp of result.response.responses) {
-          if (resp.type === 'text' && resp.text) {
-            content += resp.text;
-          } else if (resp.type === 'text' && resp.content) {
-            content += resp.content;
-          } else if (resp.type === 'assistant' && resp.message) {
-            content += resp.message;
-          } else if (resp.type === 'message' && resp.content) {
-            content += resp.content;
-          } else if (resp.type === 'result' && resp.result) {
-            content += resp.result;
-          }
-        }
-
-        if (content.length > 0) {
-          logger.info('Extracted content from responses array', {
-            requestId,
-            contentLength: content.length,
-            sessionId: claudeSessionId,
-          });
-        }
-      }
-
-      // Log content extraction result
-      logger.info('Content extraction', {
-        requestId,
-        contentLength: content.length,
-        contentPreview: content.substring(0, 100),
-        sessionId: claudeSessionId,
-      });
-
-      // Log session ID handling
-      if (!sessionId && claudeSessionId) {
-        logger.info('New conversation - using Claude-generated session ID', {
-          claudeSessionId,
-          requestId,
-        });
-      } else if (sessionId && claudeSessionId && sessionId !== claudeSessionId) {
-        logger.warn('Session ID mismatch - Claude returned different ID', {
-          expectedSessionId: sessionId,
-          claudeReturnedSessionId: claudeSessionId,
-          requestId,
-        });
-      }
-
-      // Ensure session is tracked for future requests and add to session buffer
-      await aicliService.sessionManager.trackSessionForRouting(claudeSessionId, projectPath);
-      const buffer = aicliService.sessionManager.getSessionBuffer(claudeSessionId);
-      if (buffer) {
-        // Only add user message if this is a new conversation (no sessionId was provided initially)
-        if (!sessionId) {
-          // This is a new conversation, add the user message
-          if (!buffer.userMessages) {
-            buffer.userMessages = [];
-          }
-          buffer.userMessages.push({
-            content: message,
-            timestamp: new Date().toISOString(),
-            requestId,
-            attachments: attachments?.length || 0,
-          });
-          logger.info('Added user message to new session buffer', {
-            requestId,
-            sessionId: claudeSessionId,
-          });
-        }
-
-        // Add assistant response to buffer
-        if (!buffer.assistantMessages) {
-          buffer.assistantMessages = [];
-        }
-        buffer.assistantMessages.push({
-          content,
-          timestamp: new Date().toISOString(),
-          requestId,
-          deliveredVia: 'apns',
-        });
-        logger.info('Added assistant response to session buffer', {
-          requestId,
-          sessionId: claudeSessionId,
-        });
-      }
-
-      // Store message with ID if it's large (for fetching later)
-      let messageId = null;
-      const MESSAGE_FETCH_THRESHOLD = 3000;
-      if (content.length > MESSAGE_FETCH_THRESHOLD) {
-        messageId = randomUUID();
-
-        // Store the message in the session buffer for later retrieval
-        aicliService.sessionManager.storeMessage(claudeSessionId, messageId, content, {
-          type: 'assistant',
-          requestId,
-          projectPath,
-          originalMessage: message,
-          attachmentInfo: attachments?.map((att) => ({
-            name: att.name,
-            mimeType: att.mimeType,
-            size: att.size || (att.data.length * 3) / 4,
-          })),
-        });
-
-        logger.info('Stored large message for fetching', {
-          messageId,
-          sessionId: claudeSessionId,
-          contentLength: content.length,
-        });
-      }
-
-      // Check if content is empty - but handle streaming responses properly
-      if (!content || content.trim().length === 0) {
-        // Check if this is a streaming response with accumulated text
-        const isStreamingResponse =
-          result?.source === 'streaming' ||
-          result?.source === 'accumulated_text' ||
-          result?.streaming === true;
-
-        if (isStreamingResponse) {
-          // For streaming, the accumulated text comes back as result.result
-          // The process runner returns with source: 'accumulated_text'
-          if (
-            result?.result &&
-            typeof result.result === 'string' &&
-            result.result.trim().length > 0
-          ) {
-            logger.info('Extracting accumulated text from streaming response', {
-              requestId,
-              sessionId: claudeSessionId,
-              source: result.source || 'streaming',
-              textLength: result.result.length,
-            });
-            content = result.result;
-          } else {
-            // Streaming completed but no content accumulated
-            // This can happen if Claude hasn't responded yet or if there's a genuine issue
-            logger.info('Streaming response pending or empty', {
-              requestId,
-              sessionId: claudeSessionId,
-              source: result?.source,
-              hasResult: !!result?.result,
-            });
-
-            // Don't send anything - let the stream complete naturally
-            // The stall detection will handle truly stuck operations
-            return;
-          }
-        } else {
-          // Non-streaming empty response - this is unusual but don't send fallback
-          logger.warn('Non-streaming response was empty', {
-            requestId,
-            sessionId: claudeSessionId,
-            hasResponses: !!result?.response?.responses,
-            responsesCount: result?.response?.responses?.length || 0,
-          });
-
-          // Don't send fallback - let stall detection handle truly stuck operations
-          return;
-        }
-      }
-
-      // Send Claude response via APNS
-      // Use deviceToken as deviceId since that's how we registered it
-      await pushNotificationService.sendClaudeResponseNotification(deviceToken, {
-        message: content,
-        messageId, // Include message ID for large messages
-        sessionId: claudeSessionId,
-        projectName: projectPath?.split('/').pop() || 'Project',
-        projectPath,
-        totalChunks: 1,
-        requestId,
-        isLongRunningCompletion: true, // All APNS deliveries are treated as completions
-        // Don't include originalMessage in payload - it can make payload too large
-        // originalMessage: message, // REMOVED - can exceed 4KB limit
-        attachmentInfo: attachments?.map((att) => ({
-          name: att.name,
-          mimeType: att.mimeType,
-          size: att.size || (att.data.length * 3) / 4,
-        })), // Include attachment metadata without the data
-        autoResponse, // Include auto-response metadata
-      });
-
-      logger.info('Claude response delivered via APNS', {
-        requestId,
-        deviceId: `${deviceToken.substring(0, 16)}...`,
-        sessionId: claudeSessionId,
-        contentLength: content.length,
-      });
-
-      // Clean up the listener after successful processing
-      if (streamListener) {
-        aicliService.removeListener('streamChunk', streamListener);
-      }
-    } catch (error) {
-      // Clean up the listener on error
-      if (streamListener) {
-        aicliService.removeListener('streamChunk', streamListener);
-      }
-
-      // Determine error type and user-friendly message
-      let userErrorMessage = 'Failed to process message';
-      let errorType = 'PROCESSING_ERROR';
-
-      if (error.message?.includes('timeout')) {
-        userErrorMessage =
-          'Claude is taking longer than expected. Please try again or break your message into smaller parts.';
-        errorType = 'TIMEOUT';
-      } else if (error.message?.includes('ECONNREFUSED')) {
-        userErrorMessage = 'Unable to connect to Claude. Please check if the service is running.';
-        errorType = 'CONNECTION_ERROR';
-      } else if (error.message?.includes('ENOMEM')) {
-        userErrorMessage =
-          'Server ran out of memory processing your request. Please try a smaller message.';
-        errorType = 'MEMORY_ERROR';
-      } else if (error.message?.includes('rate limit')) {
-        userErrorMessage = 'Too many requests. Please wait a moment and try again.';
-        errorType = 'RATE_LIMIT';
-      } else if (error.code === 'ENOTFOUND') {
-        userErrorMessage = 'Claude CLI not found. Please ensure it is installed and configured.';
-        errorType = 'SERVICE_NOT_FOUND';
-      }
-
-      logger.error('Async Claude processing failed', {
-        requestId,
-        error: error.message,
-        errorType,
-        stack: error.stack,
-        sessionId,
-        messageLength: message?.length,
-      });
-
-      // Send detailed error notification via APNS
-      try {
-        await pushNotificationService.sendErrorNotification(deviceToken, {
-          sessionId: sessionId || 'error-no-session',
-          projectName: projectPath?.split('/').pop() || 'Project',
-          projectPath,
-          error: userErrorMessage,
-          errorType,
-          technicalDetails: process.env.NODE_ENV === 'development' ? error.message : undefined,
-          requestId,
-        });
-
-        logger.info('Error notification sent via APNS', {
-          requestId,
-          deviceId: `${deviceToken.substring(0, 16)}...`,
-          errorType,
-        });
-      } catch (pushError) {
-        logger.error('Failed to send error notification via APNS', {
-          requestId,
-          originalError: error.message,
-          pushError: pushError.message,
-        });
-      }
-    }
+    queuePosition: queueResult.position || 1,
+    estimatedProcessingTime: '2-5 seconds',
   });
 });
 
@@ -605,9 +326,8 @@ router.post('/', async (req, res) => {
  * POST /api/chat/auto-response/pause - Pause auto-response mode for a session
  */
 router.post('/auto-response/pause', async (req, res) => {
-  const { sessionId, deviceToken } = req.body;
-  const requestId =
-    req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const { sessionId, deviceId, userId } = req.body;
+  const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
 
   if (!sessionId) {
     return res.status(400).json({
@@ -616,22 +336,30 @@ router.post('/auto-response/pause', async (req, res) => {
     });
   }
 
-  logger.info('Pausing auto-response mode', { sessionId, requestId });
-
-  // Send pause notification if device token provided
-  if (deviceToken) {
-    await pushNotificationService.sendAutoResponseControlNotification(deviceToken, {
-      sessionId,
-      action: 'pause',
-      requestId,
-    });
+  // Update device heartbeat if device context provided
+  if (deviceId && userId) {
+    try {
+      deviceRegistry.updateLastSeen(deviceId);
+    } catch (error) {
+      logger.warn('Failed to update device heartbeat', {
+        requestId,
+        deviceId: `${deviceId.substring(0, 8)}...`,
+        error: error.message,
+      });
+    }
   }
 
+  logger.info('Pausing auto-response mode', { sessionId, requestId });
+
+  // Pause the message queue for this session
+  messageQueueManager.pauseQueue(sessionId);
+
+  // Send acknowledgment
   res.json({
     success: true,
+    message: 'Auto-response mode paused',
     sessionId,
-    action: 'pause',
-    timestamp: new Date().toISOString(),
+    requestId,
   });
 });
 
@@ -639,9 +367,8 @@ router.post('/auto-response/pause', async (req, res) => {
  * POST /api/chat/auto-response/resume - Resume auto-response mode for a session
  */
 router.post('/auto-response/resume', async (req, res) => {
-  const { sessionId, deviceToken } = req.body;
-  const requestId =
-    req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const { sessionId, deviceId, userId } = req.body;
+  const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
 
   if (!sessionId) {
     return res.status(400).json({
@@ -650,22 +377,47 @@ router.post('/auto-response/resume', async (req, res) => {
     });
   }
 
+  // Update device heartbeat if device context provided
+  if (deviceId && userId) {
+    try {
+      deviceRegistry.updateLastSeen(deviceId);
+    } catch (error) {
+      logger.warn('Failed to update device heartbeat', {
+        requestId,
+        deviceId: `${deviceId.substring(0, 8)}...`,
+        error: error.message,
+      });
+    }
+  }
+
   logger.info('Resuming auto-response mode', { sessionId, requestId });
 
-  // Send resume notification if device token provided
-  if (deviceToken) {
-    await pushNotificationService.sendAutoResponseControlNotification(deviceToken, {
+  // Resume the message queue for this session
+  messageQueueManager.resumeQueue(sessionId);
+
+  // Log queue status after resume
+  const queueStatus = messageQueueManager.getQueueStatus(sessionId);
+  if (queueStatus) {
+    logger.info('Queue status after resume', {
       sessionId,
-      action: 'resume',
       requestId,
+      queueLength: queueStatus.queue.length,
+      processing: queueStatus.processing,
+      paused: queueStatus.paused,
     });
   }
 
   res.json({
     success: true,
+    message: 'Auto-response mode resumed',
     sessionId,
-    action: 'resume',
-    timestamp: new Date().toISOString(),
+    requestId,
+    queueStatus: queueStatus
+      ? {
+          queueLength: queueStatus.queue.length,
+          processing: queueStatus.processing,
+        }
+      : null,
   });
 });
 
@@ -673,9 +425,8 @@ router.post('/auto-response/resume', async (req, res) => {
  * POST /api/chat/auto-response/stop - Stop auto-response mode for a session
  */
 router.post('/auto-response/stop', async (req, res) => {
-  const { sessionId, deviceToken, reason } = req.body;
-  const requestId =
-    req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const { sessionId, deviceId, userId, reason } = req.body;
+  const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
 
   if (!sessionId) {
     return res.status(400).json({
@@ -684,24 +435,32 @@ router.post('/auto-response/stop', async (req, res) => {
     });
   }
 
-  logger.info('Stopping auto-response mode', { sessionId, reason, requestId });
-
-  // Send stop notification if device token provided
-  if (deviceToken) {
-    await pushNotificationService.sendAutoResponseControlNotification(deviceToken, {
-      sessionId,
-      action: 'stop',
-      reason: reason || 'manual',
-      requestId,
-    });
+  // Update device heartbeat if device context provided
+  if (deviceId && userId) {
+    try {
+      deviceRegistry.updateLastSeen(deviceId);
+    } catch (error) {
+      logger.warn('Failed to update device heartbeat', {
+        requestId,
+        deviceId: deviceId ? `${deviceId.substring(0, 8)}...` : 'undefined',
+        error: error.message,
+      });
+    }
   }
+
+  logger.info('Stopping auto-response mode', { sessionId, requestId, reason });
+
+  // Stop the message queue for this session
+  messageQueueManager.pauseQueue(sessionId);
+  messageQueueManager.clearQueue(sessionId);
 
   res.json({
     success: true,
-    sessionId,
+    message: 'Auto-response mode stopped',
     action: 'stop',
-    reason: reason || 'manual',
-    timestamp: new Date().toISOString(),
+    sessionId,
+    requestId,
+    reason: reason || 'user_requested',
   });
 });
 
@@ -710,54 +469,44 @@ router.post('/auto-response/stop', async (req, res) => {
  */
 router.get('/:sessionId/progress', async (req, res) => {
   const { sessionId } = req.params;
-  const requestId =
-    req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
 
-  logger.info('Fetching thinking progress', { sessionId, requestId });
+  // Get AICLI service
+  const aicliServiceInstance = req.app.get('aicliService') || aicliService;
 
-  try {
-    // Get AICLI service from app instance
-    const aicliService = req.app.get('aicliService');
-
-    // Check if session exists and get progress
-    const sessionBuffer = aicliService.sessionManager.getSessionBuffer(sessionId);
-
-    if (!sessionBuffer) {
-      return res.status(404).json({
-        success: false,
-        error: 'Session not found',
-        sessionId,
-      });
-    }
-
-    // Extract thinking metadata from session
-    const thinkingMetadata = sessionBuffer.thinkingMetadata || {
-      isThinking: false,
-      activity: null,
-      duration: 0,
-      tokenCount: 0,
-    };
-
-    res.json({
-      success: true,
-      sessionId,
-      isThinking: thinkingMetadata.isThinking,
-      activity: thinkingMetadata.activity,
-      duration: thinkingMetadata.duration,
-      tokenCount: thinkingMetadata.tokenCount,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    logger.error('Failed to fetch thinking progress', {
-      sessionId,
-      error: error.message,
-    });
-
-    res.status(500).json({
+  if (!aicliServiceInstance || !aicliServiceInstance.sessionManager) {
+    return res.status(404).json({
       success: false,
-      error: 'Failed to fetch progress',
+      error: 'Service not available',
+      requestId,
     });
   }
+
+  // Get session buffer/metadata
+  const sessionBuffer = aicliServiceInstance.sessionManager.getSessionBuffer(sessionId);
+
+  if (!sessionBuffer) {
+    return res.status(404).json({
+      success: false,
+      error: 'Session not found',
+      sessionId,
+      requestId,
+    });
+  }
+
+  // Get thinking metadata
+  const thinkingMetadata = sessionBuffer.thinkingMetadata || {};
+  const isThinking = thinkingMetadata.isThinking || false;
+
+  res.json({
+    success: true,
+    sessionId,
+    isThinking,
+    activity: thinkingMetadata.activity || null,
+    duration: thinkingMetadata.duration || 0,
+    tokenCount: thinkingMetadata.tokenCount || 0,
+    requestId,
+  });
 });
 
 /**
@@ -766,104 +515,57 @@ router.get('/:sessionId/progress', async (req, res) => {
 router.get('/:sessionId/messages', async (req, res) => {
   const { sessionId } = req.params;
   const { limit = 50, offset = 0 } = req.query;
+  const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
 
-  logger.info('Fetching chat messages', { sessionId, limit, offset });
+  // Get AICLI service
+  const aicliServiceInstance = req.app.get('aicliService') || aicliService;
+
+  if (!aicliServiceInstance || !aicliServiceInstance.sessionManager) {
+    return res.status(500).json({
+      success: false,
+      error: 'Service not available',
+      requestId,
+    });
+  }
 
   try {
-    // Get AICLI service from app instance
-    const aicliService = req.app.get('aicliService');
-
-    // Get the session buffer which contains all messages
-    const buffer = aicliService.sessionManager.getSessionBuffer(sessionId);
-
-    if (!buffer) {
-      // No buffer means no active session
-      return res.json({
-        success: true,
-        sessionId,
-        messages: [],
-        totalCount: 0,
-        hasMore: false,
-        note: 'No active session found',
-      });
-    }
-
-    // Combine user and assistant messages, maintaining chronological order
-    const allMessages = [];
-
-    // Add user messages with proper structure
-    if (buffer.userMessages && buffer.userMessages.length > 0) {
-      buffer.userMessages.forEach((msg) => {
-        allMessages.push({
-          content: msg.content || msg.message,
-          sender: 'user',
-          timestamp: msg.timestamp || new Date().toISOString(),
-          requestId: msg.requestId,
-          type: 'text',
-        });
-      });
-    }
-
-    // Add assistant messages with proper structure
-    if (buffer.assistantMessages && buffer.assistantMessages.length > 0) {
-      buffer.assistantMessages.forEach((msg) => {
-        allMessages.push({
-          content: msg.content || msg.message,
-          sender: 'assistant',
-          timestamp: msg.timestamp || new Date().toISOString(),
-          requestId: msg.requestId,
-          type: 'markdown',
-          deliveredVia: msg.deliveredVia || 'apns',
-        });
-      });
-    }
-
-    // Sort messages by timestamp to maintain conversation flow
-    allMessages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-
-    // Apply pagination if needed
-    const paginatedMessages = allMessages.slice(
-      parseInt(offset),
-      parseInt(offset) + parseInt(limit)
-    );
-
-    logger.info('Returning buffered messages', {
+    // Get session messages
+    const messages = aicliServiceInstance.sessionManager.getSessionMessages(
       sessionId,
-      totalMessages: allMessages.length,
-      returnedMessages: paginatedMessages.length,
-      offset,
-      limit,
-    });
+      parseInt(limit),
+      parseInt(offset)
+    );
 
     res.json({
       success: true,
       sessionId,
-      messages: paginatedMessages,
-      totalCount: allMessages.length,
-      hasMore: allMessages.length > parseInt(offset) + parseInt(limit),
+      messages: messages || [],
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      total: messages ? messages.length : 0,
+      requestId,
     });
   } catch (error) {
-    logger.error('Failed to fetch chat messages', {
+    logger.error('Failed to get session messages', {
+      requestId,
       sessionId,
       error: error.message,
     });
 
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch messages',
+      error: 'Failed to retrieve messages',
+      requestId,
     });
   }
 });
 
 /**
- * POST /api/chat/kill - Kill/cancel a running Claude operation
+ * POST /api/chat/interrupt - Interrupt current processing for a session
  */
-router.post('/kill', async (req, res) => {
-  const { sessionId, deviceToken, reason = 'User requested cancellation' } = req.body;
-  const requestId =
-    req.headers['x-request-id'] || `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-  logger.info('Kill operation requested', { sessionId, requestId, reason });
+router.post('/interrupt', async (req, res) => {
+  const { sessionId, deviceId, userId } = req.body;
+  const requestId = req.headers['x-request-id'] || `REQ_${randomUUID()}`;
 
   if (!sessionId) {
     return res.status(400).json({
@@ -872,73 +574,40 @@ router.post('/kill', async (req, res) => {
     });
   }
 
-  try {
-    // Get AICLI service from app instance
-    const aicliService = req.app.get('aicliService');
-    
-    if (!aicliService) {
-      logger.error('AICLI service not initialized', { requestId });
-      return res.status(500).json({
-        success: false,
-        error: 'Service temporarily unavailable',
-      });
-    }
-
-    // Kill the Claude process for this session
-    const killResult = await aicliService.killSession(sessionId, reason);
-
-    if (!killResult.success) {
-      logger.warn('Session kill failed', {
-        sessionId,
+  // Update device heartbeat if device context provided
+  if (deviceId && userId) {
+    try {
+      deviceRegistry.updateLastSeen(deviceId);
+    } catch (error) {
+      logger.warn('Failed to update device heartbeat', {
         requestId,
-        reason: killResult.error,
-      });
-
-      return res.status(404).json({
-        success: false,
-        error: killResult.error || 'Session not found or not running',
+        deviceId: `${deviceId.substring(0, 8)}...`,
+        error: error.message,
       });
     }
-
-    logger.info('Session killed successfully', {
-      sessionId,
-      requestId,
-      processKilled: killResult.processKilled,
-      sessionCleaned: killResult.sessionCleaned,
-    });
-
-    // Send notification if device token provided
-    if (deviceToken) {
-      await pushNotificationService.sendAutoResponseControlNotification(deviceToken, {
-        projectPath: killResult.projectPath,
-        action: 'stop',
-        reason: `Session terminated: ${reason}`,
-        requestId,
-      });
-    }
-
-    res.json({
-      success: true,
-      sessionId,
-      message: 'Session terminated successfully',
-      processKilled: killResult.processKilled,
-      sessionCleaned: killResult.sessionCleaned,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    logger.error('Failed to kill session', {
-      sessionId,
-      requestId,
-      error: error.message,
-      stack: error.stack,
-    });
-
-    res.status(500).json({
-      success: false,
-      error: 'Failed to terminate session',
-      details: error.message,
-    });
   }
+
+  logger.info('Interrupting session processing', { sessionId, requestId });
+
+  // Pause the queue first
+  messageQueueManager.pauseQueue(sessionId);
+
+  // Then clear any pending messages
+  const clearedCount = messageQueueManager.clearQueue(sessionId);
+
+  logger.info('Session interrupted', {
+    sessionId,
+    requestId,
+    clearedMessages: clearedCount,
+  });
+
+  res.json({
+    success: true,
+    message: 'Session processing interrupted',
+    sessionId,
+    requestId,
+    clearedMessages: clearedCount,
+  });
 });
 
 export default router;

@@ -1,21 +1,22 @@
 import Foundation
 import Combine
 import Network
+import OSLog
 
 /// Manages WebSocket connection for real-time status updates
 @MainActor
 @available(iOS 16.0, macOS 13.0, *)
-final class WebSocketManager: ObservableObject {
+public final class WebSocketManager: ObservableObject {
     // MARK: - Properties
     
-    private var webSocketTask: URLSessionWebSocketTask?
+    internal var webSocketTask: URLSessionWebSocketTask?
     private let session = URLSession.shared
     private var pingTimer: Timer?
     
     @Published var isConnected = false
     @Published var connectionError: String?
     
-    private let logger = Logger(subsystem: "com.aiclicompanion", category: "WebSocket")
+    internal let logger = os.Logger(subsystem: "com.aiclicompanion", category: "WebSocket")
     // MARK: - Connection Management
     
     func connect(to serverURL: String, token: String?) {
@@ -142,7 +143,7 @@ final class WebSocketManager: ObservableObject {
         }
     }
     
-    private func handleHeartbeat(_ data: [String: Any]) {
+    internal func handleHeartbeat(_ data: [String: Any]) {
         // Enhanced logging for debugging heartbeat data
         print("📡 WebSocket: Received heartbeat data: \(data)")
         

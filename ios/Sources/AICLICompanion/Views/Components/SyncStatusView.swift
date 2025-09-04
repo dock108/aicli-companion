@@ -212,7 +212,7 @@ private struct SyncDetailsView: View {
                     if let lastSync = cloudKitSync.lastSyncDate {
                         StatusRow(
                             title: "Last Sync",
-                            value: DateFormatter.shortDateTime.string(from: lastSync),
+                            value: DateFormatterUtility.formatForMessage(lastSync),
                             systemImage: "clock",
                             color: .blue
                         )
@@ -568,14 +568,6 @@ private struct DeviceRow: View {
 
 // MARK: - DateFormatter Extension
 
-private extension DateFormatter {
-    static let shortDateTime: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .short
-        formatter.timeStyle = .short
-        return formatter
-    }()
-}
 
 // MARK: - Preview
 

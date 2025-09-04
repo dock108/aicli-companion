@@ -9,7 +9,7 @@ import { createLogger } from '../../utils/logger.js';
 
 // Import extracted modules
 import { MessageClassifier } from './message-classifier.js';
-import { PermissionHandler } from './permission-handler.js';
+import { PermissionHandler } from '../aicli-process-runner/permission-handler.js';
 import { AttachmentProcessor } from './attachment-processor.js';
 import { ResponseEmitter } from './response-emitter.js';
 import { HealthMonitor } from './health-monitor.js';
@@ -35,7 +35,7 @@ export class AICLIService extends EventEmitter {
       options.processRunner || new AICLIProcessRunner(options.processRunnerOptions);
 
     // Initialize extracted handlers
-    this.permissionHandler = new PermissionHandler(this.processRunner);
+    this.permissionHandler = new PermissionHandler(this.processRunner.config);
     this.responseEmitter = new ResponseEmitter(this.sessionManager, this);
     this.healthMonitor = new HealthMonitor(this.sessionManager, this);
     this.sessionOperations = new SessionOperations(this.sessionManager, this.processRunner, this);

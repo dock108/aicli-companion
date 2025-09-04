@@ -23,7 +23,7 @@ public class DeviceCoordinator: ObservableObject {
     
     private var webSocketManager: WebSocketManager?
     private var cancellables = Set<AnyCancellable>()
-    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "AICLICompanion", category: "DeviceCoordinator")
+    private let logger = LoggerFactory.deviceCoordinator
     
     // Device info
     private let deviceInfo: DeviceInfo

@@ -322,8 +322,7 @@ extension PushNotificationService {
             
             if let sessionId = sessionId {
                 // Store session ID for this project
-                let key = "claude_session_\(projectPath.replacingOccurrences(of: "/", with: "_"))"
-                UserDefaults.standard.set(sessionId, forKey: key)
+                SessionKeyManager.storeSessionId(sessionId, for: projectPath)
                 print("✅ Stored Claude session ID from APNS: \(sessionId) for project: \(projectPath)")
             } else {
                 print("⚠️ No session ID in APNS message for project: \(projectPath)")

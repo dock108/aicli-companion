@@ -179,20 +179,17 @@ public class AICLIMessageOperations {
     // MARK: - Session Management
     
     private func getSessionId(for projectPath: String) -> String? {
-        // Use UserDefaults to store session IDs per project
-        let key = "claude_session_\(projectPath.replacingOccurrences(of: "/", with: "_"))"
-        return UserDefaults.standard.string(forKey: key)
+        // Use SessionKeyManager to retrieve session IDs per project
+        return SessionKeyManager.sessionId(for: projectPath)
     }
     
     public func storeSessionId(_ sessionId: String, for projectPath: String) {
-        let key = "claude_session_\(projectPath.replacingOccurrences(of: "/", with: "_"))"
-        UserDefaults.standard.set(sessionId, forKey: key)
+        SessionKeyManager.storeSessionId(sessionId, for: projectPath)
         print("💾 Stored session ID \(sessionId) for project \(projectPath)")
     }
     
     func clearSessionId(for projectPath: String) {
-        let key = "claude_session_\(projectPath.replacingOccurrences(of: "/", with: "_"))"
-        UserDefaults.standard.removeObject(forKey: key)
+        SessionKeyManager.clearSession(for: projectPath)
         print("🗑️ Cleared session ID for project \(projectPath)")
     }
     

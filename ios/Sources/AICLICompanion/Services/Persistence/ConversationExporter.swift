@@ -50,8 +50,8 @@ class ConversationExporter {
     
     private func exportToMarkdown(_ conversation: Conversation) throws -> Data {
         var markdown = "# \(conversation.title)\n\n"
-        markdown += "**Created:** \(DateFormatter.exportFormatter.string(from: conversation.createdAt))\n"
-        markdown += "**Last Updated:** \(DateFormatter.exportFormatter.string(from: conversation.updatedAt))\n"
+        markdown += "**Created:** \(DateFormatterUtility.formatForExport(conversation.createdAt))\n"
+        markdown += "**Last Updated:** \(DateFormatterUtility.formatForExport(conversation.updatedAt))\n"
         
         if let workingDirectory = conversation.workingDirectory {
             markdown += "**Working Directory:** `\(workingDirectory)`\n"
@@ -61,7 +61,7 @@ class ConversationExporter {
         
         for message in conversation.messages {
             let sender = message.sender == .user ? "👤 **User**" : "🤖 **Assistant**"
-            let timestamp = DateFormatter.messageFormatter.string(from: message.timestamp)
+            let timestamp = DateFormatterUtility.formatForMessage(message.timestamp)
             
             markdown += "## \(sender) (\(timestamp))\n\n"
             markdown += "\(message.content)\n\n"
@@ -80,8 +80,8 @@ class ConversationExporter {
     private func exportToText(_ conversation: Conversation) throws -> Data {
         var text = "\(conversation.title)\n"
         text += String(repeating: "=", count: conversation.title.count) + "\n\n"
-        text += "Created: \(DateFormatter.exportFormatter.string(from: conversation.createdAt))\n"
-        text += "Last Updated: \(DateFormatter.exportFormatter.string(from: conversation.updatedAt))\n"
+        text += "Created: \(DateFormatterUtility.formatForExport(conversation.createdAt))\n"
+        text += "Last Updated: \(DateFormatterUtility.formatForExport(conversation.updatedAt))\n"
         
         if let workingDirectory = conversation.workingDirectory {
             text += "Working Directory: \(workingDirectory)\n"
@@ -91,7 +91,7 @@ class ConversationExporter {
         
         for message in conversation.messages {
             let sender = message.sender == .user ? "USER" : "ASSISTANT"
-            let timestamp = DateFormatter.messageFormatter.string(from: message.timestamp)
+            let timestamp = DateFormatterUtility.formatForMessage(message.timestamp)
             
             text += "[\(sender)] \(timestamp)\n"
             text += "\(message.content)\n\n"
@@ -128,8 +128,8 @@ class ConversationExporter {
         <body>
             <div class="header">
                 <h1>\(conversation.title)</h1>
-                <p><strong>Created:</strong> \(DateFormatter.exportFormatter.string(from: conversation.createdAt))</p>
-                <p><strong>Last Updated:</strong> \(DateFormatter.exportFormatter.string(from: conversation.updatedAt))</p>
+                <p><strong>Created:</strong> \(DateFormatterUtility.formatForExport(conversation.createdAt))</p>
+                <p><strong>Last Updated:</strong> \(DateFormatterUtility.formatForExport(conversation.updatedAt))</p>
         """
         
         if let workingDirectory = conversation.workingDirectory {
@@ -141,7 +141,7 @@ class ConversationExporter {
         for message in conversation.messages {
             let senderClass = message.sender == .user ? "user" : "assistant"
             let senderName = message.sender == .user ? "👤 User" : "🤖 Assistant"
-            let timestamp = DateFormatter.messageFormatter.string(from: message.timestamp)
+            let timestamp = DateFormatterUtility.formatForMessage(message.timestamp)
             
             html += """
             <div class="message \(senderClass)">
@@ -170,7 +170,7 @@ class ConversationExporter {
     
     private func exportMultipleToMarkdown(_ conversations: [Conversation]) throws -> Data {
         var markdown = "# Multiple Conversations Export\n\n"
-        markdown += "**Exported on:** \(DateFormatter.exportFormatter.string(from: Date()))\n"
+        markdown += "**Exported on:** \(DateFormatterUtility.formatForExport(Date()))\n"
         markdown += "**Total Conversations:** \(conversations.count)\n\n"
         
         for conversation in conversations {
@@ -186,7 +186,7 @@ class ConversationExporter {
     private func exportMultipleToText(_ conversations: [Conversation]) throws -> Data {
         var text = "Multiple Conversations Export\n"
         text += String(repeating: "=", count: 32) + "\n\n"
-        text += "Exported on: \(DateFormatter.exportFormatter.string(from: Date()))\n"
+        text += "Exported on: \(DateFormatterUtility.formatForExport(Date()))\n"
         text += "Total Conversations: \(conversations.count)\n\n"
         
         for conversation in conversations {
@@ -215,7 +215,7 @@ class ConversationExporter {
         <body>
             <div class="export-header">
                 <h1>Multiple Conversations Export</h1>
-                <p><strong>Exported on:</strong> \(DateFormatter.exportFormatter.string(from: Date()))</p>
+                <p><strong>Exported on:</strong> \(DateFormatterUtility.formatForExport(Date()))</p>
                 <p><strong>Total Conversations:</strong> \(conversations.count)</p>
             </div>
         """
@@ -302,27 +302,3 @@ class ConversationExporter {
     }
 }
 
-// MARK: - DateFormatter Extensions
-
-extension DateFormatter {
-    static let exportFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .full
-        formatter.timeStyle = .medium
-        return formatter
-    }()
-    
-    static let messageFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .short
-        formatter.timeStyle = .short
-        return formatter
-    }()
-    
-    static let timeOnly: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .none
-        formatter.timeStyle = .short
-        return formatter
-    }()
-}

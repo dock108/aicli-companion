@@ -3,6 +3,10 @@
  */
 
 import express from 'express';
+import {
+  sendSuccessResponse,
+  sendNotFoundResponse,
+} from '../utils/response-utils.js';
 const router = express.Router();
 
 // Global message store (messageId -> message content)
@@ -44,14 +48,11 @@ router.get('/:messageId', async (req, res) => {
   const message = messageStore.get(messageId);
 
   if (!message) {
-    return res.status(404).json({
-      success: false,
-      error: 'Message not found',
-    });
+    return sendNotFoundResponse(res, 'Message');
   }
 
   // Return the message content
-  res.json({
+  sendSuccessResponse(res, {
     id: messageId,
     content: message.content,
     timestamp: message.timestamp,

@@ -6,7 +6,7 @@ import OSLog
 public class ConflictResolver {
     // MARK: - Properties
     
-    private let logger = os.Logger(subsystem: Bundle.main.bundleIdentifier ?? "AICLICompanion", category: "ConflictResolver")
+    private let logger = LoggerFactory.conflictResolver
     
     // MARK: - Public Methods
     

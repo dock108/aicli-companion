@@ -92,7 +92,7 @@ public struct ContentView: View {
 
     private func checkConnection() {
         // Check if we have saved connection settings
-        isConnected = settings.hasValidConnection()
+        isConnected = ConnectionUtils.checkConnection(with: settings)
     }
     
     private func disconnectFromServer() {

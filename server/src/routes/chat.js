@@ -6,6 +6,7 @@ import { messageQueueManager, MessagePriority } from '../services/message-queue.
 import { deviceRegistry } from '../services/device-registry.js';
 import { pushNotificationService } from '../services/push-notification.js';
 import { createChatMessageHandler } from '../handlers/chat-message-handler.js';
+import { sendErrorResponse } from '../utils/response-utils.js';
 
 const logger = createLogger('ChatAPI');
 const router = express.Router();
@@ -44,10 +45,7 @@ router.post('/', async (req, res) => {
   }
 
   if (!message) {
-    return res.status(400).json({
-      success: false,
-      error: 'Message is required',
-    });
+    return sendErrorResponse(res, 'INVALID_REQUEST', 'Message is required');
   }
 
   // Handle device registration and coordination if deviceId and userId provided

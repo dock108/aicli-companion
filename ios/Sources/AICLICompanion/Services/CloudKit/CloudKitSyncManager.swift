@@ -29,7 +29,7 @@ public class CloudKitSyncManager: ObservableObject {
     private let container: CKContainer
     private let privateDatabase: CKDatabase
     private let conflictResolver = ConflictResolver()
-    private let logger = os.Logger(subsystem: Bundle.main.bundleIdentifier ?? "AICLICompanion", category: "CloudKitSync")
+    private let logger = LoggerFactory.cloudKitSync
     
     private var subscriptions = Set<AnyCancellable>()
     private var syncQueue: OperationQueue

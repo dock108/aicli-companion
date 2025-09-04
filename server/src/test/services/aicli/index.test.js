@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import { AICLIService } from '../../../services/aicli/index.js';
 
 // Mock exec for checkAvailability
-const mockExecAsync = mock.fn(async (command) => {
+const mockExecAsync = mock.fn(async (_command) => {
   return { stdout: 'aicli version 1.0.0' };
 });
 
@@ -21,7 +21,7 @@ describe('AICLIService', () => {
   beforeEach(() => {
     // Save original env
     originalEnv = process.env.NODE_ENV;
-    
+
     // Mock console methods
     mock.method(console, 'log', () => {});
     mock.method(console, 'warn', () => {});
@@ -68,7 +68,10 @@ describe('AICLIService', () => {
       try {
         // For tests with mocked dependencies, bypass normal shutdown which might hang
         // Just clean up the health monitor directly
-        if (service.healthMonitor && typeof service.healthMonitor.stopProcessHealthMonitoring === 'function') {
+        if (
+          service.healthMonitor &&
+          typeof service.healthMonitor.stopProcessHealthMonitoring === 'function'
+        ) {
           service.healthMonitor.stopProcessHealthMonitoring();
         }
         if (typeof service.removeAllListeners === 'function') {
@@ -78,7 +81,7 @@ describe('AICLIService', () => {
         // Ignore shutdown errors in tests
       }
     }
-    
+
     mock.restoreAll();
     process.env.NODE_ENV = originalEnv;
     delete global.execAsync;
@@ -127,7 +130,7 @@ describe('AICLIService', () => {
   describe('setAllowedTools', () => {
     it('should set allowed tools', () => {
       const tools = ['Read', 'Write'];
-      
+
       service.setAllowedTools(tools);
 
       assert.deepStrictEqual(service.permissionHandler.config.allowedTools, tools);
@@ -137,7 +140,7 @@ describe('AICLIService', () => {
   describe('setDisallowedTools', () => {
     it('should set disallowed tools', () => {
       const tools = ['Delete', 'Execute'];
-      
+
       service.setDisallowedTools(tools);
 
       assert.deepStrictEqual(service.permissionHandler.config.disallowedTools, tools);
@@ -147,7 +150,7 @@ describe('AICLIService', () => {
   describe('setSafeRootDirectory', () => {
     it('should set safe root directory', () => {
       const dir = '/safe/root';
-      
+
       service.setSafeRootDirectory(dir);
 
       assert.strictEqual(service.safeRootDirectory, dir);
@@ -185,12 +188,12 @@ describe('AICLIService', () => {
       service.checkAvailability = async () => {
         return {
           available: false,
-          error: 'Command not found'
+          error: 'Command not found',
         };
       };
 
       const result = await service.checkAvailability();
-      
+
       assert.strictEqual(result.available, false);
       assert.strictEqual(result.error, 'Command not found');
     });
@@ -277,7 +280,7 @@ describe('AICLIService', () => {
         filePaths: ['/tmp/file1'],
         cleanup: mock.fn(),
       };
-      
+
       service.processAttachments = mock.fn(async () => mockAttachmentData);
       service.sendStreamingPrompt = mock.fn(async () => ({ success: true }));
 
@@ -291,7 +294,7 @@ describe('AICLIService', () => {
 
     it('should handle invalid input', async () => {
       // Mock InputValidator to return invalid
-      service.sendPrompt = async (prompt, options) => {
+      service.sendPrompt = async (prompt, _options) => {
         if (!prompt) {
           throw new Error('Invalid input: Prompt is required');
         }
@@ -303,7 +306,7 @@ describe('AICLIService', () => {
           await service.sendPrompt('', {});
         },
         {
-          message: 'Invalid input: Prompt is required'
+          message: 'Invalid input: Prompt is required',
         }
       );
     });
@@ -328,8 +331,8 @@ describe('AICLIService', () => {
     });
 
     it('should handle shutdown timeout', async () => {
-      mockSessionManager.cleanupAllSessions.mock.mockImplementationOnce(() => 
-        new Promise((resolve) => setTimeout(resolve, 20000))
+      mockSessionManager.cleanupAllSessions.mock.mockImplementationOnce(
+        () => new Promise((resolve) => setTimeout(resolve, 20000))
       );
 
       service.healthMonitor.stopProcessHealthMonitoring = mock.fn();
@@ -491,7 +494,7 @@ describe('AICLIService', () => {
 
       // Trigger the event
       const handler = mockSessionManager.on.mock.calls.find(
-        call => call.arguments[0] === 'sessionCleaned'
+        (call) => call.arguments[0] === 'sessionCleaned'
       );
       if (handler) {
         handler.arguments[1]({ sessionId: 'session123' });
@@ -504,15 +507,18 @@ describe('AICLIService', () => {
     it('should clean up dead session on process exit with error', () => {
       // Find the processExit handler
       const handler = mockProcessRunner.on.mock.calls.find(
-        call => call.arguments[0] === 'processExit'
+        (call) => call.arguments[0] === 'processExit'
       );
-      
+
       if (handler) {
         handler.arguments[1]({ sessionId: 'session123', code: 1 });
       }
 
       assert.strictEqual(mockSessionManager.cleanupDeadSession.mock.callCount(), 1);
-      assert.strictEqual(mockSessionManager.cleanupDeadSession.mock.calls[0].arguments[0], 'session123');
+      assert.strictEqual(
+        mockSessionManager.cleanupDeadSession.mock.calls[0].arguments[0],
+        'session123'
+      );
     });
   });
 });

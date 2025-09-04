@@ -395,7 +395,9 @@ export class AICLIService extends EventEmitter {
     const timeoutMs = process.env.NODE_ENV === 'test' ? 1000 : 10000;
     await Promise.race([
       this.sessionManager.cleanupAllSessions(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Shutdown timeout')), timeoutMs)),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Shutdown timeout')), timeoutMs)
+      ),
     ]).catch((error) => {
       // Ignore timeout errors in test mode - just continue with cleanup
       if (process.env.NODE_ENV !== 'test') {

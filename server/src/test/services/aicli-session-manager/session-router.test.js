@@ -149,7 +149,7 @@ describe('SessionRouter', () => {
 
       assert.strictEqual(mockStorage.hasActiveSession.mock.callCount(), 1);
       assert.strictEqual(mockStorage.addActiveSession.mock.callCount(), 1);
-      
+
       const call = mockStorage.addActiveSession.mock.calls[0];
       assert.strictEqual(call.arguments[0], sessionId);
       assert.strictEqual(call.arguments[1].sessionId, sessionId);
@@ -176,7 +176,7 @@ describe('SessionRouter', () => {
 
       assert.strictEqual(result, true);
       assert.strictEqual(mockStorage.addClaudeSession.mock.callCount(), 1);
-      
+
       const call = mockStorage.addClaudeSession.mock.calls[0];
       assert.strictEqual(call.arguments[0], claudeSessionId);
       assert.strictEqual(call.arguments[1].ourSessionId, ourSessionId);
@@ -223,9 +223,9 @@ describe('SessionRouter', () => {
     it('should find Claude session from our session reference', () => {
       const ourSessionId = 'our123';
       const claudeSessionId = 'claude456';
-      const ourSession = { 
-        sessionId: ourSessionId, 
-        claudeSessionId 
+      const ourSession = {
+        sessionId: ourSessionId,
+        claudeSessionId,
       };
 
       mockStorage.activeSessions.set(ourSessionId, ourSession);
@@ -269,9 +269,9 @@ describe('SessionRouter', () => {
     it('should search active sessions if no Claude session data', () => {
       const ourSessionId = 'our123';
       const claudeSessionId = 'claude456';
-      const session = { 
-        sessionId: ourSessionId, 
-        claudeSessionId 
+      const session = {
+        sessionId: ourSessionId,
+        claudeSessionId,
       };
 
       mockStorage.activeSessions.set(ourSessionId, session);

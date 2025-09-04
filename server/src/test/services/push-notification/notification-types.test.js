@@ -2,7 +2,7 @@ import { describe, it, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert';
 
 // Create a mock apn module BEFORE importing NotificationTypes
-const mockApn = {
+const _mockApn = {
   Notification: class MockNotification {
     constructor() {
       this.expiry = null;
@@ -18,12 +18,12 @@ const mockApn = {
       this.threadId = null;
       this.mutableContent = null;
     }
-  }
+  },
 };
 
 // Mock the module resolution
-import { register } from 'node:module';
-import { pathToFileURL } from 'node:url';
+// import { register } from 'node:module';
+// import { pathToFileURL } from 'node:url';
 
 // Unfortunately, we can't easily mock ES modules in Node.js test runner
 // So we'll import and test what we can
@@ -37,7 +37,7 @@ describe('NotificationTypes', () => {
   beforeEach(() => {
     // Save original env
     originalEnv = process.env.APNS_BUNDLE_ID;
-    
+
     // Mock console methods
     mock.method(console, 'log', () => {});
 
@@ -45,8 +45,8 @@ describe('NotificationTypes', () => {
     mockFormatter = {
       formatAttachmentText: mock.fn(() => ' [📎]'),
       formatThinkingPrefix: mock.fn(() => '🤔 '),
-      truncateMessage: mock.fn((msg, len) => msg ? msg.substring(0, len) : ''),
-      createPreview: mock.fn((msg, len) => msg ? msg.substring(0, len) : ''),
+      truncateMessage: mock.fn((msg, len) => (msg ? msg.substring(0, len) : '')),
+      createPreview: mock.fn((msg, len) => (msg ? msg.substring(0, len) : '')),
       formatTokenText: mock.fn((count) => `${count} tokens`),
     };
 

@@ -24,7 +24,7 @@ describe('APNsClient', () => {
   beforeEach(() => {
     // Save original env
     originalEnv = { ...process.env };
-    
+
     // Mock console methods
     mock.method(console, 'log', () => {});
     mock.method(console, 'error', () => {});
@@ -36,7 +36,7 @@ describe('APNsClient', () => {
     mockFs.existsSync.mock.resetCalls();
 
     client = new APNsClient();
-    
+
     // Override imports with mocks (since we can't mock ES modules directly)
     // We'll test the logic by mocking the provider after initialization
   });
@@ -44,7 +44,7 @@ describe('APNsClient', () => {
   afterEach(() => {
     mock.restoreAll();
     // Restore original env
-    Object.keys(process.env).forEach(key => {
+    Object.keys(process.env).forEach((key) => {
       if (!(key in originalEnv)) {
         delete process.env[key];
       }
@@ -72,7 +72,7 @@ describe('APNsClient', () => {
 
       // Since we can't mock the import, we verify the state
       assert.strictEqual(client.bundleId, 'com.test.app');
-      
+
       // Restore
       if (global.fs && originalExists) {
         global.fs.existsSync = originalExists;
@@ -159,7 +159,7 @@ describe('APNsClient', () => {
     });
 
     it('should send notification successfully', async () => {
-      mockProvider.send.mock.mockImplementation(() => 
+      mockProvider.send.mock.mockImplementation(() =>
         Promise.resolve({ sent: ['device1'], failed: [] })
       );
 
@@ -174,10 +174,10 @@ describe('APNsClient', () => {
     });
 
     it('should handle BadDeviceToken error', async () => {
-      mockProvider.send.mock.mockImplementation(() => 
-        Promise.resolve({ 
-          sent: [], 
-          failed: [{ response: { reason: 'BadDeviceToken' } }] 
+      mockProvider.send.mock.mockImplementation(() =>
+        Promise.resolve({
+          sent: [],
+          failed: [{ response: { reason: 'BadDeviceToken' } }],
         })
       );
 
@@ -191,10 +191,10 @@ describe('APNsClient', () => {
     });
 
     it('should handle ExpiredProviderToken error', async () => {
-      mockProvider.send.mock.mockImplementation(() => 
-        Promise.resolve({ 
-          sent: [], 
-          failed: [{ response: { reason: 'ExpiredProviderToken' } }] 
+      mockProvider.send.mock.mockImplementation(() =>
+        Promise.resolve({
+          sent: [],
+          failed: [{ response: { reason: 'ExpiredProviderToken' } }],
         })
       );
 
@@ -208,10 +208,10 @@ describe('APNsClient', () => {
     });
 
     it('should handle generic error', async () => {
-      mockProvider.send.mock.mockImplementation(() => 
-        Promise.resolve({ 
-          sent: [], 
-          failed: [{ response: { reason: 'GenericError' } }] 
+      mockProvider.send.mock.mockImplementation(() =>
+        Promise.resolve({
+          sent: [],
+          failed: [{ response: { reason: 'GenericError' } }],
         })
       );
 
@@ -225,9 +225,7 @@ describe('APNsClient', () => {
     });
 
     it('should handle no results', async () => {
-      mockProvider.send.mock.mockImplementation(() => 
-        Promise.resolve({ sent: [], failed: [] })
-      );
+      mockProvider.send.mock.mockImplementation(() => Promise.resolve({ sent: [], failed: [] }));
 
       const notification = { alert: 'Test' };
       const deviceToken = 'device123';
@@ -246,16 +244,16 @@ describe('APNsClient', () => {
           await client.send({}, 'token');
         },
         {
-          message: 'APNs provider not initialized'
+          message: 'APNs provider not initialized',
         }
       );
     });
 
     it('should handle failed without response', async () => {
-      mockProvider.send.mock.mockImplementation(() => 
-        Promise.resolve({ 
-          sent: [], 
-          failed: [{}] // No response property
+      mockProvider.send.mock.mockImplementation(() =>
+        Promise.resolve({
+          sent: [],
+          failed: [{}], // No response property
         })
       );
 

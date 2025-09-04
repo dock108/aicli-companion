@@ -12,7 +12,7 @@ describe('SessionMonitor', () => {
   beforeEach(() => {
     // Save original env
     originalEnv = process.env.NODE_ENV;
-    
+
     // Mock console methods
     mock.method(console, 'log', () => {});
     mock.method(console, 'debug', () => {});
@@ -99,7 +99,7 @@ describe('SessionMonitor', () => {
     it('should stop monitoring interval', () => {
       process.env.NODE_ENV = 'development';
       monitor.start();
-      
+
       monitor.stop();
 
       assert.strictEqual(monitor.monitoringInterval, null);
@@ -117,7 +117,7 @@ describe('SessionMonitor', () => {
       const now = Date.now();
       const sessionId = 'claude123';
       const sessionData = {
-        lastActivity: now - (21 * 60 * 60 * 1000), // 21 hours ago
+        lastActivity: now - 21 * 60 * 60 * 1000, // 21 hours ago
       };
 
       mockStorage.claudeSessions.set(sessionId, sessionData);
@@ -135,7 +135,7 @@ describe('SessionMonitor', () => {
       const now = Date.now();
       const sessionId = 'claude123';
       const sessionData = {
-        lastActivity: now - (25 * 60 * 60 * 1000), // 25 hours ago
+        lastActivity: now - 25 * 60 * 60 * 1000, // 25 hours ago
       };
 
       mockStorage.claudeSessions.set(sessionId, sessionData);
@@ -153,8 +153,8 @@ describe('SessionMonitor', () => {
       const now = Date.now();
       const sessionId = 'claude123';
       const sessionData = {
-        lastActivity: now - (21 * 60 * 60 * 1000), // 21 hours ago
-        warningsSent: ['timeout_warning']
+        lastActivity: now - 21 * 60 * 60 * 1000, // 21 hours ago
+        warningsSent: ['timeout_warning'],
       };
 
       mockStorage.claudeSessions.set(sessionId, sessionData);
@@ -185,7 +185,7 @@ describe('SessionMonitor', () => {
 
       assert.strictEqual(checkTimeoutSpy.mock.callCount(), 1);
       assert.strictEqual(checkTimeoutSpy.mock.calls[0].arguments[0], sessionId);
-      
+
       clearTimeout(session.timeoutId);
     });
   });
@@ -195,8 +195,8 @@ describe('SessionMonitor', () => {
       const sessionId = 'session123';
       const session = {
         sessionId,
-        lastActivity: Date.now() - (25 * 60 * 60 * 1000), // 25 hours ago
-        createdAt: Date.now() - (26 * 60 * 60 * 1000),
+        lastActivity: Date.now() - 25 * 60 * 60 * 1000, // 25 hours ago
+        createdAt: Date.now() - 26 * 60 * 60 * 1000,
       };
 
       mockStorage.activeSessions.set(sessionId, session);
@@ -209,7 +209,7 @@ describe('SessionMonitor', () => {
       assert.strictEqual(mockStorage.removeActiveSession.mock.callCount(), 1);
       assert.strictEqual(mockStorage.removeMessageBuffer.mock.callCount(), 1);
       assert.strictEqual(mockEventEmitter.emit.mock.callCount(), 1);
-      
+
       const call = mockEventEmitter.emit.mock.calls[0];
       assert.strictEqual(call.arguments[0], 'sessionTimeout');
       assert.strictEqual(call.arguments[1].reason, 'inactivity');
@@ -219,8 +219,8 @@ describe('SessionMonitor', () => {
       const sessionId = 'session123';
       const session = {
         sessionId,
-        lastActivity: Date.now() - (25 * 60 * 60 * 1000), // 25 hours ago
-        createdAt: Date.now() - (26 * 60 * 60 * 1000),
+        lastActivity: Date.now() - 25 * 60 * 60 * 1000, // 25 hours ago
+        createdAt: Date.now() - 26 * 60 * 60 * 1000,
       };
 
       mockStorage.activeSessions.set(sessionId, session);
@@ -248,7 +248,7 @@ describe('SessionMonitor', () => {
       // Since it's imported at module level, we'll test the actual behavior
       // by checking the function exists and returns boolean
       const result = monitor.checkPendingMessages('session123');
-      
+
       assert.strictEqual(typeof result, 'boolean');
     });
   });
@@ -258,11 +258,11 @@ describe('SessionMonitor', () => {
       const now = Date.now();
       const expiredOld = {
         expired: true,
-        lastActivity: now - (26 * 60 * 60 * 1000), // 26 hours ago
+        lastActivity: now - 26 * 60 * 60 * 1000, // 26 hours ago
       };
       const expiredRecent = {
         expired: true,
-        lastActivity: now - (24.5 * 60 * 60 * 1000), // 24.5 hours ago
+        lastActivity: now - 24.5 * 60 * 60 * 1000, // 24.5 hours ago
       };
       const notExpired = {
         lastActivity: now - 1000,
@@ -300,7 +300,7 @@ describe('SessionMonitor', () => {
 
       assert.strictEqual(mockStorage.removeActiveSession.mock.callCount(), 1);
       assert.strictEqual(mockStorage.removeMessageBuffer.mock.callCount(), 1);
-      
+
       // Verify timeout was cleared (won't throw if already cleared)
       clearTimeout(timeoutId);
     });

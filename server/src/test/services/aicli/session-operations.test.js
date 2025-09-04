@@ -45,15 +45,15 @@ describe('SessionOperations', () => {
         return Array.from(mockSessionManager.sessions.values());
       }),
 
-      trackSessionForRouting: mock.fn(async (sessionId, workingDirectory) => {
+      trackSessionForRouting: mock.fn(async (_sessionId, _workingDirectory) => {
         // Mock implementation
       }),
 
-      trackClaudeSessionActivity: mock.fn((sessionId) => {
+      trackClaudeSessionActivity: mock.fn((_sessionId) => {
         // Mock implementation
       }),
 
-      markSessionBackgrounded: mock.fn(async (sessionId, reason, metadata) => {
+      markSessionBackgrounded: mock.fn(async (sessionId, reason, _metadata) => {
         const session = mockSessionManager.sessions.get(sessionId);
         if (session) {
           session.backgrounded = true;
@@ -62,7 +62,7 @@ describe('SessionOperations', () => {
         return session;
       }),
 
-      markSessionForegrounded: mock.fn(async (sessionId, metadata) => {
+      markSessionForegrounded: mock.fn(async (sessionId, _metadata) => {
         const session = mockSessionManager.sessions.get(sessionId);
         if (session) {
           session.backgrounded = false;
@@ -74,7 +74,7 @@ describe('SessionOperations', () => {
 
     // Mock process runner
     mockProcessRunner = {
-      executeAICLICommand: mock.fn(async (session, prompt, attachmentPaths) => {
+      executeAICLICommand: mock.fn(async (_session, _prompt, _attachmentPaths) => {
         return {
           success: true,
           claudeSessionId: 'claude123',
@@ -82,7 +82,7 @@ describe('SessionOperations', () => {
         };
       }),
 
-      killProcess: mock.fn(async (sessionId, reason) => {
+      killProcess: mock.fn(async (_sessionId, _reason) => {
         // Mock implementation
       }),
     };
@@ -112,7 +112,7 @@ describe('SessionOperations', () => {
       assert.strictEqual(result.success, true);
       assert.strictEqual(result.claudeSessionId, 'claude123');
       assert.strictEqual(mockProcessRunner.executeAICLICommand.mock.callCount(), 1);
-      
+
       const call = mockProcessRunner.executeAICLICommand.mock.calls[0];
       assert.strictEqual(call.arguments[0].claudeSessionId, sessionId);
       assert.strictEqual(call.arguments[1], prompt);
@@ -196,7 +196,7 @@ describe('SessionOperations', () => {
 
     it('should retry on session expired error', async () => {
       const prompt = 'Test prompt';
-      
+
       let callCount = 0;
       mockProcessRunner.executeAICLICommand = mock.fn(async () => {
         callCount++;
@@ -223,7 +223,7 @@ describe('SessionOperations', () => {
 
     it('should retry on session not found error', async () => {
       const prompt = 'Test prompt';
-      
+
       // First call throws session not found error
       mockProcessRunner.executeAICLICommand.mock.mockImplementationOnce(() => {
         const error = new Error('session not found');
@@ -245,7 +245,7 @@ describe('SessionOperations', () => {
 
     it('should throw non-session errors', async () => {
       const prompt = 'Test prompt';
-      
+
       mockProcessRunner.executeAICLICommand.mock.mockImplementationOnce(() => {
         throw new Error('Network error');
       });
@@ -255,7 +255,7 @@ describe('SessionOperations', () => {
           await sessionOperations.sendPromptToClaude(prompt, {});
         },
         {
-          message: 'Network error'
+          message: 'Network error',
         }
       );
     });
@@ -276,7 +276,7 @@ describe('SessionOperations', () => {
     it('should handle rate limiting with retry', async () => {
       const session = { sessionId: 'session123' };
       const prompt = 'Rate limited prompt';
-      
+
       let callCount = 0;
       mockProcessRunner.executeAICLICommand = mock.fn(async () => {
         callCount++;
@@ -303,7 +303,7 @@ describe('SessionOperations', () => {
     it('should handle init response in error', async () => {
       const session = { sessionId: 'session123', workingDirectory: '/dir' };
       const prompt = 'Init prompt';
-      
+
       mockProcessRunner.executeAICLICommand.mock.mockImplementationOnce(() => {
         const error = new Error('Init error');
         error.response = {
@@ -326,7 +326,7 @@ describe('SessionOperations', () => {
       const session = { sessionId: 'session123' };
       const prompt = 'Always fails';
       const maxAttempts = 2;
-      
+
       mockProcessRunner.executeAICLICommand.mock.mockImplementation(() => {
         const error = new Error('Rate limited');
         error.code = 'RATE_LIMITED';
@@ -339,7 +339,7 @@ describe('SessionOperations', () => {
         },
         {
           message: 'Rate limited',
-          code: 'RATE_LIMITED'
+          code: 'RATE_LIMITED',
         }
       );
 
@@ -349,7 +349,7 @@ describe('SessionOperations', () => {
     it('should bubble up session expired errors', async () => {
       const session = { sessionId: 'session123' };
       const prompt = 'Expired session';
-      
+
       mockProcessRunner.executeAICLICommand.mock.mockImplementationOnce(() => {
         throw new Error('Session expired');
       });
@@ -359,7 +359,7 @@ describe('SessionOperations', () => {
           await sessionOperations.executeAICLICommand(session, prompt);
         },
         {
-          message: 'Session expired'
+          message: 'Session expired',
         }
       );
     });
@@ -434,7 +434,7 @@ describe('SessionOperations', () => {
           await sessionOperations.killSession(sessionId);
         },
         {
-          message: 'Kill failed'
+          message: 'Kill failed',
         }
       );
     });
@@ -500,7 +500,9 @@ describe('SessionOperations', () => {
       const session = { sessionId };
       mockSessionManager.sessions.set(sessionId, session);
 
-      const result = await sessionOperations.markSessionBackgrounded(sessionId, 'User action', { extra: 'data' });
+      const result = await sessionOperations.markSessionBackgrounded(sessionId, 'User action', {
+        extra: 'data',
+      });
 
       assert.strictEqual(result, session);
       assert.strictEqual(mockSessionManager.markSessionBackgrounded.mock.callCount(), 1);

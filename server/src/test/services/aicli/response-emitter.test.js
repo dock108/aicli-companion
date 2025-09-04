@@ -24,8 +24,8 @@ const mockAICLIMessageHandler = {
     finalResponseData: null,
     deferredFinalResult: null,
   })),
-  
-  processResponse: mock.fn((response, buffer, options) => {
+
+  processResponse: mock.fn((response, _buffer, _options) => {
     // Return different results based on response type
     if (response.type === 'permission_request') {
       return {
@@ -103,7 +103,7 @@ describe.skip('ResponseEmitter', () => {
     // Mock session manager
     mockSessionManager = {
       sessionMessageBuffers: new Map(),
-      
+
       getSessionBuffer: mock.fn((sessionId) => {
         return mockSessionManager.sessionMessageBuffers.get(sessionId);
       }),
@@ -120,7 +120,7 @@ describe.skip('ResponseEmitter', () => {
         return { sessionId, workingDirectory: '/test/dir' };
       }),
 
-      trackSessionForRouting: mock.fn(async (sessionId, workingDirectory) => {
+      trackSessionForRouting: mock.fn(async (_sessionId, _workingDirectory) => {
         // Mock implementation
       }),
     };
@@ -169,7 +169,7 @@ describe.skip('ResponseEmitter', () => {
     it('should handle permission request', async () => {
       const sessionId = 'session123';
       const response = { type: 'permission_request', prompt: 'Allow?', options: ['yes', 'no'] };
-      
+
       // Set up existing buffer
       const buffer = mockAICLIMessageHandler.createSessionBuffer();
       mockSessionManager.sessionMessageBuffers.set(sessionId, buffer);
@@ -185,7 +185,7 @@ describe.skip('ResponseEmitter', () => {
     it('should handle tool use', async () => {
       const sessionId = 'session123';
       const response = { type: 'tool_use' };
-      
+
       // Set up existing buffer
       const buffer = mockAICLIMessageHandler.createSessionBuffer();
       mockSessionManager.sessionMessageBuffers.set(sessionId, buffer);
@@ -200,11 +200,11 @@ describe.skip('ResponseEmitter', () => {
     it('should handle final result', async () => {
       const sessionId = 'session123';
       const response = { type: 'final' };
-      
+
       // Set up existing buffer
       const buffer = mockAICLIMessageHandler.createSessionBuffer();
       mockSessionManager.sessionMessageBuffers.set(sessionId, buffer);
-      
+
       // Override the AICLIMessageHandler import
       global.AICLIMessageHandler = mockAICLIMessageHandler;
 
@@ -218,7 +218,7 @@ describe.skip('ResponseEmitter', () => {
     it('should handle buffer action', async () => {
       const sessionId = 'session123';
       const response = { type: 'buffer' };
-      
+
       // Set up existing buffer
       const buffer = mockAICLIMessageHandler.createSessionBuffer();
       mockSessionManager.sessionMessageBuffers.set(sessionId, buffer);
@@ -231,7 +231,7 @@ describe.skip('ResponseEmitter', () => {
     it('should handle skip action', async () => {
       const sessionId = 'session123';
       const response = { type: 'skip' };
-      
+
       // Set up existing buffer
       const buffer = mockAICLIMessageHandler.createSessionBuffer();
       mockSessionManager.sessionMessageBuffers.set(sessionId, buffer);
@@ -245,7 +245,7 @@ describe.skip('ResponseEmitter', () => {
       const sessionId = 'session123';
       const response = { type: 'final' };
       const options = { custom: 'option' };
-      
+
       // Set up existing buffer
       const buffer = mockAICLIMessageHandler.createSessionBuffer();
       mockSessionManager.sessionMessageBuffers.set(sessionId, buffer);
@@ -261,7 +261,7 @@ describe.skip('ResponseEmitter', () => {
     it('should buffer final response when permission pending', async () => {
       const sessionId = 'session123';
       const data = { content: 'Final result' };
-      
+
       const buffer = mockAICLIMessageHandler.createSessionBuffer();
       buffer.pendingPermission = true;
       mockSessionManager.sessionMessageBuffers.set(sessionId, buffer);
@@ -277,7 +277,7 @@ describe.skip('ResponseEmitter', () => {
       const sessionId = 'session123';
       const data = { content: 'Final result' };
       const options = { deferEmission: true };
-      
+
       const buffer = mockAICLIMessageHandler.createSessionBuffer();
       mockSessionManager.sessionMessageBuffers.set(sessionId, buffer);
 
@@ -290,7 +290,7 @@ describe.skip('ResponseEmitter', () => {
     it('should emit final result immediately', async () => {
       const sessionId = 'session123';
       const data = { content: 'Final result' };
-      
+
       const buffer = mockAICLIMessageHandler.createSessionBuffer();
       mockSessionManager.sessionMessageBuffers.set(sessionId, buffer);
 
@@ -317,7 +317,7 @@ describe.skip('ResponseEmitter', () => {
     it('should emit deferred result', async () => {
       const sessionId = 'session123';
       const deferredData = { content: 'Deferred result' };
-      
+
       const buffer = mockAICLIMessageHandler.createSessionBuffer();
       buffer.deferredFinalResult = deferredData;
       mockSessionManager.sessionMessageBuffers.set(sessionId, buffer);
@@ -340,7 +340,7 @@ describe.skip('ResponseEmitter', () => {
 
     it('should handle buffer without deferred result', async () => {
       const sessionId = 'session123';
-      
+
       const buffer = mockAICLIMessageHandler.createSessionBuffer();
       mockSessionManager.sessionMessageBuffers.set(sessionId, buffer);
 
@@ -358,7 +358,7 @@ describe.skip('ResponseEmitter', () => {
       buffer.pendingPermission = true;
       buffer.pendingFinalResponse = true;
       buffer.finalResponseData = { data: 'final' };
-      
+
       mockSessionManager.sessionMessageBuffers.set(sessionId, buffer);
 
       const result = responseEmitter.getSessionBuffer(sessionId);
@@ -392,7 +392,10 @@ describe.skip('ResponseEmitter', () => {
       responseEmitter.clearSessionBuffer(sessionId);
 
       assert.strictEqual(mockSessionManager.clearSessionBuffer.mock.callCount(), 1);
-      assert.strictEqual(mockSessionManager.clearSessionBuffer.mock.calls[0].arguments[0], sessionId);
+      assert.strictEqual(
+        mockSessionManager.clearSessionBuffer.mock.calls[0].arguments[0],
+        sessionId
+      );
     });
 
     it('should handle missing clearSessionBuffer method', () => {

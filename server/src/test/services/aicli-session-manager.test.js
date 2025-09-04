@@ -86,14 +86,14 @@ describe('AICLISessionManager', () => {
         expired: true,
         createdAt: oldTime - 1000, // Created before lastActivity
       };
-      
+
       // Add directly to storage without going through trackClaudeSessionActivity
       sessionManager.storage.addClaudeSession('expired-session', expiredSession);
-      
+
       // Override the lastActivity to prevent addClaudeSession from resetting it
       const session = sessionManager.storage.getClaudeSession('expired-session');
       session.lastActivity = oldTime; // Reset to old time after addClaudeSession
-      
+
       // Verify setup
       assert(session.expired, 'Session should be marked as expired');
       assert(Date.now() - session.lastActivity > 2000, 'Session should be old enough');
@@ -101,7 +101,11 @@ describe('AICLISessionManager', () => {
       sessionManager.cleanupExpiredClaudeSessions();
 
       // Use storage API to check for session
-      assert.strictEqual(sessionManager.storage.getClaudeSession('expired-session'), undefined, 'Session should have been cleaned up');
+      assert.strictEqual(
+        sessionManager.storage.getClaudeSession('expired-session'),
+        undefined,
+        'Session should have been cleaned up'
+      );
     });
 
     it('should not cleanup active sessions', async () => {

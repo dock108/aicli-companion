@@ -15,7 +15,7 @@ describe('OutputProcessor', () => {
     mock.method(console, 'error', () => {});
 
     processor = new OutputProcessor();
-    
+
     // Mock the parser
     mockParser = {
       parse: mock.fn(() => ({})),
@@ -29,99 +29,119 @@ describe('OutputProcessor', () => {
 
   describe('processOutput', () => {
     it('should process streaming JSON response', () => {
-      const jsonOutput = JSON.stringify({ 
-        type: 'message', 
+      const jsonOutput = JSON.stringify({
+        type: 'message',
         content: [{ type: 'text', text: 'Hello' }],
-        session_id: 'session123' 
+        session_id: 'session123',
       });
       const sessionId = 'test-session';
-      let resolvedValue;
-      const promiseResolve = (value) => { resolvedValue = value; };
+      let _resolvedValue;
+      const promiseResolve = (value) => {
+        _resolvedValue = value;
+      };
       const reject = () => {};
 
       const result = processor.processOutput(jsonOutput, sessionId, promiseResolve, reject);
 
       assert.strictEqual(result, true);
-      assert(resolvedValue);
-      assert.strictEqual(resolvedValue.success, true);
-      assert.strictEqual(resolvedValue.isStreaming, true);
-      assert.strictEqual(resolvedValue.claudeSessionId, 'session123');
+      assert(_resolvedValue);
+      assert.strictEqual(_resolvedValue.success, true);
+      assert.strictEqual(_resolvedValue.isStreaming, true);
+      assert.strictEqual(_resolvedValue.claudeSessionId, 'session123');
     });
 
     it('should handle test format responses', () => {
       process.env.NODE_ENV = 'test';
       const jsonOutput = JSON.stringify({ type: 'result', data: 'test data' });
       const sessionId = 'test-session';
-      let resolvedValue;
-      const promiseResolve = (value) => { resolvedValue = value; };
+      let _resolvedValue;
+      const promiseResolve = (value) => {
+        _resolvedValue = value;
+      };
       const reject = () => {};
 
       const result = processor.processOutput(jsonOutput, sessionId, promiseResolve, reject);
 
       assert.strictEqual(result, true);
-      assert.deepStrictEqual(resolvedValue, { type: 'result', data: 'test data' });
-      
+      assert.deepStrictEqual(_resolvedValue, { type: 'result', data: 'test data' });
+
       process.env.NODE_ENV = undefined;
     });
 
     it('should process plain text output', () => {
       const plainOutput = 'This is plain text response';
       const sessionId = 'test-session';
-      let resolvedValue;
-      const promiseResolve = (value) => { resolvedValue = value; };
+      let _resolvedValue;
+      const promiseResolve = (value) => {
+        _resolvedValue = value;
+      };
       const reject = () => {};
 
       const result = processor.processOutput(plainOutput, sessionId, promiseResolve, reject);
 
       assert.strictEqual(result, true);
-      assert(resolvedValue);
-      assert.strictEqual(resolvedValue.success, true);
-      assert.strictEqual(resolvedValue.response, plainOutput);
-      assert.strictEqual(resolvedValue.isStreaming, false);
+      assert(_resolvedValue);
+      assert.strictEqual(_resolvedValue.success, true);
+      assert.strictEqual(_resolvedValue.response, plainOutput);
+      assert.strictEqual(_resolvedValue.isStreaming, false);
     });
 
     it('should handle empty output', () => {
       const emptyOutput = '';
       const sessionId = 'test-session';
-      let resolvedValue;
-      const promiseResolve = (value) => { resolvedValue = value; };
+      let _resolvedValue;
+      const promiseResolve = (value) => {
+        _resolvedValue = value;
+      };
       const reject = () => {};
 
       const result = processor.processOutput(emptyOutput, sessionId, promiseResolve, reject);
 
       assert.strictEqual(result, true);
-      assert(resolvedValue);
-      assert.strictEqual(resolvedValue.success, false);
-      assert.strictEqual(resolvedValue.error, 'No valid response from Claude');
+      assert(_resolvedValue);
+      assert.strictEqual(_resolvedValue.success, false);
+      assert.strictEqual(_resolvedValue.error, 'No valid response from Claude');
     });
 
     it('should handle multiple JSON lines', () => {
       const multiLine = [
         JSON.stringify({ type: 'message_start', message: { model: 'claude-3' } }),
-        JSON.stringify({ type: 'content_block_delta', delta: { type: 'text_delta', text: 'Hello ' } }),
-        JSON.stringify({ type: 'content_block_delta', delta: { type: 'text_delta', text: 'World' } }),
-        JSON.stringify({ type: 'message_delta', delta: { stop_reason: 'end_turn' } })
+        JSON.stringify({
+          type: 'content_block_delta',
+          delta: { type: 'text_delta', text: 'Hello ' },
+        }),
+        JSON.stringify({
+          type: 'content_block_delta',
+          delta: { type: 'text_delta', text: 'World' },
+        }),
+        JSON.stringify({ type: 'message_delta', delta: { stop_reason: 'end_turn' } }),
       ].join('\n');
       const sessionId = 'test-session';
-      let resolvedValue;
-      const promiseResolve = (value) => { resolvedValue = value; };
+      let _resolvedValue;
+      const promiseResolve = (value) => {
+        _resolvedValue = value;
+      };
       const reject = () => {};
 
       const result = processor.processOutput(multiLine, sessionId, promiseResolve, reject);
 
       assert.strictEqual(result, true);
-      assert(resolvedValue);
-      assert.strictEqual(resolvedValue.success, true);
-      assert.strictEqual(resolvedValue.response.result, 'Hello World');
+      assert(_resolvedValue);
+      assert.strictEqual(_resolvedValue.success, true);
+      assert.strictEqual(_resolvedValue.response.result, 'Hello World');
     });
 
     it('should handle errors during processing', () => {
       const invalidJson = '[{ "type": "invalid" }]'; // Valid JSON that will trigger processStreamingResponse
       const sessionId = 'test-session';
-      let resolvedValue;
-      const promiseResolve = (value) => { resolvedValue = value; };
+      let _resolvedValue;
+      const promiseResolve = (value) => {
+        _resolvedValue = value;
+      };
       let rejectedError;
-      const reject = (error) => { rejectedError = error; };
+      const reject = (error) => {
+        rejectedError = error;
+      };
 
       // Force an error by overriding processStreamingResponse
       processor.processStreamingResponse = () => {
@@ -136,17 +156,22 @@ describe('OutputProcessor', () => {
     });
 
     it('should include requestId in processing', () => {
-      const jsonOutput = JSON.stringify({ type: 'message', content: [{ type: 'text', text: 'Test' }] });
+      const jsonOutput = JSON.stringify({
+        type: 'message',
+        content: [{ type: 'text', text: 'Test' }],
+      });
       const sessionId = 'test-session';
       const requestId = 'req123';
-      let resolvedValue;
-      const promiseResolve = (value) => { resolvedValue = value; };
+      let _resolvedValue;
+      const promiseResolve = (value) => {
+        _resolvedValue = value;
+      };
       const reject = () => {};
 
       processor.processOutput(jsonOutput, sessionId, promiseResolve, reject, requestId);
 
-      assert(resolvedValue);
-      assert.strictEqual(resolvedValue.success, true);
+      assert(_resolvedValue);
+      assert.strictEqual(_resolvedValue.success, true);
     });
   });
 
@@ -154,7 +179,7 @@ describe('OutputProcessor', () => {
     it('should extract text from content blocks', () => {
       const jsonObjects = [
         { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Part 1 ' } },
-        { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Part 2' } }
+        { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Part 2' } },
       ];
 
       const result = processor.processStreamingResponse(jsonObjects, 'session123');
@@ -165,7 +190,7 @@ describe('OutputProcessor', () => {
     it('should extract session ID', () => {
       const jsonObjects = [
         { session_id: 'claude-session-456' },
-        { type: 'message', content: [{ type: 'text', text: 'Hello' }] }
+        { type: 'message', content: [{ type: 'text', text: 'Hello' }] },
       ];
 
       const result = processor.processStreamingResponse(jsonObjects, 'session123');
@@ -176,8 +201,11 @@ describe('OutputProcessor', () => {
     it('should extract metadata', () => {
       const jsonObjects = [
         { type: 'message_start', message: { model: 'claude-3', usage: { tokens: 100 } } },
-        { type: 'content_block_start', content_block: { type: 'tool_use', name: 'calculator', id: 'tool1' } },
-        { type: 'message_delta', delta: { stop_reason: 'max_length' }, usage: { tokens: 150 } }
+        {
+          type: 'content_block_start',
+          content_block: { type: 'tool_use', name: 'calculator', id: 'tool1' },
+        },
+        { type: 'message_delta', delta: { stop_reason: 'max_length' }, usage: { tokens: 150 } },
       ];
 
       const result = processor.processStreamingResponse(jsonObjects, 'session123');
@@ -191,13 +219,13 @@ describe('OutputProcessor', () => {
 
     it('should handle array content blocks', () => {
       const jsonObjects = [
-        { 
-          type: 'message', 
+        {
+          type: 'message',
           content: [
             { type: 'text', text: 'First ' },
-            { type: 'text', text: 'Second' }
-          ]
-        }
+            { type: 'text', text: 'Second' },
+          ],
+        },
       ];
 
       const result = processor.processStreamingResponse(jsonObjects, 'session123');
@@ -206,9 +234,7 @@ describe('OutputProcessor', () => {
     });
 
     it('should handle result type messages', () => {
-      const jsonObjects = [
-        { type: 'result', result: 'Final result text' }
-      ];
+      const jsonObjects = [{ type: 'result', result: 'Final result text' }];
 
       const result = processor.processStreamingResponse(jsonObjects, 'session123');
 
@@ -268,15 +294,15 @@ describe('OutputProcessor', () => {
         { input: 'Exception: Null pointer', expected: 'Null pointer' },
         { input: 'rate_limit_error occurred', expected: 'rate_limit_error' },
         { input: 'session expired', expected: 'session expired' },
-        { input: 'Session not found', expected: 'session not found' } // Case insensitive match
+        { input: 'Session not found', expected: 'session not found' }, // Case insensitive match
       ];
 
       for (const { input, expected } of outputs) {
         const result = processor.extractError(input);
         assert(result, `No error extracted for input: ${input}`);
         assert(
-          result.message.toLowerCase().includes(expected.toLowerCase()) || 
-          result.message.toLowerCase() === expected.toLowerCase(),
+          result.message.toLowerCase().includes(expected.toLowerCase()) ||
+            result.message.toLowerCase() === expected.toLowerCase(),
           `Expected "${expected}" but got "${result.message}" for input: ${input}`
         );
       }

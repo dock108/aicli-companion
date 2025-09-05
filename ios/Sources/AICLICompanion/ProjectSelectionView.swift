@@ -150,6 +150,70 @@ struct ProjectSelectionView: View {
                 // Projects list
                 ScrollView {
                     LazyVStack(spacing: Spacing.sm) {
+                        // Add Workspace Mode option at the top
+                        Button(action: {
+                            selectWorkspaceMode()
+                        }) {
+                            HStack(spacing: Spacing.md) {
+                                // Workspace icon
+                                ZStack {
+                                    Image(systemName: "folder.badge.gearshape")
+                                        .font(.title2)
+                                        .foregroundColor(Color.purple)
+                                        .frame(width: 40, height: 40)
+                                        .background(
+                                            Circle()
+                                                .fill(Color.purple.opacity(0.1))
+                                        )
+                                }
+                                
+                                // Workspace info
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Workspace Mode")
+                                        .font(Typography.font(.heading3))
+                                        .foregroundColor(Colors.textPrimary(for: colorScheme))
+                                    
+                                    Text("Operate across all projects")
+                                        .font(Typography.font(.caption))
+                                        .foregroundColor(Colors.textSecondary(for: colorScheme))
+                                }
+                                
+                                Spacer()
+                                
+                                // Chevron
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundColor(Colors.textSecondary(for: colorScheme))
+                            }
+                            .padding(Spacing.md)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Colors.bgCard(for: colorScheme))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color.purple.opacity(0.3), lineWidth: 1)
+                                    )
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .padding(.bottom, Spacing.sm)
+                        
+                        // Divider
+                        HStack {
+                            Rectangle()
+                                .fill(Colors.strokeLight)
+                                .frame(height: 1)
+                            Text("Projects")
+                                .font(Typography.font(.caption))
+                                .foregroundColor(Colors.textSecondary(for: colorScheme))
+                                .padding(.horizontal, Spacing.sm)
+                            Rectangle()
+                                .fill(Colors.strokeLight)
+                                .frame(height: 1)
+                        }
+                        .padding(.vertical, Spacing.sm)
+                        
+                        // Regular projects
                         ForEach(projects) { project in
                             ProjectRowView(
                                 project: project,
@@ -357,6 +421,24 @@ struct ProjectSelectionView: View {
             isProjectSelected = true
         }
         print("🟢 ProjectSelection: Selected project '\(project.name)', navigating to chat")
+    }
+    
+    private func selectWorkspaceMode() {
+        print("🔵 ProjectSelection: Entering Workspace Mode")
+        
+        // Create a special workspace project
+        let workspaceProject = Project(
+            name: "Workspace Mode",
+            path: "__workspace__",
+            type: "workspace"
+        )
+        
+        // Set both values atomically to avoid race conditions
+        withAnimation(.easeInOut(duration: 0.2)) {
+            selectedProject = workspaceProject
+            isProjectSelected = true
+        }
+        print("🟢 ProjectSelection: Workspace mode selected, navigating to chat")
     }
     
     private func disconnectFromServer() {

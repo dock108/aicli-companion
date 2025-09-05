@@ -208,9 +208,16 @@ public class AICLIMessageOperations {
         ]
         
         if let projectPath = projectPath {
-            requestBody["projectPath"] = projectPath  // Server expects camelCase
+            // Check if this is workspace mode
+            if projectPath == "__workspace__" {
+                requestBody["workspace"] = true
+                requestBody["projectPath"] = projectPath
+                print("📁 Workspace mode enabled for cross-project operations")
+            } else {
+                requestBody["projectPath"] = projectPath  // Server expects camelCase
+            }
             
-            // Include session ID if we have one for this project
+            // Include session ID if we have one for this project (or workspace)
             if let sessionId = getSessionId(for: projectPath) {
                 requestBody["sessionId"] = sessionId
                 print("📝 Including session ID in request: \(sessionId)")

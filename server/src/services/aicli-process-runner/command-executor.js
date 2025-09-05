@@ -7,6 +7,7 @@ import { createLogger } from '../../utils/logger.js';
 import { commandSecurity } from '../command-security.js';
 import { OutputProcessor } from './output-processor.js';
 import { HealthMonitor } from './health-monitor.js';
+import { ServerConfig } from '../../config/server-config.js';
 
 const logger = createLogger('CommandExecutor');
 
@@ -16,6 +17,7 @@ export class CommandExecutor {
     this.config = config;
     this.outputProcessor = new OutputProcessor();
     this.healthMonitor = new HealthMonitor();
+    this.serverConfig = new ServerConfig();
   }
 
   /**
@@ -67,9 +69,17 @@ export class CommandExecutor {
       }
     }
 
+    // Handle workspace mode - use the projects directory instead of __workspace__
+    const actualWorkingDirectory =
+      workingDirectory === '__workspace__' ? this.serverConfig.configPath : workingDirectory;
+
+    // Log for better debugging
     sessionLogger.info('Executing AICLI command', {
       sessionId,
-      workingDirectory,
+      originalWorkingDirectory: workingDirectory,
+      actualWorkingDirectory,
+      isWorkspace: workingDirectory === '__workspace__',
+      configPath: this.serverConfig.configPath,
       attachmentCount: attachmentPaths.length,
       requestId,
     });
@@ -78,7 +88,7 @@ export class CommandExecutor {
       const result = await this.runAICLIProcess(
         args,
         {
-          cwd: workingDirectory,
+          cwd: actualWorkingDirectory,
           sessionId,
           requestId,
           deviceToken,

@@ -88,8 +88,9 @@ final class ChatNotificationHandler: ObservableObject {
     
     private func logNotificationDetails(message: Message, sessionId: String, project: Project) {
         print("🎯 ChatNotificationHandler: Claude response notification validated")
-        print("🎯 Project: \(project.name) (\(project.path))")
-        print("🎯 Current Project: \(projectStateManager.currentProject?.name ?? "nil")")
+        print("🎯 Received Project: name=\(project.name), path=\(project.path)")
+        print("🎯 Current Project: name=\(projectStateManager.currentProject?.name ?? "nil"), path=\(projectStateManager.currentProject?.path ?? "nil")")
+        print("🎯 Path match: \(project.path == projectStateManager.currentProject?.path)")
         print("🎯 Message ID: \(message.id)")
         print("🎯 Message content preview: \(String(message.content.prefix(100)))...")
     }

@@ -22,13 +22,24 @@ export class SessionLifecycle {
    * Create a new interactive session
    */
   async createSession(sessionId, initialPrompt, workingDirectory, options = {}) {
+    // Check if this is a workspace session
+    const isWorkspaceSession = options.workspace === true || workingDirectory === '__workspace__';
+
     // Validate and sanitize inputs
     const sanitizedSessionId = InputValidator.sanitizeSessionId(sessionId);
     const sanitizedPrompt = InputValidator.sanitizePrompt(initialPrompt);
-    const validatedWorkingDir = await InputValidator.validateWorkingDirectory(workingDirectory);
+
+    // For workspace mode, use parent directory of all projects
+    // We'll keep __workspace__ as a marker but the actual directory is resolved later
+    const validatedWorkingDir = isWorkspaceSession
+      ? '__workspace__'
+      : await InputValidator.validateWorkingDirectory(workingDirectory);
 
     // Check if session already exists for this directory
-    const existingSession = await this.findSessionByWorkingDirectory(validatedWorkingDir);
+    // Skip check for workspace mode since it's special
+    const existingSession = isWorkspaceSession
+      ? null
+      : await this.findSessionByWorkingDirectory(validatedWorkingDir);
     if (existingSession) {
       logger.info('Reusing existing session for directory', {
         sessionId: existingSession.sessionId,
@@ -68,6 +79,14 @@ export class SessionLifecycle {
       conversationStarted: false,
       timeoutId: null,
       skipPermissions: options.skipPermissions,
+      isWorkspace: isWorkspaceSession,
+      workspaceContext: isWorkspaceSession
+        ? {
+            rootDirectory: '__workspace__', // Marker that gets resolved to actual path
+            mode: 'workspace',
+            permissions: ['read', 'crossProject'],
+          }
+        : undefined,
     };
 
     // Store session

@@ -40,11 +40,23 @@ struct ProjectContextHeader: View {
             }
             #endif
             
-            // Project name only (cleaner UI)
-            Text(project.name)
-                .font(Typography.font(.body))
-                .fontWeight(.medium)
-                .foregroundColor(Colors.textPrimary(for: colorScheme))
+            // Project name or workspace indicator
+            HStack(spacing: 8) {
+                if project.type == "workspace" {
+                    Image(systemName: "folder.badge.gearshape")
+                        .font(.system(size: 16))
+                        .foregroundColor(Color.purple)
+                }
+                Text(project.name)
+                    .font(Typography.font(.body))
+                    .fontWeight(.medium)
+                    .foregroundColor(project.type == "workspace" ? Color.purple : Colors.textPrimary(for: colorScheme))
+                if project.type == "workspace" {
+                    Text("• Cross-project operations enabled")
+                        .font(Typography.font(.caption))
+                        .foregroundColor(Colors.textSecondary(for: colorScheme))
+                }
+            }
             
             Spacer()
             

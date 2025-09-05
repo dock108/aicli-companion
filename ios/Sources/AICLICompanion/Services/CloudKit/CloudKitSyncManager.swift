@@ -240,6 +240,24 @@ public class CloudKitSyncManager: ObservableObject {
             return messages
         } catch {
             logger.error("Failed to fetch messages from CloudKit: \(error.localizedDescription)")
+            
+            // Check for specific CloudKit errors
+            if let ckError = error as? CKError {
+                switch ckError.code {
+                case .invalidArguments:
+                    // This often happens when a field isn't marked as queryable
+                    if error.localizedDescription.contains("not marked queryable") || 
+                       error.localizedDescription.contains("Field 'timestamp'") {
+                        logger.error("CloudKit schema issue: timestamp field not queryable. CloudKit sync disabled for this query.")
+                        self.errorMessage = "CloudKit configuration issue. Local storage will be used."
+                        // Don't throw - allow app to continue without CloudKit sync
+                        return []
+                    }
+                default:
+                    break
+                }
+            }
+            
             throw error
         }
     }

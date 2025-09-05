@@ -41,8 +41,6 @@ final class ChatNotificationHandler: ObservableObject {
     // MARK: - Notification Handling
     
     private func handleClaudeResponseNotification(_ notification: Notification) {
-        print("📨 ChatNotificationHandler: Received Claude response notification")
-        
         guard let payload = extractNotificationPayload(notification) else {
             debugInvalidNotification(notification)
             return
@@ -51,19 +49,14 @@ final class ChatNotificationHandler: ObservableObject {
         let (message, sessionId, project) = payload
         logNotificationDetails(message: message, sessionId: sessionId, project: project)
         
-        // Only process if this is for the current project
-        guard project.path == projectStateManager.currentProject?.path else {
-            print("🚫 ChatNotificationHandler: Ignoring message for different project")
-            print("   Received for: \(project.path)")
-            print("   Current project: \(projectStateManager.currentProject?.path ?? "none")")
-            return
-        }
-        
-        // Clear loading state for the project
+        // ALWAYS clear loading state for ANY project that receives a response
+        // This prevents stuck "Thinking" states when switching between projects
         clearLoadingStateIfNeeded(for: project)
         
-        // Add message to conversation
-        addMessageToConversation(message, for: project)
+        // Only add message to conversation if this is for the current project
+        if project.path == projectStateManager.currentProject?.path {
+            addMessageToConversation(message, for: project)
+        }
     }
     
     private func extractNotificationPayload(_ notification: Notification) -> (Message, String, Project)? {
@@ -87,29 +80,24 @@ final class ChatNotificationHandler: ObservableObject {
     }
     
     private func logNotificationDetails(message: Message, sessionId: String, project: Project) {
-        print("🎯 ChatNotificationHandler: Claude response notification validated")
-        print("🎯 Received Project: name=\(project.name), path=\(project.path)")
-        print("🎯 Current Project: name=\(projectStateManager.currentProject?.name ?? "nil"), path=\(projectStateManager.currentProject?.path ?? "nil")")
-        print("🎯 Path match: \(project.path == projectStateManager.currentProject?.path)")
-        print("🎯 Message ID: \(message.id)")
-        print("🎯 Message content preview: \(String(message.content.prefix(100)))...")
+        // Minimal logging - just project name
+        print("📨 Response for: \(project.name)")
     }
     
     private func clearLoadingStateIfNeeded(for project: Project) {
-        // Clear loading state if this is for the current project
-        if project.path == projectStateManager.currentProject?.path {
-            loadingStateManager.clearLoadingState(for: project.path)
-            
-            // Also clear waiting state in project state to re-enable send button
-            projectStateManager.updateProjectState(for: project.path) { state in
-                state.isWaitingForResponse = false
-            }
-            
-            // Clear processing state for stop button
-            print("🔄 Clearing processing state for project: \(project.path)")
-            ProjectStatusManager.shared.statusFor(project).isProcessing = false
-            print("✅ Processing state cleared. isProcessing = \(ProjectStatusManager.shared.statusFor(project).isProcessing)")
+        // Clear ALL loading states when ANY response arrives for this project
+        loadingStateManager.clearLoadingState(for: project.path)
+        
+        // Clear waiting state to re-enable send button
+        projectStateManager.updateProjectState(for: project.path) { state in
+            state.isWaitingForResponse = false
         }
+        
+        // Clear processing state (stop button becomes send button)
+        ProjectStatusManager.shared.statusFor(project).isProcessing = false
+        
+        // Clear from global coordinator
+        LoadingStateCoordinator.shared.stopProjectLoading(project.path)
     }
     
     private func addMessageToConversation(_ message: Message, for project: Project) {

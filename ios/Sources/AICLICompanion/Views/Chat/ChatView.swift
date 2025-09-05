@@ -411,18 +411,15 @@ struct ChatView: View {
                 }
             }
             
-            // Mark messages as deleted in CloudKit for this device (soft delete)
+            // Permanently delete messages from CloudKit (hard delete)
             let cloudKitManager = await CloudKitSyncManager.shared
             if await cloudKitManager.iCloudAvailable {
                 do {
-                    print("☁️ Marking messages as deleted in CloudKit for project: \(project.path)")
-                    try await cloudKitManager.markMessagesAsDeleted(for: project.path)
-                    print("☁️ Successfully marked CloudKit messages as deleted")
-                    
-                    // Small delay to ensure CloudKit propagation
-                    try await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+                    print("☁️ Deleting all messages from CloudKit for project: \(project.path)")
+                    try await cloudKitManager.deleteAllMessages(for: project.path)
+                    print("☁️ Successfully deleted all CloudKit messages")
                 } catch {
-                    print("⚠️ Failed to mark CloudKit messages as deleted: \(error)")
+                    print("⚠️ Failed to delete CloudKit messages: \(error)")
                     // Continue with local cleanup even if CloudKit fails
                 }
             }

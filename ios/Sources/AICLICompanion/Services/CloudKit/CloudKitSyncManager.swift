@@ -216,15 +216,17 @@ public class CloudKitSyncManager: ObservableObject {
                 case .success(let record):
                     // Check if this message has been marked as deleted by current device
                     if let deletedByDevices = record[CloudKitSchema.MessageFields.deletedByDevices] as? [String] {
-                        print("☁️ CloudKitSyncManager: Message \(record.recordID.recordName) deletedByDevices: \(deletedByDevices), currentDeviceId: \(currentDeviceId)")
+                        // Only log in debug mode to reduce verbosity
+                        // print("☁️ CloudKitSyncManager: Message \(record.recordID.recordName) deletedByDevices: \(deletedByDevices), currentDeviceId: \(currentDeviceId)")
                         if deletedByDevices.contains(currentDeviceId) {
                             deletedCount += 1
-                            print("☁️ CloudKitSyncManager: Skipping message marked as deleted by current device")
+                            // print("☁️ CloudKitSyncManager: Skipping message marked as deleted by current device")
                             logger.debug("Skipping message marked as deleted by current device")
                             continue
                         }
                     } else {
-                        print("☁️ CloudKitSyncManager: Message \(record.recordID.recordName) has no deletedByDevices array")
+                        // Only log in debug mode
+                        // print("☁️ CloudKitSyncManager: Message \(record.recordID.recordName) has no deletedByDevices array")
                     }
                     
                     if let message = Message.from(ckRecord: record) {
@@ -246,7 +248,7 @@ public class CloudKitSyncManager: ObservableObject {
                 switch ckError.code {
                 case .invalidArguments:
                     // This often happens when a field isn't marked as queryable
-                    if error.localizedDescription.contains("not marked queryable") || 
+                    if error.localizedDescription.contains("not marked queryable") ||
                        error.localizedDescription.contains("Field 'timestamp'") {
                         logger.error("CloudKit schema issue: timestamp field not queryable. CloudKit sync disabled for this query.")
                         self.errorMessage = "CloudKit configuration issue. Local storage will be used."
@@ -309,6 +311,72 @@ public class CloudKitSyncManager: ObservableObject {
             logger.info("Message deleted from CloudKit successfully")
         } catch {
             logger.error("Failed to delete message from CloudKit: \(error.localizedDescription)")
+            throw error
+        }
+    }
+    
+    /// Permanently delete all messages for a project from CloudKit
+    public func deleteAllMessages(for projectPath: String) async throws {
+        guard iCloudAvailable else {
+            throw CloudKitSchema.SyncError.iCloudUnavailable
+        }
+        
+        logger.info("Deleting all messages from CloudKit for project: \(projectPath)")
+        
+        do {
+            // Fetch all messages for this project
+            let predicate = NSPredicate(format: "%K == %@", CloudKitSchema.MessageFields.projectPath, projectPath)
+            let query = CKQuery(recordType: CloudKitSchema.RecordType.message, predicate: predicate)
+            
+            let (records, _) = try await privateDatabase.records(matching: query)
+            logger.info("Found \(records.count) messages to delete from CloudKit")
+            
+            // Collect record IDs to delete
+            var recordIDsToDelete: [CKRecord.ID] = []
+            
+            for (recordID, result) in records {
+                switch result {
+                case .success:
+                    recordIDsToDelete.append(recordID)
+                case .failure(let error):
+                    logger.error("Failed to fetch record: \(error.localizedDescription)")
+                }
+            }
+            
+            // Batch delete all records
+            if !recordIDsToDelete.isEmpty {
+                let deleteOperation = CKModifyRecordsOperation(
+                    recordsToSave: nil,
+                    recordIDsToDelete: recordIDsToDelete
+                )
+                
+                deleteOperation.modifyRecordsResultBlock = { result in
+                    switch result {
+                    case .success:
+                        self.logger.info("Successfully deleted \(recordIDsToDelete.count) messages from CloudKit")
+                    case .failure(let error):
+                        self.logger.error("Failed to delete messages from CloudKit: \(error.localizedDescription)")
+                    }
+                }
+                
+                privateDatabase.add(deleteOperation)
+                
+                // Wait for completion
+                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                    deleteOperation.modifyRecordsResultBlock = { result in
+                        switch result {
+                        case .success:
+                            continuation.resume()
+                        case .failure(let error):
+                            continuation.resume(throwing: error)
+                        }
+                    }
+                }
+            }
+            
+            logger.info("CloudKit message deletion completed for project: \(projectPath)")
+        } catch {
+            logger.error("Failed to delete messages from CloudKit: \(error.localizedDescription)")
             throw error
         }
     }
@@ -425,6 +493,12 @@ public class CloudKitSyncManager: ObservableObject {
                 syncStatus = .failed
                 errorMessage = error.localizedDescription
             }
+            // Check if it's the timestamp queryable error and suppress it
+            if error.localizedDescription.contains("timestamp") && error.localizedDescription.contains("queryable") {
+                logger.debug("CloudKit schema configuration issue (timestamp not queryable) - sync disabled")
+                // Don't throw for this known issue
+                return
+            }
             logger.error("Full sync failed: \(error.localizedDescription)")
             throw error
         }
@@ -451,9 +525,17 @@ public class CloudKitSyncManager: ObservableObject {
                 try await performFullSync()
             }
         } catch {
-            logger.error("Failed to setup CloudKit services: \(error.localizedDescription)")
-            await MainActor.run {
-                errorMessage = "Failed to setup CloudKit: \(error.localizedDescription)"
+            // Check if it's the timestamp queryable error and suppress it
+            if error.localizedDescription.contains("timestamp") && error.localizedDescription.contains("queryable") {
+                logger.debug("CloudKit schema configuration issue - continuing without full sync")
+                await MainActor.run {
+                    errorMessage = nil  // Clear error for this known issue
+                }
+            } else {
+                logger.error("Failed to setup CloudKit services: \(error.localizedDescription)")
+                await MainActor.run {
+                    errorMessage = "Failed to setup CloudKit: \(error.localizedDescription)"
+                }
             }
         }
     }
@@ -510,7 +592,12 @@ public class CloudKitSyncManager: ObservableObject {
                 logger.error("Server rejected subscription: \(error.localizedDescription)")
             }
         } catch {
-            logger.error("Failed to create subscriptions: \(error.localizedDescription)")
+            // Check for Session record type not found error
+            if error.localizedDescription.contains("Did not find record type: Session") {
+                logger.debug("Session record type not configured in CloudKit - subscriptions skipped")
+            } else {
+                logger.error("Failed to create subscriptions: \(error.localizedDescription)")
+            }
         }
     }
     

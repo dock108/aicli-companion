@@ -224,36 +224,37 @@ final class ChatViewModel: ObservableObject {
     
     // MARK: Kill Session
     func killSession(_ sessionId: String, for project: Project, sendNotification: Bool = true, completion: @escaping (Bool) -> Void) {
-        print("⏹️ ChatViewModel: Killing session \(sessionId) for project: \(project.name)")
+        print("⏹️ ChatViewModel: Stopping session for project: \(project.name)")
         
-        // Call the kill endpoint via AICLIService
-        aicliService.killSession(sessionId, projectPath: project.path, sendNotification: sendNotification) { [weak self] result in
-            Task { @MainActor in
-                switch result {
-                case .success:
-                    print("✅ ChatViewModel: Session killed successfully")
-                    
-                    // Clear loading states
-                    self?.loadingStateManager.setLoading(false, for: project.path)
-                    self?.loadingStateManager.setWaitingForResponse(false)
-                    
-                    // Update project state
-                    self?.projectStateManager.updateProjectState(for: project.path) { state in
-                        state.isWaitingForResponse = false
-                        state.isLoading = false
-                    }
-                    
-                    // Clear processing state for stop button
-                    ProjectStatusManager.shared.statusFor(project).isProcessing = false
-                    
-                    completion(true)
-                    
-                case .failure(let error):
-                    print("❌ ChatViewModel: Failed to kill session: \(error)")
-                    completion(false)
-                }
+        // ALWAYS clear the states immediately - user wants to stop NOW
+        // Clear loading states
+        loadingStateManager.setLoading(false, for: project.path)
+        loadingStateManager.setWaitingForResponse(false)
+        
+        // Update project state
+        projectStateManager.updateProjectState(for: project.path) { state in
+            state.isWaitingForResponse = false
+            state.isLoading = false
+        }
+        
+        // Clear processing state (stop button becomes send button)
+        ProjectStatusManager.shared.statusFor(project).isProcessing = false
+        
+        // Clear from global coordinator
+        LoadingStateCoordinator.shared.stopProjectLoading(project.path)
+        
+        // Try to notify the server, but don't block on it
+        aicliService.killSession(sessionId, projectPath: project.path, sendNotification: sendNotification) { result in
+            switch result {
+            case .success:
+                print("✅ ChatViewModel: Server notified of session stop")
+            case .failure(let error):
+                print("⚠️ ChatViewModel: Server notification failed (states already cleared): \(error)")
             }
         }
+        
+        // Always report success since we cleared the client state
+        completion(true)
     }
     
     // MARK: Add System Message

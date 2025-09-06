@@ -54,7 +54,7 @@ struct ChatInputBar: View {
             // Mode selector bar
             HStack {
                 Menu {
-                    ForEach(ChatMode.allCases, id: \.self) { mode in
+                    ForEach(ChatMode.visibleCases, id: \.self) { mode in
                         Button(action: {
                             selectedMode = mode
                             mode.save() // Persist selection

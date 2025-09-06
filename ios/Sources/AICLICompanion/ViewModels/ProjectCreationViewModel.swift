@@ -129,6 +129,11 @@ struct ReadinessLevel {
         color: .green,
         canProceed: true
     )
+    
+    // Aliases for backward compatibility
+    static let ready = productionReady
+    static let almostReady = developmentReady
+    static let needsWork = planningNeeded
 }
 
 struct Template: Identifiable, Hashable {

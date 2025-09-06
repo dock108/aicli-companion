@@ -17,77 +17,77 @@ struct PlanningValidationDashboard: View {
     @State private var showingActionItems = false
     
     var body: some View {
-        NavigationView {
-            ScrollView {
-                VStack(spacing: Spacing.lg) {
-                    // Overall readiness
-                    OverallReadinessCard(viewModel: viewModel)
-                        .padding(.horizontal)
-                    
-                    // Domain breakdown
-                    DomainScoresSection(
-                        viewModel: viewModel,
-                        selectedDomain: $selectedDomain
-                    )
+        ScrollView {
+            VStack(spacing: Spacing.lg) {
+                // Overall readiness
+                OverallReadinessCard(viewModel: viewModel)
                     .padding(.horizontal)
                     
-                    // Blockers section
-                    if !viewModel.blockers.isEmpty {
-                        BlockersSection(blockers: viewModel.blockers)
-                            .padding(.horizontal)
-                    }
+                // Domain breakdown
+                DomainScoresSection(
+                    viewModel: viewModel,
+                    selectedDomain: $selectedDomain
+                )
+                .padding(.horizontal)
                     
-                    // Suggestions
-                    if !viewModel.suggestions.isEmpty {
-                        SuggestionsSection(suggestions: viewModel.suggestions)
-                            .padding(.horizontal)
-                    }
-                    
-                    // Action items button
-                    if viewModel.hasActionItems {
-                        Button(action: { showingActionItems = true }) {
-                            HStack {
-                                Image(systemName: "checklist")
-                                Text("View Action Items (\(viewModel.actionItems.count))")
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                            }
-                            .padding()
-                            .background(Color.accentColor.opacity(0.1))
-                            .foregroundColor(.accentColor)
-                            .cornerRadius(12)
-                        }
-                        .padding(.horizontal)
-                    }
-                    
-                    // Confidence indicator
-                    ConfidenceIndicator(confidence: viewModel.analysisConfidence)
+                // Blockers section
+                if !viewModel.blockers.isEmpty {
+                    BlockersSection(blockers: viewModel.blockers)
                         .padding(.horizontal)
                 }
-                .padding(.vertical)
+                    
+                // Suggestions
+                if !viewModel.suggestions.isEmpty {
+                    SuggestionsSection(suggestions: viewModel.suggestions)
+                        .padding(.horizontal)
+                }
+                    
+                // Action items button
+                if viewModel.hasActionItems {
+                    Button(action: { showingActionItems = true }) {
+                        HStack {
+                            Image(systemName: "checklist")
+                            Text("View Action Items (\(viewModel.actionItems.count))")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                        }
+                        .padding()
+                        .background(Color.accentColor.opacity(0.1))
+                        .foregroundColor(.accentColor)
+                        .cornerRadius(12)
+                    }
+                    .padding(.horizontal)
+                }
+                    
+                // Confidence indicator
+                ConfidenceIndicator(confidence: viewModel.analysisConfidence)
+                    .padding(.horizontal)
             }
-            .navigationTitle("Planning Validation")
-            #if os(iOS)
+            .padding(.vertical)
+        }
+        .navigationTitle("Planning Validation")
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.large)
         #endif
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button("Refresh") {
-                        Task {
-                            await viewModel.analyzeCurrentConversation()
-                        }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button(viewModel.isAnalyzing ? "Analyzing..." : "Analyze") {
+                    Task {
+                        await viewModel.refreshAnalysis()
                     }
                 }
-            }
-            .sheet(isPresented: $showingActionItems) {
-                ActionItemsSheet(actionItems: viewModel.actionItems)
-            }
-            .sheet(item: $selectedDomain) { domain in
-                DomainDetailsSheet(domain: domain, viewModel: viewModel)
+                .disabled(viewModel.isAnalyzing)
             }
         }
+        .sheet(isPresented: $showingActionItems) {
+            ActionItemsSheet(actionItems: viewModel.actionItems)
+        }
+        .sheet(item: $selectedDomain) { domain in
+            DomainDetailsSheet(domain: domain, viewModel: viewModel)
+        }
         .task {
-            await viewModel.analyzeCurrentConversation()
+            // Use mock data for now since we're in planning mode
+            await viewModel.analyzeMockConversation()
         }
     }
 }

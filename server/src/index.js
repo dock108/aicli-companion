@@ -20,6 +20,7 @@ import { router as messagesRouter } from './routes/messages.js';
 import filesRoutes from './routes/files.js';
 import queueRoutes from './routes/queue.js';
 import projectManagementRoutes from './routes/project-management.js';
+import planningValidationRoutes from './routes/planning-validation.js';
 import { errorHandler } from './middleware/error.js';
 import { aicliService } from './services/aicli-instance.js';
 import { ServerConfig } from './config/server-config.js';
@@ -130,6 +131,7 @@ class AICLICompanionServer {
     this.app.use('/api/files', filesRoutes);
     this.app.use('/api/queue', queueRoutes);
     this.app.use('/api', projectManagementRoutes);
+    this.app.use('/api/planning-validation', planningValidationRoutes);
 
     // Static files (for web interface if needed)
     this.app.use('/static', express.static(join(__dirname, '../public')));

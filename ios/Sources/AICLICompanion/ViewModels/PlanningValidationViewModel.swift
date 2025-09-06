@@ -79,7 +79,7 @@ class PlanningValidationViewModel: ObservableObject {
     @Published var lastAnalysisDate: Date?
     @Published var currentConversation: String = ""
     
-    private let networkService = NetworkService.shared
+    private let aicliService = AICLIService.shared
     private var cancellables = Set<AnyCancellable>()
     
     var scoreColor: Color {
@@ -103,19 +103,147 @@ class PlanningValidationViewModel: ObservableObject {
     func analyzeCurrentConversation() async {
         isAnalyzing = true
         
-        do {
-            // Get current conversation from chat session
-            // For now, we'll use mock data
-            await analyzeMockConversation()
-            lastAnalysisDate = Date()
-        } catch {
-            print("Analysis error: \(error)")
+        await MainActor.run {
+            // Clear previous results during analysis
+            self.domainScores = []
+            self.blockers = []
+            self.suggestions = []
+            self.actionItems = []
         }
         
-        isAnalyzing = false
+        // Get project info from current context
+        let projectPath = ProjectStateManager.shared.currentProject?.path
+        let projectType = getProjectType(from: ProjectStateManager.shared.currentProject)
+        
+        // Analyze the current conversation content
+        await withCheckedContinuation { continuation in
+            aicliService.validatePlanningDocument(
+                content: currentConversation,
+                projectType: projectType,
+                projectPath: projectPath
+            ) { [weak self] result in
+                Task { @MainActor in
+                    guard let self = self else {
+                        continuation.resume()
+                        return
+                    }
+                    
+                    switch result {
+                    case .success(let response):
+                        self.processValidationResponse(response)
+                        self.lastAnalysisDate = Date()
+                    case .failure(let error):
+                        print("Analysis error: \(error)")
+                        // Fall back to mock data on error
+                        await self.analyzeMockConversation()
+                    }
+                    
+                    self.isAnalyzing = false
+                    continuation.resume()
+                }
+            }
+        }
     }
     
-    private func analyzeMockConversation() async {
+    private func getProjectType(from project: Project?) -> String {
+        // Determine project type based on project metadata or default
+        if let type = project?.type {
+            switch type.lowercased() {
+            case "web", "webapp": return "web-app"
+            case "api", "service": return "api-service"
+            case "mobile", "ios", "android": return "mobile-app"
+            case "cli", "tool": return "cli-tool"
+            default: return "general"
+            }
+        }
+        return "general"
+    }
+    
+    private func processValidationResponse(_ response: PlanningValidationResponse) {
+        let validation = response.validation
+        
+        // Update scores
+        overallScore = validation.overallScore
+        analysisConfidence = validation.confidence
+        
+        // Convert readiness level
+        readinessLevel = mapReadinessLevel(validation.readinessLevel)
+        
+        // Convert domain scores
+        domainScores = validation.domains.map { domain in
+            PlanningDomainScore(
+                name: domain.name,
+                icon: domain.icon,
+                score: domain.score,
+                confidence: validation.confidence,
+                keywordMatches: domain.keywordMatches,
+                foundRequirements: domain.foundRequirements,
+                missingRequirements: domain.missingRequirements
+            )
+        }
+        
+        // Convert blockers
+        blockers = validation.blockers.map { blocker in
+            Blocker(
+                severity: mapBlockerSeverity(blocker.severity),
+                domain: blocker.domain,
+                message: blocker.message,
+                resolution: blocker.resolution ?? ""
+            )
+        }
+        
+        // Convert suggestions
+        suggestions = validation.suggestions.map { suggestion in
+            Suggestion(
+                priority: mapSuggestionPriority(suggestion.priority),
+                icon: "💡",
+                message: suggestion.message,
+                action: suggestion.action ?? ""
+            )
+        }
+        
+        // Convert action items
+        actionItems = validation.actionItems.map { item in
+            ActionItem(
+                priority: item.priority,
+                category: item.category,
+                icon: item.icon,
+                action: item.action,
+                impact: item.impact ?? "Medium",
+                effort: item.effort ?? "Moderate"
+            )
+        }
+    }
+    
+    private func mapReadinessLevel(_ level: ReadinessLevelResponse) -> ReadinessLevel {
+        switch level.level {
+        case "production-ready": return .ready
+        case "development-ready": return .almostReady
+        case "planning-needed": return .needsWork
+        default: return .notReady
+        }
+    }
+    
+    private func mapBlockerSeverity(_ severity: String) -> BlockerSeverity {
+        switch severity.lowercased() {
+        case "critical": return .critical
+        case "high": return .high
+        case "medium": return .medium
+        case "low": return .low
+        default: return .medium
+        }
+    }
+    
+    private func mapSuggestionPriority(_ priority: String) -> SuggestionPriority {
+        switch priority.lowercased() {
+        case "high": return .high
+        case "medium": return .medium
+        case "low": return .low
+        default: return .medium
+        }
+    }
+    
+    func analyzeMockConversation() async {
         // Simulate API delay
         try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
         
@@ -338,5 +466,59 @@ class PlanningValidationViewModel: ObservableObject {
     
     func refreshAnalysis() async {
         await analyzeCurrentConversation()
+    }
+    
+    func updateConversationContent(_ content: String) {
+        currentConversation = content
+    }
+    
+    func analyzeProjectDirectory(path: String) async {
+        isAnalyzing = true
+        
+        await withCheckedContinuation { continuation in
+            aicliService.analyzeDirectory(path: path) { [weak self] result in
+                Task { @MainActor in
+                    guard let self = self else {
+                        continuation.resume()
+                        return
+                    }
+                    
+                    switch result {
+                    case .success(let response):
+                        // Process directory analysis
+                        if let validation = response.analysis.validation {
+                            // Update scores from existing plan.md
+                            self.overallScore = validation.overallScore
+                            self.readinessLevel = self.mapReadinessLevel(validation.readinessLevel)
+                        }
+                        self.lastAnalysisDate = Date()
+                        
+                    case .failure(let error):
+                        print("Directory analysis error: \(error)")
+                    }
+                    
+                    self.isAnalyzing = false
+                    continuation.resume()
+                }
+            }
+        }
+    }
+    
+    func saveAndValidatePlan(projectPath: String, content: String) async -> Bool {
+        return await withCheckedContinuation { continuation in
+            aicliService.saveAndValidatePlan(
+                projectPath: projectPath,
+                content: content
+            ) { result in
+                switch result {
+                case .success(let response):
+                    print("Plan saved successfully: \(response.result.filePath)")
+                    continuation.resume(returning: true)
+                case .failure(let error):
+                    print("Failed to save plan: \(error)")
+                    continuation.resume(returning: false)
+                }
+            }
+        }
     }
 }

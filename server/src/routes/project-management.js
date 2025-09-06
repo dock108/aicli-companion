@@ -8,6 +8,7 @@ import { projectCreator } from '../services/project-creator.js';
 import { templateEngine } from '../services/template-engine.js';
 import { createLogger } from '../utils/logger.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { validateProjectPath, isValidFilename } from '../utils/path-validator.js';
 
 const router = express.Router();
 const logger = createLogger('ProjectManagementRoutes');
@@ -174,11 +175,26 @@ router.get('/project-management/templates', authMiddleware, async (req, res) => 
  */
 router.post('/project-management/templates/custom', authMiddleware, async (req, res) => {
   try {
-    const { projectPath, templateName } = req.body;
+    const { projectPath: rawPath, templateName } = req.body;
 
-    if (!projectPath || !templateName) {
+    if (!rawPath || !templateName) {
       return res.status(400).json({
         error: 'Project path and template name are required',
+      });
+    }
+
+    // Validate project path
+    const projectPath = validateProjectPath(rawPath);
+    if (!projectPath) {
+      return res.status(400).json({
+        error: 'Invalid project path',
+      });
+    }
+
+    // Validate template name (no path components allowed)
+    if (!isValidFilename(templateName)) {
+      return res.status(400).json({
+        error: 'Invalid template name',
       });
     }
 

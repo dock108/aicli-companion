@@ -99,6 +99,27 @@ public enum ChatMode: String, CaseIterable, Codable {
     }
 }
 
+// MARK: - Visibility Control
+@available(iOS 16.0, macOS 13.0, *)
+extension ChatMode {
+    /// Check if this mode should be visible in the app
+    public var isVisibleInApp: Bool {
+        switch self {
+        case .normal:
+            return FeatureFlags.showNormalMode
+        case .planning:
+            return FeatureFlags.showPlanningMode
+        case .code:
+            return FeatureFlags.showCodeMode
+        }
+    }
+    
+    /// Get only the modes that should be visible to users
+    public static var visibleCases: [ChatMode] {
+        return ChatMode.allCases.filter { $0.isVisibleInApp }
+    }
+}
+
 // MARK: - UserDefaults Storage
 extension ChatMode {
     private static let userDefaultsKey = "selectedChatMode"
@@ -108,6 +129,12 @@ extension ChatMode {
         guard let rawValue = UserDefaults.standard.string(forKey: userDefaultsKey),
               let mode = ChatMode(rawValue: rawValue) else {
             return .normal
+        }
+        // If the saved mode is not visible, default to normal
+        if #available(iOS 16.0, macOS 13.0, *) {
+            if !mode.isVisibleInApp {
+                return .normal
+            }
         }
         return mode
     }

@@ -19,6 +19,8 @@ struct ChatView: View {
     @State private var permissionRequest: PermissionRequestData?
     @State private var showingStopConfirmation = false
     @State private var showingQueueStatus = false
+    @State private var showingPlanningDashboard = false
+    @State private var showingProjectCreation = false
     @State private var selectedMode: ChatMode = ChatMode.loadSavedMode()
     
     // Removed complex scroll tracking - handled by ChatMessageList now
@@ -70,6 +72,14 @@ struct ChatView: View {
                 // FEATURE FLAG: Auto-response controls (currently hidden)
                 if FeatureFlags.showAutoModeUI {
                     AutoResponseControls()
+                }
+                
+                // Workspace Mode Features
+                if let project = selectedProject, project.type == "workspace" {
+                    WorkspaceModeToolbar(
+                        showingPlanningDashboard: $showingPlanningDashboard,
+                        showingProjectCreation: $showingProjectCreation
+                    )
                 }
                 
                 // Queue Status Bar (always visible if there are queued messages)
@@ -217,6 +227,25 @@ struct ChatView: View {
                         }
                 }
             }
+        }
+        .sheet(isPresented: $showingPlanningDashboard) {
+            NavigationView {
+                PlanningValidationDashboard()
+                    .navigationTitle("Planning Validation")
+                    #if os(iOS)
+                    .navigationBarTitleDisplayMode(.inline)
+                    #endif
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") {
+                                showingPlanningDashboard = false
+                            }
+                        }
+                    }
+            }
+        }
+        .sheet(isPresented: $showingProjectCreation) {
+            ProjectCreationWizard()
         }
         .onAppear {
             // Ensure proper setup on view appearance

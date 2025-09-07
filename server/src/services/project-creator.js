@@ -166,8 +166,19 @@ export class ProjectCreator {
    * @returns {Promise<void>}
    */
   async writeTemplates(projectPath, templates) {
+    // Ensure projectPath is resolved and safe
+    const safeProjectPath = path.resolve(projectPath);
+
     for (const [filename, content] of Object.entries(templates)) {
-      const filePath = path.join(projectPath, filename);
+      // Sanitize filename to prevent traversal
+      const normalizedPath = path.normalize(filename).replace(/^(\.\.([\/\\]|$))+/, '');
+      const filePath = path.resolve(safeProjectPath, normalizedPath);
+
+      // Ensure the file is within the project directory
+      if (!filePath.startsWith(safeProjectPath)) {
+        logger.warn('Skipping file outside project directory', { filename });
+        continue;
+      }
 
       // Ensure directory exists
       const dir = path.dirname(filePath);

@@ -294,13 +294,19 @@ export class RequirementsAnalyzer {
         return /(?:user flow|user journey|workflow|process flow)/gi.test(conversation);
 
       case 'response_time_targets':
-        return /(?:\d+\s*ms|\d+\s*seconds?|response time|performance target)/gi.test(conversation);
+        // Fixed ReDoS: Limit digit repetition and use more specific patterns
+        return /(?:\d{1,6}\s{0,3}ms|\d{1,3}\s{0,3}seconds?|response time|performance target)/gi.test(
+          conversation
+        );
 
       case 'deployment_target':
         return /(?:deploy|hosting|aws|azure|gcp|heroku|docker|kubernetes)/gi.test(conversation);
 
       case 'unit_test_coverage': {
-        return /(?:test coverage|\d+%\s*coverage|unit test|testing strategy)/gi.test(conversation);
+        // Fixed ReDoS: Limit digit repetition for coverage percentage
+        return /(?:test coverage|\d{1,3}%\s{0,3}coverage|unit test|testing strategy)/gi.test(
+          conversation
+        );
       }
 
       default: {

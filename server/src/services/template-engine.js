@@ -330,7 +330,14 @@ export class TemplateEngine {
    * @returns {Promise<void>}
    */
   async createCustomTemplate(projectPath, templateName) {
-    const customDir = path.join(this.templateDir, 'custom', templateName);
+    // Sanitize template name to prevent path traversal
+    const safeTemplateName = path.basename(templateName);
+    const customDir = path.resolve(this.templateDir, 'custom', safeTemplateName);
+
+    // Ensure custom directory is within template directory
+    if (!customDir.startsWith(path.resolve(this.templateDir))) {
+      throw new Error('Invalid template path');
+    }
 
     try {
       // Create custom template directory
@@ -340,8 +347,10 @@ export class TemplateEngine {
       const filesToCopy = ['CLAUDE.md', 'plan.md', 'README.md', 'package.json', '.gitignore'];
 
       for (const file of filesToCopy) {
-        const sourcePath = path.join(projectPath, file);
-        const destPath = path.join(customDir, file);
+        // Sanitize file paths
+        const safeFile = path.basename(file);
+        const sourcePath = path.resolve(projectPath, safeFile);
+        const destPath = path.resolve(customDir, safeFile);
 
         try {
           const content = await fs.readFile(sourcePath, 'utf-8');

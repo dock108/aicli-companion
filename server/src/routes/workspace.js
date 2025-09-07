@@ -6,6 +6,7 @@
 import express from 'express';
 import { promises as fs } from 'fs';
 import path from 'path';
+import rateLimit from 'express-rate-limit';
 import { createLogger } from '../utils/logger.js';
 import { workspaceSecurity } from '../services/workspace-security.js';
 import { ServerConfig } from '../config/server-config.js';
@@ -14,6 +15,15 @@ import { AICLISessionManager } from '../services/aicli-session-manager.js';
 const router = express.Router();
 const logger = createLogger('WorkspaceAPI');
 const config = new ServerConfig();
+
+// Rate limiter for workspace operations
+const workspaceLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 20, // limit each IP to 20 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many workspace requests, please try again later.' },
+});
 
 /**
  * Setup workspace routes
@@ -175,7 +185,7 @@ export function setupWorkspaceRoutes(app, _aicliService) {
    * POST /api/workspace/execute
    * Execute a cross-project operation in workspace mode
    */
-  router.post('/workspace/execute', async (req, res) => {
+  router.post('/workspace/execute', workspaceLimiter, async (req, res) => {
     try {
       const { sessionId, operation, params } = req.body;
 
@@ -331,20 +341,30 @@ async function moveFileBetweenProjects(workspaceRoot, params) {
   const { sourcePath, targetPath } = params;
 
   try {
+    // Sanitize and resolve paths to prevent traversal
+    const safeSourcePath = path.resolve(
+      workspaceRoot,
+      path.normalize(sourcePath).replace(/^(\.\.([/\\]|$))+/, '')
+    );
+    const safeTargetPath = path.resolve(
+      workspaceRoot,
+      path.normalize(targetPath).replace(/^(\.\.([/\\]|$))+/, '')
+    );
+
     // Validate paths
     if (
-      !workspaceSecurity.isPathWithinWorkspace(sourcePath, workspaceRoot) ||
-      !workspaceSecurity.isPathWithinWorkspace(targetPath, workspaceRoot)
+      !workspaceSecurity.isPathWithinWorkspace(safeSourcePath, workspaceRoot) ||
+      !workspaceSecurity.isPathWithinWorkspace(safeTargetPath, workspaceRoot)
     ) {
       throw new Error('Invalid path: outside workspace bounds');
     }
 
     // Move the file
-    await fs.rename(sourcePath, targetPath);
+    await fs.rename(safeSourcePath, safeTargetPath);
 
     return {
       success: true,
-      message: `File moved from ${sourcePath} to ${targetPath}`,
+      message: `File moved successfully`,
     };
   } catch (error) {
     return {
@@ -358,7 +378,17 @@ async function createNewProject(workspaceRoot, params) {
   const { projectName, template } = params;
 
   try {
-    const projectPath = path.join(workspaceRoot, projectName);
+    // Validate project name to prevent path traversal
+    if (!projectName || /[./\\]/.test(projectName)) {
+      throw new Error('Invalid project name');
+    }
+
+    const projectPath = path.resolve(workspaceRoot, projectName);
+
+    // Extra validation to ensure path is within workspace
+    if (!projectPath.startsWith(path.resolve(workspaceRoot))) {
+      throw new Error('Invalid project path');
+    }
 
     // Check if project already exists
     try {
@@ -385,14 +415,17 @@ async function createNewProject(workspaceRoot, params) {
       };
 
       await fs.writeFile(
-        path.join(projectPath, 'package.json'),
+        path.resolve(projectPath, 'package.json'),
         JSON.stringify(packageJson, null, 2)
       );
 
-      await fs.writeFile(path.join(projectPath, 'index.js'), `// Entry point for ${projectName}\n`);
+      await fs.writeFile(
+        path.resolve(projectPath, 'index.js'),
+        `// Entry point for ${projectName}\n`
+      );
 
       await fs.writeFile(
-        path.join(projectPath, 'README.md'),
+        path.resolve(projectPath, 'README.md'),
         `# ${projectName}\n\n## Description\n\nProject created in workspace mode.\n`
       );
     }

@@ -344,17 +344,33 @@ async function moveFileBetweenProjects(workspaceRoot, params) {
   const { sourcePath, targetPath } = params;
 
   try {
-    // Sanitize and resolve paths to prevent traversal
-    const safeSourcePath = path.resolve(
-      workspaceRoot,
-      path.normalize(sourcePath).replace(/^(\.\.([/\\]|$))+/, '')
-    );
-    const safeTargetPath = path.resolve(
-      workspaceRoot,
-      path.normalize(targetPath).replace(/^(\.\.([/\\]|$))+/, '')
-    );
+    // Validate input types first
+    if (!sourcePath || typeof sourcePath !== 'string') {
+      throw new Error('Invalid source path');
+    }
+    if (!targetPath || typeof targetPath !== 'string') {
+      throw new Error('Invalid target path');
+    }
 
-    // Validate paths
+    // Remove null bytes and normalize paths
+    const cleanedSource = String(sourcePath).replace(/\0/g, '');
+    const cleanedTarget = String(targetPath).replace(/\0/g, '');
+
+    // Remove any parent directory references
+    const normalizedSource = path.normalize(cleanedSource).replace(/^(\.\.([/\\]|$))+/, '');
+    const normalizedTarget = path.normalize(cleanedTarget).replace(/^(\.\.([/\\]|$))+/, '');
+
+    // Resolve to absolute paths within workspace
+    const safeSourcePath = path.resolve(workspaceRoot, normalizedSource);
+    const safeTargetPath = path.resolve(workspaceRoot, normalizedTarget);
+
+    // Validate paths are within workspace bounds
+    const workspaceResolved = path.resolve(workspaceRoot);
+    if (!safeSourcePath.startsWith(workspaceResolved) || !safeTargetPath.startsWith(workspaceResolved)) {
+      throw new Error('Path traversal attempt detected');
+    }
+
+    // Additional validation using workspace security
     if (
       !workspaceSecurity.isPathWithinWorkspace(safeSourcePath, workspaceRoot) ||
       !workspaceSecurity.isPathWithinWorkspace(safeTargetPath, workspaceRoot)
@@ -362,7 +378,7 @@ async function moveFileBetweenProjects(workspaceRoot, params) {
       throw new Error('Invalid path: outside workspace bounds');
     }
 
-    // Move the file
+    // Move the file with validated paths
     await fs.rename(safeSourcePath, safeTargetPath);
 
     return {

@@ -631,7 +631,7 @@ describe('Workspace Route', () => {
         .expect(200);
 
       assert(response.body.success === false);
-      assert(response.body.error.includes('Invalid path'));
+      assert(response.body.error.includes('Invalid') || response.body.error.includes('Path traversal'));
 
       // Restore original methods
       AICLISessionManager.prototype.getSession = originalGetSession;

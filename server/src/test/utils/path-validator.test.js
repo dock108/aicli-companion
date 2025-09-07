@@ -13,7 +13,6 @@ describe('Path Validator', () => {
   describe('validateProjectPath', () => {
     test('should accept valid paths within home directory', () => {
       const home = os.homedir();
-      const validPath = path.join(home, 'projects', 'my-app');
       const result = validateProjectPath('projects/my-app');
       assert.ok(result);
       assert.ok(result.startsWith(home));

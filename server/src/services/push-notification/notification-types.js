@@ -130,7 +130,7 @@ export class NotificationTypes {
     notification.expiry = Math.floor(Date.now() / 1000) + 300; // 5 minutes
     notification.contentAvailable = true;
     notification.priority = 5; // Lower priority for progress
-    notification.sound = null; // Silent notification
+    // Don't set sound property for silent notification - library doesn't accept null
 
     notification.topic = this.getBundleId();
     notification.pushType = 'background';

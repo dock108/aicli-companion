@@ -23,6 +23,7 @@ function validateProjectPath(inputPath, basePath = null) {
   }
 
   // Remove any remaining control characters
+  // eslint-disable-next-line no-control-regex
   const cleanPath = inputPath.replace(/[\x00-\x1f\x7f]/g, '');
 
   // If cleaning changed the path, it was malicious

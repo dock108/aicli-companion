@@ -104,7 +104,8 @@ describe('ProjectCreator', () => {
         // No error means file exists
       });
 
-      const exists = await projectCreator.projectExists('/path/to/project');
+      // Use a relative project name instead of absolute path
+      const exists = await projectCreator.projectExists('test-project');
       assert.strictEqual(exists, true);
     });
 
@@ -113,7 +114,8 @@ describe('ProjectCreator', () => {
         throw new Error('ENOENT');
       });
 
-      const exists = await projectCreator.projectExists('/path/to/project');
+      // Use a relative project name instead of absolute path
+      const exists = await projectCreator.projectExists('test-project');
       assert.strictEqual(exists, false);
     });
   });

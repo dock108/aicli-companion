@@ -16,14 +16,17 @@ const router = express.Router();
 const logger = createLogger('WorkspaceAPI');
 const config = new ServerConfig();
 
-// Rate limiter for workspace operations
-const workspaceLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 20, // limit each IP to 20 requests per windowMs
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many workspace requests, please try again later.' },
-});
+// Rate limiter for workspace operations (disabled in tests)
+const workspaceLimiter =
+  process.env.NODE_ENV === 'test'
+    ? (req, res, next) => next() // Pass-through middleware for tests
+    : rateLimit({
+        windowMs: 60 * 1000, // 1 minute
+        max: 20, // limit each IP to 20 requests per windowMs
+        standardHeaders: true,
+        legacyHeaders: false,
+        message: { error: 'Too many workspace requests, please try again later.' },
+      });
 
 /**
  * Setup workspace routes
@@ -37,7 +40,7 @@ export function setupWorkspaceRoutes(app, _aicliService) {
    * GET /api/workspace/status
    * Check workspace mode availability and configuration
    */
-  router.get('/workspace/status', async (req, res) => {
+  router.get('/workspace/status', workspaceLimiter, async (req, res) => {
     try {
       const workspaceRoot = config.configPath;
       const restrictions = workspaceSecurity.getWorkspaceRestrictions();
@@ -61,7 +64,7 @@ export function setupWorkspaceRoutes(app, _aicliService) {
    * POST /api/workspace/enter
    * Enter workspace mode and create a workspace session
    */
-  router.post('/workspace/enter', async (req, res) => {
+  router.post('/workspace/enter', workspaceLimiter, async (req, res) => {
     try {
       const { deviceToken } = req.body;
 
@@ -111,7 +114,7 @@ export function setupWorkspaceRoutes(app, _aicliService) {
    * GET /api/workspace/projects
    * List all projects in the workspace
    */
-  router.get('/workspace/projects', async (req, res) => {
+  router.get('/workspace/projects', workspaceLimiter, async (req, res) => {
     try {
       const workspaceRoot = config.configPath;
 
@@ -268,7 +271,7 @@ export function setupWorkspaceRoutes(app, _aicliService) {
    * POST /api/workspace/exit
    * Exit workspace mode and clean up session
    */
-  router.post('/workspace/exit', async (req, res) => {
+  router.post('/workspace/exit', workspaceLimiter, async (req, res) => {
     try {
       const { sessionId } = req.body;
 

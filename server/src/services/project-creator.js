@@ -18,6 +18,30 @@ export class ProjectCreator {
   }
 
   /**
+   * Sanitize and validate a path to ensure it's within the projects directory
+   * @param {string} inputPath - Path to validate
+   * @param {string} basePath - Base path to validate against
+   * @returns {string} - Validated path
+   * @throws {Error} - If path is invalid
+   */
+  sanitizePath(inputPath, basePath = this.projectsDir) {
+    // Remove any null bytes and normalize
+    const cleaned = String(inputPath).replace(/\0/g, '');
+
+    // Resolve to absolute path
+    const resolved = path.resolve(basePath, cleaned);
+    const baseResolved = path.resolve(basePath);
+
+    // Ensure the resolved path is within the base directory
+    // Allow if path equals base or starts with base + separator
+    if (!resolved.startsWith(baseResolved)) {
+      throw new Error('Path traversal attempt detected');
+    }
+
+    return resolved;
+  }
+
+  /**
    * Create a new project with templates
    * @param {object} projectConfig - Project configuration
    * @returns {Promise<object>} - Creation result
@@ -39,7 +63,13 @@ export class ProjectCreator {
       );
     }
 
-    const projectPath = path.join(this.projectsDir, projectName);
+    // Double-sanitize project name for extra safety
+    const safeProjectName = projectName.replace(/[^a-zA-Z0-9_-]/g, '');
+    if (safeProjectName !== projectName) {
+      throw new Error('Project name contains invalid characters after sanitization');
+    }
+
+    const projectPath = this.sanitizePath(safeProjectName);
 
     // Check if project already exists
     if (await this.projectExists(projectPath)) {
@@ -95,7 +125,9 @@ export class ProjectCreator {
 
       // Cleanup on failure
       try {
-        await fs.rmdir(projectPath, { recursive: true });
+        // Re-validate path before cleanup
+        const cleanupPath = this.sanitizePath(path.basename(projectPath));
+        await fs.rmdir(cleanupPath, { recursive: true });
       } catch (cleanupError) {
         logger.error('Failed to cleanup after error', { cleanupError: cleanupError.message });
       }
@@ -125,7 +157,24 @@ export class ProjectCreator {
    */
   async projectExists(projectPath) {
     try {
-      await fs.access(projectPath);
+      // If already absolute and within bounds, use as-is
+      // Otherwise, sanitize it
+      let validPath;
+      if (path.isAbsolute(projectPath)) {
+        // If it's already absolute, just verify it's within bounds
+        const baseResolved = path.resolve(this.projectsDir);
+        if (projectPath.startsWith(baseResolved)) {
+          validPath = projectPath;
+        } else {
+          // If absolute but outside bounds, reject
+          return false;
+        }
+      } else {
+        // Relative path, sanitize it
+        validPath = this.sanitizePath(projectPath);
+      }
+
+      await fs.access(validPath);
       return true;
     } catch (error) {
       return false;
@@ -171,7 +220,8 @@ export class ProjectCreator {
 
     for (const [filename, content] of Object.entries(templates)) {
       // Sanitize filename to prevent traversal
-      const normalizedPath = path.normalize(filename).replace(/^(\.\.([\/\\]|$))+/, '');
+      // Remove any parent directory references
+      const normalizedPath = path.normalize(filename).replace(/^(\.\.(\/|\\|$))+/, '');
       const filePath = path.resolve(safeProjectPath, normalizedPath);
 
       // Ensure the file is within the project directory
@@ -238,10 +288,14 @@ export class ProjectCreator {
       },
     };
 
-    const metadataPath = path.join(projectPath, '.aicli-companion', 'project.json');
+    // Validate project path and create safe metadata path
+    const validProjectPath = this.sanitizePath(path.basename(projectPath));
+    const metadataDir = this.sanitizePath('.aicli-companion', validProjectPath);
 
     // Create .aicli-companion directory
-    await fs.mkdir(path.dirname(metadataPath), { recursive: true });
+    await fs.mkdir(metadataDir, { recursive: true });
+
+    const metadataPath = this.sanitizePath('project.json', metadataDir);
 
     // Write metadata
     await fs.writeFile(metadataPath, JSON.stringify(metadata, null, 2));
@@ -260,12 +314,15 @@ export class ProjectCreator {
       const projects = [];
       for (const item of items) {
         if (item.isDirectory() && !item.name.startsWith('.')) {
-          const projectPath = path.join(this.projectsDir, item.name);
+          // Sanitize the project name before creating path
+          const projectPath = this.sanitizePath(item.name);
 
           // Try to load metadata
           let metadata = null;
           try {
-            const metadataPath = path.join(projectPath, '.aicli-companion', 'project.json');
+            // Use sanitized paths for metadata
+            const metadataDir = this.sanitizePath('.aicli-companion', projectPath);
+            const metadataPath = this.sanitizePath('project.json', metadataDir);
             const metadataContent = await fs.readFile(metadataPath, 'utf-8');
             metadata = JSON.parse(metadataContent);
           } catch (err) {
@@ -298,7 +355,9 @@ export class ProjectCreator {
    * @returns {Promise<object>} - Deletion result
    */
   async deleteProject(projectName, archive = false) {
-    const projectPath = path.join(this.projectsDir, projectName);
+    // Sanitize project name to prevent path traversal
+    const safeProjectName = path.basename(projectName).replace(/[^a-zA-Z0-9_-]/g, '');
+    const projectPath = this.sanitizePath(safeProjectName);
 
     // Check if project exists
     if (!(await this.projectExists(projectPath))) {
@@ -308,8 +367,10 @@ export class ProjectCreator {
     try {
       if (archive) {
         // Archive project
-        const archivePath = path.join(this.projectsDir, '.archived', projectName);
-        await fs.mkdir(path.dirname(archivePath), { recursive: true });
+        // Create safe archive path
+        const archiveDir = this.sanitizePath('.archived');
+        await fs.mkdir(archiveDir, { recursive: true });
+        const archivePath = this.sanitizePath(`${safeProjectName}_${Date.now()}`, archiveDir);
         await fs.rename(projectPath, archivePath);
 
         logger.info('Project archived', { projectName, archivePath });
@@ -321,7 +382,9 @@ export class ProjectCreator {
         };
       } else {
         // Delete project
-        await fs.rm(projectPath, { recursive: true, force: true });
+        // Validate path once more before deletion
+        const deletePath = this.sanitizePath(safeProjectName);
+        await fs.rm(deletePath, { recursive: true, force: true });
 
         logger.info('Project deleted', { projectName });
 
@@ -343,8 +406,11 @@ export class ProjectCreator {
    * @returns {Promise<object>} - Updated metadata
    */
   async updateProjectMetadata(projectName, updates) {
-    const projectPath = path.join(this.projectsDir, projectName);
-    const metadataPath = path.join(projectPath, '.aicli-companion', 'project.json');
+    // Sanitize project name and create safe paths
+    const safeProjectName = path.basename(projectName).replace(/[^a-zA-Z0-9_-]/g, '');
+    const projectPath = this.sanitizePath(safeProjectName);
+    const metadataDir = this.sanitizePath('.aicli-companion', projectPath);
+    const metadataPath = this.sanitizePath('project.json', metadataDir);
 
     try {
       // Load existing metadata

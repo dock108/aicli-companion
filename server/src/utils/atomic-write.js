@@ -9,21 +9,25 @@ import crypto from 'crypto';
  */
 export async function atomicWriteFile(filePath, data, options = {}) {
   const encoding = options.encoding || 'utf8';
-  // Determine root directory for containment check
-  const rootDir = options.rootDir || path.dirname(filePath);
 
-  // Sanitize filename to prevent path traversal
-  const fileName = path.basename(filePath);
-  // Only allow alphanumeric, dash, underscore, and dot in filename
-  if (!/^[a-zA-Z0-9._-]+$/.test(fileName)) {
-    throw new Error('Invalid filename: Only alphanumeric, dash, underscore, and dot are allowed');
+  // Resolve the file path - if rootDir is provided, resolve relative to it
+  const resolvedFilePath = options.rootDir
+    ? path.resolve(options.rootDir, filePath)
+    : path.resolve(filePath);
+
+  // If rootDir is provided, ensure path is within it
+  if (options.rootDir) {
+    const normalizedRoot = path.resolve(options.rootDir);
+    if (!resolvedFilePath.startsWith(normalizedRoot)) {
+      throw new Error('Invalid file path: Access denied');
+    }
   }
 
-  // Resolve and normalize the file path
-  const resolvedFilePath = path.resolve(rootDir, fileName);
-  const normalizedRoot = path.normalize(rootDir);
-  if (!resolvedFilePath.startsWith(normalizedRoot)) {
-    throw new Error('Invalid file path: Access denied');
+  // Basic filename validation - just check the basename
+  const fileName = path.basename(resolvedFilePath);
+  // Only allow reasonable filename characters
+  if (!/^[a-zA-Z0-9._-]+$/.test(fileName)) {
+    throw new Error('Invalid filename: Only alphanumeric, dash, underscore, and dot are allowed');
   }
 
   // Generate unique temp file name with random suffix to avoid collisions

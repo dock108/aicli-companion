@@ -366,7 +366,10 @@ async function moveFileBetweenProjects(workspaceRoot, params) {
 
     // Validate paths are within workspace bounds
     const workspaceResolved = path.resolve(workspaceRoot);
-    if (!safeSourcePath.startsWith(workspaceResolved) || !safeTargetPath.startsWith(workspaceResolved)) {
+    if (
+      !safeSourcePath.startsWith(workspaceResolved) ||
+      !safeTargetPath.startsWith(workspaceResolved)
+    ) {
       throw new Error('Path traversal attempt detected');
     }
 

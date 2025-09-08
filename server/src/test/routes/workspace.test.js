@@ -429,7 +429,7 @@ describe('Workspace Route', () => {
         .send({
           sessionId: 'test-session',
           operation: 'move_file',
-          params: { sourcePath: '/test/src', targetPath: '/test/dst' },
+          params: { sourcePath: 'test/src', targetPath: 'test/dst' },
         })
         .expect(200);
 
@@ -631,7 +631,9 @@ describe('Workspace Route', () => {
         .expect(200);
 
       assert(response.body.success === false);
-      assert(response.body.error.includes('Invalid') || response.body.error.includes('Path traversal'));
+      assert(
+        response.body.error.includes('Invalid') || response.body.error.includes('Path traversal')
+      );
 
       // Restore original methods
       AICLISessionManager.prototype.getSession = originalGetSession;

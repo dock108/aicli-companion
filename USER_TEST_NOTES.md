@@ -28,28 +28,6 @@ Users experience a broken flow where responses are received via push but not dis
 
 ---
 
-## Test Note 2: Broken Documentation Links
-**Date**: 2025-09-06
-
-### Issue Description
-Documentation links appear to be broken throughout the application.
-
-### Observed Behavior
-- Clicking any documentation link shows "failed to load file" error
-- All doc links affected, not isolated to specific sections
-
-### Impact
-Users cannot access documentation or help resources from within the app.
-
-### Potential Areas to Investigate
-- File path resolution in the documentation viewer
-- URL scheme handling for doc links
-- Missing or moved documentation files
-- Permissions or access issues for doc files
-- Base URL or path configuration for documentation
-
----
-
 ## Test Note 3: Thinking Response UI Scrolling Issue
 **Date**: 2025-09-06
 

@@ -3,12 +3,17 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { PathValidator } from '../utils/path-security.js';
 import { createLogger } from '../utils/logger.js';
+import { ServerConfig } from '../config/server-config.js';
 
 const router = express.Router();
 const logger = createLogger('FileRoutes');
+const config = new ServerConfig();
 
-// Define safe root for all file operations
-const ROOT_DIRECTORY = process.cwd();
+// Define safe root for all file operations - use configured project directory
+const ROOT_DIRECTORY = config.configPath;
+
+// Log the configured directory on startup
+logger.info(`File routes initialized with ROOT_DIRECTORY: ${ROOT_DIRECTORY}`);
 
 /**
  * Validates and resolves a working directory to ensure it's within the safe root
@@ -55,7 +60,9 @@ async function validateWorkingDirectory(workingDirectory) {
         const realPath = await fs.realpath(resolvedDir);
 
         // Double-check the real path is still within root
-        if (!realPath.startsWith(ROOT_DIRECTORY)) {
+        // Note: On macOS, /var is symlinked to /private/var, so we need to check both
+        const resolvedRoot = await fs.realpath(ROOT_DIRECTORY);
+        if (!realPath.startsWith(resolvedRoot) && !realPath.startsWith(ROOT_DIRECTORY)) {
           logger.warn(`Blocked symlink escape attempt: ${workingDirectory} -> ${realPath}`);
           throw new Error('Working directory is outside the allowed root');
         }
@@ -100,7 +107,9 @@ async function validateWorkingDirectory(workingDirectory) {
     const realPath = await fs.realpath(resolvedDir);
 
     // Final check: ensure the real path is still within the root directory
-    if (!realPath.startsWith(ROOT_DIRECTORY)) {
+    // Note: On macOS, /var is symlinked to /private/var, so we need to check both
+    const resolvedRoot = await fs.realpath(ROOT_DIRECTORY);
+    if (!realPath.startsWith(resolvedRoot) && !realPath.startsWith(ROOT_DIRECTORY)) {
       logger.warn(`Blocked symlink escape attempt: ${workingDirectory} -> ${realPath}`);
       throw new Error('Working directory is outside the allowed root');
     }
@@ -119,9 +128,10 @@ async function validateWorkingDirectory(workingDirectory) {
 }
 
 // Enhanced function to search for files and detect duplicates
-async function findAllMatchingFiles(baseDir, filename, maxDepth = 10, currentDepth = 0) {
+async function findAllMatchingFiles(baseDir, filename, maxDepth = 3, currentDepth = 0) {
   const matches = [];
 
+  // Use a more conservative default depth to avoid searching too deep into the filesystem
   if (currentDepth > maxDepth) {
     logger.debug(`Max search depth reached (${maxDepth}) while looking for: ${filename}`);
     return matches;
@@ -154,9 +164,30 @@ async function findAllMatchingFiles(baseDir, filename, maxDepth = 10, currentDep
       }
     }
 
+    // Directories to skip during search
+    const skipDirs = new Set([
+      'node_modules',
+      '.git',
+      'Library',
+      'Applications',
+      'System',
+      '.Trash',
+      'DerivedData',
+      'build',
+      'dist',
+      '.next',
+      'coverage',
+      '__pycache__',
+      '.pytest_cache',
+      'venv',
+      '.venv',
+      'env',
+      '.env'
+    ]);
+
     // Then recursively search subdirectories
     for (const entry of entries) {
-      if (entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules') {
+      if (entry.isDirectory() && !entry.name.startsWith('.') && !skipDirs.has(entry.name)) {
         const subDir = path.join(baseDir, entry.name);
         const subMatches = await findAllMatchingFiles(subDir, filename, maxDepth, currentDepth + 1);
         matches.push(...subMatches);

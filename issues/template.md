@@ -1,4 +1,6 @@
-# Issue #[NUMBER]: [Brief Title]
+# Issue MMDDYY-N: [Brief Title]
+<!-- Format: MMDDYY-N where MM=month, DD=day, YY=year, N=sequential number for that day (1-20) -->
+<!-- Example: 090725-1 for first issue on September 7, 2025 -->
 
 **Priority**: [High/Medium/Low]  
 **Component**: [Component - Specific Area]  

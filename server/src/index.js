@@ -10,6 +10,7 @@ import { dirname, join } from 'path';
 import { setupRoutes } from './routes/api-routes.js';
 import { setupProjectRoutes } from './routes/projects.js';
 import { setupAICLIStatusRoutes } from './routes/aicli-status.js';
+import { setupWorkspaceRoutes } from './routes/workspace.js';
 import sessionRoutes from './routes/sessions.js';
 import pushNotificationRoutes from './routes/push-notifications.js';
 import chatRoutes from './routes/chat.js';
@@ -18,6 +19,8 @@ import authRoutes from './routes/auth.js';
 import { router as messagesRouter } from './routes/messages.js';
 import filesRoutes from './routes/files.js';
 import queueRoutes from './routes/queue.js';
+import projectManagementRoutes from './routes/project-management.js';
+import planningValidationRoutes from './routes/planning-validation.js';
 import { errorHandler } from './middleware/error.js';
 import { aicliService } from './services/aicli-instance.js';
 import { ServerConfig } from './config/server-config.js';
@@ -116,6 +119,7 @@ class AICLICompanionServer {
     setupRoutes(this.app, this.aicliService);
     setupProjectRoutes(this.app, this.aicliService);
     setupAICLIStatusRoutes(this.app, this.aicliService);
+    setupWorkspaceRoutes(this.app, this.aicliService);
     this.app.use(pushNotificationRoutes);
 
     // New HTTP + APNS routes
@@ -126,6 +130,8 @@ class AICLICompanionServer {
     this.app.use('/api/messages', messagesRouter);
     this.app.use('/api/files', filesRoutes);
     this.app.use('/api/queue', queueRoutes);
+    this.app.use('/api', projectManagementRoutes);
+    this.app.use('/api/planning-validation', planningValidationRoutes);
 
     // Static files (for web interface if needed)
     this.app.use('/static', express.static(join(__dirname, '../public')));
@@ -145,6 +151,7 @@ class AICLICompanionServer {
           chat: '/api/chat',
           devices: '/api/devices',
           projects: '/api/projects',
+          workspace: '/api/workspace',
           files: '/api/files',
           qrCode: '/api/auth/setup',
         },

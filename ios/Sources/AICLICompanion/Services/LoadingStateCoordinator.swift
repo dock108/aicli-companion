@@ -58,7 +58,6 @@ public class LoadingStateCoordinator: ObservableObject {
         let identifier = type.rawValue
         
         guard !activeLoadingStates.contains(identifier) else {
-            print("⚠️ LoadingStateCoordinator: \(type.rawValue) already loading")
             return
         }
         
@@ -68,7 +67,6 @@ public class LoadingStateCoordinator: ObservableObject {
             startTimeout(for: identifier, duration: timeout)
         }
         
-        print("🔄 LoadingStateCoordinator: Started loading \(type.rawValue)")
         objectWillChange.send()
     }
     
@@ -77,14 +75,11 @@ public class LoadingStateCoordinator: ObservableObject {
         let identifier = type.rawValue
         
         guard activeLoadingStates.contains(identifier) else {
-            print("⚠️ LoadingStateCoordinator: \(type.rawValue) not currently loading")
             return
         }
         
         activeLoadingStates.remove(identifier)
         clearTimeout(for: identifier)
-        
-        print("✅ LoadingStateCoordinator: Stopped loading \(type.rawValue)")
         objectWillChange.send()
     }
     
@@ -98,7 +93,6 @@ public class LoadingStateCoordinator: ObservableObject {
             startTimeout(for: identifier, duration: timeout)
         }
         
-        print("🔄 LoadingStateCoordinator: Started project loading for \(projectPath)")
         objectWillChange.send()
     }
     
@@ -107,14 +101,11 @@ public class LoadingStateCoordinator: ObservableObject {
         let identifier = "project_\(projectPath)"
         
         guard projectLoadingStates[projectPath] == true else {
-            print("⚠️ LoadingStateCoordinator: Project \(projectPath) not currently loading")
             return
         }
         
         projectLoadingStates[projectPath] = false
         clearTimeout(for: identifier)
-        
-        print("✅ LoadingStateCoordinator: Stopped project loading for \(projectPath)")
         objectWillChange.send()
     }
     
@@ -192,26 +183,7 @@ public class LoadingStateCoordinator: ObservableObject {
     // MARK: - Debug Support
     
     private func setupDebugLogging() {
-        $activeLoadingStates
-            .sink { states in
-                if states.isEmpty {
-                    print("📍 LoadingStateCoordinator: No active loading states")
-                } else {
-                    print("📍 LoadingStateCoordinator: Active loading states: \(Array(states).joined(separator: ", "))")
-                }
-            }
-            .store(in: &cancellables)
-        
-        $projectLoadingStates
-            .sink { projectStates in
-                let loadingProjects = projectStates.compactMap { key, value in
-                    value ? key : nil
-                }
-                if !loadingProjects.isEmpty {
-                    print("📍 LoadingStateCoordinator: Projects loading: \(loadingProjects.joined(separator: ", "))")
-                }
-            }
-            .store(in: &cancellables)
+        // Removed verbose debug logging
     }
 }
 

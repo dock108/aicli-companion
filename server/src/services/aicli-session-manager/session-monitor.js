@@ -26,6 +26,11 @@ export class SessionMonitor {
       return;
     }
 
+    // Skip if already started
+    if (this.monitoringInterval) {
+      return;
+    }
+
     // Check sessions every minute
     this.monitoringInterval = setInterval(() => {
       this.checkSessionTimeouts();

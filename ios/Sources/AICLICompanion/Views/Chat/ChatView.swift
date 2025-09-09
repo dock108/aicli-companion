@@ -19,6 +19,8 @@ struct ChatView: View {
     @State private var permissionRequest: PermissionRequestData?
     @State private var showingStopConfirmation = false
     @State private var showingQueueStatus = false
+    @State private var showingPlanningDashboard = false
+    @State private var showingProjectCreation = false
     @State private var selectedMode: ChatMode = ChatMode.loadSavedMode()
     
     // Removed complex scroll tracking - handled by ChatMessageList now
@@ -70,6 +72,14 @@ struct ChatView: View {
                 // FEATURE FLAG: Auto-response controls (currently hidden)
                 if FeatureFlags.showAutoModeUI {
                     AutoResponseControls()
+                }
+                
+                // Workspace Mode Features
+                if let project = selectedProject, project.type == "workspace" {
+                    WorkspaceModeToolbar(
+                        showingPlanningDashboard: $showingPlanningDashboard,
+                        showingProjectCreation: $showingProjectCreation
+                    )
                 }
                 
                 // Queue Status Bar (always visible if there are queued messages)
@@ -218,9 +228,31 @@ struct ChatView: View {
                 }
             }
         }
+        .sheet(isPresented: $showingPlanningDashboard) {
+            NavigationView {
+                PlanningValidationDashboard()
+                    .navigationTitle("Planning Validation")
+                    #if os(iOS)
+                    .navigationBarTitleDisplayMode(.inline)
+                    #endif
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") {
+                                showingPlanningDashboard = false
+                            }
+                        }
+                    }
+            }
+        }
+        .sheet(isPresented: $showingProjectCreation) {
+            ProjectCreationWizard()
+        }
         .onAppear {
             // Ensure proper setup on view appearance
             if let project = selectedProject {
+                // Mark messages as read when viewing the conversation
+                MessagePersistenceService.shared.markAsRead(for: project.path)
+                
                 // Only setup if project is different or not yet set
                 if viewModel.currentProject?.path != project.path {
                     viewModel.currentProject = project
@@ -411,18 +443,15 @@ struct ChatView: View {
                 }
             }
             
-            // Mark messages as deleted in CloudKit for this device (soft delete)
+            // Permanently delete messages from CloudKit (hard delete)
             let cloudKitManager = await CloudKitSyncManager.shared
             if await cloudKitManager.iCloudAvailable {
                 do {
-                    print("☁️ Marking messages as deleted in CloudKit for project: \(project.path)")
-                    try await cloudKitManager.markMessagesAsDeleted(for: project.path)
-                    print("☁️ Successfully marked CloudKit messages as deleted")
-                    
-                    // Small delay to ensure CloudKit propagation
-                    try await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+                    print("☁️ Deleting all messages from CloudKit for project: \(project.path)")
+                    try await cloudKitManager.deleteAllMessages(for: project.path)
+                    print("☁️ Successfully deleted all CloudKit messages")
                 } catch {
-                    print("⚠️ Failed to mark CloudKit messages as deleted: \(error)")
+                    print("⚠️ Failed to delete CloudKit messages: \(error)")
                     // Continue with local cleanup even if CloudKit fails
                 }
             }

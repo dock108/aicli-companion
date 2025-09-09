@@ -38,6 +38,45 @@ struct FeatureFlags {
     /// When true: auto mode settings are visible and functional
     static let enableAutoModeSettings: Bool = false
     
+    // MARK: - Workspace Mode Features
+    
+    /// Show Planning Validation tool in workspace mode
+    /// When true: Planning validation tool is visible
+    /// When false: Planning validation tool is hidden
+    static let showPlanningValidation: Bool = false
+    
+    /// Show New Project tool in workspace mode
+    /// When true: New Project tool is visible
+    /// When false: New Project tool is hidden
+    static let showProjectCreation: Bool = true
+    
+    /// Show Code Review tool in workspace mode
+    /// When true: Code Review tool is visible
+    /// When false: Code Review tool is hidden
+    static let showCodeReview: Bool = false
+    
+    /// Show Refactor Assistant in workspace mode
+    /// When true: Refactor Assistant is visible
+    /// When false: Refactor Assistant is hidden
+    static let showRefactorAssistant: Bool = false
+    
+    // MARK: - Chat Mode Features
+    
+    /// Show Code mode in chat mode selector
+    /// When true: Code mode is available in chat
+    /// When false: Code mode is hidden from selector
+    static let showCodeMode: Bool = false
+    
+    /// Show Planning mode in chat mode selector
+    /// When true: Planning mode is available in chat
+    /// When false: Planning mode is hidden from selector
+    static let showPlanningMode: Bool = true
+    
+    /// Show Normal mode in chat mode selector
+    /// When true: Normal mode is available in chat
+    /// When false: Normal mode is hidden from selector
+    static let showNormalMode: Bool = true
+    
     // MARK: - Development Features
     
     /// Enable/disable debug logging for feature flags
@@ -77,6 +116,19 @@ extension FeatureFlags {
     static var summary: String {
         return """
         FeatureFlags Summary:
+        
+        Chat Modes:
+        - Normal Mode: \(showNormalMode ? "✅" : "❌")
+        - Planning Mode: \(showPlanningMode ? "✅" : "❌")
+        - Code Mode: \(showCodeMode ? "✅" : "❌")
+        
+        Workspace Tools:
+        - New Project: \(showProjectCreation ? "✅" : "❌")
+        - Planning Validation: \(showPlanningValidation ? "✅" : "❌")
+        - Code Review: \(showCodeReview ? "✅" : "❌")
+        - Refactor Assistant: \(showRefactorAssistant ? "✅" : "❌")
+        
+        System Features:
         - Queue System: \(isQueueSystemEnabled ? "✅" : "❌")
         - Queue UI: \(showQueueUI ? "✅" : "❌")
         - Queue Processing: \(enableQueueProcessing ? "✅" : "❌")

@@ -208,9 +208,16 @@ public class AICLIMessageOperations {
         ]
         
         if let projectPath = projectPath {
-            requestBody["projectPath"] = projectPath  // Server expects camelCase
+            // Check if this is workspace mode
+            if projectPath == "__workspace__" {
+                requestBody["workspace"] = true
+                requestBody["projectPath"] = projectPath
+                print("📁 Workspace mode enabled for cross-project operations")
+            } else {
+                requestBody["projectPath"] = projectPath  // Server expects camelCase
+            }
             
-            // Include session ID if we have one for this project
+            // Include session ID if we have one for this project (or workspace)
             if let sessionId = getSessionId(for: projectPath) {
                 requestBody["sessionId"] = sessionId
                 print("📝 Including session ID in request: \(sessionId)")
@@ -444,6 +451,141 @@ public class AICLIMessageOperations {
             } else {
                 let error = AICLICompanionError.serverError("Failed to kill session: HTTP \(httpResponse.statusCode)")
                 completion(.failure(error))
+            }
+        }.resume()
+    }
+    
+    // MARK: - Planning Validation
+    
+    public func validatePlanningDocument(
+        content: String,
+        projectType: String? = nil,
+        projectPath: String? = nil,
+        completion: @escaping (Result<PlanningValidationResponse, AICLICompanionError>) -> Void
+    ) {
+        guard let baseURL = connectionManager.currentBaseURL else {
+            completion(.failure(AICLICompanionError.networkError("No connection configured")))
+            return
+        }
+        
+        let validateURL = baseURL.appendingPathComponent("/api/planning-validation/validate")
+        var request = connectionManager.createAuthenticatedRequest(url: validateURL, method: "POST")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let requestBody = PlanningValidationRequest(
+            content: content,
+            projectType: projectType,
+            projectPath: projectPath
+        )
+        
+        do {
+            request.httpBody = try JSONEncoder().encode(requestBody)
+        } catch {
+            completion(.failure(AICLICompanionError.encodingError(error)))
+            return
+        }
+        
+        URLSession.shared.dataTask(with: request) { data, _, error in
+            if let error = error {
+                completion(.failure(AICLICompanionError.networkError(error.localizedDescription)))
+                return
+            }
+            
+            guard let data = data else {
+                completion(.failure(AICLICompanionError.invalidResponse))
+                return
+            }
+            
+            do {
+                let validationResponse = try JSONDecoder().decode(PlanningValidationResponse.self, from: data)
+                completion(.success(validationResponse))
+            } catch {
+                completion(.failure(AICLICompanionError.decodingError(error)))
+            }
+        }.resume()
+    }
+    
+    public func analyzeDirectory(
+        path: String,
+        completion: @escaping (Result<DirectoryAnalysisResponse, AICLICompanionError>) -> Void
+    ) {
+        guard let baseURL = connectionManager.currentBaseURL else {
+            completion(.failure(AICLICompanionError.networkError("No connection configured")))
+            return
+        }
+        
+        let analyzeURL = baseURL.appendingPathComponent("/api/planning-validation/analyze")
+        var request = connectionManager.createAuthenticatedRequest(url: analyzeURL, method: "POST")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let requestBody = DirectoryAnalysisRequest(projectPath: path)
+        
+        do {
+            request.httpBody = try JSONEncoder().encode(requestBody)
+        } catch {
+            completion(.failure(AICLICompanionError.encodingError(error)))
+            return
+        }
+        
+        URLSession.shared.dataTask(with: request) { data, _, error in
+            if let error = error {
+                completion(.failure(AICLICompanionError.networkError(error.localizedDescription)))
+                return
+            }
+            
+            guard let data = data else {
+                completion(.failure(AICLICompanionError.invalidResponse))
+                return
+            }
+            
+            do {
+                let analysisResponse = try JSONDecoder().decode(DirectoryAnalysisResponse.self, from: data)
+                completion(.success(analysisResponse))
+            } catch {
+                completion(.failure(AICLICompanionError.decodingError(error)))
+            }
+        }.resume()
+    }
+    
+    public func saveAndValidatePlan(
+        projectPath: String,
+        content: String,
+        completion: @escaping (Result<PlanSaveResponse, AICLICompanionError>) -> Void
+    ) {
+        guard let baseURL = connectionManager.currentBaseURL else {
+            completion(.failure(AICLICompanionError.networkError("No connection configured")))
+            return
+        }
+        
+        let saveURL = baseURL.appendingPathComponent("/api/planning-validation/save")
+        var request = connectionManager.createAuthenticatedRequest(url: saveURL, method: "POST")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let requestBody = PlanSaveRequest(projectPath: projectPath, content: content)
+        
+        do {
+            request.httpBody = try JSONEncoder().encode(requestBody)
+        } catch {
+            completion(.failure(AICLICompanionError.encodingError(error)))
+            return
+        }
+        
+        URLSession.shared.dataTask(with: request) { data, _, error in
+            if let error = error {
+                completion(.failure(AICLICompanionError.networkError(error.localizedDescription)))
+                return
+            }
+            
+            guard let data = data else {
+                completion(.failure(AICLICompanionError.invalidResponse))
+                return
+            }
+            
+            do {
+                let saveResponse = try JSONDecoder().decode(PlanSaveResponse.self, from: data)
+                completion(.success(saveResponse))
+            } catch {
+                completion(.failure(AICLICompanionError.decodingError(error)))
             }
         }.resume()
     }

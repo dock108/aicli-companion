@@ -13,7 +13,7 @@ describe('Files Routes', () => {
   beforeEach(async () => {
     app = express();
     app.use(express.json());
-    
+
     // Create test directory for tests
     testDir = path.join(os.tmpdir(), 'aicli-test');
     try {
@@ -296,7 +296,7 @@ describe('Files Routes', () => {
       assert.strictEqual(response.status, 200);
       assert.strictEqual(response.body.success, true);
       assert.strictEqual(response.body.content.content, 'console.log("test");');
-      
+
       // Clean up
       await fs.unlink(testFile);
     });

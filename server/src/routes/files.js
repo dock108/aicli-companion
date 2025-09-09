@@ -182,7 +182,7 @@ async function findAllMatchingFiles(baseDir, filename, maxDepth = 3, currentDept
       'venv',
       '.venv',
       'env',
-      '.env'
+      '.env',
     ]);
 
     // Then recursively search subdirectories

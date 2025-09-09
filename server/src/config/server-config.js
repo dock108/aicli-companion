@@ -35,7 +35,7 @@ export class ServerConfig {
     this.enableTLS = process.env.ENABLE_TLS === 'true';
     this.allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['*'];
     this.nodeEnv = process.env.NODE_ENV || 'development';
-    
+
     // Set appropriate default path based on environment
     if (this.nodeEnv === 'test') {
       // For tests, use a test-specific directory to avoid searching entire home directory

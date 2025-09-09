@@ -1,33 +1,5 @@
 # User Test Notes
 
-## Test Note 1: Response Timeout Issue
-**Date**: 2025-09-06
-
-### Issue Description
-Super long time to response messages seem to trigger a timeout somewhere despite still working.
-
-### Observed Behavior
-- Push notification eventually arrives with the message
-- Message doesn't appear in the chat interface
-- Chat UI remains stuck on "thinking" state
-- **Multiple "failed to process APNS" alerts appear at regular intervals**
-- **These APNS failures occur even while Claude is still actively thinking on the server side**
-
-### Impact
-Users experience a broken flow where responses are received via push but not displayed in the active chat session. The repeated APNS failure alerts add to confusion about the system state.
-
-### Potential Areas to Investigate
-- WebSocket connection timeout settings
-- HTTP request timeout configurations
-- Session timeout handling
-- Message correlation between push notifications and chat UI
-- Client-side timeout handling in the iOS app
-- **APNS retry logic that may be too aggressive**
-- **Why APNS processing fails while server is still working**
-- **Timeout mismatch between client expectations and server processing time**
-
----
-
 ## Test Note 3: Thinking Response UI Scrolling Issue
 **Date**: 2025-09-06
 
@@ -74,10 +46,6 @@ Users are confused by non-functional or unclear settings options, reducing trust
 - Ensure all displayed settings actually do something
 - Consider separating developer/debug settings from user settings
 - Improve visual hierarchy and layout
-
----
-
-
 
 ---
 

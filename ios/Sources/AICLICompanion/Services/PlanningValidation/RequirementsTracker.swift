@@ -148,15 +148,13 @@ class RequirementsTracker: ObservableObject {
                 ("High", high),
                 ("Medium", medium),
                 ("Low", low)
-            ] {
-                if !reqs.isEmpty {
-                    markdown += "### \(priority) Priority\n\n"
-                    for req in reqs {
-                        let checkbox = req.isCompleted ? "[x]" : "[ ]"
-                        markdown += "- \(checkbox) **\(req.name)**: \(req.description)\n"
-                    }
-                    markdown += "\n"
+            ] where !reqs.isEmpty {
+                markdown += "### \(priority) Priority\n\n"
+                for req in reqs {
+                    let checkbox = req.isCompleted ? "[x]" : "[ ]"
+                    markdown += "- \(checkbox) **\(req.name)**: \(req.description)\n"
                 }
+                markdown += "\n"
             }
         }
         
@@ -188,10 +186,10 @@ struct Requirement: Identifiable, Equatable {
 }
 
 enum RequirementPriority: String, CaseIterable {
-    case critical = "critical"
-    case high = "high"
-    case medium = "medium"
-    case low = "low"
+    case critical
+    case high
+    case medium
+    case low
     
     init(from string: String) {
         self = RequirementPriority(rawValue: string.lowercased()) ?? .medium

@@ -546,7 +546,12 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
             return messageId
         }
         
-        // Try to get request ID
+        // Try to get correlation ID first (for better message tracking)
+        if let correlationId = userInfo["correlationId"] as? String {
+            return correlationId
+        }
+        
+        // Fall back to request ID
         if let requestId = userInfo["requestId"] as? String {
             return requestId
         }

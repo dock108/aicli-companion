@@ -42,6 +42,16 @@ export function createChatMessageHandler(services) {
         sessionIdValue: msgSessionId || 'new conversation',
       });
 
+      // Mark session as processing to prevent timeout
+      if (msgSessionId) {
+        const sessionManager = aicliService.getSessionManager();
+        const session = sessionManager.getSession(msgSessionId);
+        if (session) {
+          session.isProcessing = true;
+          session.processingStartTime = Date.now();
+        }
+      }
+
       // Set up streaming status updates listener
       streamListener = async (data) => {
         // Only process chunks for our request ID
@@ -236,6 +246,23 @@ export function createChatMessageHandler(services) {
         contentLength: content.length,
       });
 
+      // Clear processing state after successful completion
+      if (msgSessionId) {
+        const sessionManager = aicliService.getSessionManager();
+        const session = sessionManager.getSession(msgSessionId);
+        if (session) {
+          session.isProcessing = false;
+          session.processingEndTime = Date.now();
+          const processingDuration =
+            session.processingEndTime - (session.processingStartTime || Date.now());
+          logger.info('Session processing completed', {
+            sessionId: msgSessionId,
+            duration: Math.floor(processingDuration / 1000),
+            durationMs: processingDuration,
+          });
+        }
+      }
+
       // Report success to queue callback
       callback(null, { success: true, sessionId: claudeSessionId });
     } catch (error) {
@@ -296,6 +323,19 @@ export function createChatMessageHandler(services) {
       // Always clean up the stream listener
       if (streamListener) {
         aicliService.removeListener('streamChunk', streamListener);
+      }
+
+      // Always clear processing state when done (success or failure)
+      if (msgSessionId) {
+        const sessionManager = aicliService.getSessionManager();
+        const session = sessionManager.getSession(msgSessionId);
+        if (session && session.isProcessing) {
+          session.isProcessing = false;
+          session.processingEndTime = Date.now();
+          logger.info('Session processing state cleared (finally block)', {
+            sessionId: msgSessionId,
+          });
+        }
       }
     }
   };

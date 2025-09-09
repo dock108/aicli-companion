@@ -623,6 +623,74 @@ export class ReadinessScorer {
   }
 
   /**
+   * Calculate score for a specific domain
+   * @param {string} domain - Domain name
+   * @param {array} domainReqs - Requirements for the domain
+   * @param {string} projectType - Type of project
+   * @returns {number} - Domain score (0-100)
+   */
+  calculateDomainScore(domain, domainReqs, projectType) {
+    if (!domainReqs || domainReqs.length === 0) {
+      return 0;
+    }
+
+    // Simple scoring based on requirement count
+    // More requirements = higher score, up to a reasonable maximum
+    const baseScore = Math.min(100, domainReqs.length * 20);
+
+    // Apply project type modifier if available
+    if (
+      projectType &&
+      this.projectTypeModifiers[projectType] &&
+      this.projectTypeModifiers[projectType][domain]
+    ) {
+      return Math.min(100, baseScore * this.projectTypeModifiers[projectType][domain]);
+    }
+
+    return baseScore;
+  }
+
+  /**
+   * Calculate overall score from requirements
+   * @param {Map} requirements - Map of domain requirements
+   * @param {string} projectType - Type of project
+   * @returns {number} - Overall score (0-100)
+   */
+  calculateScore(requirements, projectType) {
+    if (!requirements || requirements.size === 0) {
+      return 0;
+    }
+
+    let totalScore = 0;
+    let domainCount = 0;
+
+    for (const [domain, domainReqs] of requirements.entries()) {
+      const domainScore = this.calculateDomainScore(domain, domainReqs, projectType);
+      totalScore += domainScore;
+      domainCount++;
+    }
+
+    return domainCount > 0 ? Math.round(totalScore / domainCount) : 0;
+  }
+
+  /**
+   * Get readiness level based on score
+   * @param {number} score - Overall score
+   * @returns {string} - Readiness level
+   */
+  getReadinessLevel(score) {
+    if (score >= this.thresholds.production_ready) {
+      return 'ready';
+    } else if (score >= this.thresholds.development_ready) {
+      return 'partial';
+    } else if (score >= this.thresholds.prototype_ready) {
+      return 'incomplete';
+    } else {
+      return 'insufficient';
+    }
+  }
+
+  /**
    * Generate actionable items to improve readiness
    * @param {object} scores - Component scores
    * @param {object} requirementsAnalysis - Requirements analysis

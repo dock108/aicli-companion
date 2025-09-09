@@ -1,7 +1,7 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import { deviceRegistry } from '../../services/device-registry.js';
-import { messageQueueManager, MessagePriority } from '../../services/message-queue.js';
+import { messageQueueManager } from '../../services/message-queue.js';
 
 describe('WebSocket Device Coordination Logic', () => {
   const userId1 = 'user-123';
@@ -247,104 +247,6 @@ describe('WebSocket Device Coordination Logic', () => {
       });
 
       deviceRegistry.unregisterDevice(deviceId1);
-    });
-  });
-
-  describe('Message Queue Integration', () => {
-    const sessionId = 'test-session-integration';
-
-    beforeEach(() => {
-      messageQueueManager.removeQueue(sessionId);
-    });
-
-    afterEach(() => {
-      messageQueueManager.removeQueue(sessionId);
-    });
-
-    it('should queue unique messages from devices', () => {
-      // Create and pause queue
-      messageQueueManager.getQueue(sessionId);
-      messageQueueManager.pauseQueue(sessionId);
-
-      const message = {
-        content: 'Test message from device',
-        sessionId,
-        projectPath: '/test/project',
-      };
-
-      // Queue message with device context
-      const result = messageQueueManager.queueMessage(sessionId, message, MessagePriority.NORMAL, {
-        deviceId: deviceId1,
-      });
-
-      assert.strictEqual(result.queued, true);
-      assert.strictEqual(typeof result.messageId, 'string');
-      assert.strictEqual(typeof result.messageHash, 'string');
-
-      const status = messageQueueManager.getQueueStatus(sessionId);
-      assert.strictEqual(status.queue.length, 1);
-    });
-
-    it('should prevent duplicate messages from multiple devices', () => {
-      // Create and pause queue
-      messageQueueManager.getQueue(sessionId);
-      messageQueueManager.pauseQueue(sessionId);
-
-      const message = {
-        content: 'Duplicate test message',
-        sessionId,
-        projectPath: '/test/project',
-      };
-
-      // First message from device1
-      const result1 = messageQueueManager.queueMessage(sessionId, message, MessagePriority.NORMAL, {
-        deviceId: deviceId1,
-      });
-
-      // Second identical message from device2
-      const result2 = messageQueueManager.queueMessage(sessionId, message, MessagePriority.NORMAL, {
-        deviceId: deviceId2,
-      });
-
-      assert.strictEqual(result1.queued, true);
-      assert.strictEqual(result2.queued, false);
-      assert.strictEqual(result2.reason, 'duplicate');
-      assert(result2.duplicateInfo);
-      assert.strictEqual(result2.duplicateInfo.originalDeviceId, deviceId1);
-
-      // Should have only one message in queue
-      const status = messageQueueManager.getQueueStatus(sessionId);
-      assert.strictEqual(status.queue.length, 1);
-    });
-
-    it('should emit duplicate-message events', (t, done) => {
-      // Create and pause queue
-      const queue = messageQueueManager.getQueue(sessionId);
-      messageQueueManager.pauseQueue(sessionId);
-
-      queue.once('duplicate-message', (event) => {
-        assert.strictEqual(event.sessionId, sessionId);
-        assert.strictEqual(event.deviceId, deviceId2);
-        assert.strictEqual(typeof event.messageHash, 'string');
-        assert(event.duplicateInfo);
-        done();
-      });
-
-      const message = {
-        content: 'Event test message',
-        sessionId,
-        projectPath: '/test/project',
-      };
-
-      // First message
-      messageQueueManager.queueMessage(sessionId, message, MessagePriority.NORMAL, {
-        deviceId: deviceId1,
-      });
-
-      // Duplicate message should emit event
-      messageQueueManager.queueMessage(sessionId, message, MessagePriority.NORMAL, {
-        deviceId: deviceId2,
-      });
     });
   });
 

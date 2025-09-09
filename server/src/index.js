@@ -316,6 +316,8 @@ class AICLICompanionServer {
       ws.userId = null;
       ws.sessionIds = new Set();
       ws.isAlive = true;
+      ws.isProcessing = false;
+      ws.lastHeartbeat = Date.now();
 
       // Setup ping-pong for connection health
       ws.on('pong', () => {
@@ -357,8 +359,15 @@ class AICLICompanionServer {
     });
 
     // Heartbeat interval to detect disconnected clients
+    // Reduced interval for better stability during long operations
     this.wsHeartbeatInterval = setInterval(() => {
       this.wss.clients.forEach((ws) => {
+        // Skip heartbeat check if client is actively processing
+        if (ws.isProcessing) {
+          ws.lastHeartbeat = Date.now();
+          return;
+        }
+
         if (!ws.isAlive) {
           console.log('🔌 Terminating inactive WebSocket connection');
           return ws.terminate();
@@ -366,7 +375,7 @@ class AICLICompanionServer {
         ws.isAlive = false;
         ws.ping();
       });
-    }, 30000); // Check every 30 seconds
+    }, 15000); // Check every 15 seconds for better responsiveness
 
     console.log('🔌 WebSocket server configured on /ws path');
 
@@ -708,6 +717,34 @@ class AICLICompanionServer {
           ws.send(JSON.stringify(message));
         } catch (error) {
           console.error('❌ Failed to broadcast message:', error.message);
+        }
+      }
+    });
+  }
+
+  // Mark WebSocket clients as processing for a session
+  markSessionProcessing(sessionId, isProcessing = true) {
+    if (!this.wss) return;
+
+    this.wss.clients.forEach((ws) => {
+      if (ws.sessionIds && ws.sessionIds.has(sessionId)) {
+        ws.isProcessing = isProcessing;
+        ws.lastHeartbeat = Date.now();
+
+        // Send processing status update
+        if (ws.readyState === ws.OPEN) {
+          try {
+            ws.send(
+              JSON.stringify({
+                type: 'processing-status',
+                sessionId,
+                isProcessing,
+                timestamp: Date.now(),
+              })
+            );
+          } catch (error) {
+            console.error('❌ Failed to send processing status:', error.message);
+          }
         }
       }
     });

@@ -146,6 +146,8 @@ export class NotificationTypes {
       tokenCount: data.tokenCount,
       tokenText,
       requestId: data.requestId,
+      sessionId: data.sessionId || null,
+      correlationId: data.correlationId || data.requestId,
       timestamp: new Date().toISOString(),
       type: 'thinkingProgress',
       isThinking: true,
@@ -187,6 +189,8 @@ export class NotificationTypes {
       action: data.action,
       reason: data.reason,
       requestId: data.requestId,
+      sessionId: data.sessionId || null,
+      correlationId: data.correlationId || data.requestId,
       timestamp: new Date().toISOString(),
       type: 'autoResponseControl',
     };
@@ -228,6 +232,7 @@ export class NotificationTypes {
       type: 'stallAlert',
       sessionId: data.sessionId,
       requestId: data.requestId,
+      correlationId: data.correlationId || data.requestId,
       projectPath: data.projectPath,
       silentMinutes: data.silentMinutes,
       lastActivity: data.lastActivity,
@@ -261,13 +266,14 @@ export class NotificationTypes {
     notification.category = 'CLAUDE_MESSAGE';
     notification.threadId = data.projectPath || 'default';
 
-    // Explicitly include sessionId in the payload
+    // Explicitly include sessionId and correlationId in the payload
     notification.payload = {
       ...data,
       type: 'message',
       deliveryMethod: 'apns_message',
       sessionId: data.sessionId, // Ensure sessionId is explicitly included
       claudeSessionId: data.sessionId, // Also include as claudeSessionId for compatibility
+      correlationId: data.correlationId || data.requestId, // Add correlation ID for tracking
     };
 
     return notification;
@@ -308,6 +314,7 @@ export class NotificationTypes {
       projectName: data.projectName,
       projectPath: data.projectPath,
       sessionId: data.sessionId,
+      correlationId: data.correlationId || data.requestId,
       error: true,
       errorType: data.errorType || 'UNKNOWN',
       errorMessage: data.error,

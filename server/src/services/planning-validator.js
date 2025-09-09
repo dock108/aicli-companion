@@ -12,21 +12,13 @@ const logger = createLogger('PlanningValidator');
 
 export class PlanningValidator {
   constructor() {
-    this.domains = [
-      'database',
-      'api',
-      'ui_ux',
-      'auth',
-      'performance',
-      'deployment',
-      'testing'
-    ];
-    
+    this.domains = ['database', 'api', 'ui_ux', 'auth', 'performance', 'deployment', 'testing'];
+
     this.requirements = new Map();
     this.analyzer = new RequirementsAnalyzer();
     this.scorer = new ReadinessScorer();
     this.gapDetector = new GapDetector();
-    
+
     // Track validation session state
     this.sessionId = null;
     this.projectType = null;
@@ -43,7 +35,7 @@ export class PlanningValidator {
     this.projectType = projectType;
     this.conversationHistory = [];
     this.requirements.clear();
-    
+
     logger.info('Initialized planning validation session', { sessionId, projectType });
   }
 
@@ -60,14 +52,14 @@ export class PlanningValidator {
     try {
       // Add to conversation history
       this.conversationHistory.push(message);
-      
+
       // Use the analyzer's analyzeConversation method with full history
       const conversationText = this.conversationHistory
-        .map(m => m.content || m.text || '')
+        .map((m) => m.content || m.text || '')
         .join('\n');
-      
+
       const analysis = this.analyzer.analyzeConversation(conversationText);
-      
+
       // Convert analysis to requirements format
       const requirements = [];
       for (const [domain, domainAnalysis] of Object.entries(analysis.domains)) {
@@ -77,12 +69,12 @@ export class PlanningValidator {
               domain,
               type: 'explicit',
               value: req,
-              confidence: domainAnalysis.confidence
+              confidence: domainAnalysis.confidence,
             });
           }
         }
       }
-      
+
       // Update requirements map
       for (const req of requirements) {
         const domain = req.domain || 'general';
@@ -91,16 +83,16 @@ export class PlanningValidator {
         }
         // Only add if not already present
         const existing = this.requirements.get(domain);
-        if (!existing.some(e => e.value === req.value)) {
+        if (!existing.some((e) => e.value === req.value)) {
           existing.push(req);
         }
       }
-      
-      logger.debug('Analyzed message', { 
-        messageId: message.id, 
-        requirementsFound: requirements.length 
+
+      logger.debug('Analyzed message', {
+        messageId: message.id,
+        requirementsFound: requirements.length,
       });
-      
+
       return { requirements, confidence: analysis.overallScore / 100 };
     } catch (error) {
       logger.error('Failed to analyze message', { error: error.message });
@@ -117,13 +109,13 @@ export class PlanningValidator {
     try {
       // Clear and rebuild requirements from all messages
       this.requirements.clear();
-      this.conversationHistory = messages;
-      
+      this.conversationHistory = [];
+
       // Analyze all messages
       for (const message of messages) {
         await this.analyzeMessage(message);
       }
-      
+
       // Calculate completeness per domain
       const domainScores = {};
       for (const domain of this.domains) {
@@ -134,25 +126,19 @@ export class PlanningValidator {
           this.projectType
         );
       }
-      
+
       // Calculate overall readiness score
-      const readinessScore = this.scorer.calculateScore(
-        this.requirements,
-        this.projectType
-      );
-      
+      const readinessScore = this.scorer.calculateScore(this.requirements, this.projectType);
+
       // Detect gaps and missing requirements
-      const gaps = this.gapDetector.detectGaps(
-        this.requirements,
-        this.projectType
-      );
-      
+      const gaps = this.gapDetector.detectGaps(this.requirements, this.projectType);
+
       // Generate checklist of missing items
       const checklist = this.generateChecklist(gaps);
-      
+
       // Determine readiness level
       const readinessLevel = this.scorer.getReadinessLevel(readinessScore);
-      
+
       const result = {
         sessionId: this.sessionId,
         projectType: this.projectType,
@@ -162,15 +148,15 @@ export class PlanningValidator {
         gaps,
         checklist,
         totalRequirements: this.getTotalRequirements(),
-        message: this.getReadinessMessage(readinessLevel, gaps)
+        message: this.getReadinessMessage(readinessLevel, gaps),
       };
-      
-      logger.info('Validation complete', { 
+
+      logger.info('Validation complete', {
         sessionId: this.sessionId,
         readinessScore,
-        readinessLevel 
+        readinessLevel,
       });
-      
+
       return result;
     } catch (error) {
       logger.error('Failed to validate conversation', { error: error.message });
@@ -185,7 +171,7 @@ export class PlanningValidator {
    */
   generateChecklist(gaps) {
     const checklist = [];
-    
+
     for (const [domain, domainGaps] of Object.entries(gaps)) {
       for (const gap of domainGaps) {
         checklist.push({
@@ -193,17 +179,17 @@ export class PlanningValidator {
           item: gap.item,
           priority: gap.priority,
           description: gap.description,
-          completed: false
+          completed: false,
         });
       }
     }
-    
+
     // Sort by priority
     checklist.sort((a, b) => {
       const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
       return priorityOrder[a.priority] - priorityOrder[b.priority];
     });
-    
+
     return checklist;
   }
 
@@ -227,22 +213,22 @@ export class PlanningValidator {
    */
   getReadinessMessage(level, gaps) {
     const gapCount = Object.values(gaps).flat().length;
-    
+
     switch (level) {
       case 'ready':
         return '✅ All critical requirements identified! Ready to start development.';
-      
+
       case 'partial':
         return `⚠️ Missing ${gapCount} requirements: ${this.summarizeGaps(gaps)}`;
-      
+
       case 'incomplete':
         return `🚨 Database schema needs: ${this.getDomainGapSummary(gaps.database)}`;
-      
+
       case 'insufficient':
         return `📋 Generated ${gapCount}-item checklist for remaining specifications`;
-      
+
       default:
-        return '🎮 You\'re flying without instruments here! Missing critical requirements, but let\'s go if you\'re feeling adventurous...';
+        return "🎮 You're flying without instruments here! Missing critical requirements, but let's go if you're feeling adventurous...";
     }
   }
 
@@ -253,16 +239,16 @@ export class PlanningValidator {
    */
   summarizeGaps(gaps) {
     const summaries = [];
-    
+
     for (const [domain, domainGaps] of Object.entries(gaps)) {
       if (domainGaps.length > 0) {
-        const critical = domainGaps.filter(g => g.priority === 'critical');
+        const critical = domainGaps.filter((g) => g.priority === 'critical');
         if (critical.length > 0) {
           summaries.push(`${domain}: ${critical[0].item}`);
         }
       }
     }
-    
+
     return summaries.slice(0, 3).join(', ');
   }
 
@@ -273,12 +259,12 @@ export class PlanningValidator {
    */
   getDomainGapSummary(domainGaps = []) {
     if (domainGaps.length === 0) return 'complete';
-    
+
     const items = domainGaps
       .slice(0, 3)
-      .map(g => g.item)
+      .map((g) => g.item)
       .join(', ');
-    
+
     return items;
   }
 
@@ -287,10 +273,7 @@ export class PlanningValidator {
    * @returns {boolean} - Whether minimum requirements are met
    */
   meetsMinimumRequirements() {
-    const score = this.scorer.calculateScore(
-      this.requirements,
-      this.projectType
-    );
+    const score = this.scorer.calculateScore(this.requirements, this.projectType);
     return score >= 60; // 60% minimum threshold
   }
 
@@ -300,11 +283,11 @@ export class PlanningValidator {
    */
   getSuggestions() {
     const suggestions = [];
-    
+
     // Check each domain for missing critical items
     for (const domain of this.domains) {
       const domainReqs = this.requirements.get(domain) || [];
-      
+
       if (domainReqs.length === 0) {
         switch (domain) {
           case 'database':
@@ -322,7 +305,7 @@ export class PlanningValidator {
         }
       }
     }
-    
+
     return suggestions;
   }
 
@@ -332,13 +315,13 @@ export class PlanningValidator {
    */
   async exportReport() {
     const validation = await this.validateConversation(this.conversationHistory);
-    
+
     return {
       ...validation,
       suggestions: this.getSuggestions(),
       timestamp: new Date().toISOString(),
       conversationLength: this.conversationHistory.length,
-      meetsMinimum: this.meetsMinimumRequirements()
+      meetsMinimum: this.meetsMinimumRequirements(),
     };
   }
 
@@ -350,7 +333,7 @@ export class PlanningValidator {
     this.projectType = null;
     this.conversationHistory = [];
     this.requirements.clear();
-    
+
     logger.info('Cleared validation session');
   }
 }

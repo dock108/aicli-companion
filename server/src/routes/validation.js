@@ -23,27 +23,27 @@ export function setupValidationRoutes(app) {
   router.post('/validation/session', async (req, res) => {
     try {
       const { sessionId, projectType } = req.body;
-      
+
       if (!sessionId) {
         return res.status(400).json({
           error: 'Missing session ID',
-          message: 'Session ID is required to initialize validation'
+          message: 'Session ID is required to initialize validation',
         });
       }
-      
+
       planningValidator.initializeSession(sessionId, projectType);
-      
+
       res.json({
         success: true,
         sessionId,
         projectType: projectType || 'web-app',
-        message: 'Validation session initialized'
+        message: 'Validation session initialized',
       });
     } catch (error) {
       logger.error('Failed to initialize validation session', { error: error.message });
       res.status(500).json({
         error: 'Failed to initialize validation session',
-        message: error.message
+        message: error.message,
       });
     }
   });
@@ -55,26 +55,26 @@ export function setupValidationRoutes(app) {
   router.post('/validation/analyze', async (req, res) => {
     try {
       const { message } = req.body;
-      
+
       if (!message || !message.content) {
         return res.status(400).json({
           error: 'Missing message content',
-          message: 'Message content is required for analysis'
+          message: 'Message content is required for analysis',
         });
       }
-      
+
       const result = await planningValidator.analyzeMessage(message);
-      
+
       res.json({
         success: true,
         requirements: result.requirements,
-        confidence: result.confidence
+        confidence: result.confidence,
       });
     } catch (error) {
       logger.error('Failed to analyze message', { error: error.message });
       res.status(500).json({
         error: 'Failed to analyze message',
-        message: error.message
+        message: error.message,
       });
     }
   });
@@ -86,30 +86,30 @@ export function setupValidationRoutes(app) {
   router.post('/validation/validate', async (req, res) => {
     try {
       const { messages, projectType } = req.body;
-      
+
       if (!messages || !Array.isArray(messages)) {
         return res.status(400).json({
           error: 'Invalid messages',
-          message: 'Messages array is required for validation'
+          message: 'Messages array is required for validation',
         });
       }
-      
+
       // Set project type if provided
       if (projectType) {
         planningValidator.projectType = projectType;
       }
-      
+
       const validation = await planningValidator.validateConversation(messages);
-      
+
       res.json({
         success: true,
-        validation
+        validation,
       });
     } catch (error) {
       logger.error('Failed to validate conversation', { error: error.message });
       res.status(500).json({
         error: 'Failed to validate conversation',
-        message: error.message
+        message: error.message,
       });
     }
   });
@@ -121,16 +121,16 @@ export function setupValidationRoutes(app) {
   router.get('/validation/report', async (req, res) => {
     try {
       const report = await planningValidator.exportReport();
-      
+
       res.json({
         success: true,
-        report
+        report,
       });
     } catch (error) {
       logger.error('Failed to generate report', { error: error.message });
       res.status(500).json({
         error: 'Failed to generate report',
-        message: error.message
+        message: error.message,
       });
     }
   });
@@ -142,29 +142,29 @@ export function setupValidationRoutes(app) {
   router.post('/validation/checklist', async (req, res) => {
     try {
       const { itemId, completed, notes } = req.body;
-      
+
       if (itemId === undefined) {
         return res.status(400).json({
           error: 'Missing item ID',
-          message: 'Item ID is required to update checklist'
+          message: 'Item ID is required to update checklist',
         });
       }
-      
+
       // This would update the checklist in the validator
       // For now, just acknowledge the update
       logger.info('Checklist item updated', { itemId, completed });
-      
+
       res.json({
         success: true,
         itemId,
         completed,
-        notes
+        notes,
       });
     } catch (error) {
       logger.error('Failed to update checklist', { error: error.message });
       res.status(500).json({
         error: 'Failed to update checklist',
-        message: error.message
+        message: error.message,
       });
     }
   });
@@ -176,26 +176,26 @@ export function setupValidationRoutes(app) {
   router.post('/validation/requirements/extract', async (req, res) => {
     try {
       const { text } = req.body;
-      
+
       if (!text) {
         return res.status(400).json({
           error: 'Missing text',
-          message: 'Text is required for requirement extraction'
+          message: 'Text is required for requirement extraction',
         });
       }
-      
+
       const requirements = requirementsAnalyzer.extractRequirements(text);
-      
+
       res.json({
         success: true,
         requirements: requirements.requirements,
-        confidence: requirements.confidence
+        confidence: requirements.confidence,
       });
     } catch (error) {
       logger.error('Failed to extract requirements', { error: error.message });
       res.status(500).json({
         error: 'Failed to extract requirements',
-        message: error.message
+        message: error.message,
       });
     }
   });
@@ -207,25 +207,25 @@ export function setupValidationRoutes(app) {
   router.post('/validation/requirements/database', async (req, res) => {
     try {
       const { messages } = req.body;
-      
+
       if (!messages || !Array.isArray(messages)) {
         return res.status(400).json({
           error: 'Invalid messages',
-          message: 'Messages array is required for database detection'
+          message: 'Messages array is required for database detection',
         });
       }
-      
+
       const schema = requirementsAnalyzer.detectDatabaseSchema(messages);
-      
+
       res.json({
         success: true,
-        schema
+        schema,
       });
     } catch (error) {
       logger.error('Failed to detect database schema', { error: error.message });
       res.status(500).json({
         error: 'Failed to detect database schema',
-        message: error.message
+        message: error.message,
       });
     }
   });
@@ -237,25 +237,25 @@ export function setupValidationRoutes(app) {
   router.post('/validation/requirements/api', async (req, res) => {
     try {
       const { messages } = req.body;
-      
+
       if (!messages || !Array.isArray(messages)) {
         return res.status(400).json({
           error: 'Invalid messages',
-          message: 'Messages array is required for API detection'
+          message: 'Messages array is required for API detection',
         });
       }
-      
+
       const contracts = requirementsAnalyzer.detectAPIContracts(messages);
-      
+
       res.json({
         success: true,
-        contracts
+        contracts,
       });
     } catch (error) {
       logger.error('Failed to detect API contracts', { error: error.message });
       res.status(500).json({
         error: 'Failed to detect API contracts',
-        message: error.message
+        message: error.message,
       });
     }
   });
@@ -267,25 +267,25 @@ export function setupValidationRoutes(app) {
   router.post('/validation/requirements/ui', async (req, res) => {
     try {
       const { messages } = req.body;
-      
+
       if (!messages || !Array.isArray(messages)) {
         return res.status(400).json({
           error: 'Invalid messages',
-          message: 'Messages array is required for UI detection'
+          message: 'Messages array is required for UI detection',
         });
       }
-      
+
       const ui = requirementsAnalyzer.detectUIRequirements(messages);
-      
+
       res.json({
         success: true,
-        ui
+        ui,
       });
     } catch (error) {
       logger.error('Failed to detect UI requirements', { error: error.message });
       res.status(500).json({
         error: 'Failed to detect UI requirements',
-        message: error.message
+        message: error.message,
       });
     }
   });
@@ -297,16 +297,16 @@ export function setupValidationRoutes(app) {
   router.get('/validation/suggestions', async (req, res) => {
     try {
       const suggestions = planningValidator.getSuggestions();
-      
+
       res.json({
         success: true,
-        suggestions
+        suggestions,
       });
     } catch (error) {
       logger.error('Failed to get suggestions', { error: error.message });
       res.status(500).json({
         error: 'Failed to get suggestions',
-        message: error.message
+        message: error.message,
       });
     }
   });
@@ -318,16 +318,16 @@ export function setupValidationRoutes(app) {
   router.delete('/validation/session', async (req, res) => {
     try {
       planningValidator.clearSession();
-      
+
       res.json({
         success: true,
-        message: 'Validation session cleared'
+        message: 'Validation session cleared',
       });
     } catch (error) {
       logger.error('Failed to clear session', { error: error.message });
       res.status(500).json({
         error: 'Failed to clear session',
-        message: error.message
+        message: error.message,
       });
     }
   });

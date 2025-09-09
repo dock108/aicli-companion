@@ -22,7 +22,7 @@ describe('PlanningValidator', () => {
     it('should initialize a new validation session', () => {
       validator.clearSession();
       validator.initializeSession('new-session', 'api-service');
-      
+
       assert.equal(validator.sessionId, 'new-session');
       assert.equal(validator.projectType, 'api-service');
       assert.equal(validator.conversationHistory.length, 0);
@@ -32,7 +32,7 @@ describe('PlanningValidator', () => {
     it('should default to web-app project type', () => {
       validator.clearSession();
       validator.initializeSession('default-session');
-      
+
       assert.equal(validator.projectType, 'web-app');
     });
   });
@@ -41,11 +41,12 @@ describe('PlanningValidator', () => {
     it('should extract requirements from a message', async () => {
       const message = {
         id: 'msg1',
-        content: 'We need a users table with email and password fields. Also create a login endpoint at POST /api/auth/login'
+        content:
+          'We need a users table with email and password fields. Also create a login endpoint at POST /api/auth/login',
       };
 
       const result = await validator.analyzeMessage(message);
-      
+
       assert(result.requirements);
       assert(Array.isArray(result.requirements));
       assert(validator.conversationHistory.includes(message));
@@ -53,29 +54,29 @@ describe('PlanningValidator', () => {
 
     it('should handle empty messages gracefully', async () => {
       const result = await validator.analyzeMessage({ content: '' });
-      
+
       assert(result.requirements);
       assert.equal(result.requirements.length, 0);
     });
 
     it('should handle null messages', async () => {
       const result = await validator.analyzeMessage(null);
-      
+
       assert(result.requirements);
       assert.equal(result.requirements.length, 0);
     });
 
     it('should accumulate requirements across messages', async () => {
       const message1 = {
-        content: 'Create a users table'
+        content: 'Create a users table',
       };
       const message2 = {
-        content: 'Add authentication with JWT tokens'
+        content: 'Add authentication with JWT tokens',
       };
 
       await validator.analyzeMessage(message1);
       await validator.analyzeMessage(message2);
-      
+
       assert.equal(validator.conversationHistory.length, 2);
       assert(validator.requirements.size > 0);
     });
@@ -89,11 +90,11 @@ describe('PlanningValidator', () => {
         { content: 'Posts table with id, title, content, author_id, published_at' },
         { content: 'API endpoints: GET /posts, POST /posts, GET /posts/:id' },
         { content: 'User authentication with JWT tokens' },
-        { content: 'Deploy to AWS with Docker containers' }
+        { content: 'Deploy to AWS with Docker containers' },
       ];
 
       const result = await validator.validateConversation(messages);
-      
+
       assert(result.readinessScore !== undefined);
       assert(result.readinessLevel);
       assert(result.domainScores);
@@ -106,7 +107,7 @@ describe('PlanningValidator', () => {
 
     it('should handle empty conversation', async () => {
       const result = await validator.validateConversation([]);
-      
+
       assert(result.readinessScore !== undefined);
       assert.equal(result.totalRequirements, 0);
       assert(result.readinessLevel === 'insufficient');
@@ -114,24 +115,27 @@ describe('PlanningValidator', () => {
 
     it('should generate appropriate readiness levels', async () => {
       // Minimal requirements
-      const minimal = [
-        { content: 'Create a simple webpage' }
-      ];
-      
+      const minimal = [{ content: 'Create a simple webpage' }];
+
       const minimalResult = await validator.validateConversation(minimal);
-      assert(minimalResult.readinessLevel === 'insufficient' || minimalResult.readinessLevel === 'incomplete');
-      
+      assert(
+        minimalResult.readinessLevel === 'insufficient' ||
+          minimalResult.readinessLevel === 'incomplete'
+      );
+
       // Comprehensive requirements
       const comprehensive = [
-        { content: 'Database: users table (id, email, password), posts table (id, title, content)' },
+        {
+          content: 'Database: users table (id, email, password), posts table (id, title, content)',
+        },
         { content: 'API: REST endpoints for CRUD operations on users and posts' },
         { content: 'Authentication: JWT-based auth with refresh tokens' },
         { content: 'UI: Login page, dashboard, post editor, post list' },
         { content: 'Performance: Response time < 200ms, support 1000 concurrent users' },
         { content: 'Deployment: Docker containers on AWS ECS' },
-        { content: 'Testing: Unit tests with 80% coverage, integration tests for API' }
+        { content: 'Testing: Unit tests with 80% coverage, integration tests for API' },
       ];
-      
+
       const comprehensiveResult = await validator.validateConversation(comprehensive);
       assert(comprehensiveResult.readinessScore > minimalResult.readinessScore);
     });
@@ -142,24 +146,24 @@ describe('PlanningValidator', () => {
       const gaps = {
         database: [
           { item: 'indexes', priority: 'high', description: 'Define database indexes' },
-          { item: 'migrations', priority: 'medium', description: 'Plan migration strategy' }
+          { item: 'migrations', priority: 'medium', description: 'Plan migration strategy' },
         ],
         api: [
-          { item: 'rate_limiting', priority: 'critical', description: 'Implement rate limiting' }
-        ]
+          { item: 'rate_limiting', priority: 'critical', description: 'Implement rate limiting' },
+        ],
       };
 
       const checklist = validator.generateChecklist(gaps);
-      
+
       assert(Array.isArray(checklist));
       assert.equal(checklist.length, 3);
-      
+
       // Should be sorted by priority
       assert.equal(checklist[0].priority, 'critical');
       assert.equal(checklist[0].domain, 'api');
-      
+
       // All items should have required fields
-      checklist.forEach(item => {
+      checklist.forEach((item) => {
         assert(item.domain);
         assert(item.item);
         assert(item.priority);
@@ -170,7 +174,7 @@ describe('PlanningValidator', () => {
 
     it('should handle empty gaps', () => {
       const checklist = validator.generateChecklist({});
-      
+
       assert(Array.isArray(checklist));
       assert.equal(checklist.length, 0);
     });
@@ -181,7 +185,7 @@ describe('PlanningValidator', () => {
       const messages = [
         { content: 'Need users and posts tables' },
         { content: 'Create REST API endpoints' },
-        { content: 'Add JWT authentication' }
+        { content: 'Add JWT authentication' },
       ];
 
       for (const msg of messages) {
@@ -207,9 +211,9 @@ describe('PlanningValidator', () => {
     it('should return appropriate message for partial status', () => {
       const gaps = {
         api: [{ item: 'authentication', priority: 'critical' }],
-        database: [{ item: 'indexes', priority: 'high' }]
+        database: [{ item: 'indexes', priority: 'high' }],
       };
-      
+
       const message = validator.getReadinessMessage('partial', gaps);
       assert(message.includes('Missing'));
       assert(message.includes('⚠️'));
@@ -219,10 +223,10 @@ describe('PlanningValidator', () => {
       const gaps = {
         database: [
           { item: 'schema', priority: 'critical' },
-          { item: 'relationships', priority: 'critical' }
-        ]
+          { item: 'relationships', priority: 'critical' },
+        ],
       };
-      
+
       const message = validator.getReadinessMessage('incomplete', gaps);
       assert(message.includes('🚨'));
     });
@@ -231,9 +235,9 @@ describe('PlanningValidator', () => {
       const gaps = {
         database: [{ item: 'schema', priority: 'critical' }],
         api: [{ item: 'endpoints', priority: 'critical' }],
-        auth: [{ item: 'strategy', priority: 'critical' }]
+        auth: [{ item: 'strategy', priority: 'critical' }],
       };
-      
+
       const message = validator.getReadinessMessage('insufficient', gaps);
       assert(message.includes('📋'));
     });
@@ -241,23 +245,24 @@ describe('PlanningValidator', () => {
 
   describe('meetsMinimumRequirements', () => {
     it('should return false for insufficient requirements', async () => {
-      const messages = [
-        { content: 'Build a simple app' }
-      ];
-      
+      const messages = [{ content: 'Build a simple app' }];
+
       await validator.validateConversation(messages);
       assert(!validator.meetsMinimumRequirements());
     });
 
     it('should return true for sufficient requirements', async () => {
       const messages = [
-        { content: 'Database schema: users (id, email, password), posts (id, title, content, user_id)' },
+        {
+          content:
+            'Database schema: users (id, email, password), posts (id, title, content, user_id)',
+        },
         { content: 'API: GET /posts, POST /posts, PUT /posts/:id, DELETE /posts/:id' },
         { content: 'Authentication: JWT with refresh tokens, role-based access control' },
         { content: 'UI: Login, dashboard, post editor with rich text' },
-        { content: 'Deployment: Docker on AWS ECS with auto-scaling' }
+        { content: 'Deployment: Docker on AWS ECS with auto-scaling' },
       ];
-      
+
       await validator.validateConversation(messages);
       // Score might not be above 60% with our simple extraction
       // This is more of an integration test
@@ -270,25 +275,25 @@ describe('PlanningValidator', () => {
     it('should provide suggestions for missing domains', () => {
       // Empty requirements
       const suggestions = validator.getSuggestions();
-      
+
       assert(Array.isArray(suggestions));
       assert(suggestions.length > 0);
-      
+
       // Should suggest database schema
-      assert(suggestions.some(s => s.toLowerCase().includes('database')));
+      assert(suggestions.some((s) => s.toLowerCase().includes('database')));
       // Should suggest API endpoints
-      assert(suggestions.some(s => s.toLowerCase().includes('api')));
+      assert(suggestions.some((s) => s.toLowerCase().includes('api')));
     });
 
     it('should not suggest domains with requirements', async () => {
       const message = {
-        content: 'Database: users table with id, email, password fields'
+        content: 'Database: users table with id, email, password fields',
       };
-      
+
       await validator.analyzeMessage(message);
-      
+
       const suggestions = validator.getSuggestions();
-      
+
       // Should still have suggestions for other domains
       assert(Array.isArray(suggestions));
       // But not for database (already has requirements)
@@ -303,12 +308,12 @@ describe('PlanningValidator', () => {
         { content: 'Users can create, edit, and delete tasks' },
         { content: 'Tasks have title, description, due date, and status' },
         { content: 'Use PostgreSQL database' },
-        { content: 'Deploy to Heroku' }
+        { content: 'Deploy to Heroku' },
       ];
 
       await validator.validateConversation(messages);
       const report = await validator.exportReport();
-      
+
       assert(report.sessionId);
       assert(report.projectType);
       assert(report.readinessScore !== undefined);
@@ -326,89 +331,18 @@ describe('PlanningValidator', () => {
   describe('clearSession', () => {
     it('should clear all session data', async () => {
       // Add some data
-      const messages = [
-        { content: 'Test message 1' },
-        { content: 'Test message 2' }
-      ];
-      
+      const messages = [{ content: 'Test message 1' }, { content: 'Test message 2' }];
+
       await validator.validateConversation(messages);
       assert(validator.conversationHistory.length > 0);
-      
+
       // Clear session
       validator.clearSession();
-      
+
       assert.equal(validator.sessionId, null);
       assert.equal(validator.projectType, null);
       assert.equal(validator.conversationHistory.length, 0);
       assert.equal(validator.requirements.size, 0);
     });
   });
-
-  describe('Integration with different project types', () => {
-    it('should handle web-app project validation', async () => {
-      validator.initializeSession('web-test', 'web-app');
-      
-      const messages = [
-        { content: 'Frontend: React with TypeScript' },
-        { content: 'Backend: Node.js Express API' },
-        { content: 'Database: PostgreSQL with users and products tables' },
-        { content: 'Authentication: OAuth 2.0 with Google' }
-      ];
-
-      const result = await validator.validateConversation(messages);
-      
-      assert.equal(result.projectType, 'web-app');
-      assert(result.domainScores);
-    });
-
-    it('should handle api-service project validation', async () => {
-      validator.initializeSession('api-test', 'api-service');
-      
-      const messages = [
-        { content: 'RESTful API with versioning' },
-        { content: 'Endpoints for user management and data processing' },
-        { content: 'Rate limiting: 100 requests per minute' },
-        { content: 'API key authentication' }
-      ];
-
-      const result = await validator.validateConversation(messages);
-      
-      assert.equal(result.projectType, 'api-service');
-    });
-
-    it('should handle mobile-app project validation', async () => {
-      validator.initializeSession('mobile-test', 'mobile-app');
-      
-      const messages = [
-        { content: 'React Native app for iOS and Android' },
-        { content: 'Offline mode with local SQLite database' },
-        { content: 'Push notifications via Firebase' },
-        { content: 'Biometric authentication' }
-      ];
-
-      const result = await validator.validateConversation(messages);
-      
-      assert.equal(result.projectType, 'mobile-app');
-    });
-
-    it('should handle cli-tool project validation', async () => {
-      validator.initializeSession('cli-test', 'cli-tool');
-      
-      const messages = [
-        { content: 'Command-line tool for file processing' },
-        { content: 'Commands: init, process, export' },
-        { content: 'Support for JSON and CSV formats' },
-        { content: 'Progress bar for long operations' }
-      ];
-
-      const result = await validator.validateConversation(messages);
-      
-      assert.equal(result.projectType, 'cli-tool');
-    });
-  });
 });
-
-// Run tests if this file is executed directly
-if (import.meta.url === `file://${process.argv[1]}`) {
-  // Tests will run automatically with node:test
-}

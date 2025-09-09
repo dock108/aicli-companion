@@ -201,6 +201,10 @@ public class AICLIMessageOperations {
         var request = connectionManager.createAuthenticatedRequest(url: chatURL, method: "POST")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
+        // iOS needs a timeout to handle unresponsive server, but we rely on push notifications
+        // for the actual response, so this is just for the initial request acknowledgment
+        request.timeoutInterval = 120 // 2 minutes for server to acknowledge request
+        
         var requestBody: [String: Any] = [
             "message": message,
             "timestamp": ISO8601DateFormatter().string(from: Date()),

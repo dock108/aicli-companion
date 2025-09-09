@@ -19,6 +19,12 @@ describe('ChatMessageHandler', () => {
         result: 'Test response from Claude',
         claudeSessionId: 'test-session-123',
       })),
+      getSessionManager: mock.fn(() => ({
+        getSession: mock.fn(() => ({
+          isProcessing: false,
+          processingStartTime: null,
+        })),
+      })),
       on: mock.fn(),
       removeListener: mock.fn(),
     };

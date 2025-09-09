@@ -11,6 +11,8 @@ struct Conversation: Identifiable, Codable {
     var createdAt: Date
     var updatedAt: Date
     var metadata: ConversationMetadata
+    var unreadCount: Int = 0
+    var lastReadMessageId: UUID?
 
     init(title: String = "New Conversation", sessionId: String? = nil, workingDirectory: String? = nil) {
         self.id = UUID()
@@ -35,6 +37,16 @@ struct Conversation: Identifiable, Codable {
         metadata.hasRichContent = messages.contains { (message: Message) in
             message.richContent != nil
         }
+        
+        // Update unread count for assistant messages
+        if message.sender == .assistant {
+            unreadCount += 1
+        }
+        
+        // Update last message preview
+        metadata.lastMessagePreview = String(message.content.prefix(100))
+        metadata.lastMessageSender = message.sender
+        metadata.lastActiveAt = Date()
 
         // Auto-generate title from first user message if still default
         if title == "New Conversation" || title.isEmpty {
@@ -42,6 +54,27 @@ struct Conversation: Identifiable, Codable {
                 title = generateTitle(from: firstUserMessage.content)
             }
         }
+    }
+    
+    mutating func markAsRead() {
+        unreadCount = 0
+        if let lastMessage = messages.last {
+            lastReadMessageId = lastMessage.id
+        }
+    }
+    
+    mutating func updateUnreadCount() {
+        // Recalculate unread count based on lastReadMessageId
+        guard let lastReadId = lastReadMessageId,
+              let lastReadIndex = messages.firstIndex(where: { $0.id == lastReadId }) else {
+            // If no last read message, count all assistant messages as unread
+            unreadCount = messages.filter { $0.sender == .assistant }.count
+            return
+        }
+        
+        // Count assistant messages after the last read message
+        let unreadMessages = messages[(lastReadIndex + 1)...]
+        unreadCount = unreadMessages.filter { $0.sender == .assistant }.count
     }
 
     private func generateTitle(from content: String) -> String {
@@ -63,6 +96,8 @@ struct ConversationMetadata: Codable {
     var tags: [String] = []
     var isFavorite: Bool = false
     var lastActiveAt: Date = Date()
+    var lastMessagePreview: String?
+    var lastMessageSender: MessageSender?
 }
 
 enum ExportFormat: String, Codable, CaseIterable {

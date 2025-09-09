@@ -250,6 +250,9 @@ struct ChatView: View {
         .onAppear {
             // Ensure proper setup on view appearance
             if let project = selectedProject {
+                // Mark messages as read when viewing the conversation
+                MessagePersistenceService.shared.markAsRead(for: project.path)
+                
                 // Only setup if project is different or not yet set
                 if viewModel.currentProject?.path != project.path {
                     viewModel.currentProject = project

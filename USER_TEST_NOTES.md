@@ -77,30 +77,6 @@ Users are confused by non-functional or unclear settings options, reducing trust
 
 ---
 
-## Test Note 5: Missing New Message Indicators on Main Screen
-**Date**: 2025-09-06
-
-### Issue Description
-The main screen lacks any indication of new messages, making it impossible to know when responses arrive without opening the chat.
-
-### Current State
-- No new message indicator/badge
-- No message preview
-- No visual feedback when new messages arrive
-- Users must manually check chats to see if there are responses
-
-### Impact
-Users miss important responses and have no way to know when Claude has replied without actively checking, significantly degrading the user experience.
-
-### Recommended Features
-- Re-enable new message indicator/badge on main screen
-- Add message preview (first line or snippet of new message)
-- Consider notification dot or count badge
-- Maybe show timestamp of last message
-- Could add subtle animation when new message arrives
-- Preview could show sender (User/Claude) and truncated message text
-
----
 
 ## Test Note 6: Chat Mode Should Persist Per Chat, Not Globally
 **Date**: 2025-09-06

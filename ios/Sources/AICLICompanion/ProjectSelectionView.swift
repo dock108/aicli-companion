@@ -470,7 +470,9 @@ struct ProjectRowView: View {
     @State private var isProcessing = false
     @StateObject private var persistenceService = MessagePersistenceService.shared
     @State private var timeRemaining: String = ""
-    @State private var hasUnreadMessages: Bool = false
+    @State private var unreadCount: Int = 0
+    @State private var messagePreview: String = ""
+    @State private var lastMessageSender: MessageSender?
     @State private var timer: Timer?
     
     var body: some View {
@@ -504,16 +506,19 @@ struct ProjectRowView: View {
                                 .fill(Colors.accentPrimaryEnd.opacity(0.1))
                         )
                     
-                    // Commented out - Unread indicator not working correctly for beta
-                    /*
-                    // Unread indicator dot
-                    if hasUnreadMessages {
-                        Circle()
-                            .fill(Color.blue)
-                            .frame(width: 10, height: 10)
-                            .offset(x: 5, y: -5)
+                    // Unread indicator badge
+                    if unreadCount > 0 {
+                        ZStack {
+                            Circle()
+                                .fill(Color.blue)
+                                .frame(width: 20, height: 20)
+                            
+                            Text("\(min(unreadCount, 99))")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                        .offset(x: 8, y: -8)
                     }
-                    */
                 }
                 
                 // Project info
@@ -525,6 +530,24 @@ struct ProjectRowView: View {
                             .lineLimit(1)
                         
                         // Processing indicators moved to chat thread as typing bubbles
+                    }
+                    
+                    // Message preview
+                    if !messagePreview.isEmpty {
+                        HStack(spacing: 4) {
+                            if let sender = lastMessageSender {
+                                Text(sender == .user ? "You:" : "Claude:")
+                                    .font(Typography.font(.caption))
+                                    .foregroundColor(Colors.textSecondary(for: colorScheme))
+                                    .fontWeight(.medium)
+                            }
+                            
+                            Text(messagePreview)
+                                .font(Typography.font(.caption))
+                                .foregroundColor(Colors.textSecondary(for: colorScheme))
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
                     }
                 }
                 
@@ -550,17 +573,10 @@ struct ProjectRowView: View {
         .opacity(isProcessing ? 0.6 : 1.0)
         .disabled(isProcessing)
         .animation(.easeInOut(duration: 0.2), value: isProcessing)
-        // Commented out - Timer functionality not working correctly for beta
-        /*
         .onAppear {
-            updateTimeRemaining()
-            checkUnreadMessages()
-            startTimer()
+            loadUnreadState()
+            loadMessagePreview()
         }
-        .onDisappear {
-            timer?.invalidate()
-        }
-        */
     }
     
     private func updateTimeRemaining() {
@@ -595,17 +611,17 @@ struct ProjectRowView: View {
         }
     }
     
-    private func checkUnreadMessages() {
-        // Check if there are unread messages
-        // For now, we'll check if the last message is from assistant and was recent
-        let messages = persistenceService.loadMessages(for: project.path)
-        if let lastMessage = messages.last,
-           lastMessage.sender == .assistant {
-            // Consider it unread if it's less than 5 minutes old
-            let fiveMinutesAgo = Date().addingTimeInterval(-5 * 60)
-            hasUnreadMessages = lastMessage.timestamp > fiveMinutesAgo
+    private func loadUnreadState() {
+        unreadCount = persistenceService.getUnreadCount(for: project.path)
+    }
+    
+    private func loadMessagePreview() {
+        if let preview = persistenceService.getLastMessagePreview(for: project.path) {
+            messagePreview = preview.preview
+            lastMessageSender = preview.sender
         } else {
-            hasUnreadMessages = false
+            messagePreview = ""
+            lastMessageSender = nil
         }
     }
     

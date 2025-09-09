@@ -78,30 +78,6 @@ Users are confused by non-functional or unclear settings options, reducing trust
 ---
 
 
-## Test Note 6: Chat Mode Should Persist Per Chat, Not Globally
-**Date**: 2025-09-06
-
-### Issue Description
-Chat mode (planning/normal) currently appears to persist globally across all chats, but it should be maintained individually per chat/project.
-
-### Current Behavior
-- Switching between projects/chats maintains the same mode
-- If in planning mode in one project, switching to another project keeps planning mode active
-- This can lead to accidental wrong mode usage when quickly switching between projects
-
-### Expected Behavior
-- Each chat/project should remember its own mode setting
-- Switching to a different project should restore that project's last used mode
-- Mode should be stored as part of the chat/conversation state, not as a global setting
-
-### Impact
-Users accidentally use the wrong mode when switching between projects, potentially causing unintended behavior (e.g., being in normal mode when they expect planning mode for a specific project).
-
-### Implementation Considerations
-- Store mode preference with each chat/conversation
-- Load appropriate mode when switching chats
-- Ensure mode indicator clearly shows current state
-- Consider defaulting new chats to a sensible mode (likely normal)
 
 ---
 

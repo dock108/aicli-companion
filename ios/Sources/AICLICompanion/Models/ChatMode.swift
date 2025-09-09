@@ -123,8 +123,9 @@ extension ChatMode {
 // MARK: - UserDefaults Storage
 extension ChatMode {
     private static let userDefaultsKey = "selectedChatMode"
+    private static let perProjectPrefix = "chatMode_"
     
-    /// Load the saved mode from UserDefaults
+    /// Load the saved mode from UserDefaults (global fallback)
     public static func loadSavedMode() -> ChatMode {
         guard let rawValue = UserDefaults.standard.string(forKey: userDefaultsKey),
               let mode = ChatMode(rawValue: rawValue) else {
@@ -139,8 +140,43 @@ extension ChatMode {
         return mode
     }
     
-    /// Save the mode to UserDefaults
+    /// Load the saved mode for a specific project
+    public static func loadSavedMode(for projectPath: String) -> ChatMode {
+        let key = "\(perProjectPrefix)\(projectPath.replacingOccurrences(of: "/", with: "_"))"
+        
+        // Try to load project-specific mode first
+        if let rawValue = UserDefaults.standard.string(forKey: key),
+           let mode = ChatMode(rawValue: rawValue) {
+            // If the saved mode is not visible, default to normal
+            if #available(iOS 16.0, macOS 13.0, *) {
+                if !mode.isVisibleInApp {
+                    return .normal
+                }
+            }
+            return mode
+        }
+        
+        // Fall back to global default or normal mode
+        return loadSavedMode()
+    }
+    
+    /// Save the mode to UserDefaults (global)
     public func save() {
         UserDefaults.standard.set(self.rawValue, forKey: ChatMode.userDefaultsKey)
+    }
+    
+    /// Save the mode for a specific project
+    public func save(for projectPath: String) {
+        let key = "\(ChatMode.perProjectPrefix)\(projectPath.replacingOccurrences(of: "/", with: "_"))"
+        UserDefaults.standard.set(self.rawValue, forKey: key)
+        
+        // Also update the global default for new projects
+        save()
+    }
+    
+    /// Clear saved mode for a project (useful when clearing chat)
+    public static func clearSavedMode(for projectPath: String) {
+        let key = "\(perProjectPrefix)\(projectPath.replacingOccurrences(of: "/", with: "_"))"
+        UserDefaults.standard.removeObject(forKey: key)
     }
 }

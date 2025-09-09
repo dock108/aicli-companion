@@ -21,7 +21,7 @@ struct ChatView: View {
     @State private var showingQueueStatus = false
     @State private var showingPlanningDashboard = false
     @State private var showingProjectCreation = false
-    @State private var selectedMode: ChatMode = ChatMode.loadSavedMode()
+    @State private var selectedMode: ChatMode = .normal // Will be loaded per project
     
     // Removed complex scroll tracking - handled by ChatMessageList now
     
@@ -253,6 +253,9 @@ struct ChatView: View {
                 // Mark messages as read when viewing the conversation
                 MessagePersistenceService.shared.markAsRead(for: project.path)
                 
+                // Load the saved mode for this project
+                selectedMode = ChatMode.loadSavedMode(for: project.path)
+                
                 // Only setup if project is different or not yet set
                 if viewModel.currentProject?.path != project.path {
                     viewModel.currentProject = project
@@ -285,9 +288,18 @@ struct ChatView: View {
                     viewModel.saveMessages(for: oldProject)
                 }
                 
+                // Load the saved mode for the new project
+                selectedMode = ChatMode.loadSavedMode(for: newProject.path)
+                
                 // Update to new project (handles both initial and subsequent selections)
                 viewModel.currentProject = newProject
                 handleProjectChange()
+            }
+        }
+        .onChange(of: selectedMode) { _, newMode in
+            // Save the mode when it changes
+            if let project = selectedProject {
+                newMode.save(for: project.path)
             }
         }
         // Removed message count change handling - ChatMessageList handles auto-scroll now
@@ -373,6 +385,10 @@ struct ChatView: View {
         guard let project = selectedProject else { return }
         
         print("🔄 ChatView: Project changed to '\(project.name)'")
+        
+        // Load the saved mode for this project
+        selectedMode = ChatMode.loadSavedMode(for: project.path)
+        print("🔄 ChatView: Loaded mode '\(selectedMode.displayName)' for project '\(project.name)'")
         
         // The currentProject setter will handle saving old messages and loading new ones
         // Just update the currentProject and it will switch contexts
@@ -461,9 +477,14 @@ struct ChatView: View {
             let persistenceService = MessagePersistenceService.shared
             persistenceService.clearMessages(for: project.path)
             
+            // Clear saved chat mode for this project (reset to default)
+            ChatMode.clearSavedMode(for: project.path)
+            
             // Clear stored session ID on main thread
             await MainActor.run {
                 aicliService.clearSessionId(for: project.path)
+                // Reset mode to default after clearing
+                selectedMode = ChatMode.loadSavedMode() // Load global default
             }
             
             // Clear notifications in background

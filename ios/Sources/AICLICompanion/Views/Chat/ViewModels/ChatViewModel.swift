@@ -100,6 +100,33 @@ final class ChatViewModel: ObservableObject {
         messageManager.clearMessages()
     }
     
+    // MARK: Pull-to-Refresh Operations
+    func loadOlderMessages(for project: Project, beforeMessageId: UUID?) async {
+        // Load older messages from persistence (pagination)
+        await MainActor.run {
+            print("📜 Loading older messages for project: \(project.name)")
+            
+            // For now, just reload all messages (can be enhanced with pagination later)
+            messageManager.loadMessages(for: project, isRefresh: false)
+            
+            // In a future enhancement, we could:
+            // 1. Query persistence for messages before the given ID
+            // 2. Prepend them to the current message list
+            // 3. Maintain scroll position
+        }
+    }
+    
+    func checkForMissedMessages(sessionId: String, for project: Project) async {
+        // Check server for any messages we might have missed
+        await MainActor.run {
+            print("🔍 Checking for missed messages in session: \(sessionId)")
+            
+            // This would typically make an API call to check for messages
+            // For now, just trigger a sync
+            messageManager.syncNewMessagesIfNeeded(for: project)
+        }
+    }
+    
     // MARK: Project Operations
     func setCurrentProject(_ project: Project?) {
         projectStateManager.setCurrentProject(project)

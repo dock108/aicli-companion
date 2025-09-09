@@ -108,17 +108,30 @@ struct ChatView: View {
                 }
                 #if os(iOS)
                 .refreshable {
-                    // WhatsApp/iMessage pattern: Just reload local conversation
-                    print("🔄 User triggered pull-to-refresh - reloading conversation")
+                    // Pull-to-refresh: Load older messages or sync latest
+                    print("🔄 User triggered pull-to-refresh")
                     
-                    // Reload messages from local database (instant)
-                    // Use isRefresh=true to merge instead of replace
                     if let project = selectedProject {
-                        viewModel.loadMessages(for: project, isRefresh: true)
+                        // First, try to load older messages from persistence
+                        let oldestMessageId = viewModel.messages.first?.id
+                        
+                        // Load older messages if available
+                        await viewModel.loadOlderMessages(for: project, beforeMessageId: oldestMessageId)
+                        
+                        // Also sync any new messages that might have arrived
+                        viewModel.syncNewMessagesIfNeeded(for: project)
+                        
+                        // Check server for any missed messages (in case APNS failed)
+                        if let sessionId = viewModel.currentSessionId {
+                            await viewModel.checkForMissedMessages(sessionId: sessionId, for: project)
+                        }
                     }
                     
-                    // Small delay for visual feedback
-                    try? await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
+                    // Small haptic feedback for completion
+                    #if os(iOS)
+                    let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                    impactFeedback.impactOccurred()
+                    #endif
                 }
                 #endif
                 
@@ -253,6 +266,9 @@ struct ChatView: View {
                 // Mark messages as read when viewing the conversation
                 MessagePersistenceService.shared.markAsRead(for: project.path)
                 
+                // Clear all notifications for this project immediately
+                PushNotificationService.shared.clearProjectNotifications(project.path)
+                
                 // Load the saved mode for this project
                 selectedMode = ChatMode.loadSavedMode(for: project.path)
                 
@@ -287,6 +303,10 @@ struct ChatView: View {
                 if let oldProject = oldProject, oldProject.path != newProject.path {
                     viewModel.saveMessages(for: oldProject)
                 }
+                
+                // Mark as read and clear notifications for new project
+                MessagePersistenceService.shared.markAsRead(for: newProject.path)
+                PushNotificationService.shared.clearProjectNotifications(newProject.path)
                 
                 // Load the saved mode for the new project
                 selectedMode = ChatMode.loadSavedMode(for: newProject.path)

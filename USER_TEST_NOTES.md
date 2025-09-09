@@ -1,27 +1,5 @@
 # User Test Notes
 
-## Test Note 3: Thinking Response UI Scrolling Issue
-**Date**: 2025-09-06
-
-### Issue Description
-The thinking response indicator doesn't automatically scroll the chat view up, causing it to be hidden behind the message input bar.
-
-### Observed Behavior
-- Thinking indicator appears but gets obscured by the message type bar
-- Requires manual scrolling to see the thinking indicator
-- May be intermittent (not happening consistently every time)
-
-### Impact
-Users may not realize the app is processing their request if the thinking indicator is hidden, leading to confusion about whether their message was received.
-
-### Potential Areas to Investigate
-- Auto-scroll behavior when thinking indicator appears
-- Chat view content inset adjustments
-- Keyboard avoidance and view positioning logic
-- Timing of scroll animations vs thinking indicator appearance
-- Conditional logic that might cause intermittent behavior
-
----
 
 ## Test Note 4: Settings Popout Needs Overhaul
 **Date**: 2025-09-06
@@ -117,3 +95,35 @@ Returning users face a frustrating delay that makes the app feel slow and unresp
 - Thread continuity breaking when the app reloads
 - Responses arriving during reload not being properly captured
 - Session state confusion leading to orphaned messages
+
+---
+
+## Test Note 9: iPad Keyboard Issue After Sending Message
+**Date**: 2025-09-09
+
+### Issue Description
+On iPad, when the keyboard remains open after hitting send, the UI goes wonky AND the message is sent but still appears in the text entry box.
+
+### Observed Behavior
+- Keyboard stays open after tapping send button
+- UI becomes unstable/wonky
+- Message is successfully sent to the backend
+- Message text remains in the input field despite being sent
+- Creates confusion about whether message was actually sent
+
+### Impact
+Users may accidentally send duplicate messages thinking the first one didn't go through, and the wonky UI creates a poor user experience on iPad.
+
+### Potential Causes
+- iPad-specific keyboard dismissal behavior
+- Text field not clearing properly after send
+- Race condition between send action and UI update
+- iPad multitasking or keyboard dock mode interfering
+- Focus management issues specific to iPadOS
+
+### Areas to Investigate
+- TextField focus and keyboard dismissal on iPad
+- Message send completion handler and UI cleanup
+- iPad-specific keyboard behaviors and split view scenarios
+- Ensure text field is cleared immediately after send validation
+- Test with external keyboards and keyboard dock modes

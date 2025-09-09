@@ -44,11 +44,18 @@ export function createChatMessageHandler(services) {
 
       // Mark session as processing to prevent timeout
       if (msgSessionId) {
-        const sessionManager = aicliService.getSessionManager();
-        const session = sessionManager.getSession(msgSessionId);
+        const session = aicliService.sessionManager.getSession(msgSessionId);
         if (session) {
           session.isProcessing = true;
           session.processingStartTime = Date.now();
+          logger.info('Session processing started', {
+            sessionId: msgSessionId,
+            startTime: session.processingStartTime,
+          });
+        } else {
+          logger.warn('Session not found when trying to mark as processing', {
+            sessionId: msgSessionId,
+          });
         }
       }
 
@@ -248,18 +255,24 @@ export function createChatMessageHandler(services) {
 
       // Clear processing state after successful completion
       if (msgSessionId) {
-        const sessionManager = aicliService.getSessionManager();
-        const session = sessionManager.getSession(msgSessionId);
+        const session = aicliService.sessionManager.getSession(msgSessionId);
         if (session) {
           session.isProcessing = false;
           session.processingEndTime = Date.now();
-          const processingDuration =
-            session.processingEndTime - (session.processingStartTime || Date.now());
-          logger.info('Session processing completed', {
-            sessionId: msgSessionId,
-            duration: Math.floor(processingDuration / 1000),
-            durationMs: processingDuration,
-          });
+          if (session.processingStartTime) {
+            const processingDuration = session.processingEndTime - session.processingStartTime;
+            logger.info('Session processing completed', {
+              sessionId: msgSessionId,
+              duration: Math.floor(processingDuration / 1000),
+              durationMs: processingDuration,
+            });
+          } else {
+            logger.info('Session processing completed', {
+              sessionId: msgSessionId,
+              duration: 'unknown',
+              note: 'Start time was not recorded',
+            });
+          }
         }
       }
 
@@ -327,8 +340,7 @@ export function createChatMessageHandler(services) {
 
       // Always clear processing state when done (success or failure)
       if (msgSessionId) {
-        const sessionManager = aicliService.getSessionManager();
-        const session = sessionManager.getSession(msgSessionId);
+        const session = aicliService.sessionManager.getSession(msgSessionId);
         if (session && session.isProcessing) {
           session.isProcessing = false;
           session.processingEndTime = Date.now();

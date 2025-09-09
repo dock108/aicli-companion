@@ -215,14 +215,14 @@ struct ProjectSelectionView: View {
         .onReceive(NotificationCenter.default.publisher(for: .projectMessagesCleared)) { notification in
             guard let projectPath = notification.userInfo?["projectPath"] as? String else { return }
             
-            // Update the hasMessagesCache asynchronously to avoid publishing changes warning
-            Task {
-                let persistenceService = MessagePersistenceService.shared
-                let messages = persistenceService.loadMessages(for: projectPath)
-                await MainActor.run {
-                    hasMessagesCache[projectPath] = !messages.isEmpty
-                    print("📊 Updated hasMessagesCache: project \(projectPath) has \(messages.count) messages, indicator: \(hasMessagesCache[projectPath] ?? false)")
-                }
+            // Update the cache and force UI refresh immediately
+            Task { @MainActor in
+                // Clear the cache for this project
+                hasMessagesCache[projectPath] = false
+                print("📊 Cleared hasMessagesCache for project: \(projectPath)")
+                
+                // Force reload of projects to update UI immediately
+                await loadProjectsAsync()
             }
         }
         .onDisappear {
@@ -672,6 +672,14 @@ struct ProjectRowView: View {
         .onAppear {
             loadUnreadState()
             loadMessagePreview()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("projectMessagesCleared"))) { notification in
+            if let clearedPath = notification.userInfo?["projectPath"] as? String, clearedPath == project.path {
+                // Immediately clear the message preview when messages are cleared
+                messagePreview = ""
+                lastMessageSender = nil
+                unreadCount = 0
+            }
         }
     }
     

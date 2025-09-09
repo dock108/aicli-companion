@@ -118,10 +118,10 @@ struct ProjectInfoStep: View {
             
             Section("Project Type") {
                 Picker("Type", selection: $viewModel.projectType) {
-                    Text("Web Application").tag(ProjectType.webApp)
-                    Text("Mobile Application").tag(ProjectType.mobileApp)
-                    Text("API Service").tag(ProjectType.apiService)
-                    Text("CLI Tool").tag(ProjectType.cliTool)
+                    Text("Web Application").tag(ProjectCreationType.webApp)
+                    Text("Mobile Application").tag(ProjectCreationType.mobileApp)
+                    Text("API Service").tag(ProjectCreationType.apiService)
+                    Text("CLI Tool").tag(ProjectCreationType.cliTool)
                 }
                 .pickerStyle(.segmented)
                 
@@ -396,7 +396,7 @@ struct SummaryRow: View {
 
 struct ReadinessCard: View {
     let score: Int
-    let level: ReadinessLevel
+    let level: ProjectReadinessLevel
     @Binding var showDetails: Bool
     
     var scoreColor: Color {

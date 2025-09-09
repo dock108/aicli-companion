@@ -48,7 +48,7 @@ struct FeatureFlags {
     /// Show New Project tool in workspace mode
     /// When true: New Project tool is visible
     /// When false: New Project tool is hidden
-    static let showProjectCreation: Bool = true
+    static let showProjectCreation: Bool = false
     
     /// Show Code Review tool in workspace mode
     /// When true: Code Review tool is visible

@@ -11,6 +11,7 @@ import { setupRoutes } from './routes/api-routes.js';
 import { setupProjectRoutes } from './routes/projects.js';
 import { setupAICLIStatusRoutes } from './routes/aicli-status.js';
 import { setupWorkspaceRoutes } from './routes/workspace.js';
+import { setupValidationRoutes } from './routes/validation.js';
 import sessionRoutes from './routes/sessions.js';
 import pushNotificationRoutes from './routes/push-notifications.js';
 import chatRoutes from './routes/chat.js';
@@ -120,6 +121,7 @@ class AICLICompanionServer {
     setupProjectRoutes(this.app, this.aicliService);
     setupAICLIStatusRoutes(this.app, this.aicliService);
     setupWorkspaceRoutes(this.app, this.aicliService);
+    setupValidationRoutes(this.app);
     this.app.use(pushNotificationRoutes);
 
     // New HTTP + APNS routes

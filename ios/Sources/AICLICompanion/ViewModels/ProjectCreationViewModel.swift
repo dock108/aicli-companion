@@ -11,7 +11,7 @@ import Combine
 
 // MARK: - Enums
 
-enum ProjectType: String, CaseIterable {
+enum ProjectCreationType: String, CaseIterable {
     case webApp = "Web Application"
     case mobileApp = "Mobile Application"
     case apiService = "API Service"
@@ -37,6 +37,10 @@ enum ProjectType: String, CaseIterable {
         case .apiService: return "api-service"
         case .cliTool: return "cli-tool"
         }
+    }
+    
+    var serverValue: String {
+        return apiValue
     }
 }
 
@@ -77,7 +81,7 @@ enum Architecture: String, CaseIterable {
     case serverless = "Serverless"
 }
 
-struct ReadinessLevel {
+struct ProjectReadinessLevel {
     let level: String
     let label: String
     let icon: String
@@ -85,7 +89,7 @@ struct ReadinessLevel {
     let color: Color
     let canProceed: Bool
     
-    static let notReady = ReadinessLevel(
+    static let notReady = ProjectReadinessLevel(
         level: "not-ready",
         label: "Not Ready",
         icon: "🛑",
@@ -94,7 +98,7 @@ struct ReadinessLevel {
         canProceed: false
     )
     
-    static let planningNeeded = ReadinessLevel(
+    static let planningNeeded = ProjectReadinessLevel(
         level: "planning-needed",
         label: "More Planning Needed",
         icon: "📝",
@@ -103,7 +107,7 @@ struct ReadinessLevel {
         canProceed: false
     )
     
-    static let prototypeReady = ReadinessLevel(
+    static let prototypeReady = ProjectReadinessLevel(
         level: "prototype-ready",
         label: "Prototype Ready",
         icon: "🔨",
@@ -112,7 +116,7 @@ struct ReadinessLevel {
         canProceed: true
     )
     
-    static let developmentReady = ReadinessLevel(
+    static let developmentReady = ProjectReadinessLevel(
         level: "development-ready",
         label: "Development Ready",
         icon: "✅",
@@ -121,7 +125,7 @@ struct ReadinessLevel {
         canProceed: true
     )
     
-    static let productionReady = ReadinessLevel(
+    static let productionReady = ProjectReadinessLevel(
         level: "production-ready",
         label: "Production Ready",
         icon: "🚀",
@@ -143,7 +147,7 @@ struct Template: Identifiable, Hashable {
     let isRequired: Bool
 }
 
-struct DomainScore: Identifiable {
+struct ProjectDomainScore: Identifiable {
     let id = UUID()
     let domain: String
     let icon: String
@@ -158,7 +162,7 @@ class ProjectCreationViewModel: ObservableObject {
     @Published var projectName = ""
     @Published var projectDescription = ""
     @Published var author = ""
-    @Published var projectType = ProjectType.webApp
+    @Published var projectType = ProjectCreationType.webApp
     @Published var techStack = TechStack.nodeJS
     @Published var teamSize = TeamSize.small
     @Published var architecture = Architecture.monolith
@@ -174,8 +178,8 @@ class ProjectCreationViewModel: ObservableObject {
     
     // Readiness
     @Published var readinessScore = 0
-    @Published var readinessLevel = ReadinessLevel.notReady
-    @Published var domainScores: [DomainScore] = []
+    @Published var readinessLevel = ProjectReadinessLevel.notReady
+    @Published var domainScores: [ProjectDomainScore] = []
     @Published var missingRequirements: [String] = []
     @Published var suggestions: [String] = []
     
@@ -264,6 +268,49 @@ class ProjectCreationViewModel: ObservableObject {
         return templates
     }
     
+    private func calculateConfigurationScore() -> Int {
+        var score = 0
+        var maxScore = 0
+        
+        // Tech stack selection (25 points if non-default)
+        maxScore += 25
+        if techStack != .nodeJS {
+            score += 25
+        }
+        
+        // Team size selection (15 points if specified)
+        maxScore += 15
+        if teamSize != .small {
+            score += 15
+        }
+        
+        // Architecture selection (15 points if non-default)
+        maxScore += 15
+        if architecture != .monolith {
+            score += 15
+        }
+        
+        // Docker option (20 points)
+        maxScore += 20
+        if includeDocker {
+            score += 20
+        }
+        
+        // CI/CD option (20 points)
+        maxScore += 20
+        if includeCICD {
+            score += 20
+        }
+        
+        // Git initialization (5 points)
+        maxScore += 5
+        if initGit {
+            score += 5
+        }
+        
+        return maxScore > 0 ? Int((Double(score) / Double(maxScore)) * 100) : 50
+    }
+    
     private func updateReadinessAssessment() {
         // Simple readiness calculation based on filled fields
         var score = 0
@@ -274,7 +321,10 @@ class ProjectCreationViewModel: ObservableObject {
         if techStack != .nodeJS { score += 10 } // Non-default selection
         if includeDocker { score += 10 }
         if includeCICD { score += 10 }
-        if !selectedTemplates.isEmpty { score += 15 }
+        if !selectedTemplates.isEmpty { 
+            let templateRatio = Double(selectedTemplates.count) / Double(max(availableTemplates.count, 1))
+            score += Int(15 * templateRatio)
+        }
         if initGit { score += 10 }
         
         readinessScore = min(100, score)
@@ -295,10 +345,10 @@ class ProjectCreationViewModel: ObservableObject {
         
         // Update domain scores (mock data for now)
         domainScores = [
-            DomainScore(domain: "Project Structure", icon: "📁", score: projectName.isEmpty ? 0 : 100),
-            DomainScore(domain: "Configuration", icon: "⚙️", score: 75),
-            DomainScore(domain: "Templates", icon: "📄", score: selectedTemplates.isEmpty ? 50 : 100),
-            DomainScore(domain: "Documentation", icon: "📚", score: projectDescription.isEmpty ? 0 : 80)
+            ProjectDomainScore(domain: "Project Structure", icon: "📁", score: projectName.isEmpty ? 0 : 100),
+            ProjectDomainScore(domain: "Configuration", icon: "⚙️", score: calculateConfigurationScore()),
+            ProjectDomainScore(domain: "Templates", icon: "📄", score: availableTemplates.isEmpty ? 50 : Int((Double(selectedTemplates.count) / Double(availableTemplates.count)) * 100)),
+            ProjectDomainScore(domain: "Documentation", icon: "📚", score: projectDescription.isEmpty ? 0 : 80)
         ]
         
         // Update missing requirements
@@ -342,7 +392,7 @@ class ProjectCreationViewModel: ObservableObject {
         ]
         
         do {
-            let endpoint = "/api/project-management/create"
+            let endpoint = "/api/projects"
             let response = try await networkService.post(endpoint: endpoint, body: config)
             
             if let success = response["success"] as? Bool, success {

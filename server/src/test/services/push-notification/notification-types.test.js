@@ -393,13 +393,20 @@ describe('NotificationTypes', () => {
         assert(notification);
       });
 
-      // Verify message truncation
-      assert.strictEqual(mockFormatter.truncateMessage.mock.callCount(), 1);
+      // Verify message truncation - called twice now (for alert body and messagePreview)
+      assert.strictEqual(mockFormatter.truncateMessage.mock.callCount(), 2);
+      // First call for alert body
       assert.strictEqual(
         mockFormatter.truncateMessage.mock.calls[0].arguments[0],
         'This is a test message'
       );
       assert.strictEqual(mockFormatter.truncateMessage.mock.calls[0].arguments[1], 150);
+      // Second call for messagePreview
+      assert.strictEqual(
+        mockFormatter.truncateMessage.mock.calls[1].arguments[0],
+        'This is a test message'
+      );
+      assert.strictEqual(mockFormatter.truncateMessage.mock.calls[1].arguments[1], 150);
     });
 
     it('should handle missing projectPath', () => {
@@ -423,9 +430,14 @@ describe('NotificationTypes', () => {
 
       notificationTypes.createMessageNotification(data);
 
-      assert.strictEqual(mockFormatter.truncateMessage.mock.callCount(), 1);
+      // Called twice now (for alert body and messagePreview)
+      assert.strictEqual(mockFormatter.truncateMessage.mock.callCount(), 2);
+      // First call for alert body
       assert.strictEqual(mockFormatter.truncateMessage.mock.calls[0].arguments[0], longMessage);
       assert.strictEqual(mockFormatter.truncateMessage.mock.calls[0].arguments[1], 150);
+      // Second call for messagePreview
+      assert.strictEqual(mockFormatter.truncateMessage.mock.calls[1].arguments[0], longMessage);
+      assert.strictEqual(mockFormatter.truncateMessage.mock.calls[1].arguments[1], 150);
     });
 
     it('should include additional data fields in payload', () => {

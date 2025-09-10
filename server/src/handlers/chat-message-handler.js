@@ -4,8 +4,13 @@
  */
 
 import { createLogger } from '../utils/logger.js';
+import { storeMessage } from '../routes/messages.js';
+import { randomUUID } from 'crypto';
 
 const logger = createLogger('ChatMessageHandler');
+
+// APNS has a max payload size of 4KB, but we'll be conservative
+const MAX_MESSAGE_SIZE = 2000; // 2KB to leave room for other payload data
 
 /**
  * Creates a message handler for processing queued chat messages
@@ -229,9 +234,34 @@ export function createChatMessageHandler(services) {
         return;
       }
 
-      // Send Claude response via APNS
+      // Check if message is too large for APNS
+      let messageId = null;
+      let requiresFetch = false;
+
+      if (content.length > MAX_MESSAGE_SIZE) {
+        // Store large message and send only metadata via APNS
+        messageId = randomUUID();
+        storeMessage(messageId, content, {
+          projectPath: msgProjectPath,
+          sessionId: claudeSessionId,
+          requestId: msgRequestId,
+          timestamp: new Date().toISOString(),
+        });
+        requiresFetch = true;
+
+        logger.info('Stored large message for fetch', {
+          requestId: msgRequestId,
+          messageId,
+          contentLength: content.length,
+        });
+      }
+
+      // Send notification via APNS
+      // If message is large, the notification-types.js will exclude it from payload
       await pushNotificationService.sendMessageNotification(msgDeviceToken, {
-        message: content,
+        message: requiresFetch ? '' : content, // Don't send content if it needs fetching
+        messageId, // Include message ID for fetching
+        requiresFetch, // Tell the app to fetch the message
         projectPath: msgProjectPath,
         sessionId: claudeSessionId,
         requestId: msgRequestId,
@@ -251,6 +281,8 @@ export function createChatMessageHandler(services) {
         deviceId: `${msgDeviceToken.substring(0, 16)}...`,
         sessionId: claudeSessionId,
         contentLength: content.length,
+        requiresFetch,
+        messageId,
       });
 
       // Clear processing state after successful completion

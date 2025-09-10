@@ -642,11 +642,10 @@ describe('Workspace Route', () => {
     });
 
     it('should handle create_project when project already exists', async () => {
-      // NOTE: There's a bug in the implementation where the error thrown when a project
-      // already exists is caught by the inner catch block and execution continues.
-      // With recursive:true, fs.mkdir doesn't fail if the directory exists.
-      // So the function incorrectly returns success even when the project exists.
-      // This test documents the actual (buggy) behavior.
+      // BUG: Tracked in issue 091025-2-project-creation-bug.md
+      // The implementation incorrectly returns success when creating a project that already exists
+      // because fs.mkdir with recursive:true doesn't fail on existing directories.
+      // This test documents the current (incorrect) behavior and should be updated when the bug is fixed.
 
       // Mock dependencies
       const { AICLISessionManager } = await import('../../services/aicli-session-manager.js');

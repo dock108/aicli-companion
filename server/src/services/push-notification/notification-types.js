@@ -130,7 +130,6 @@ export class NotificationTypes {
     notification.expiry = Math.floor(Date.now() / 1000) + 300; // 5 minutes
     notification.contentAvailable = true;
     notification.priority = 5; // Lower priority for progress
-    // Don't set sound property for silent notification - library doesn't accept null
 
     notification.topic = this.getBundleId();
     notification.pushType = 'background';
@@ -268,12 +267,11 @@ export class NotificationTypes {
     notification.category = 'CLAUDE_MESSAGE';
     notification.threadId = data.projectPath || 'default';
 
-    // CRITICAL: Don't include the full message in the payload to avoid PayloadTooLarge errors
-    // The app should fetch the full message when it opens
-    const { message: _message, ...metadataOnly } = data; // Destructure to exclude the message
+    const { message: _message, ...metadataOnly } = data;
 
-    notification.payload = {
-      ...metadataOnly, // Only include metadata, not the full message
+    // Build initial payload
+    let payload = {
+      ...metadataOnly,
       type: 'message',
       deliveryMethod: 'apns_message',
       sessionId: data.sessionId, // Ensure sessionId is explicitly included
@@ -285,6 +283,36 @@ export class NotificationTypes {
       requiresFetch: data.requiresFetch || false, // Tell the app to fetch the full message if needed
       messageId: data.messageId || null, // Include message ID for fetching
     };
+
+    // Check payload size and truncate if needed (APNS max is 4KB)
+    const MAX_PAYLOAD_SIZE = 3800; // Leave some buffer for APNS overhead
+    let payloadString = JSON.stringify(payload);
+
+    if (payloadString.length > MAX_PAYLOAD_SIZE) {
+      // Remove non-essential fields progressively
+      const fieldsToRemove = ['messagePreview', 'metadata', 'context'];
+
+      for (const field of fieldsToRemove) {
+        if (payload[field]) {
+          delete payload[field];
+          payloadString = JSON.stringify(payload);
+          if (payloadString.length <= MAX_PAYLOAD_SIZE) break;
+        }
+      }
+
+      // If still too large, keep only essential fields
+      if (payloadString.length > MAX_PAYLOAD_SIZE) {
+        payload = {
+          type: 'message',
+          sessionId: data.sessionId,
+          requestId: data.requestId,
+          requiresFetch: true, // Force fetch since we stripped data
+          messageId: data.messageId || null,
+        };
+      }
+    }
+
+    notification.payload = payload;
 
     return notification;
   }
@@ -320,7 +348,8 @@ export class NotificationTypes {
     notification.category = 'ERROR_NOTIFICATION';
     notification.threadId = data.projectPath || 'error';
 
-    notification.payload = {
+    // Build initial payload
+    const payload = {
       projectName: data.projectName,
       projectPath: data.projectPath,
       sessionId: data.sessionId,
@@ -333,6 +362,34 @@ export class NotificationTypes {
       timestamp: new Date().toISOString(),
       deliveryMethod: 'apns_error',
     };
+
+    // Check payload size and truncate if needed
+    const MAX_PAYLOAD_SIZE = 3800;
+    let payloadString = JSON.stringify(payload);
+
+    if (payloadString.length > MAX_PAYLOAD_SIZE) {
+      // Truncate technical details first, then error message
+      if (payload.technicalDetails && payload.technicalDetails.length > 100) {
+        payload.technicalDetails = `${payload.technicalDetails.substring(0, 100)}...`;
+        payloadString = JSON.stringify(payload);
+      }
+
+      if (payloadString.length > MAX_PAYLOAD_SIZE && payload.errorMessage) {
+        const maxErrorLength = Math.max(
+          50,
+          MAX_PAYLOAD_SIZE - payloadString.length + payload.errorMessage.length - 100
+        );
+        payload.errorMessage = `${payload.errorMessage.substring(0, maxErrorLength)}...`;
+        payloadString = JSON.stringify(payload);
+      }
+
+      // If still too large, remove technical details entirely
+      if (payloadString.length > MAX_PAYLOAD_SIZE) {
+        delete payload.technicalDetails;
+      }
+    }
+
+    notification.payload = payload;
 
     return notification;
   }

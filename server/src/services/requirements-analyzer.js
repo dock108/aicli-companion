@@ -139,10 +139,11 @@ export class RequirementsAnalyzer {
 
     // Patterns to detect specific requirement mentions
     this.patterns = {
-      database_schema: /(?:table|schema|model|entity|database)\s+(?:definition|structure|design)/gi,
-      api_endpoints: /(?:endpoint|api|route|rest|graphql)\s+(?:definition|design|contract)/gi,
+      database_schema:
+        /(?:table|schema|model|entity|database)\s{1,10}(?:definition|structure|design)/gi,
+      api_endpoints: /(?:endpoint|api|route|rest|graphql)\s{1,10}(?:definition|design|contract)/gi,
       ui_components:
-        /(?:ui|interface|screen|component|wireframe)\s+(?:design|specification|layout)/gi,
+        /(?:ui|interface|screen|component|wireframe)\s{1,10}(?:design|specification|layout)/gi,
       authentication: /(?:auth|authentication|login|signup|oauth|jwt|session)/gi,
       performance_targets: /(?:\d+\s*ms|\d+\s*seconds?|response time|load time|concurrent users)/gi,
       deployment_info: /(?:deploy|docker|kubernetes|aws|azure|gcp|heroku|production)/gi,
@@ -279,7 +280,7 @@ export class RequirementsAnalyzer {
     // Pattern-based checks for specific requirements
     switch (requirement) {
       case 'table_definitions':
-        return /(?:table|entity|model)\s+(?:definition|structure|schema)/gi.test(conversation);
+        return /(?:table|entity|model)\s{1,10}(?:definition|structure|schema)/gi.test(conversation);
 
       case 'relationships':
         return /(?:relationship|relation|foreign key|reference|association)/gi.test(conversation);
@@ -355,8 +356,8 @@ export class RequirementsAnalyzer {
 
     // Check for specific technical details
     const technicalPatterns = [
-      /\b\d+\s*(ms|seconds?|minutes?|gb|mb|users?)\b/gi,
-      /\b(post|get|put|delete|patch)\s+\/\w+/gi,
+      /\b\d{1,10}\s{0,3}(ms|seconds?|minutes?|gb|mb|users?)\b/gi,
+      /\b(post|get|put|delete|patch)\s{1,10}\/\w{1,100}/gi,
       /\b(varchar|int|boolean|timestamp|foreign key)\b/gi,
     ];
 
@@ -498,7 +499,7 @@ export class RequirementsAnalyzer {
     };
 
     // Extract sections using markdown headers
-    const sections = planText.split(/^##\s+/gm);
+    const sections = planText.split(/^##\s{1,10}/gm);
 
     for (const section of sections) {
       const lines = section.split('\n');
@@ -506,8 +507,8 @@ export class RequirementsAnalyzer {
 
       // Extract checklist items
       const checklistItems = lines
-        .filter((line) => line.match(/^\s*-\s*\[[ x]\]/i))
-        .map((line) => line.replace(/^\s*-\s*\[[ x]\]\s*/i, '').trim());
+        .filter((line) => line.match(/^\s{0,10}-\s{0,5}\[[ x]\]/i))
+        .map((line) => line.replace(/^\s{0,10}-\s{0,5}\[[ x]\]\s{0,10}/i, '').trim());
 
       // Categorize by header
       if (header.includes('feature') || header.includes('requirement')) {

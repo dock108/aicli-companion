@@ -48,7 +48,7 @@ struct FeatureFlags {
     /// Show New Project tool in workspace mode
     /// When true: New Project tool is visible
     /// When false: New Project tool is hidden
-    static let showProjectCreation: Bool = true
+    static let showProjectCreation: Bool = false
     
     /// Show Code Review tool in workspace mode
     /// When true: Code Review tool is visible
@@ -76,6 +76,13 @@ struct FeatureFlags {
     /// When true: Normal mode is available in chat
     /// When false: Normal mode is hidden from selector
     static let showNormalMode: Bool = true
+    
+    // MARK: - UI Features
+    
+    /// Enable/disable attachment functionality in chat
+    /// When true: Attachment button and picker are available
+    /// When false: Attachment feature is completely hidden
+    static let enableAttachments: Bool = false
     
     // MARK: - Development Features
     
@@ -127,6 +134,9 @@ extension FeatureFlags {
         - Planning Validation: \(showPlanningValidation ? "✅" : "❌")
         - Code Review: \(showCodeReview ? "✅" : "❌")
         - Refactor Assistant: \(showRefactorAssistant ? "✅" : "❌")
+        
+        UI Features:
+        - Attachments: \(enableAttachments ? "✅" : "❌")
         
         System Features:
         - Queue System: \(isQueueSystemEnabled ? "✅" : "❌")

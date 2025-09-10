@@ -146,6 +146,8 @@ export class NotificationTypes {
       tokenCount: data.tokenCount,
       tokenText,
       requestId: data.requestId,
+      sessionId: data.sessionId || null,
+      correlationId: data.correlationId || data.requestId,
       timestamp: new Date().toISOString(),
       type: 'thinkingProgress',
       isThinking: true,
@@ -187,6 +189,8 @@ export class NotificationTypes {
       action: data.action,
       reason: data.reason,
       requestId: data.requestId,
+      sessionId: data.sessionId || null,
+      correlationId: data.correlationId || data.requestId,
       timestamp: new Date().toISOString(),
       type: 'autoResponseControl',
     };
@@ -228,6 +232,7 @@ export class NotificationTypes {
       type: 'stallAlert',
       sessionId: data.sessionId,
       requestId: data.requestId,
+      correlationId: data.correlationId || data.requestId,
       projectPath: data.projectPath,
       silentMinutes: data.silentMinutes,
       lastActivity: data.lastActivity,
@@ -253,7 +258,9 @@ export class NotificationTypes {
     notification.alert = {
       title: 'Claude Response',
       subtitle: data.projectPath || 'AICLI Companion',
-      body: this.formatter.truncateMessage(data.message, 150),
+      body: data.message
+        ? this.formatter.truncateMessage(data.message, 150)
+        : 'New message received',
     };
 
     notification.topic = this.getBundleId();
@@ -261,13 +268,22 @@ export class NotificationTypes {
     notification.category = 'CLAUDE_MESSAGE';
     notification.threadId = data.projectPath || 'default';
 
-    // Explicitly include sessionId in the payload
+    // CRITICAL: Don't include the full message in the payload to avoid PayloadTooLarge errors
+    // The app should fetch the full message when it opens
+    const { message: _message, ...metadataOnly } = data; // Destructure to exclude the message
+
     notification.payload = {
-      ...data,
+      ...metadataOnly, // Only include metadata, not the full message
       type: 'message',
       deliveryMethod: 'apns_message',
       sessionId: data.sessionId, // Ensure sessionId is explicitly included
       claudeSessionId: data.sessionId, // Also include as claudeSessionId for compatibility
+      correlationId: data.correlationId || data.requestId, // Add correlation ID for tracking
+      messagePreview: data.message
+        ? this.formatter.truncateMessage(data.message, 150)
+        : 'New message', // Small preview only
+      requiresFetch: data.requiresFetch || false, // Tell the app to fetch the full message if needed
+      messageId: data.messageId || null, // Include message ID for fetching
     };
 
     return notification;
@@ -308,6 +324,7 @@ export class NotificationTypes {
       projectName: data.projectName,
       projectPath: data.projectPath,
       sessionId: data.sessionId,
+      correlationId: data.correlationId || data.requestId,
       error: true,
       errorType: data.errorType || 'UNKNOWN',
       errorMessage: data.error,

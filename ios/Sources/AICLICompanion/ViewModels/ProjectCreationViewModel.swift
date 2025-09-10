@@ -11,12 +11,12 @@ import Combine
 
 // MARK: - Enums
 
-enum ProjectType: String, CaseIterable {
+enum ProjectCreationType: String, CaseIterable {
     case webApp = "Web Application"
     case mobileApp = "Mobile Application"
     case apiService = "API Service"
     case cliTool = "CLI Tool"
-    
+
     var description: String {
         switch self {
         case .webApp:
@@ -29,7 +29,7 @@ enum ProjectType: String, CaseIterable {
             return "Command-line interface tool"
         }
     }
-    
+
     var apiValue: String {
         switch self {
         case .webApp: return "web-app"
@@ -37,6 +37,10 @@ enum ProjectType: String, CaseIterable {
         case .apiService: return "api-service"
         case .cliTool: return "cli-tool"
         }
+    }
+
+    var serverValue: String {
+        return apiValue
     }
 }
 
@@ -48,9 +52,9 @@ enum TechStack: String, CaseIterable, Identifiable {
     case rust = "Rust"
     case java = "Java"
     case dotnet = ".NET"
-    
+
     var id: String { rawValue }
-    
+
     var icon: String {
         switch self {
         case .nodeJS: return "server.rack"
@@ -77,15 +81,15 @@ enum Architecture: String, CaseIterable {
     case serverless = "Serverless"
 }
 
-struct ReadinessLevel {
+struct ProjectReadinessLevel {
     let level: String
     let label: String
     let icon: String
     let description: String
     let color: Color
     let canProceed: Bool
-    
-    static let notReady = ReadinessLevel(
+
+    static let notReady = ProjectReadinessLevel(
         level: "not-ready",
         label: "Not Ready",
         icon: "🛑",
@@ -93,8 +97,8 @@ struct ReadinessLevel {
         color: .red,
         canProceed: false
     )
-    
-    static let planningNeeded = ReadinessLevel(
+
+    static let planningNeeded = ProjectReadinessLevel(
         level: "planning-needed",
         label: "More Planning Needed",
         icon: "📝",
@@ -102,8 +106,8 @@ struct ReadinessLevel {
         color: .orange,
         canProceed: false
     )
-    
-    static let prototypeReady = ReadinessLevel(
+
+    static let prototypeReady = ProjectReadinessLevel(
         level: "prototype-ready",
         label: "Prototype Ready",
         icon: "🔨",
@@ -111,8 +115,8 @@ struct ReadinessLevel {
         color: .yellow,
         canProceed: true
     )
-    
-    static let developmentReady = ReadinessLevel(
+
+    static let developmentReady = ProjectReadinessLevel(
         level: "development-ready",
         label: "Development Ready",
         icon: "✅",
@@ -120,8 +124,8 @@ struct ReadinessLevel {
         color: Color.green.opacity(0.8),
         canProceed: true
     )
-    
-    static let productionReady = ReadinessLevel(
+
+    static let productionReady = ProjectReadinessLevel(
         level: "production-ready",
         label: "Production Ready",
         icon: "🚀",
@@ -129,7 +133,7 @@ struct ReadinessLevel {
         color: .green,
         canProceed: true
     )
-    
+
     // Aliases for backward compatibility
     static let ready = productionReady
     static let almostReady = developmentReady
@@ -143,7 +147,7 @@ struct Template: Identifiable, Hashable {
     let isRequired: Bool
 }
 
-struct DomainScore: Identifiable {
+struct ProjectDomainScore: Identifiable {
     let id = UUID()
     let domain: String
     let icon: String
@@ -158,41 +162,41 @@ class ProjectCreationViewModel: ObservableObject {
     @Published var projectName = ""
     @Published var projectDescription = ""
     @Published var author = ""
-    @Published var projectType = ProjectType.webApp
+    @Published var projectType = ProjectCreationType.webApp
     @Published var techStack = TechStack.nodeJS
     @Published var teamSize = TeamSize.small
     @Published var architecture = Architecture.monolith
-    
+
     // Options
     @Published var includeDocker = false
     @Published var includeCICD = false
     @Published var initGit = true
-    
+
     // Templates
     @Published var availableTemplates: [Template] = []
     @Published var selectedTemplates = Set<String>()
-    
+
     // Readiness
     @Published var readinessScore = 0
-    @Published var readinessLevel = ReadinessLevel.notReady
-    @Published var domainScores: [DomainScore] = []
+    @Published var readinessLevel = ProjectReadinessLevel.notReady
+    @Published var domainScores: [ProjectDomainScore] = []
     @Published var missingRequirements: [String] = []
     @Published var suggestions: [String] = []
-    
+
     // State
     @Published var isCreating = false
     @Published var creationError: String?
     @Published var creationSuccessful = false
     @Published var hasUnsavedChanges = false
-    
+
     private let networkService = NetworkService.shared
     private var cancellables = Set<AnyCancellable>()
-    
+
     init() {
         setupBindings()
         loadDefaultAuthor()
     }
-    
+
     private func setupBindings() {
         // Monitor changes
         Publishers.CombineLatest4(
@@ -207,7 +211,7 @@ class ProjectCreationViewModel: ObservableObject {
         }
         .store(in: &cancellables)
     }
-    
+
     private func loadDefaultAuthor() {
         if let savedAuthor = UserDefaults.standard.string(forKey: "projectAuthor") {
             author = savedAuthor
@@ -215,7 +219,7 @@ class ProjectCreationViewModel: ObservableObject {
             author = NSFullUserName()
         }
     }
-    
+
     func loadAvailableTemplates() {
         // In a real implementation, this would fetch from the server
         availableTemplates = [
@@ -225,7 +229,7 @@ class ProjectCreationViewModel: ObservableObject {
             Template(name: "package.json", description: "Node.js package configuration", isRequired: false),
             Template(name: ".github/workflows/ci.yml", description: "GitHub Actions CI/CD", isRequired: false)
         ]
-        
+
         // Auto-select recommended templates based on configuration
         if includeDocker {
             selectedTemplates.insert("Dockerfile")
@@ -237,7 +241,7 @@ class ProjectCreationViewModel: ObservableObject {
             selectedTemplates.insert("package.json")
         }
     }
-    
+
     func canProceedToStep(_ step: Int) -> Bool {
         switch step {
         case 1:
@@ -252,33 +256,79 @@ class ProjectCreationViewModel: ObservableObject {
             return false
         }
     }
-    
+
     var isReadyToCreate: Bool {
         !projectName.isEmpty && !author.isEmpty && readinessLevel.canProceed
     }
-    
+
     var selectedTemplateNames: [String] {
         // Core templates are always included
         var templates = ["CLAUDE.md", "plan.md", "README.md"]
         templates.append(contentsOf: selectedTemplates.sorted())
         return templates
     }
-    
+
+    private func calculateConfigurationScore() -> Int {
+        var score = 0
+        var maxScore = 0
+
+        // Tech stack selection (25 points if non-default)
+        maxScore += 25
+        if techStack != .nodeJS {
+            score += 25
+        }
+
+        // Team size selection (15 points if specified)
+        maxScore += 15
+        if teamSize != .small {
+            score += 15
+        }
+
+        // Architecture selection (15 points if non-default)
+        maxScore += 15
+        if architecture != .monolith {
+            score += 15
+        }
+
+        // Docker option (20 points)
+        maxScore += 20
+        if includeDocker {
+            score += 20
+        }
+
+        // CI/CD option (20 points)
+        maxScore += 20
+        if includeCICD {
+            score += 20
+        }
+
+        // Git initialization (5 points)
+        maxScore += 5
+        if initGit {
+            score += 5
+        }
+
+        return maxScore > 0 ? Int((Double(score) / Double(maxScore)) * 100) : 50
+    }
+
     private func updateReadinessAssessment() {
         // Simple readiness calculation based on filled fields
         var score = 0
-        
+
         if !projectName.isEmpty { score += 20 }
         if !projectDescription.isEmpty { score += 15 }
         if !author.isEmpty { score += 10 }
         if techStack != .nodeJS { score += 10 } // Non-default selection
         if includeDocker { score += 10 }
         if includeCICD { score += 10 }
-        if !selectedTemplates.isEmpty { score += 15 }
+        if !selectedTemplates.isEmpty {
+            let templateRatio = Double(selectedTemplates.count) / Double(max(availableTemplates.count, 1))
+            score += Int(15 * templateRatio)
+        }
         if initGit { score += 10 }
-        
+
         readinessScore = min(100, score)
-        
+
         // Update readiness level
         switch readinessScore {
         case 90...100:
@@ -292,15 +342,15 @@ class ProjectCreationViewModel: ObservableObject {
         default:
             readinessLevel = .notReady
         }
-        
+
         // Update domain scores (mock data for now)
         domainScores = [
-            DomainScore(domain: "Project Structure", icon: "📁", score: projectName.isEmpty ? 0 : 100),
-            DomainScore(domain: "Configuration", icon: "⚙️", score: 75),
-            DomainScore(domain: "Templates", icon: "📄", score: selectedTemplates.isEmpty ? 50 : 100),
-            DomainScore(domain: "Documentation", icon: "📚", score: projectDescription.isEmpty ? 0 : 80)
+            ProjectDomainScore(domain: "Project Structure", icon: "📁", score: projectName.isEmpty ? 0 : 100),
+            ProjectDomainScore(domain: "Configuration", icon: "⚙️", score: calculateConfigurationScore()),
+            ProjectDomainScore(domain: "Templates", icon: "📄", score: availableTemplates.isEmpty ? 50 : Int((Double(selectedTemplates.count) / Double(availableTemplates.count)) * 100)),
+            ProjectDomainScore(domain: "Documentation", icon: "📚", score: projectDescription.isEmpty ? 0 : 80)
         ]
-        
+
         // Update missing requirements
         missingRequirements = []
         if projectDescription.isEmpty {
@@ -309,7 +359,7 @@ class ProjectCreationViewModel: ObservableObject {
         if selectedTemplates.isEmpty {
             missingRequirements.append("No additional templates selected")
         }
-        
+
         // Update suggestions
         suggestions = []
         if !includeDocker {
@@ -319,14 +369,14 @@ class ProjectCreationViewModel: ObservableObject {
             suggestions.append("Add CI/CD pipeline for automated testing")
         }
     }
-    
+
     func createProject() async {
         isCreating = true
         creationError = nil
-        
+
         // Save author preference
         UserDefaults.standard.set(author, forKey: "projectAuthor")
-        
+
         // Prepare project configuration
         let config: [String: Any] = [
             "projectName": projectName,
@@ -340,15 +390,15 @@ class ProjectCreationViewModel: ObservableObject {
             "includeCICD": includeCICD,
             "selectedTemplates": Array(selectedTemplates)
         ]
-        
+
         do {
-            let endpoint = "/api/project-management/create"
+            let endpoint = "/api/projects"
             let response = try await networkService.post(endpoint: endpoint, body: config)
-            
+
             if let success = response["success"] as? Bool, success {
                 creationSuccessful = true
                 hasUnsavedChanges = false
-                
+
                 // Post notification for project list refresh
                 NotificationCenter.default.post(
                     name: NSNotification.Name("ProjectCreated"),
@@ -361,7 +411,7 @@ class ProjectCreationViewModel: ObservableObject {
         } catch {
             creationError = error.localizedDescription
         }
-        
+
         isCreating = false
     }
 }
@@ -370,7 +420,7 @@ class ProjectCreationViewModel: ObservableObject {
 
 struct ErrorView: View {
     let message: String
-    
+
     var body: some View {
         HStack {
             Image(systemName: "exclamationmark.triangle")

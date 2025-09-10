@@ -34,7 +34,7 @@ struct ChatInputBar: View {
     var body: some View {
         VStack(spacing: 0) {
             // Attachment preview (only show if feature is enabled and there are attachments)
-            if settings.enableAttachments {
+            if FeatureFlags.enableAttachments && !attachments.isEmpty {
                 AttachmentPreview(
                     attachments: attachments,
                     onRemove: removeAttachment
@@ -109,7 +109,7 @@ struct ChatInputBar: View {
             VStack(spacing: 8) {
                 HStack(alignment: .bottom, spacing: 12) {
                     // Attachment button (only show if feature flag is enabled)
-                    if settings.enableAttachments {
+                    if FeatureFlags.enableAttachments {
                         Button(action: {
                             showingAttachmentPicker = true
                         }) {
@@ -196,7 +196,7 @@ struct ChatInputBar: View {
         }
         .background(.ultraThinMaterial)
         .sheet(isPresented: $showingAttachmentPicker) {
-            if settings.enableAttachments {
+            if FeatureFlags.enableAttachments {
                 AttachmentPicker(
                     isPresented: $showingAttachmentPicker,
                     onAttachmentSelected: addAttachment
@@ -207,9 +207,9 @@ struct ChatInputBar: View {
                 #endif
             }
         }
-        .onChange(of: settings.enableAttachments) { enabled in
+        .onAppear {
             // Clear attachments if feature is disabled
-            if !enabled {
+            if !FeatureFlags.enableAttachments {
                 attachments.removeAll()
             }
         }

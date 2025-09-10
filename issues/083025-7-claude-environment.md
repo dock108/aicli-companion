@@ -1,10 +1,11 @@
-# Issue #7: Enhanced Claude Environment Details Display
+# Issue 083025-7: Enhanced Claude Environment Details Display
 
 **Priority**: Low  
 **Component**: iOS App - Debug/Info Panel  
 **Beta Blocker**: No  
 **Discovered**: 2025-08-19  
-**Status**: New  
+**Status**: New (Feature Request - Not Started)  
+**Resolved**: N/A - Feature not implemented  
 
 ## Problem Description
 
@@ -66,5 +67,31 @@ Users can access a detailed debug view showing all available Claude session info
 
 ## Status
 
-**Current Status**: New  
-**Last Updated**: 2025-08-22
+**Current Status**: New (Feature Request - Not Started)  
+**Last Updated**: 2025-09-09
+
+### Implementation Checklist
+- [ ] Root cause identified (N/A - feature request)
+- [ ] Solution designed
+- [ ] Code changes made
+- [ ] Tests written
+- [ ] Manual testing completed
+- [ ] Code review passed
+- [ ] Deployed to beta
+
+### Completion Criteria (Ready for User Testing)
+- [ ] Code compiles without errors
+- [ ] All tests pass
+- [ ] Feature/fix is functional
+- [ ] Ready for user testing
+- [ ] Any blockers clearly documented
+
+### User Testing Confirmation
+- [ ] User has tested the fix/feature
+- [ ] User confirms issue is resolved
+- [ ] User approves moving to done/complete
+<!-- DO NOT move issue to done folder until all above are checked by user -->
+
+## Result
+
+Feature not yet implemented. This is a low-priority enhancement request for future development.

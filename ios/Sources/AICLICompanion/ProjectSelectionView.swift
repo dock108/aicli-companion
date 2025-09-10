@@ -151,52 +151,8 @@ struct ProjectSelectionView: View {
                 ScrollView {
                     LazyVStack(spacing: Spacing.sm) {
                         // Add Workspace Mode option at the top
-                        Button(action: {
-                            selectWorkspaceMode()
-                        }) {
-                            HStack(spacing: Spacing.md) {
-                                // Workspace icon
-                                ZStack {
-                                    Image(systemName: "folder.badge.gearshape")
-                                        .font(.title2)
-                                        .foregroundColor(Color.purple)
-                                        .frame(width: 40, height: 40)
-                                        .background(
-                                            Circle()
-                                                .fill(Color.purple.opacity(0.1))
-                                        )
-                                }
-                                
-                                // Workspace info
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("Workspace Mode")
-                                        .font(Typography.font(.heading3))
-                                        .foregroundColor(Colors.textPrimary(for: colorScheme))
-                                    
-                                    Text("Operate across all projects")
-                                        .font(Typography.font(.caption))
-                                        .foregroundColor(Colors.textSecondary(for: colorScheme))
-                                }
-                                
-                                Spacer()
-                                
-                                // Chevron
-                                Image(systemName: "chevron.right")
-                                    .font(.caption)
-                                    .foregroundColor(Colors.textSecondary(for: colorScheme))
-                            }
-                            .padding(Spacing.md)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(Colors.bgCard(for: colorScheme))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .stroke(Color.purple.opacity(0.3), lineWidth: 1)
-                                    )
-                            )
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        .padding(.bottom, Spacing.sm)
+                        WorkspaceModeRowView(onSelect: selectWorkspaceMode)
+                            .padding(.bottom, Spacing.sm)
                         
                         // Divider
                         HStack {
@@ -259,14 +215,14 @@ struct ProjectSelectionView: View {
         .onReceive(NotificationCenter.default.publisher(for: .projectMessagesCleared)) { notification in
             guard let projectPath = notification.userInfo?["projectPath"] as? String else { return }
             
-            // Update the hasMessagesCache asynchronously to avoid publishing changes warning
-            Task {
-                let persistenceService = MessagePersistenceService.shared
-                let messages = persistenceService.loadMessages(for: projectPath)
-                await MainActor.run {
-                    hasMessagesCache[projectPath] = !messages.isEmpty
-                    print("📊 Updated hasMessagesCache: project \(projectPath) has \(messages.count) messages, indicator: \(hasMessagesCache[projectPath] ?? false)")
-                }
+            // Update the cache and force UI refresh immediately
+            Task { @MainActor in
+                // Clear the cache for this project
+                hasMessagesCache[projectPath] = false
+                print("📊 Cleared hasMessagesCache for project: \(projectPath)")
+                
+                // Force reload of projects to update UI immediately
+                await loadProjectsAsync()
             }
         }
         .onDisappear {
@@ -457,6 +413,146 @@ struct ProjectSelectionView: View {
     }
 }
 
+// MARK: - Workspace Mode Row View
+
+@available(iOS 17.0, macOS 14.0, *)
+struct WorkspaceModeRowView: View {
+    let onSelect: () -> Void
+    
+    @Environment(\.colorScheme) var colorScheme
+    @State private var isProcessing = false
+    @StateObject private var persistenceService = MessagePersistenceService.shared
+    @State private var unreadCount: Int = 0
+    @State private var messagePreview: String = ""
+    @State private var lastMessageSender: MessageSender?
+    
+    private let workspacePath = "__workspace__"
+    
+    var body: some View {
+        Button(action: {
+            guard !isProcessing else { return }
+            
+            // Brief visual feedback
+            withAnimation(.easeInOut(duration: 0.1)) {
+                isProcessing = true
+            }
+            
+            onSelect()
+            
+            // Reset immediately after the action
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                withAnimation(.easeInOut(duration: 0.1)) {
+                    isProcessing = false
+                }
+            }
+        }) {
+            HStack(spacing: Spacing.md) {
+                // Workspace icon with unread indicator
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: "folder.badge.gearshape")
+                        .font(.title2)
+                        .foregroundColor(Color.purple)
+                        .frame(width: 40, height: 40)
+                        .background(
+                            Circle()
+                                .fill(Color.purple.opacity(0.1))
+                        )
+                    
+                    // Unread indicator badge
+                    if unreadCount > 0 {
+                        ZStack {
+                            Circle()
+                                .fill(Color.blue)
+                                .frame(width: 20, height: 20)
+                            
+                            Text("\(min(unreadCount, 99))")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                        .offset(x: 8, y: -8)
+                    }
+                }
+                
+                // Workspace info
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Workspace Mode")
+                        .font(Typography.font(.heading3))
+                        .foregroundColor(Colors.textPrimary(for: colorScheme))
+                    
+                    // Message preview or default description
+                    if !messagePreview.isEmpty {
+                        HStack(spacing: 4) {
+                            if let sender = lastMessageSender {
+                                Text(sender == .user ? "You:" : "Claude:")
+                                    .font(Typography.font(.caption))
+                                    .foregroundColor(Colors.textSecondary(for: colorScheme))
+                                    .fontWeight(.medium)
+                            }
+                            
+                            Text(messagePreview)
+                                .font(Typography.font(.caption))
+                                .foregroundColor(Colors.textSecondary(for: colorScheme))
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
+                    } else {
+                        Text("Operate across all projects")
+                            .font(Typography.font(.caption))
+                            .foregroundColor(Colors.textSecondary(for: colorScheme))
+                    }
+                }
+                
+                Spacer()
+                
+                // Chevron
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundColor(Colors.textSecondary(for: colorScheme))
+            }
+            .padding(Spacing.md)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Colors.bgCard(for: colorScheme))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.purple.opacity(0.3), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+        .opacity(isProcessing ? 0.6 : 1.0)
+        .disabled(isProcessing)
+        .animation(.easeInOut(duration: 0.2), value: isProcessing)
+        .onAppear {
+            loadUnreadState()
+            loadMessagePreview()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .projectMessagesCleared)) { notification in
+            guard let projectPath = notification.userInfo?["projectPath"] as? String,
+                  projectPath == workspacePath else { return }
+            
+            // Reset unread state when messages are cleared
+            unreadCount = 0
+            messagePreview = ""
+            lastMessageSender = nil
+        }
+    }
+    
+    private func loadUnreadState() {
+        unreadCount = persistenceService.getUnreadCount(for: workspacePath)
+    }
+    
+    private func loadMessagePreview() {
+        if let preview = persistenceService.getLastMessagePreview(for: workspacePath) {
+            messagePreview = preview.preview
+            lastMessageSender = preview.sender
+        } else {
+            messagePreview = ""
+            lastMessageSender = nil
+        }
+    }
+}
+
 // MARK: - Project Row View
 
 @available(iOS 17.0, macOS 14.0, *)
@@ -576,6 +672,14 @@ struct ProjectRowView: View {
         .onAppear {
             loadUnreadState()
             loadMessagePreview()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("projectMessagesCleared"))) { notification in
+            if let clearedPath = notification.userInfo?["projectPath"] as? String, clearedPath == project.path {
+                // Immediately clear the message preview when messages are cleared
+                messagePreview = ""
+                lastMessageSender = nil
+                unreadCount = 0
+            }
         }
     }
     

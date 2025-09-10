@@ -135,9 +135,10 @@ export class SessionMonitor {
     const now = Date.now();
     const timeSinceActivity = now - (session.lastActivity || session.createdAt);
     const hasMessages = this.checkPendingMessages(sessionId);
+    const isProcessing = session.isProcessing || false;
 
-    // Only timeout if inactive AND no pending messages
-    if (timeSinceActivity > this.config.sessionTimeout && !hasMessages) {
+    // Only timeout if inactive AND no pending messages AND not actively processing
+    if (timeSinceActivity > this.config.sessionTimeout && !hasMessages && !isProcessing) {
       logger.info('Session timeout triggered', {
         sessionId,
         timeSinceActivity,
@@ -155,6 +156,12 @@ export class SessionMonitor {
       });
     } else if (hasMessages) {
       logger.debug('Session has pending messages, skipping timeout', { sessionId });
+    } else if (isProcessing) {
+      logger.debug('Session is actively processing, skipping timeout', {
+        sessionId,
+        timeSinceActivity,
+        isProcessing,
+      });
     }
   }
 

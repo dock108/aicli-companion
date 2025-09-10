@@ -1,7 +1,7 @@
 # AICLI Companion Features
 
 ## Feature Visibility Status
-Last Updated: 2025-09-06
+Last Updated: 2025-09-09
 
 ### Chat Modes
 | Feature | App Visibility | Internal Status | Flag | Description |
@@ -13,16 +13,16 @@ Last Updated: 2025-09-06
 ### Workspace Mode Tools
 | Feature | App Visibility | Internal Status | Flag | Description |
 |---------|---------------|-----------------|------|-------------|
-| New Project | ✅ Visible | Complete | `showProjectCreation = true` | Create projects with AI guidance |
+| New Project | ❌ Hidden | Complete | `showProjectCreation = false` | Create projects with AI guidance |
 | Planning Validation | ❌ Hidden | Complete | `showPlanningValidation = false` | Analyze project readiness |
 | Code Review | ❌ Hidden | In Development | `showCodeReview = false` | AI-powered code review |
 | Refactor Assistant | ❌ Hidden | In Development | `showRefactorAssistant = false` | Intelligent refactoring suggestions |
 
-### Core Features (Always On)
+### Core Features
 | Feature | Status | Control | Description |
 |---------|--------|---------|-------------|
 | Queue System | ❌ Disabled | `isQueueSystemEnabled = false` | Message queueing system |
-| Attachments | ✅ Active | Settings-based | File attachments in chat |
+| Attachments | ❌ Disabled | `enableAttachments = false` | File attachments in chat |
 | CloudKit Sync | ✅ Active | Settings-based | iCloud synchronization |
 | WebSocket | ✅ Active | Always on | Real-time communication |
 | Push Notifications | ✅ Active | User permission required | Message delivery via APNS |
@@ -57,16 +57,20 @@ Last Updated: 2025-09-06
 - ✅ Planning mode - Documentation only
 
 **Workspace Tools:**
-- ✅ New Project - Create projects with AI guidance
+- (None currently visible - all workspace tools are hidden)
 
 ### What's Hidden:
 **Chat Modes:**
 - ❌ Code mode - Fast generation mode
 
 **Workspace Tools:**
+- ❌ New Project - Create projects with AI guidance
 - ❌ Planning Validation - Readiness analysis
 - ❌ Code Review - Coming soon
 - ❌ Refactor Assistant - Coming soon
+
+**UI Features:**
+- ❌ Attachments - File attachments in chat (disabled for beta)
 
 **System Features:**
 - ❌ Queue System - Message queueing
@@ -143,6 +147,14 @@ To test hidden features:
 4. Set flag back to `false` before committing
 
 ## Version History
+
+### v1.0.1 (2025-09-09)
+- Implemented Planning Validation engine with real-time requirement extraction
+- Implemented New Project creation from workspace with templates
+- Fixed template scoring to be proportional (0-100% based on selection)
+- Fixed configuration scoring to be dynamic based on options
+- Fixed overall readiness calculation for proper thresholds
+- Disabled New Project and Planning Validation features for stability testing
 
 ### v1.0.0 (2025-09-06)
 - Initial feature flag system implementation

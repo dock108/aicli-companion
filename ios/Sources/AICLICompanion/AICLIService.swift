@@ -187,6 +187,13 @@ public class AICLIService: ObservableObject {
         return sessionManager.getSessionId(for: projectPath)
     }
     
+    // MARK: - Large Message Fetching
+    
+    public func fetchLargeMessage(messageId: String) async throws -> (content: String, metadata: [String: Any]?) {
+        // Use messageOperations to fetch large message from server
+        return try await messageOperations.fetchLargeMessage(messageId: messageId)
+    }
+    
     // MARK: - Kill Session
     
     public func killSession(_ sessionId: String, projectPath: String, sendNotification: Bool = true, completion: @escaping (Result<Void, Error>) -> Void) {

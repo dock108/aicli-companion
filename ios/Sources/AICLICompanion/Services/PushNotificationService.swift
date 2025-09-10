@@ -343,14 +343,14 @@ extension PushNotificationService {
             print("📲 Preview: \(preview)")
             
             do {
-                let fullMessage = try await AICLIService.shared.fetchMessage(
+                let fullMessage = try await AICLIService.shared.fetchLargeMessage(
                     messageId: messageId
                 )
                 
                 print("✅ Message fetched: \(fullMessage.content.count) characters")
                 
                 // 2. Validate content
-                guard !fullMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                guard !fullMessage.content.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty else {
                     print("⚠️ Fetched empty message - skipping")
                     return
                 }
@@ -546,7 +546,12 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
             return messageId
         }
         
-        // Try to get request ID
+        // Try to get correlation ID first (for better message tracking)
+        if let correlationId = userInfo["correlationId"] as? String {
+            return correlationId
+        }
+        
+        // Fall back to request ID
         if let requestId = userInfo["requestId"] as? String {
             return requestId
         }

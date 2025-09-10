@@ -67,7 +67,7 @@ struct ActionItem: Identifiable {
 class PlanningValidationViewModel: ObservableObject {
     // Scores and analysis
     @Published var overallScore: Int = 0
-    @Published var readinessLevel: ReadinessLevel = .notReady
+    @Published var readinessLevel: ProjectReadinessLevel = .notReady
     @Published var domainScores: [PlanningDomainScore] = []
     @Published var blockers: [Blocker] = []
     @Published var suggestions: [Suggestion] = []
@@ -215,7 +215,7 @@ class PlanningValidationViewModel: ObservableObject {
         }
     }
     
-    private func mapReadinessLevel(_ level: ReadinessLevelResponse) -> ReadinessLevel {
+    private func mapReadinessLevel(_ level: ReadinessLevelResponse) -> ProjectReadinessLevel {
         switch level.level {
         case "production-ready": return .ready
         case "development-ready": return .almostReady
@@ -251,7 +251,7 @@ class PlanningValidationViewModel: ObservableObject {
         overallScore = 73
         analysisConfidence = 68
         
-        readinessLevel = ReadinessLevel.prototypeReady
+        readinessLevel = ProjectReadinessLevel.prototypeReady
         
         domainScores = [
             PlanningDomainScore(

@@ -21,7 +21,7 @@ struct ChatView: View {
     @State private var showingQueueStatus = false
     @State private var showingPlanningDashboard = false
     @State private var showingProjectCreation = false
-    @State private var selectedMode: ChatMode = ChatMode.loadSavedMode()
+    @State private var selectedMode: ChatMode = .normal // Will be loaded per project
     
     // Removed complex scroll tracking - handled by ChatMessageList now
     
@@ -108,17 +108,30 @@ struct ChatView: View {
                 }
                 #if os(iOS)
                 .refreshable {
-                    // WhatsApp/iMessage pattern: Just reload local conversation
-                    print("🔄 User triggered pull-to-refresh - reloading conversation")
+                    // Pull-to-refresh: Load older messages or sync latest
+                    print("🔄 User triggered pull-to-refresh")
                     
-                    // Reload messages from local database (instant)
-                    // Use isRefresh=true to merge instead of replace
                     if let project = selectedProject {
-                        viewModel.loadMessages(for: project, isRefresh: true)
+                        // First, try to load older messages from persistence
+                        let oldestMessageId = viewModel.messages.first?.id
+                        
+                        // Load older messages if available
+                        await viewModel.loadOlderMessages(for: project, beforeMessageId: oldestMessageId)
+                        
+                        // Also sync any new messages that might have arrived
+                        viewModel.syncNewMessagesIfNeeded(for: project)
+                        
+                        // Check server for any missed messages (in case APNS failed)
+                        if let sessionId = viewModel.currentSessionId {
+                            await viewModel.checkForMissedMessages(sessionId: sessionId, for: project)
+                        }
                     }
                     
-                    // Small delay for visual feedback
-                    try? await Task.sleep(nanoseconds: 200_000_000) // 0.2 seconds
+                    // Small haptic feedback for completion
+                    #if os(iOS)
+                    let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                    impactFeedback.impactOccurred()
+                    #endif
                 }
                 #endif
                 
@@ -253,6 +266,12 @@ struct ChatView: View {
                 // Mark messages as read when viewing the conversation
                 MessagePersistenceService.shared.markAsRead(for: project.path)
                 
+                // Clear all notifications for this project immediately
+                PushNotificationService.shared.clearProjectNotifications(project.path)
+                
+                // Load the saved mode for this project
+                selectedMode = ChatMode.loadSavedMode(for: project.path)
+                
                 // Only setup if project is different or not yet set
                 if viewModel.currentProject?.path != project.path {
                     viewModel.currentProject = project
@@ -285,9 +304,22 @@ struct ChatView: View {
                     viewModel.saveMessages(for: oldProject)
                 }
                 
+                // Mark as read and clear notifications for new project
+                MessagePersistenceService.shared.markAsRead(for: newProject.path)
+                PushNotificationService.shared.clearProjectNotifications(newProject.path)
+                
+                // Load the saved mode for the new project
+                selectedMode = ChatMode.loadSavedMode(for: newProject.path)
+                
                 // Update to new project (handles both initial and subsequent selections)
                 viewModel.currentProject = newProject
                 handleProjectChange()
+            }
+        }
+        .onChange(of: selectedMode) { _, newMode in
+            // Save the mode when it changes
+            if let project = selectedProject {
+                newMode.save(for: project.path)
             }
         }
         // Removed message count change handling - ChatMessageList handles auto-scroll now
@@ -373,6 +405,10 @@ struct ChatView: View {
         guard let project = selectedProject else { return }
         
         print("🔄 ChatView: Project changed to '\(project.name)'")
+        
+        // Load the saved mode for this project
+        selectedMode = ChatMode.loadSavedMode(for: project.path)
+        print("🔄 ChatView: Loaded mode '\(selectedMode.displayName)' for project '\(project.name)'")
         
         // The currentProject setter will handle saving old messages and loading new ones
         // Just update the currentProject and it will switch contexts
@@ -461,9 +497,14 @@ struct ChatView: View {
             let persistenceService = MessagePersistenceService.shared
             persistenceService.clearMessages(for: project.path)
             
+            // Clear saved chat mode for this project (reset to default)
+            ChatMode.clearSavedMode(for: project.path)
+            
             // Clear stored session ID on main thread
             await MainActor.run {
                 aicliService.clearSessionId(for: project.path)
+                // Reset mode to default after clearing
+                selectedMode = ChatMode.loadSavedMode() // Load global default
             }
             
             // Clear notifications in background

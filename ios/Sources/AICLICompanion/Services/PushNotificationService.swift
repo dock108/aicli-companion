@@ -343,14 +343,14 @@ extension PushNotificationService {
             print("📲 Preview: \(preview)")
             
             do {
-                let fullMessage = try await AICLIService.shared.fetchMessage(
+                let fullMessage = try await AICLIService.shared.fetchLargeMessage(
                     messageId: messageId
                 )
                 
                 print("✅ Message fetched: \(fullMessage.content.count) characters")
                 
                 // 2. Validate content
-                guard !fullMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                guard !fullMessage.content.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty else {
                     print("⚠️ Fetched empty message - skipping")
                     return
                 }
@@ -459,8 +459,21 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
         message: String,
         projectPath: String
     ) {
-        let projectName = projectPath.split(separator: "/").last.map(String.init) ?? "Project"
-        let project = Project(name: projectName, path: projectPath, type: "directory")
+        // Try to get the actual project from ProjectStateManager for exact match
+        // If the current project path matches, use it directly to ensure name consistency
+        let project: Project
+        if let currentProject = ProjectStateManager.shared.currentProject,
+           currentProject.path == projectPath {
+            // Use the actual current project to ensure name matches
+            project = currentProject
+            print("🔔 Using current project from ProjectStateManager: \(project.name)")
+        } else {
+            // Create a new project - try to get proper name from path
+            // For paths like "/Users/michaelfuscoletti/Desktop/dfs-ml", extract "dfs-ml"
+            let projectName = projectPath.split(separator: "/").last.map(String.init) ?? "Project"
+            project = Project(name: projectName, path: projectPath, type: "directory")
+            print("🔔 Created new project: name=\(projectName), path=\(projectPath)")
+        }
         
         let claudeMessage = Message(
             content: message,
@@ -471,6 +484,7 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
         print("🔔 Posting claudeResponseReceived notification to UI")
         print("🔔 Message content length: \(claudeMessage.content.count)")
         print("🔔 Message ID: \(claudeMessage.id)")
+        print("🔔 Project: name=\(project.name), path=\(project.path)")
         
         NotificationCenter.default.post(
             name: .claudeResponseReceived,
@@ -491,12 +505,26 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
         _ claudeMessage: Message,
         projectPath: String
     ) {
-        let projectName = projectPath.split(separator: "/").last.map(String.init) ?? "Project"
-        let project = Project(name: projectName, path: projectPath, type: "directory")
+        // Try to get the actual project from ProjectStateManager for exact match
+        // If the current project path matches, use it directly to ensure name consistency
+        let project: Project
+        if let currentProject = ProjectStateManager.shared.currentProject,
+           currentProject.path == projectPath {
+            // Use the actual current project to ensure name matches
+            project = currentProject
+            print("🔔 Using current project from ProjectStateManager: \(project.name)")
+        } else {
+            // Create a new project - try to get proper name from path
+            // For paths like "/Users/michaelfuscoletti/Desktop/dfs-ml", extract "dfs-ml"
+            let projectName = projectPath.split(separator: "/").last.map(String.init) ?? "Project"
+            project = Project(name: projectName, path: projectPath, type: "directory")
+            print("🔔 Created new project: name=\(projectName), path=\(projectPath)")
+        }
         
         print("🔔 Posting claudeResponseReceived notification to UI (reusing Message)")
         print("🔔 Message content length: \(claudeMessage.content.count)")
         print("🔔 Message ID: \(claudeMessage.id)")
+        print("🔔 Project: name=\(project.name), path=\(project.path)")
         
         NotificationCenter.default.post(
             name: .claudeResponseReceived,
@@ -518,7 +546,12 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
             return messageId
         }
         
-        // Try to get request ID
+        // Try to get correlation ID first (for better message tracking)
+        if let correlationId = userInfo["correlationId"] as? String {
+            return correlationId
+        }
+        
+        // Fall back to request ID
         if let requestId = userInfo["requestId"] as? String {
             return requestId
         }

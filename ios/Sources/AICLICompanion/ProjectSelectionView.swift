@@ -150,6 +150,26 @@ struct ProjectSelectionView: View {
                 // Projects list
                 ScrollView {
                     LazyVStack(spacing: Spacing.sm) {
+                        // Add Workspace Mode option at the top
+                        WorkspaceModeRowView(onSelect: selectWorkspaceMode)
+                            .padding(.bottom, Spacing.sm)
+                        
+                        // Divider
+                        HStack {
+                            Rectangle()
+                                .fill(Colors.strokeLight)
+                                .frame(height: 1)
+                            Text("Projects")
+                                .font(Typography.font(.caption))
+                                .foregroundColor(Colors.textSecondary(for: colorScheme))
+                                .padding(.horizontal, Spacing.sm)
+                            Rectangle()
+                                .fill(Colors.strokeLight)
+                                .frame(height: 1)
+                        }
+                        .padding(.vertical, Spacing.sm)
+                        
+                        // Regular projects
                         ForEach(projects) { project in
                             ProjectRowView(
                                 project: project,
@@ -195,14 +215,14 @@ struct ProjectSelectionView: View {
         .onReceive(NotificationCenter.default.publisher(for: .projectMessagesCleared)) { notification in
             guard let projectPath = notification.userInfo?["projectPath"] as? String else { return }
             
-            // Update the hasMessagesCache asynchronously to avoid publishing changes warning
-            Task {
-                let persistenceService = MessagePersistenceService.shared
-                let messages = persistenceService.loadMessages(for: projectPath)
-                await MainActor.run {
-                    hasMessagesCache[projectPath] = !messages.isEmpty
-                    print("📊 Updated hasMessagesCache: project \(projectPath) has \(messages.count) messages, indicator: \(hasMessagesCache[projectPath] ?? false)")
-                }
+            // Update the cache and force UI refresh immediately
+            Task { @MainActor in
+                // Clear the cache for this project
+                hasMessagesCache[projectPath] = false
+                print("📊 Cleared hasMessagesCache for project: \(projectPath)")
+                
+                // Force reload of projects to update UI immediately
+                await loadProjectsAsync()
             }
         }
         .onDisappear {
@@ -359,6 +379,24 @@ struct ProjectSelectionView: View {
         print("🟢 ProjectSelection: Selected project '\(project.name)', navigating to chat")
     }
     
+    private func selectWorkspaceMode() {
+        print("🔵 ProjectSelection: Entering Workspace Mode")
+        
+        // Create a special workspace project
+        let workspaceProject = Project(
+            name: "Workspace Mode",
+            path: "__workspace__",
+            type: "workspace"
+        )
+        
+        // Set both values atomically to avoid race conditions
+        withAnimation(.easeInOut(duration: 0.2)) {
+            selectedProject = workspaceProject
+            isProjectSelected = true
+        }
+        print("🟢 ProjectSelection: Workspace mode selected, navigating to chat")
+    }
+    
     private func disconnectFromServer() {
         if let onDisconnect = onDisconnect {
             onDisconnect()
@@ -375,6 +413,146 @@ struct ProjectSelectionView: View {
     }
 }
 
+// MARK: - Workspace Mode Row View
+
+@available(iOS 17.0, macOS 14.0, *)
+struct WorkspaceModeRowView: View {
+    let onSelect: () -> Void
+    
+    @Environment(\.colorScheme) var colorScheme
+    @State private var isProcessing = false
+    @StateObject private var persistenceService = MessagePersistenceService.shared
+    @State private var unreadCount: Int = 0
+    @State private var messagePreview: String = ""
+    @State private var lastMessageSender: MessageSender?
+    
+    private let workspacePath = "__workspace__"
+    
+    var body: some View {
+        Button(action: {
+            guard !isProcessing else { return }
+            
+            // Brief visual feedback
+            withAnimation(.easeInOut(duration: 0.1)) {
+                isProcessing = true
+            }
+            
+            onSelect()
+            
+            // Reset immediately after the action
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                withAnimation(.easeInOut(duration: 0.1)) {
+                    isProcessing = false
+                }
+            }
+        }) {
+            HStack(spacing: Spacing.md) {
+                // Workspace icon with unread indicator
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: "folder.badge.gearshape")
+                        .font(.title2)
+                        .foregroundColor(Color.purple)
+                        .frame(width: 40, height: 40)
+                        .background(
+                            Circle()
+                                .fill(Color.purple.opacity(0.1))
+                        )
+                    
+                    // Unread indicator badge
+                    if unreadCount > 0 {
+                        ZStack {
+                            Circle()
+                                .fill(Color.blue)
+                                .frame(width: 20, height: 20)
+                            
+                            Text("\(min(unreadCount, 99))")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                        .offset(x: 8, y: -8)
+                    }
+                }
+                
+                // Workspace info
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Workspace Mode")
+                        .font(Typography.font(.heading3))
+                        .foregroundColor(Colors.textPrimary(for: colorScheme))
+                    
+                    // Message preview or default description
+                    if !messagePreview.isEmpty {
+                        HStack(spacing: 4) {
+                            if let sender = lastMessageSender {
+                                Text(sender == .user ? "You:" : "Claude:")
+                                    .font(Typography.font(.caption))
+                                    .foregroundColor(Colors.textSecondary(for: colorScheme))
+                                    .fontWeight(.medium)
+                            }
+                            
+                            Text(messagePreview)
+                                .font(Typography.font(.caption))
+                                .foregroundColor(Colors.textSecondary(for: colorScheme))
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
+                    } else {
+                        Text("Operate across all projects")
+                            .font(Typography.font(.caption))
+                            .foregroundColor(Colors.textSecondary(for: colorScheme))
+                    }
+                }
+                
+                Spacer()
+                
+                // Chevron
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundColor(Colors.textSecondary(for: colorScheme))
+            }
+            .padding(Spacing.md)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Colors.bgCard(for: colorScheme))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.purple.opacity(0.3), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+        .opacity(isProcessing ? 0.6 : 1.0)
+        .disabled(isProcessing)
+        .animation(.easeInOut(duration: 0.2), value: isProcessing)
+        .onAppear {
+            loadUnreadState()
+            loadMessagePreview()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .projectMessagesCleared)) { notification in
+            guard let projectPath = notification.userInfo?["projectPath"] as? String,
+                  projectPath == workspacePath else { return }
+            
+            // Reset unread state when messages are cleared
+            unreadCount = 0
+            messagePreview = ""
+            lastMessageSender = nil
+        }
+    }
+    
+    private func loadUnreadState() {
+        unreadCount = persistenceService.getUnreadCount(for: workspacePath)
+    }
+    
+    private func loadMessagePreview() {
+        if let preview = persistenceService.getLastMessagePreview(for: workspacePath) {
+            messagePreview = preview.preview
+            lastMessageSender = preview.sender
+        } else {
+            messagePreview = ""
+            lastMessageSender = nil
+        }
+    }
+}
+
 // MARK: - Project Row View
 
 @available(iOS 17.0, macOS 14.0, *)
@@ -388,7 +566,9 @@ struct ProjectRowView: View {
     @State private var isProcessing = false
     @StateObject private var persistenceService = MessagePersistenceService.shared
     @State private var timeRemaining: String = ""
-    @State private var hasUnreadMessages: Bool = false
+    @State private var unreadCount: Int = 0
+    @State private var messagePreview: String = ""
+    @State private var lastMessageSender: MessageSender?
     @State private var timer: Timer?
     
     var body: some View {
@@ -422,16 +602,19 @@ struct ProjectRowView: View {
                                 .fill(Colors.accentPrimaryEnd.opacity(0.1))
                         )
                     
-                    // Commented out - Unread indicator not working correctly for beta
-                    /*
-                    // Unread indicator dot
-                    if hasUnreadMessages {
-                        Circle()
-                            .fill(Color.blue)
-                            .frame(width: 10, height: 10)
-                            .offset(x: 5, y: -5)
+                    // Unread indicator badge
+                    if unreadCount > 0 {
+                        ZStack {
+                            Circle()
+                                .fill(Color.blue)
+                                .frame(width: 20, height: 20)
+                            
+                            Text("\(min(unreadCount, 99))")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                        .offset(x: 8, y: -8)
                     }
-                    */
                 }
                 
                 // Project info
@@ -443,6 +626,24 @@ struct ProjectRowView: View {
                             .lineLimit(1)
                         
                         // Processing indicators moved to chat thread as typing bubbles
+                    }
+                    
+                    // Message preview
+                    if !messagePreview.isEmpty {
+                        HStack(spacing: 4) {
+                            if let sender = lastMessageSender {
+                                Text(sender == .user ? "You:" : "Claude:")
+                                    .font(Typography.font(.caption))
+                                    .foregroundColor(Colors.textSecondary(for: colorScheme))
+                                    .fontWeight(.medium)
+                            }
+                            
+                            Text(messagePreview)
+                                .font(Typography.font(.caption))
+                                .foregroundColor(Colors.textSecondary(for: colorScheme))
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
                     }
                 }
                 
@@ -468,17 +669,18 @@ struct ProjectRowView: View {
         .opacity(isProcessing ? 0.6 : 1.0)
         .disabled(isProcessing)
         .animation(.easeInOut(duration: 0.2), value: isProcessing)
-        // Commented out - Timer functionality not working correctly for beta
-        /*
         .onAppear {
-            updateTimeRemaining()
-            checkUnreadMessages()
-            startTimer()
+            loadUnreadState()
+            loadMessagePreview()
         }
-        .onDisappear {
-            timer?.invalidate()
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("projectMessagesCleared"))) { notification in
+            if let clearedPath = notification.userInfo?["projectPath"] as? String, clearedPath == project.path {
+                // Immediately clear the message preview when messages are cleared
+                messagePreview = ""
+                lastMessageSender = nil
+                unreadCount = 0
+            }
         }
-        */
     }
     
     private func updateTimeRemaining() {
@@ -513,17 +715,17 @@ struct ProjectRowView: View {
         }
     }
     
-    private func checkUnreadMessages() {
-        // Check if there are unread messages
-        // For now, we'll check if the last message is from assistant and was recent
-        let messages = persistenceService.loadMessages(for: project.path)
-        if let lastMessage = messages.last,
-           lastMessage.sender == .assistant {
-            // Consider it unread if it's less than 5 minutes old
-            let fiveMinutesAgo = Date().addingTimeInterval(-5 * 60)
-            hasUnreadMessages = lastMessage.timestamp > fiveMinutesAgo
+    private func loadUnreadState() {
+        unreadCount = persistenceService.getUnreadCount(for: project.path)
+    }
+    
+    private func loadMessagePreview() {
+        if let preview = persistenceService.getLastMessagePreview(for: project.path) {
+            messagePreview = preview.preview
+            lastMessageSender = preview.sender
         } else {
-            hasUnreadMessages = false
+            messagePreview = ""
+            lastMessageSender = nil
         }
     }
     

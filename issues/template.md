@@ -1,11 +1,13 @@
-# Issue #[NUMBER]: [Brief Title]
+# Issue MMDDYY-N: [Brief Title]
+<!-- Format: MMDDYY-N where MM=month, DD=day, YY=year, N=sequential number for that day (1-20) -->
+<!-- Example: 090725-1 for first issue on September 7, 2025 -->
 
 **Priority**: [High/Medium/Low]  
 **Component**: [Component - Specific Area]  
 **Beta Blocker**: [Yes/No] ([reason if yes])  
 **Discovered**: [YYYY-MM-DD]  
-**Status**: [New/In Progress/Awaiting Info/RESOLVED]  
-**Resolved**: [YYYY-MM-DD if resolved]
+**Status**: [New/In Progress/Awaiting User Testing/User Testing Complete/RESOLVED]  
+**Resolved**: [YYYY-MM-DD if resolved - only after user confirms testing complete]
 
 ## Problem Description
 
@@ -87,6 +89,19 @@
 - [ ] Manual testing completed
 - [ ] Code review passed
 - [ ] Deployed to beta
+
+### Completion Criteria (Ready for User Testing)
+- [ ] Code compiles without errors
+- [ ] All tests pass
+- [ ] Feature/fix is functional
+- [ ] Ready for user testing
+- [ ] Any blockers clearly documented
+
+### User Testing Confirmation
+- [ ] User has tested the fix/feature
+- [ ] User confirms issue is resolved
+- [ ] User approves moving to done/complete
+<!-- DO NOT move issue to done folder until all above are checked by user -->
 
 ## Result
 

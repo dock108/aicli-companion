@@ -1,0 +1,261 @@
+{
+  "project_types": {
+    "web-app": {
+      "required": [
+        "database.schema",
+        "api.endpoints",
+        "ui_ux.screens",
+        "auth.strategy"
+      ],
+      "recommended": [
+        "performance.targets",
+        "deployment.environment",
+        "testing.strategy",
+        "ui_ux.responsive"
+      ],
+      "optional": [
+        "monitoring",
+        "analytics",
+        "internationalization"
+      ]
+    },
+    "mobile-app": {
+      "required": [
+        "ui_ux.screens",
+        "ui_ux.navigation",
+        "api.endpoints",
+        "auth.strategy"
+      ],
+      "recommended": [
+        "offline.strategy",
+        "push.notifications",
+        "performance.targets",
+        "testing.device_matrix"
+      ],
+      "optional": [
+        "analytics",
+        "crash.reporting",
+        "deep_linking"
+      ]
+    },
+    "api-service": {
+      "required": [
+        "api.endpoints",
+        "database.schema",
+        "auth.strategy"
+      ],
+      "recommended": [
+        "api.documentation",
+        "rate_limiting",
+        "monitoring",
+        "error.handling"
+      ],
+      "optional": [
+        "ui_ux",
+        "websockets",
+        "graphql"
+      ]
+    },
+    "cli-tool": {
+      "required": [
+        "commands",
+        "arguments",
+        "output.format"
+      ],
+      "recommended": [
+        "help.documentation",
+        "config.management",
+        "error.messages"
+      ],
+      "optional": [
+        "update.mechanism",
+        "telemetry",
+        "plugins"
+      ]
+    }
+  },
+  "completeness_criteria": {
+    "database.schema": {
+      "must_have": [
+        "tables",
+        "primary_keys",
+        "relationships"
+      ],
+      "should_have": [
+        "indexes",
+        "constraints",
+        "migrations",
+        "data_types"
+      ],
+      "nice_to_have": [
+        "seed_data",
+        "backup_strategy",
+        "partitioning"
+      ]
+    },
+    "api.endpoints": {
+      "must_have": [
+        "http_methods",
+        "paths",
+        "response_formats"
+      ],
+      "should_have": [
+        "request_validation",
+        "error_handling",
+        "rate_limiting",
+        "authentication"
+      ],
+      "nice_to_have": [
+        "api_documentation",
+        "versioning",
+        "webhooks"
+      ]
+    },
+    "ui_ux.screens": {
+      "must_have": [
+        "screen_list",
+        "navigation_flow"
+      ],
+      "should_have": [
+        "responsive_design",
+        "user_interactions",
+        "form_validation"
+      ],
+      "nice_to_have": [
+        "animations",
+        "accessibility",
+        "dark_mode"
+      ]
+    },
+    "auth.strategy": {
+      "must_have": [
+        "authentication_method",
+        "user_roles"
+      ],
+      "should_have": [
+        "session_management",
+        "password_policy",
+        "token_expiry"
+      ],
+      "nice_to_have": [
+        "mfa",
+        "sso",
+        "biometric"
+      ]
+    },
+    "performance.targets": {
+      "must_have": [
+        "response_time",
+        "concurrent_users"
+      ],
+      "should_have": [
+        "caching_strategy",
+        "load_testing",
+        "database_queries"
+      ],
+      "nice_to_have": [
+        "cdn",
+        "optimization",
+        "lazy_loading"
+      ]
+    },
+    "deployment.environment": {
+      "must_have": [
+        "hosting_platform",
+        "deployment_process"
+      ],
+      "should_have": [
+        "environments",
+        "ci_cd",
+        "secrets_management"
+      ],
+      "nice_to_have": [
+        "rollback_strategy",
+        "blue_green",
+        "canary_deployment"
+      ]
+    },
+    "testing.strategy": {
+      "must_have": [
+        "unit_tests",
+        "test_coverage"
+      ],
+      "should_have": [
+        "integration_tests",
+        "e2e_tests",
+        "test_data"
+      ],
+      "nice_to_have": [
+        "performance_tests",
+        "security_tests",
+        "chaos_engineering"
+      ]
+    }
+  },
+  "scoring_weights": {
+    "web-app": {
+      "database": 0.20,
+      "api": 0.20,
+      "ui_ux": 0.20,
+      "auth": 0.15,
+      "performance": 0.10,
+      "deployment": 0.10,
+      "testing": 0.05
+    },
+    "mobile-app": {
+      "ui_ux": 0.30,
+      "api": 0.20,
+      "auth": 0.15,
+      "performance": 0.15,
+      "testing": 0.10,
+      "deployment": 0.05,
+      "database": 0.05
+    },
+    "api-service": {
+      "api": 0.30,
+      "database": 0.25,
+      "auth": 0.20,
+      "performance": 0.10,
+      "deployment": 0.10,
+      "testing": 0.05,
+      "ui_ux": 0.00
+    },
+    "cli-tool": {
+      "commands": 0.35,
+      "output": 0.20,
+      "help": 0.15,
+      "config": 0.10,
+      "testing": 0.10,
+      "deployment": 0.05,
+      "performance": 0.05
+    }
+  },
+  "readiness_thresholds": {
+    "ready": 85,
+    "partial": 70,
+    "incomplete": 50,
+    "insufficient": 0
+  },
+  "priority_levels": {
+    "critical": {
+      "weight": 1.0,
+      "blocking": true,
+      "message": "Must be addressed before development"
+    },
+    "high": {
+      "weight": 0.7,
+      "blocking": false,
+      "message": "Should be addressed for production readiness"
+    },
+    "medium": {
+      "weight": 0.4,
+      "blocking": false,
+      "message": "Recommended for better quality"
+    },
+    "low": {
+      "weight": 0.2,
+      "blocking": false,
+      "message": "Nice to have for completeness"
+    }
+  }
+}

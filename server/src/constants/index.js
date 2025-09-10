@@ -83,7 +83,6 @@ export const DEFAULT_CONFIG = {
   HOST: '0.0.0.0',
   MAX_SESSIONS: 10,
   SESSION_TIMEOUT: 30 * 60 * 1000, // 30 minutes
-  REQUEST_TIMEOUT: 60000, // 60 seconds
   BODY_LIMIT: '10mb',
   PING_INTERVAL: 30000, // 30 seconds
 };

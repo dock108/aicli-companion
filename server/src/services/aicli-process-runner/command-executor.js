@@ -7,6 +7,7 @@ import { createLogger } from '../../utils/logger.js';
 import { commandSecurity } from '../command-security.js';
 import { OutputProcessor } from './output-processor.js';
 import { HealthMonitor } from './health-monitor.js';
+import { ServerConfig } from '../../config/server-config.js';
 
 const logger = createLogger('CommandExecutor');
 
@@ -16,6 +17,7 @@ export class CommandExecutor {
     this.config = config;
     this.outputProcessor = new OutputProcessor();
     this.healthMonitor = new HealthMonitor();
+    this.serverConfig = new ServerConfig();
   }
 
   /**
@@ -67,9 +69,17 @@ export class CommandExecutor {
       }
     }
 
+    // Handle workspace mode - use the projects directory instead of __workspace__
+    const actualWorkingDirectory =
+      workingDirectory === '__workspace__' ? this.serverConfig.configPath : workingDirectory;
+
+    // Log for better debugging
     sessionLogger.info('Executing AICLI command', {
       sessionId,
-      workingDirectory,
+      originalWorkingDirectory: workingDirectory,
+      actualWorkingDirectory,
+      isWorkspace: workingDirectory === '__workspace__',
+      configPath: this.serverConfig.configPath,
       attachmentCount: attachmentPaths.length,
       requestId,
     });
@@ -78,10 +88,11 @@ export class CommandExecutor {
       const result = await this.runAICLIProcess(
         args,
         {
-          cwd: workingDirectory,
+          cwd: actualWorkingDirectory,
           sessionId,
           requestId,
           deviceToken,
+          workingDirectory, // Pass original working directory for workspace detection
         },
         prompt
       );
@@ -218,7 +229,11 @@ export class CommandExecutor {
 
         // Send prompt via stdin if provided
         if (prompt) {
-          this.handleStdinInput(aicliProcess, prompt);
+          // Check if this is workspace mode based on the cwd
+          const isWorkspaceMode =
+            options.cwd === this.serverConfig.configPath &&
+            options.workingDirectory === '__workspace__';
+          this.handleStdinInput(aicliProcess, prompt, isWorkspaceMode);
         }
 
         // Create health monitor
@@ -252,9 +267,54 @@ export class CommandExecutor {
   /**
    * Handle stdin input for the process
    */
-  handleStdinInput(aicliProcess, prompt) {
+  handleStdinInput(aicliProcess, prompt, isWorkspaceMode = false) {
+    let finalPrompt = prompt;
+
+    // Add workspace mode system prompt if in workspace mode
+    if (isWorkspaceMode) {
+      const workspaceSystemPrompt = `[WORKSPACE MODE CONTEXT]
+You are currently in Workspace Mode, which is designed for high-level project management, cross-project operations, and PROJECT ONBOARDING.
+
+IMPORTANT WORKSPACE MODE GUIDELINES:
+
+PROJECT ONBOARDING & INITIALIZATION (ALLOWED):
+- Create new projects with initial folder structure
+- Generate starter files and boilerplate code for NEW projects
+- Set up project configuration files (package.json, tsconfig.json, etc.)
+- Create initial README, documentation, and planning files
+- Establish project architecture and directory layout
+- Copy templates and starter code from other projects
+
+CROSS-PROJECT OPERATIONS (ALLOWED):
+- Browse, search, and read files across multiple projects
+- Copy files and patterns between existing projects
+- Analyze project structures and dependencies
+- Compare implementations across projects
+
+RESTRICTIONS:
+- Do NOT modify existing code files in established projects
+- Do NOT perform detailed feature implementations in existing projects
+- Do NOT refactor or debug code in existing projects
+- For coding tasks in existing projects, the user should switch to that specific project directory
+
+BEHAVIOR:
+- Provide concise, relevant responses to questions
+- Only do what is explicitly asked - no unsolicited project summaries
+- Focus on project structure, organization, and high-level planning
+- Be helpful with project initialization and setup tasks
+
+USER REQUEST:
+${prompt}`;
+
+      finalPrompt = workspaceSystemPrompt;
+      logger.info('Added workspace mode system prompt', {
+        originalLength: prompt.length,
+        finalLength: finalPrompt.length,
+      });
+    }
+
     // Ensure prompt is properly formatted
-    const formattedPrompt = prompt.endsWith('\n') ? prompt : `${prompt}\n`;
+    const formattedPrompt = finalPrompt.endsWith('\n') ? finalPrompt : `${finalPrompt}\n`;
 
     aicliProcess.stdin.write(formattedPrompt, (err) => {
       if (err) {
@@ -262,6 +322,7 @@ export class CommandExecutor {
       } else {
         logger.debug('Prompt sent to AICLI CLI', {
           length: formattedPrompt.length,
+          isWorkspaceMode,
         });
       }
       // Close stdin to signal end of input

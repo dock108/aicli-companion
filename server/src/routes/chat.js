@@ -7,12 +7,16 @@ import { deviceRegistry } from '../services/device-registry.js';
 import { pushNotificationService } from '../services/push-notification.js';
 import { createChatMessageHandler } from '../handlers/chat-message-handler.js';
 import { sendErrorResponse } from '../utils/response-utils.js';
+import { PlanningModeService } from '../services/planning-mode.js';
 
 const logger = createLogger('ChatAPI');
 const router = express.Router();
 
 // Import AICLI service singleton instance
 import { aicliService } from '../services/aicli-instance.js';
+
+// Initialize planning mode service
+const planningModeService = new PlanningModeService();
 
 /**
  * POST /api/chat - Send message to Claude and get response via APNS (always async)
@@ -29,6 +33,7 @@ router.post('/', async (req, res) => {
     deviceId, // Device identifier for coordination
     userId, // User identifier for device coordination
     deviceInfo, // Device information (platform, version, etc.)
+    mode = 'normal', // Chat mode: normal, planning, code
   } = req.body;
 
   const requestId =
@@ -236,18 +241,36 @@ router.post('/', async (req, res) => {
     deviceInfo,
   };
 
+  // If in planning mode, prefix the message with instructions
+  let processedMessage = message;
+  if (mode === 'planning') {
+    // Use centralized planning mode prefix from PlanningModeService
+    const planningPrefix = planningModeService.getPlanningModePrefix();
+    processedMessage = planningPrefix + message;
+    logger.info('Planning mode activated - added instruction prefix', {
+      requestId,
+      mode,
+      originalLength: message.length,
+      prefixedLength: processedMessage.length,
+    });
+  } else if (mode === 'code') {
+    // Optional prefix for code mode
+    processedMessage = message; // No prefix needed for code mode
+  }
+
   const queueResult = messageQueueManager.queueMessage(
     queueSessionId,
     {
-      message,
+      message: processedMessage,
       projectPath,
       deviceToken,
       attachments,
       autoResponse,
       requestId,
       sessionId,
-      validatedMessage: messageValidation.message ?? message,
-      content: message, // Duplicate detector needs this field
+      mode, // Include mode for handler
+      validatedMessage: processedMessage, // Use the processed (prefixed) message
+      content: message, // Duplicate detector needs original message
     },
     messagePriority,
     messageMetadata

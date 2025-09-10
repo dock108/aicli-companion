@@ -189,7 +189,16 @@ export class AICLIService extends EventEmitter {
       streaming = true,
       skipPermissions = false,
       attachments = null,
+      mode = 'normal', // Add mode parameter
     } = options;
+
+    // For code mode, set bypass permissions for faster operation
+    // Planning mode is now handled via prompt prefix, not permission restrictions
+    if (mode === 'code') {
+      this.setPermissionMode('bypassPermissions');
+    } else {
+      this.setPermissionMode('default');
+    }
 
     // Process attachments first
     let attachmentData = { filePaths: [], cleanup: () => {} };
@@ -219,12 +228,14 @@ export class AICLIService extends EventEmitter {
           skipPermissions,
           attachmentPaths: attachmentData.filePaths, // Pass file paths
           workingDirectory: options.workingDirectory || this.defaultWorkingDirectory,
+          mode, // Pass mode through
         });
       } else {
         return await this.sendOneTimePrompt(enhancedPrompt, {
           ...options,
           skipPermissions,
           attachmentPaths: attachmentData.filePaths, // Pass file paths
+          mode, // Pass mode through
         });
       }
     } finally {

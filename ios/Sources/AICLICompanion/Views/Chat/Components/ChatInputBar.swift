@@ -19,6 +19,9 @@ struct ChatInputBar: View {
     let isProcessing: Bool
     let onStopProcessing: (() -> Void)?
     
+    // Chat mode selection
+    @Binding var selectedMode: ChatMode
+    
     @EnvironmentObject private var settings: SettingsManager
     @FocusState private var isInputFocused: Bool
     @State private var attachments: [AttachmentData] = []
@@ -31,7 +34,7 @@ struct ChatInputBar: View {
     var body: some View {
         VStack(spacing: 0) {
             // Attachment preview (only show if feature is enabled and there are attachments)
-            if settings.enableAttachments {
+            if FeatureFlags.enableAttachments && !attachments.isEmpty {
                 AttachmentPreview(
                     attachments: attachments,
                     onRemove: removeAttachment
@@ -48,10 +51,65 @@ struct ChatInputBar: View {
             Divider()
                 .background(Colors.strokeLight)
             
+            // Mode selector bar
+            HStack {
+                Menu {
+                    ForEach(ChatMode.visibleCases, id: \.self) { mode in
+                        Button(action: {
+                            selectedMode = mode
+                            mode.save() // Persist selection
+                        }) {
+                            Label {
+                                VStack(alignment: .leading) {
+                                    Text(mode.displayName)
+                                    Text(mode.description)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            } icon: {
+                                Image(systemName: mode.icon)
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: selectedMode.icon)
+                            .font(.system(size: 14))
+                        Text(selectedMode.displayName)
+                            .font(.system(size: 14, weight: .medium))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 10))
+                    }
+                    .foregroundColor(selectedMode.foregroundColor)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(selectedMode.backgroundColor)
+                    .clipShape(Capsule())
+                }
+                
+                Spacer()
+                
+                // Mode indicator when not normal
+                if !selectedMode.shortDescription.isEmpty {
+                    Text(selectedMode.shortDescription)
+                        .font(.system(size: 12))
+                        .foregroundColor(selectedMode.foregroundColor)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(selectedMode.backgroundColor)
+                        .clipShape(Capsule())
+                }
+            }
+            .padding(.horizontal, isIPad && horizontalSizeClass == .regular ? 20 : 16)
+            .padding(.vertical, 8)
+            
+            Divider()
+                .background(Colors.strokeLight)
+            
             VStack(spacing: 8) {
                 HStack(alignment: .bottom, spacing: 12) {
                     // Attachment button (only show if feature flag is enabled)
-                    if settings.enableAttachments {
+                    if FeatureFlags.enableAttachments {
                         Button(action: {
                             showingAttachmentPicker = true
                         }) {
@@ -138,7 +196,7 @@ struct ChatInputBar: View {
         }
         .background(.ultraThinMaterial)
         .sheet(isPresented: $showingAttachmentPicker) {
-            if settings.enableAttachments {
+            if FeatureFlags.enableAttachments {
                 AttachmentPicker(
                     isPresented: $showingAttachmentPicker,
                     onAttachmentSelected: addAttachment
@@ -149,9 +207,9 @@ struct ChatInputBar: View {
                 #endif
             }
         }
-        .onChange(of: settings.enableAttachments) { enabled in
+        .onAppear {
             // Clear attachments if feature is disabled
-            if !enabled {
+            if !FeatureFlags.enableAttachments {
                 attachments.removeAll()
             }
         }

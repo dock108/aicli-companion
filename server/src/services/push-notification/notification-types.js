@@ -130,7 +130,6 @@ export class NotificationTypes {
     notification.expiry = Math.floor(Date.now() / 1000) + 300; // 5 minutes
     notification.contentAvailable = true;
     notification.priority = 5; // Lower priority for progress
-    notification.sound = null; // Silent notification
 
     notification.topic = this.getBundleId();
     notification.pushType = 'background';
@@ -146,6 +145,8 @@ export class NotificationTypes {
       tokenCount: data.tokenCount,
       tokenText,
       requestId: data.requestId,
+      sessionId: data.sessionId || null,
+      correlationId: data.correlationId || data.requestId,
       timestamp: new Date().toISOString(),
       type: 'thinkingProgress',
       isThinking: true,
@@ -187,6 +188,8 @@ export class NotificationTypes {
       action: data.action,
       reason: data.reason,
       requestId: data.requestId,
+      sessionId: data.sessionId || null,
+      correlationId: data.correlationId || data.requestId,
       timestamp: new Date().toISOString(),
       type: 'autoResponseControl',
     };
@@ -228,6 +231,7 @@ export class NotificationTypes {
       type: 'stallAlert',
       sessionId: data.sessionId,
       requestId: data.requestId,
+      correlationId: data.correlationId || data.requestId,
       projectPath: data.projectPath,
       silentMinutes: data.silentMinutes,
       lastActivity: data.lastActivity,
@@ -253,7 +257,9 @@ export class NotificationTypes {
     notification.alert = {
       title: 'Claude Response',
       subtitle: data.projectPath || 'AICLI Companion',
-      body: this.formatter.truncateMessage(data.message, 150),
+      body: data.message
+        ? this.formatter.truncateMessage(data.message, 150)
+        : 'New message received',
     };
 
     notification.topic = this.getBundleId();
@@ -261,14 +267,52 @@ export class NotificationTypes {
     notification.category = 'CLAUDE_MESSAGE';
     notification.threadId = data.projectPath || 'default';
 
-    // Explicitly include sessionId in the payload
-    notification.payload = {
-      ...data,
+    const { message: _message, ...metadataOnly } = data;
+
+    // Build initial payload
+    let payload = {
+      ...metadataOnly,
       type: 'message',
       deliveryMethod: 'apns_message',
       sessionId: data.sessionId, // Ensure sessionId is explicitly included
       claudeSessionId: data.sessionId, // Also include as claudeSessionId for compatibility
+      correlationId: data.correlationId || data.requestId, // Add correlation ID for tracking
+      messagePreview: data.message
+        ? this.formatter.truncateMessage(data.message, 150)
+        : 'New message', // Small preview only
+      requiresFetch: data.requiresFetch || false, // Tell the app to fetch the full message if needed
+      messageId: data.messageId || null, // Include message ID for fetching
     };
+
+    // Check payload size and truncate if needed (APNS max is 4KB)
+    const MAX_PAYLOAD_SIZE = 3800; // Leave some buffer for APNS overhead
+    let payloadString = JSON.stringify(payload);
+
+    if (payloadString.length > MAX_PAYLOAD_SIZE) {
+      // Remove non-essential fields progressively
+      const fieldsToRemove = ['messagePreview', 'metadata', 'context'];
+
+      for (const field of fieldsToRemove) {
+        if (payload[field]) {
+          delete payload[field];
+          payloadString = JSON.stringify(payload);
+          if (payloadString.length <= MAX_PAYLOAD_SIZE) break;
+        }
+      }
+
+      // If still too large, keep only essential fields
+      if (payloadString.length > MAX_PAYLOAD_SIZE) {
+        payload = {
+          type: 'message',
+          sessionId: data.sessionId,
+          requestId: data.requestId,
+          requiresFetch: true, // Force fetch since we stripped data
+          messageId: data.messageId || null,
+        };
+      }
+    }
+
+    notification.payload = payload;
 
     return notification;
   }
@@ -304,10 +348,12 @@ export class NotificationTypes {
     notification.category = 'ERROR_NOTIFICATION';
     notification.threadId = data.projectPath || 'error';
 
-    notification.payload = {
+    // Build initial payload
+    const payload = {
       projectName: data.projectName,
       projectPath: data.projectPath,
       sessionId: data.sessionId,
+      correlationId: data.correlationId || data.requestId,
       error: true,
       errorType: data.errorType || 'UNKNOWN',
       errorMessage: data.error,
@@ -316,6 +362,34 @@ export class NotificationTypes {
       timestamp: new Date().toISOString(),
       deliveryMethod: 'apns_error',
     };
+
+    // Check payload size and truncate if needed
+    const MAX_PAYLOAD_SIZE = 3800;
+    let payloadString = JSON.stringify(payload);
+
+    if (payloadString.length > MAX_PAYLOAD_SIZE) {
+      // Truncate technical details first, then error message
+      if (payload.technicalDetails && payload.technicalDetails.length > 100) {
+        payload.technicalDetails = `${payload.technicalDetails.substring(0, 100)}...`;
+        payloadString = JSON.stringify(payload);
+      }
+
+      if (payloadString.length > MAX_PAYLOAD_SIZE && payload.errorMessage) {
+        const maxErrorLength = Math.max(
+          50,
+          MAX_PAYLOAD_SIZE - payloadString.length + payload.errorMessage.length - 100
+        );
+        payload.errorMessage = `${payload.errorMessage.substring(0, maxErrorLength)}...`;
+        payloadString = JSON.stringify(payload);
+      }
+
+      // If still too large, remove technical details entirely
+      if (payloadString.length > MAX_PAYLOAD_SIZE) {
+        delete payload.technicalDetails;
+      }
+    }
+
+    notification.payload = payload;
 
     return notification;
   }

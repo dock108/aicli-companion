@@ -1,6 +1,14 @@
 import Foundation
 import SwiftUI
 
+// MARK: - Unread State
+
+struct UnreadState: Codable {
+    let lastReadMessageId: String?
+    let unreadCount: Int
+    let lastReadDate: Date
+}
+
 // MARK: - Persisted Message
 
 @available(iOS 16.0, macOS 13.0, *)
@@ -200,6 +208,66 @@ class MessagePersistenceService: ObservableObject {
         let projectDir = sessionsDirectory.appendingPathComponent(sanitizeFilename(projectPath))
         let messagesFile = projectDir.appendingPathComponent("messages.json")
         return fileManager.fileExists(atPath: messagesFile.path)
+    }
+    
+    // MARK: - Unread State Management
+    
+    func getUnreadCount(for projectPath: String) -> Int {
+        let projectDir = sessionsDirectory.appendingPathComponent(sanitizeFilename(projectPath))
+        let unreadFile = projectDir.appendingPathComponent("unread_state.json")
+        
+        guard fileManager.fileExists(atPath: unreadFile.path) else {
+            // If no unread state file, count all assistant messages as unread
+            let messages = loadMessages(for: projectPath)
+            return messages.filter { $0.sender == .assistant }.count
+        }
+        
+        do {
+            let data = try Data(contentsOf: unreadFile)
+            let unreadState = try decoder.decode(UnreadState.self, from: data)
+            
+            // Calculate unread count based on last read message ID
+            let messages = loadMessages(for: projectPath)
+            if let lastReadId = unreadState.lastReadMessageId,
+               let lastReadIndex = messages.firstIndex(where: { $0.id.uuidString == lastReadId }) {
+                let unreadMessages = messages[(lastReadIndex + 1)...]
+                return unreadMessages.filter { $0.sender == .assistant }.count
+            } else {
+                return messages.filter { $0.sender == .assistant }.count
+            }
+        } catch {
+            print("⚠️ MessagePersistence: Failed to load unread state: \(error)")
+            let messages = loadMessages(for: projectPath)
+            return messages.filter { $0.sender == .assistant }.count
+        }
+    }
+    
+    func markAsRead(for projectPath: String) {
+        let projectDir = sessionsDirectory.appendingPathComponent(sanitizeFilename(projectPath))
+        try? fileManager.createDirectory(at: projectDir, withIntermediateDirectories: true)
+        
+        let unreadFile = projectDir.appendingPathComponent("unread_state.json")
+        let messages = loadMessages(for: projectPath)
+        
+        let unreadState = UnreadState(
+            lastReadMessageId: messages.last?.id.uuidString,
+            unreadCount: 0,
+            lastReadDate: Date()
+        )
+        
+        if let data = try? encoder.encode(unreadState) {
+            try? data.write(to: unreadFile)
+            print("📝 MessagePersistence: Marked all messages as read for project")
+        }
+    }
+    
+    func getLastMessagePreview(for projectPath: String) -> (preview: String, sender: MessageSender)? {
+        let messages = loadMessages(for: projectPath)
+        guard let lastMessage = messages.last else { return nil }
+        
+        let preview = String(lastMessage.content.prefix(100))
+            .replacingOccurrences(of: "\n", with: " ")
+        return (preview: preview, sender: lastMessage.sender)
     }
     
     // MARK: - Private Methods

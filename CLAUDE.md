@@ -8,7 +8,15 @@
 - When stuck on one approach, try another approach
 - Fix ALL test failures, don't settle for "good enough"
 - 80% coverage means 80%, not 78%
-- Complete means COMPLETE
+- **COMPLETION MEANS**: Task is ready for user testing, evaluation, or further direction
+  - Code compiles and runs without errors
+  - All tests pass
+  - Feature is implemented and functional
+  - Ready to hand over to user for testing
+  - If blocked, clearly explain the blocker for user evaluation
+- **IMPORTANT**: Never move issues or documentation to 'done' or 'complete' folders until user explicitly confirms testing is complete
+  - Keep issues open with status "Awaiting User Testing"
+  - Only close/move when user says "testing complete" or similar confirmation
 
 ### 2. User First
 - Always prioritize what the user is asking for
@@ -77,9 +85,10 @@ After completing any sprint or major task:
 - **File cleanup** - Delete temporary files, organize outputs
 - **Size check** - Monitor data files, logs, and cache growth
 - **Line count review** - If files exceed ~1000 lines, consider breaking them down
-- **Documentation sync** - Update README, move completed issues to done/
+- **Documentation sync** - Update README, but DO NOT move issues to done/ until user confirms
 - **Test coverage** - Verify all new code has tests
 - **Code quality** - Run linters, fix warnings
+- **CRITICAL**: Keep issues in active folder with "Awaiting User Testing" status until user explicitly confirms testing is complete
 
 ## Remember
 - Do what's asked, nothing more
@@ -87,5 +96,5 @@ After completing any sprint or major task:
 - Simple working code beats perfect architecture
 
 ---
-**Version**: 1.1.0  
-**Last Updated**: 2025-08-29
+**Version**: 1.3.0  
+**Last Updated**: 2025-09-09

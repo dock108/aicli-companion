@@ -100,6 +100,33 @@ final class ChatViewModel: ObservableObject {
         messageManager.clearMessages()
     }
     
+    // MARK: Pull-to-Refresh Operations
+    func loadOlderMessages(for project: Project, beforeMessageId: UUID?) async {
+        // Load older messages from persistence (pagination)
+        await MainActor.run {
+            print("📜 Loading older messages for project: \(project.name)")
+            
+            // For now, just reload all messages (can be enhanced with pagination later)
+            messageManager.loadMessages(for: project, isRefresh: false)
+            
+            // In a future enhancement, we could:
+            // 1. Query persistence for messages before the given ID
+            // 2. Prepend them to the current message list
+            // 3. Maintain scroll position
+        }
+    }
+    
+    func checkForMissedMessages(sessionId: String, for project: Project) async {
+        // Check server for any messages we might have missed
+        await MainActor.run {
+            print("🔍 Checking for missed messages in session: \(sessionId)")
+            
+            // This would typically make an API call to check for messages
+            // For now, just trigger a sync
+            messageManager.syncNewMessagesIfNeeded(for: project)
+        }
+    }
+    
     // MARK: Project Operations
     func setCurrentProject(_ project: Project?) {
         projectStateManager.setCurrentProject(project)
@@ -124,8 +151,8 @@ final class ChatViewModel: ObservableObject {
     }
     
     // MARK: Message Sending
-    func sendMessage(_ text: String, for project: Project, attachments: [AttachmentData] = []) {
-        print("📤 ChatViewModel: Sending message for project: \(project.name)")
+    func sendMessage(_ text: String, for project: Project, attachments: [AttachmentData] = [], mode: ChatMode = .normal) {
+        print("📤 ChatViewModel: Sending message for project: \(project.name) in mode: \(mode.displayName)")
         
         // Set loading state and waiting for response
         loadingStateManager.setLoading(true, for: project.path)
@@ -184,7 +211,8 @@ final class ChatViewModel: ObservableObject {
         aicliService.sendMessage(
             text,
             projectPath: project.path,
-            attachments: attachments
+            attachments: attachments,
+            mode: mode
         ) { [weak self] result in
             Task { @MainActor in
                 guard let self = self else { return }
@@ -223,36 +251,37 @@ final class ChatViewModel: ObservableObject {
     
     // MARK: Kill Session
     func killSession(_ sessionId: String, for project: Project, sendNotification: Bool = true, completion: @escaping (Bool) -> Void) {
-        print("⏹️ ChatViewModel: Killing session \(sessionId) for project: \(project.name)")
+        print("⏹️ ChatViewModel: Stopping session for project: \(project.name)")
         
-        // Call the kill endpoint via AICLIService
-        aicliService.killSession(sessionId, projectPath: project.path, sendNotification: sendNotification) { [weak self] result in
-            Task { @MainActor in
-                switch result {
-                case .success:
-                    print("✅ ChatViewModel: Session killed successfully")
-                    
-                    // Clear loading states
-                    self?.loadingStateManager.setLoading(false, for: project.path)
-                    self?.loadingStateManager.setWaitingForResponse(false)
-                    
-                    // Update project state
-                    self?.projectStateManager.updateProjectState(for: project.path) { state in
-                        state.isWaitingForResponse = false
-                        state.isLoading = false
-                    }
-                    
-                    // Clear processing state for stop button
-                    ProjectStatusManager.shared.statusFor(project).isProcessing = false
-                    
-                    completion(true)
-                    
-                case .failure(let error):
-                    print("❌ ChatViewModel: Failed to kill session: \(error)")
-                    completion(false)
-                }
+        // ALWAYS clear the states immediately - user wants to stop NOW
+        // Clear loading states
+        loadingStateManager.setLoading(false, for: project.path)
+        loadingStateManager.setWaitingForResponse(false)
+        
+        // Update project state
+        projectStateManager.updateProjectState(for: project.path) { state in
+            state.isWaitingForResponse = false
+            state.isLoading = false
+        }
+        
+        // Clear processing state (stop button becomes send button)
+        ProjectStatusManager.shared.statusFor(project).isProcessing = false
+        
+        // Clear from global coordinator
+        LoadingStateCoordinator.shared.stopProjectLoading(project.path)
+        
+        // Try to notify the server, but don't block on it
+        aicliService.killSession(sessionId, projectPath: project.path, sendNotification: sendNotification) { result in
+            switch result {
+            case .success:
+                print("✅ ChatViewModel: Server notified of session stop")
+            case .failure(let error):
+                print("⚠️ ChatViewModel: Server notification failed (states already cleared): \(error)")
             }
         }
+        
+        // Always report success since we cleared the client state
+        completion(true)
     }
     
     // MARK: Add System Message

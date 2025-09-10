@@ -4,8 +4,13 @@
  */
 
 import { createLogger } from '../utils/logger.js';
+import { storeMessage } from '../routes/messages.js';
+import { randomUUID } from 'crypto';
 
 const logger = createLogger('ChatMessageHandler');
+
+// APNS has a max payload size of 4KB, but we'll be conservative
+const MAX_MESSAGE_SIZE = 2000; // 2KB to leave room for other payload data
 
 /**
  * Creates a message handler for processing queued chat messages
@@ -26,6 +31,7 @@ export function createChatMessageHandler(services) {
       requestId: msgRequestId,
       sessionId: msgSessionId,
       validatedMessage,
+      mode = 'normal', // Extract mode
     } = msgData;
 
     // NO TIMEOUT - Claude operations can take as long as needed
@@ -40,6 +46,23 @@ export function createChatMessageHandler(services) {
         hasSessionId: !!msgSessionId,
         sessionIdValue: msgSessionId || 'new conversation',
       });
+
+      // Mark session as processing to prevent timeout
+      if (msgSessionId) {
+        const session = aicliService.sessionManager.getSession(msgSessionId);
+        if (session) {
+          session.isProcessing = true;
+          session.processingStartTime = Date.now();
+          logger.info('Session processing started', {
+            sessionId: msgSessionId,
+            startTime: session.processingStartTime,
+          });
+        } else {
+          logger.warn('Session not found when trying to mark as processing', {
+            sessionId: msgSessionId,
+          });
+        }
+      }
 
       // Set up streaming status updates listener
       streamListener = async (data) => {
@@ -97,6 +120,7 @@ export function createChatMessageHandler(services) {
         attachments: msgAttachments,
         streaming: true, // Use streaming to get processRunner with --resume
         deviceToken: msgDeviceToken, // Pass device token for stall notifications
+        mode, // Pass mode to AICLI service
       });
 
       // Log the full result structure for debugging
@@ -210,9 +234,34 @@ export function createChatMessageHandler(services) {
         return;
       }
 
-      // Send Claude response via APNS
+      // Check if message is too large for APNS
+      let messageId = null;
+      let requiresFetch = false;
+
+      if (content.length > MAX_MESSAGE_SIZE) {
+        // Store large message and send only metadata via APNS
+        messageId = randomUUID();
+        storeMessage(messageId, content, {
+          projectPath: msgProjectPath,
+          sessionId: claudeSessionId,
+          requestId: msgRequestId,
+          timestamp: new Date().toISOString(),
+        });
+        requiresFetch = true;
+
+        logger.info('Stored large message for fetch', {
+          requestId: msgRequestId,
+          messageId,
+          contentLength: content.length,
+        });
+      }
+
+      // Send notification via APNS
+      // If message is large, the notification-types.js will exclude it from payload
       await pushNotificationService.sendMessageNotification(msgDeviceToken, {
-        message: content,
+        message: requiresFetch ? '' : content, // Don't send content if it needs fetching
+        messageId, // Include message ID for fetching
+        requiresFetch, // Tell the app to fetch the message
         projectPath: msgProjectPath,
         sessionId: claudeSessionId,
         requestId: msgRequestId,
@@ -232,7 +281,32 @@ export function createChatMessageHandler(services) {
         deviceId: `${msgDeviceToken.substring(0, 16)}...`,
         sessionId: claudeSessionId,
         contentLength: content.length,
+        requiresFetch,
+        messageId,
       });
+
+      // Clear processing state after successful completion
+      if (msgSessionId) {
+        const session = aicliService.sessionManager.getSession(msgSessionId);
+        if (session) {
+          session.isProcessing = false;
+          session.processingEndTime = Date.now();
+          if (session.processingStartTime) {
+            const processingDuration = session.processingEndTime - session.processingStartTime;
+            logger.info('Session processing completed', {
+              sessionId: msgSessionId,
+              duration: Math.floor(processingDuration / 1000),
+              durationMs: processingDuration,
+            });
+          } else {
+            logger.info('Session processing completed', {
+              sessionId: msgSessionId,
+              duration: 'unknown',
+              note: 'Start time was not recorded',
+            });
+          }
+        }
+      }
 
       // Report success to queue callback
       callback(null, { success: true, sessionId: claudeSessionId });
@@ -294,6 +368,18 @@ export function createChatMessageHandler(services) {
       // Always clean up the stream listener
       if (streamListener) {
         aicliService.removeListener('streamChunk', streamListener);
+      }
+
+      // Always clear processing state when done (success or failure)
+      if (msgSessionId) {
+        const session = aicliService.sessionManager.getSession(msgSessionId);
+        if (session && session.isProcessing) {
+          session.isProcessing = false;
+          session.processingEndTime = Date.now();
+          logger.info('Session processing state cleared (finally block)', {
+            sessionId: msgSessionId,
+          });
+        }
       }
     }
   };

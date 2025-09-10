@@ -10,6 +10,8 @@ import { dirname, join } from 'path';
 import { setupRoutes } from './routes/api-routes.js';
 import { setupProjectRoutes } from './routes/projects.js';
 import { setupAICLIStatusRoutes } from './routes/aicli-status.js';
+import { setupWorkspaceRoutes } from './routes/workspace.js';
+import { setupValidationRoutes } from './routes/validation.js';
 import sessionRoutes from './routes/sessions.js';
 import pushNotificationRoutes from './routes/push-notifications.js';
 import chatRoutes from './routes/chat.js';
@@ -18,6 +20,8 @@ import authRoutes from './routes/auth.js';
 import { router as messagesRouter } from './routes/messages.js';
 import filesRoutes from './routes/files.js';
 import queueRoutes from './routes/queue.js';
+import projectManagementRoutes from './routes/project-management.js';
+import planningValidationRoutes from './routes/planning-validation.js';
 import { errorHandler } from './middleware/error.js';
 import { aicliService } from './services/aicli-instance.js';
 import { ServerConfig } from './config/server-config.js';
@@ -116,6 +120,8 @@ class AICLICompanionServer {
     setupRoutes(this.app, this.aicliService);
     setupProjectRoutes(this.app, this.aicliService);
     setupAICLIStatusRoutes(this.app, this.aicliService);
+    setupWorkspaceRoutes(this.app, this.aicliService);
+    setupValidationRoutes(this.app);
     this.app.use(pushNotificationRoutes);
 
     // New HTTP + APNS routes
@@ -126,6 +132,8 @@ class AICLICompanionServer {
     this.app.use('/api/messages', messagesRouter);
     this.app.use('/api/files', filesRoutes);
     this.app.use('/api/queue', queueRoutes);
+    this.app.use('/api', projectManagementRoutes);
+    this.app.use('/api/planning-validation', planningValidationRoutes);
 
     // Static files (for web interface if needed)
     this.app.use('/static', express.static(join(__dirname, '../public')));
@@ -145,6 +153,7 @@ class AICLICompanionServer {
           chat: '/api/chat',
           devices: '/api/devices',
           projects: '/api/projects',
+          workspace: '/api/workspace',
           files: '/api/files',
           qrCode: '/api/auth/setup',
         },
@@ -307,6 +316,8 @@ class AICLICompanionServer {
       ws.userId = null;
       ws.sessionIds = new Set();
       ws.isAlive = true;
+      ws.isProcessing = false;
+      ws.lastHeartbeat = Date.now();
 
       // Setup ping-pong for connection health
       ws.on('pong', () => {
@@ -348,8 +359,15 @@ class AICLICompanionServer {
     });
 
     // Heartbeat interval to detect disconnected clients
+    // Reduced interval for better stability during long operations
     this.wsHeartbeatInterval = setInterval(() => {
       this.wss.clients.forEach((ws) => {
+        // Skip heartbeat check if client is actively processing
+        if (ws.isProcessing) {
+          ws.lastHeartbeat = Date.now();
+          return;
+        }
+
         if (!ws.isAlive) {
           console.log('🔌 Terminating inactive WebSocket connection');
           return ws.terminate();
@@ -357,7 +375,7 @@ class AICLICompanionServer {
         ws.isAlive = false;
         ws.ping();
       });
-    }, 30000); // Check every 30 seconds
+    }, 15000); // Check every 15 seconds for better responsiveness
 
     console.log('🔌 WebSocket server configured on /ws path');
 
@@ -699,6 +717,34 @@ class AICLICompanionServer {
           ws.send(JSON.stringify(message));
         } catch (error) {
           console.error('❌ Failed to broadcast message:', error.message);
+        }
+      }
+    });
+  }
+
+  // Mark WebSocket clients as processing for a session
+  markSessionProcessing(sessionId, isProcessing = true) {
+    if (!this.wss) return;
+
+    this.wss.clients.forEach((ws) => {
+      if (ws.sessionIds && ws.sessionIds.has(sessionId)) {
+        ws.isProcessing = isProcessing;
+        ws.lastHeartbeat = Date.now();
+
+        // Send processing status update
+        if (ws.readyState === ws.OPEN) {
+          try {
+            ws.send(
+              JSON.stringify({
+                type: 'processing-status',
+                sessionId,
+                isProcessing,
+                timestamp: Date.now(),
+              })
+            );
+          } catch (error) {
+            console.error('❌ Failed to send processing status:', error.message);
+          }
         }
       }
     });

@@ -13,9 +13,17 @@ struct ChatMessageList: View {
     let colorScheme: ColorScheme
     @ObservedObject var claudeStatus: Project.StatusInfo
     
-    // Simple scroll state - only what we actually need
+    // Enhanced scroll state management
     @State private var isNearBottom: Bool = true
     @State private var shouldAutoScroll: Bool = true
+    @State private var scrollOffset: CGFloat = 0
+    @State private var contentHeight: CGFloat = 0
+    @State private var visibleHeight: CGFloat = 0
+    @State private var showScrollButton: Bool = false
+    @State private var unreadMessageCount: Int = 0
+    @State private var hasScrolledToThinking: Bool = false
+    @State private var lastScrollTime: Date = Date()
+    
     
     var body: some View {
         ScrollViewReader { proxy in
@@ -41,92 +49,189 @@ struct ChatMessageList: View {
                             estimatedTimeRemaining: nil,
                             isIndeterminate: true
                         ))
-                        .onAppear {
-                            print("💬 ChatMessageList: Showing typing bubble - Activity: \(activity), Elapsed: \(claudeStatus.elapsedSeconds)s")
-                        }
                         .padding(.horizontal, 4)
                         .id("claude-processing")
                     }
+                    
+                    // Small bottom padding for scroll alignment
+                    Color.clear
+                        .frame(height: 20) // Just enough to prevent content from being cut off
+                        .id("bottom-spacer")
                 }
                 .padding(.horizontal, isIPad && horizontalSizeClass == .regular ? 20 : 16)
-                .padding(.vertical, 16)
+                .padding(.top, 16)
+                .background(
+                    GeometryReader { geometry in
+                        Color.clear
+                            .preference(key: ScrollOffsetKey.self,
+                                      value: geometry.frame(in: .named("scroll")))
+                    }
+                )
             }
+            .coordinateSpace(name: "scroll")
             .background(
-                // Simple scroll detection using GeometryReader
                 GeometryReader { geometry in
                     Color.clear
-                        .preference(key: ScrollDetectionKey.self, value: geometry.frame(in: .named("scroll")).minY)
+                        .onAppear {
+                            visibleHeight = geometry.size.height
+                        }
+                        .onChange(of: geometry.size.height) { _, newHeight in
+                            visibleHeight = newHeight
+                        }
                 }
             )
-            .coordinateSpace(name: "scroll")
-            .onPreferenceChange(ScrollDetectionKey.self) { value in
-                // Simple detection: if we're scrolling up significantly, stop auto-scroll
-                let scrollOffset = -value
+            .onPreferenceChange(ScrollOffsetKey.self) { frame in
+                // Track scroll position more accurately
+                let newScrollOffset = frame.minY
+                let newContentHeight = frame.height
                 
-                // If user scrolled up more than 50 points, stop auto-scroll
-                if scrollOffset > 50 {
-                    shouldAutoScroll = false
-                    isNearBottom = false
-                } else if scrollOffset < 10 {
-                    // If near top of scroll (bottom of messages), resume auto-scroll
-                    shouldAutoScroll = true
-                    isNearBottom = true
-                }
-            }
-            .onAppear {
-                // Simple: always start at bottom like iMessage
-                scrollToBottom(proxy, animated: false)
-            }
-            .onChange(of: messages.count) { oldCount, newCount in
-                // Simple rule: if user is near bottom and messages increased, scroll to new messages
-                if newCount > oldCount && shouldAutoScroll {
-                    scrollToBottom(proxy, animated: true)
-                }
-            }
-            .onChange(of: isLoading) { _, loading in
-                // Show loading indicator at bottom if user should see it
-                if loading && shouldAutoScroll {
-                    withAnimation(.easeOut(duration: 0.3)) {
-                        proxy.scrollTo("loading-indicator", anchor: .bottom)
+                // Only update if values have changed significantly (avoid micro-updates)
+                if abs(newScrollOffset - scrollOffset) > 1 || abs(newContentHeight - contentHeight) > 1 {
+                    scrollOffset = newScrollOffset
+                    contentHeight = newContentHeight
+                    
+                    // Calculate if we're near bottom (within 100 points)
+                    let distanceFromBottom = contentHeight - visibleHeight + scrollOffset
+                    isNearBottom = distanceFromBottom < 100
+                    
+                    // Only animate button visibility on significant changes
+                    if distanceFromBottom > 200 && !showScrollButton {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            showScrollButton = true
+                        }
+                    } else if distanceFromBottom <= 200 && showScrollButton {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            showScrollButton = false
+                        }
+                    }
+                    
+                    // Update auto-scroll state based on position
+                    if distanceFromBottom > 150 && shouldAutoScroll {
+                        shouldAutoScroll = false
+                    } else if distanceFromBottom < 50 && !shouldAutoScroll {
+                        shouldAutoScroll = true
+                        if unreadMessageCount > 0 {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                unreadMessageCount = 0
+                            }
+                        }
                     }
                 }
             }
-            .onReceive(NotificationCenter.default.publisher(for: .scrollToBottom)) { _ in
-                scrollToBottom(proxy, animated: true)
+            .onAppear {
+                // Start at bottom like iMessage
+                scrollToBottom(proxy, animated: false)
             }
-            #if os(iOS)
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
-                // Scroll to bottom when keyboard appears (if near bottom)
-                if shouldAutoScroll {
-                    scrollToBottom(proxy, animated: true)
+            .onChange(of: messages.count) { oldCount, newCount in
+                // Auto-scroll on new messages if appropriate
+                if newCount > oldCount {
+                    if shouldAutoScroll {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                            scrollToBottom(proxy, animated: true)
+                        }
+                    } else {
+                        // User is scrolled up, increment unread count
+                        let newMessages = newCount - oldCount
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            unreadMessageCount += newMessages
+                        }
+                    }
                 }
             }
-            #endif
+            .onChange(of: isLoading) { oldValue, newValue in
+                // Only scroll when transitioning from not loading to loading
+                // Add debounce to prevent rapid triggering
+                let now = Date()
+                if !oldValue && newValue && shouldAutoScroll && !hasScrolledToThinking {
+                    // Check if enough time has passed since last scroll (300ms debounce)
+                    if now.timeIntervalSince(lastScrollTime) > 0.3 {
+                        hasScrolledToThinking = true
+                        lastScrollTime = now
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            withAnimation(.easeOut(duration: 0.3)) {
+                                proxy.scrollTo("loading-indicator", anchor: .bottom)
+                            }
+                        }
+                    }
+                } else if oldValue && !newValue {
+                    // Reset flag when loading completes
+                    hasScrolledToThinking = false
+                }
+            }
+            .onChange(of: claudeStatus.isProcessing) { oldValue, newValue in
+                // Only scroll when transitioning from not processing to processing
+                // Add debounce to prevent rapid triggering
+                let now = Date()
+                if !oldValue && newValue && shouldAutoScroll && !hasScrolledToThinking {
+                    // Check if enough time has passed since last scroll (300ms debounce)
+                    if now.timeIntervalSince(lastScrollTime) > 0.3 {
+                        hasScrolledToThinking = true
+                        lastScrollTime = now
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            withAnimation(.easeOut(duration: 0.3)) {
+                                proxy.scrollTo("claude-processing", anchor: .bottom)
+                            }
+                        }
+                    }
+                } else if oldValue && !newValue {
+                    // Reset flag when processing completes
+                    hasScrolledToThinking = false
+                }
+            }
+            
+            // Scroll to bottom button overlay
+            .overlay(alignment: .bottomTrailing) {
+                ScrollToBottomButton(
+                    isVisible: showScrollButton,
+                    unreadCount: unreadMessageCount
+                ) {
+                    // Scroll to bottom action
+                    scrollToBottom(proxy, animated: true)
+                    unreadMessageCount = 0
+                }
+                .padding(.trailing, 16)
+                .padding(.bottom, 100) // Above input bar with proper spacing
+            }
         }
     }
     
-    // MARK: - Simple Scroll Management
+    // MARK: - Enhanced Scroll Management
     
     private func scrollToBottom(_ proxy: ScrollViewProxy, animated: Bool) {
-        guard let lastMessage = messages.last else { return }
+        // Determine the best target to scroll to
+        let targetId: String
+        if isLoading {
+            targetId = "loading-indicator"
+        } else if claudeStatus.isProcessing {
+            targetId = "claude-processing"
+        } else if !messages.isEmpty {
+            targetId = messages.last?.id.uuidString ?? "bottom-spacer"
+        } else {
+            targetId = "bottom-spacer"
+        }
         
         if animated {
             withAnimation(.easeOut(duration: 0.3)) {
-                proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                proxy.scrollTo(targetId, anchor: .bottom)
             }
         } else {
-            proxy.scrollTo(lastMessage.id, anchor: .bottom)
+            proxy.scrollTo(targetId, anchor: .bottom)
         }
         
         // Update state
         isNearBottom = true
         shouldAutoScroll = true
     }
-    
-    // updateScrollState is now handled inline in onPreferenceChange
 }
 
-// MARK: - Preference Key for Scroll Detection
+// MARK: - Preference Keys
+
+struct ScrollOffsetKey: PreferenceKey {
+    static var defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        value = nextValue()
+    }
+}
 
 struct ScrollDetectionKey: PreferenceKey {
     static var defaultValue: CGFloat = 0

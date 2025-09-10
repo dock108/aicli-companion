@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import path from 'path';
+import os from 'os';
 import { DEFAULT_CONFIG, SERVER_VERSION } from '../constants/index.js';
 
 // Load environment variables
@@ -34,7 +35,15 @@ export class ServerConfig {
     this.enableTLS = process.env.ENABLE_TLS === 'true';
     this.allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['*'];
     this.nodeEnv = process.env.NODE_ENV || 'development';
-    this.configPath = process.env.CONFIG_PATH || path.dirname(process.cwd());
+
+    // Set appropriate default path based on environment
+    if (this.nodeEnv === 'test') {
+      // For tests, use a test-specific directory to avoid searching entire home directory
+      this.configPath = process.env.CONFIG_PATH || path.join(os.tmpdir(), 'aicli-test');
+    } else {
+      // For production/development, use the user's home directory
+      this.configPath = process.env.CONFIG_PATH || os.homedir();
+    }
   }
 
   /**

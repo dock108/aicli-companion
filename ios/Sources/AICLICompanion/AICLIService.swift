@@ -117,9 +117,10 @@ public class AICLIService: ObservableObject {
         _ text: String,
         projectPath: String? = nil,
         attachments: [AttachmentData]? = nil,
+        mode: ChatMode = .normal,
         completion: @escaping (Result<ClaudeChatResponse, AICLICompanionError>) -> Void
     ) {
-        messageOperations.sendMessage(text, projectPath: projectPath, attachments: attachments, completion: completion)
+        messageOperations.sendMessage(text, projectPath: projectPath, attachments: attachments, mode: mode, completion: completion)
     }
     
     public func fetchMessage(messageId: String) async throws -> Message {
@@ -186,9 +187,42 @@ public class AICLIService: ObservableObject {
         return sessionManager.getSessionId(for: projectPath)
     }
     
+    // MARK: - Large Message Fetching
+    
+    public func fetchLargeMessage(messageId: String) async throws -> (content: String, metadata: [String: Any]?) {
+        // Use messageOperations to fetch large message from server
+        return try await messageOperations.fetchLargeMessage(messageId: messageId)
+    }
+    
     // MARK: - Kill Session
     
     public func killSession(_ sessionId: String, projectPath: String, sendNotification: Bool = true, completion: @escaping (Result<Void, Error>) -> Void) {
         messageOperations.killSession(sessionId, projectPath: projectPath, sendNotification: sendNotification, completion: completion)
+    }
+    
+    // MARK: - Planning Validation
+    
+    public func validatePlanningDocument(
+        content: String,
+        projectType: String? = nil,
+        projectPath: String? = nil,
+        completion: @escaping (Result<PlanningValidationResponse, AICLICompanionError>) -> Void
+    ) {
+        messageOperations.validatePlanningDocument(content: content, projectType: projectType, projectPath: projectPath, completion: completion)
+    }
+    
+    public func analyzeDirectory(
+        path: String,
+        completion: @escaping (Result<DirectoryAnalysisResponse, AICLICompanionError>) -> Void
+    ) {
+        messageOperations.analyzeDirectory(path: path, completion: completion)
+    }
+    
+    public func saveAndValidatePlan(
+        projectPath: String,
+        content: String,
+        completion: @escaping (Result<PlanSaveResponse, AICLICompanionError>) -> Void
+    ) {
+        messageOperations.saveAndValidatePlan(projectPath: projectPath, content: content, completion: completion)
     }
 }

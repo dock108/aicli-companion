@@ -67,10 +67,8 @@ describe('SessionMonitor', () => {
   });
 
   afterEach(() => {
-    // Clear any intervals
-    if (monitor.monitoringInterval) {
-      clearInterval(monitor.monitoringInterval);
-    }
+    // Stop the monitor to clean up intervals
+    monitor.stop();
     mock.restoreAll();
     process.env.NODE_ENV = originalEnv;
   });

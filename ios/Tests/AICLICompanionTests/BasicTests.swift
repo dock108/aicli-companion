@@ -3,15 +3,6 @@ import XCTest
 
 @available(iOS 16.0, macOS 13.0, *)
 final class BasicTests: XCTestCase {
-    
-    override func setUp() {
-        super.setUp()
-    }
-    
-    override func tearDown() {
-        super.tearDown()
-    }
-    
     // MARK: - Basic Functionality Tests
     
     func testBasicAssertions() throws {

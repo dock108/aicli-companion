@@ -10,7 +10,6 @@ import XCTest
 
 @MainActor
 final class ServerManagerAdvancedTests: XCTestCase {
-
     var serverManager: ServerManager!
     var settingsManager: SettingsManager!
 

@@ -4,7 +4,6 @@ import Foundation
 
 @available(iOS 16.0, macOS 13.0, *)
 final class AICLIMessageOperationsTests: XCTestCase {
-    
     // MARK: - Message Processing Logic Tests
     
     func testMessageOperationsExists() {
@@ -467,7 +466,6 @@ final class AICLIMessageOperationsTests: XCTestCase {
 // MARK: - Test Extensions
 
 extension AICLIMessageOperationsTests {
-    
     func testComplexMessageScenarios() {
         // Test complex message scenarios
         

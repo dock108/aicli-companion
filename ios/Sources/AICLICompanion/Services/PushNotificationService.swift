@@ -9,48 +9,48 @@ import UIKit
 @available(iOS 16.0, macOS 13.0, *)
 public class PushNotificationService: NSObject, ObservableObject {
     public static let shared = PushNotificationService()
-    
+
     // MARK: - Published Properties
-    
+
     @Published public var badgeCount: Int = 0
     @Published public var pendingNotifications: [String: Int] = [:] // projectId: count
     // Use unified project state instead of duplicate tracking
     private let projectStateManager = ProjectStateManager.shared
-    
+
     // Track current active project for notification suppression
     @MainActor
     private var currentActiveProjectPath: String? {
         return projectStateManager.currentProject?.path
     }
-    
+
     // MARK: - Constants
-    
+
     private let notificationCategoryIdentifier = "CLAUDE_COMPANION_CATEGORY"
     private let viewActionIdentifier = "VIEW_ACTION"
     private let dismissActionIdentifier = "DISMISS_ACTION"
     private let markReadActionIdentifier = "MARK_READ_ACTION"
-    
+
     // MARK: - Private Properties
-    
+
     private let notificationCenter = UNUserNotificationCenter.current()
-    
+
     // Track processed message IDs to prevent duplicates (WhatsApp/iMessage pattern)
     private var processedMessageIds = Set<String>()
     private let processedMessageQueue = DispatchQueue(label: "com.aiclicompanion.processedMessages")
     private let processedMessagesKey = "processedPushNotificationIds"
-    
-    
+
+
     // MARK: - Initialization
-    
+
     override private init() {
         super.init()
         setupNotificationCategories()
         notificationCenter.delegate = self
         loadProcessedMessageIds()
     }
-    
+
     // MARK: - Public Methods
-    
+
     /// Configure notification categories and actions
     func setupNotificationCategories() {
         // Create actions
@@ -59,19 +59,19 @@ public class PushNotificationService: NSObject, ObservableObject {
             title: "View",
             options: [.foreground]
         )
-        
+
         let dismissAction = UNNotificationAction(
             identifier: dismissActionIdentifier,
             title: "Dismiss",
             options: [.destructive]
         )
-        
+
         let markReadAction = UNNotificationAction(
             identifier: markReadActionIdentifier,
             title: "Mark as Read",
             options: []
         )
-        
+
         // Create category
         let category = UNNotificationCategory(
             identifier: notificationCategoryIdentifier,
@@ -79,23 +79,23 @@ public class PushNotificationService: NSObject, ObservableObject {
             intentIdentifiers: [],
             options: []
         )
-        
+
         // Register categories
         notificationCenter.setNotificationCategories([category])
-        
+
         print("📱 Registered notification categories with actions")
     }
-    
+
     /// Request notification authorization with enhanced options
     public func requestAuthorizationWithOptions() async throws -> Bool {
         let options: UNAuthorizationOptions = [.alert, .badge, .sound, .criticalAlert]
-        
+
         do {
             let granted = try await notificationCenter.requestAuthorization(options: options)
-            
+
             if granted {
                 print("✅ Push notifications authorized with all options")
-                
+
                 // Register for remote notifications on main thread
                 await MainActor.run {
                     #if os(iOS)
@@ -103,14 +103,14 @@ public class PushNotificationService: NSObject, ObservableObject {
                     #endif
                 }
             }
-            
+
             return granted
         } catch {
             print("❌ Failed to request notification authorization: \(error)")
             throw error
         }
     }
-    
+
     /// Schedule a grouped notification for a project
     func scheduleProjectNotification(
         title: String,
@@ -124,30 +124,30 @@ public class PushNotificationService: NSObject, ObservableObject {
         content.body = body
         content.sound = sound
         content.categoryIdentifier = notificationCategoryIdentifier
-        
+
         // Group by project
         content.threadIdentifier = projectId
-        
+
         // Add user info
         let userInfo: [String: Any] = [
             "projectId": projectId,
             "projectName": projectName,
             "type": "project_message"
         ]
-        
+
         content.userInfo = userInfo
-        
+
         // Update badge count
         incrementBadgeCount(for: projectId)
         content.badge = NSNumber(value: badgeCount)
-        
+
         // Create request
         let request = UNNotificationRequest(
             identifier: UUID().uuidString,
             content: content,
             trigger: nil // Deliver immediately
         )
-        
+
         // Schedule notification
         notificationCenter.add(request) { error in
             if let error = error {
@@ -157,7 +157,7 @@ public class PushNotificationService: NSObject, ObservableObject {
             }
         }
     }
-    
+
     /// Clear notifications for a specific project
     public func clearProjectNotifications(_ projectId: String) {
         notificationCenter.getDeliveredNotifications { [weak self] notifications in
@@ -169,17 +169,17 @@ public class PushNotificationService: NSObject, ObservableObject {
                     return false
                 }
                 .map { $0.request.identifier }
-            
+
             if !identifiersToRemove.isEmpty {
                 self?.notificationCenter.removeDeliveredNotifications(withIdentifiers: identifiersToRemove)
                 print("🧹 Cleared \(identifiersToRemove.count) notifications for project: \(projectId)")
-                
+
                 // Update badge count
                 self?.decrementBadgeCount(for: projectId, count: identifiersToRemove.count)
             }
         }
     }
-    
+
     /// Update application badge count
     func updateApplicationBadge() {
         #if os(iOS)
@@ -188,33 +188,33 @@ public class PushNotificationService: NSObject, ObservableObject {
         }
         #endif
     }
-    
+
     /// Process any pending notifications that weren't processed while app was terminated
     /// This ensures no messages are lost even if background delivery failed
     public func processPendingNotifications() async {
         print("🔍 Checking for pending notifications to process...")
-        
+
         // Get all delivered notifications
         let notifications = await notificationCenter.deliveredNotifications()
-        
+
         var processedCount = 0
         for notification in notifications {
             let userInfo = notification.request.content.userInfo
-            
+
             // Check if this is a Claude message that needs processing
             // Note: Check for non-empty message content, not just presence
             let hasValidMessage = (userInfo["message"] as? String)?.isEmpty == false
             let isClaudeMessage = hasValidMessage ||
                                  userInfo["requiresFetch"] != nil ||
                                  userInfo["messageId"] != nil
-            
+
             if isClaudeMessage {
                 // Check if we've already processed this notification
                 let notificationId = extractNotificationId(from: userInfo)
                 let alreadyProcessed = processedMessageQueue.sync {
                     processedMessageIds.contains(notificationId)
                 }
-                
+
                 if !alreadyProcessed {
                     print("🔍 Found unprocessed Claude message, processing now...")
                     await processAPNSMessage(userInfo: userInfo)
@@ -222,55 +222,55 @@ public class PushNotificationService: NSObject, ObservableObject {
                 }
             }
         }
-        
+
         if processedCount > 0 {
             print("✅ Processed \(processedCount) pending notifications")
         } else {
             print("✅ No pending notifications to process")
         }
     }
-    
+
     /// Reset badge count
     public func resetBadgeCount() {
         badgeCount = 0
         pendingNotifications.removeAll()
         updateApplicationBadge()
     }
-    
+
     /// Get notification settings
     func getNotificationSettings() async -> UNNotificationSettings {
         return await notificationCenter.notificationSettings()
     }
-    
+
     /// Update the currently active project
     public func setActiveProject(_ project: Project?) {
         // Project state is now managed by ProjectStateManager
-        
+
         if let project = project {
             print("📍 Active project set to: \(project.name)")
         } else {
             print("📍 No active project")
         }
     }
-    
+
     /// Simple check if notification should be shown (best practices)
     @MainActor
     func shouldShowNotification(for projectPath: String) -> Bool {
         // Only suppress if user is actively viewing this exact project
         let isViewingSameProject = (currentActiveProjectPath == projectPath)
-        
+
         // Suppress notification only if viewing same project
         return !isViewingSameProject
     }
-    
+
     // MARK: - Private Methods
-    
+
     private func incrementBadgeCount(for projectId: String) {
         pendingNotifications[projectId, default: 0] += 1
         badgeCount = pendingNotifications.values.reduce(0, +)
         updateApplicationBadge()
     }
-    
+
     private func decrementBadgeCount(for projectId: String, count: Int = 1) {
         if let currentCount = pendingNotifications[projectId] {
             let newCount = max(0, currentCount - count)
@@ -280,7 +280,7 @@ public class PushNotificationService: NSObject, ObservableObject {
                 pendingNotifications[projectId] = newCount
             }
         }
-        
+
         badgeCount = pendingNotifications.values.reduce(0, +)
         updateApplicationBadge()
     }
@@ -295,31 +295,31 @@ extension PushNotificationService {
     public func processAPNSMessage(userInfo: [AnyHashable: Any]) async {
         print("🚀 === UNIFIED MESSAGE PROCESSING ===")
         print("🚀 Processing with keys: \(Array(userInfo.keys))")
-        
+
         // Extract or generate a unique ID for this notification
         let notificationId = extractNotificationId(from: userInfo)
-        
+
         // Check if we've already processed this message (WhatsApp/iMessage pattern)
         let alreadyProcessed = processedMessageQueue.sync { processedMessageIds.contains(notificationId) }
         if alreadyProcessed {
             print("✅ Message already processed, skipping duplicate: \(notificationId)")
             return
         }
-        
+
         // Mark as processed
         processedMessageQueue.sync { _ = processedMessageIds.insert(notificationId) }
-        
+
         // Save to UserDefaults to persist across app restarts
         saveProcessedMessageIds()
-        
+
         // Clean up old entries if set gets too large (keep last 100)
         await cleanupProcessedMessageIds()
-        
+
         // Extract and store session ID if present
         if let projectPath = userInfo["projectPath"] as? String {
             // Check for claudeSessionId (new format) or sessionId (legacy)
             let sessionId = userInfo["claudeSessionId"] as? String ?? userInfo["sessionId"] as? String
-            
+
             if let sessionId = sessionId {
                 // Store session ID for this project
                 SessionKeyManager.storeSessionId(sessionId, for: projectPath)
@@ -329,7 +329,7 @@ extension PushNotificationService {
                 print("⚠️ Available keys: \(userInfo.keys.map { String(describing: $0) }.joined(separator: ", "))")
             }
         }
-        
+
         // 1. Extract message data
         if let requiresFetch = userInfo["requiresFetch"] as? Bool,
            requiresFetch,
@@ -341,27 +341,27 @@ extension PushNotificationService {
             print("📲 Message ID: \(messageId)")
             print("📲 Project Path: \(projectPath)")
             print("📲 Preview: \(preview)")
-            
+
             do {
                 let fullMessage = try await AICLIService.shared.fetchLargeMessage(
                     messageId: messageId
                 )
-                
+
                 print("✅ Message fetched: \(fullMessage.content.count) characters")
-                
+
                 // 2. Validate content
                 guard !fullMessage.content.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty else {
                     print("⚠️ Fetched empty message - skipping")
                     return
                 }
-                
+
                 // 3. Save to storage and get the Message object
                 let savedMessage = await saveClaudeMessage(
                     message: fullMessage.content,
                     projectPath: projectPath,
                     userInfo: userInfo
                 )
-                
+
                 // 4. Post notification to UI with the same Message object
                 await postClaudeResponseNotificationWithMessage(
                     savedMessage,
@@ -369,46 +369,46 @@ extension PushNotificationService {
                 )
             } catch {
                 print("❌ Failed to fetch message: \(error)")
-                
+
                 // Fallback to preview with error indication
                 let errorMessage = "\(preview)\n\n⚠️ [Failed to load full message. Tap to retry.]"
-                
+
                 let savedErrorMessage = await saveClaudeMessage(
                     message: errorMessage,
                     projectPath: projectPath,
                     userInfo: userInfo
                 )
-                
+
                 await postClaudeResponseNotificationWithMessage(
                     savedErrorMessage,
                     projectPath: projectPath
                 )
             }
-        } else if let claudeMessage = userInfo["message"] as? String,
+        } else if let claudeMessage = (userInfo["message"] as? String) ?? (userInfo["messagePreview"] as? String),
                   let projectPath = userInfo["projectPath"] as? String {
             // Small message - process directly
             print("🤖 Processing message: \(claudeMessage.count) characters")
             print("🤖 Project Path: \(projectPath)")
-            
+
             // 2. Validate content
             guard !claudeMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 print("⚠️ Received empty message - skipping")
                 return
             }
-            
+
             // 3. Save to storage and get the Message object
             let savedMessage = await saveClaudeMessage(
                 message: claudeMessage,
                 projectPath: projectPath,
                 userInfo: userInfo
             )
-            
+
             // 4. Post notification to UI with the same Message object
             await postClaudeResponseNotificationWithMessage(
                 savedMessage,
                 projectPath: projectPath
             )
-            
+
             print("✅ Message processed and saved")
         } else {
             print("ℹ️ No Claude message content in notification payload")
@@ -428,17 +428,17 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
     ) {
         print("🔔 === FOREGROUND NOTIFICATION ===")
         let userInfo = notification.request.content.userInfo
-        
+
         // Process message through unified pipeline
         Task {
             await processAPNSMessage(userInfo: userInfo)
         }
-        
+
         // Banner decision logic (UI presentation only)
         if let projectPath = userInfo["projectPath"] as? String {
             Task { @MainActor in
                 let shouldShow = shouldShowNotification(for: projectPath)
-                
+
                 if !shouldShow {
                     print("🔕 Suppressing banner - user viewing same project")
                     completionHandler([])
@@ -452,7 +452,7 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
             completionHandler([.banner, .sound, .badge])
         }
     }
-    
+
     /// Post Claude response notification to UI
     @MainActor
     internal func postClaudeResponseNotification(
@@ -474,18 +474,18 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
             project = Project(name: projectName, path: projectPath, type: "directory")
             print("🔔 Created new project: name=\(projectName), path=\(projectPath)")
         }
-        
+
         let claudeMessage = Message(
             content: message,
             sender: .assistant,
             type: .markdown
         )
-        
+
         print("🔔 Posting claudeResponseReceived notification to UI")
         print("🔔 Message content length: \(claudeMessage.content.count)")
         print("🔔 Message ID: \(claudeMessage.id)")
         print("🔔 Project: name=\(project.name), path=\(project.path)")
-        
+
         NotificationCenter.default.post(
             name: .claudeResponseReceived,
             object: nil,
@@ -495,10 +495,10 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
                 "project": project
             ]
         )
-        
+
         print("🔔 Notification posted successfully")
     }
-    
+
     /// Post Claude response notification to UI with existing Message (prevents duplicate IDs)
     @MainActor
     internal func postClaudeResponseNotificationWithMessage(
@@ -520,12 +520,12 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
             project = Project(name: projectName, path: projectPath, type: "directory")
             print("🔔 Created new project: name=\(projectName), path=\(projectPath)")
         }
-        
+
         print("🔔 Posting claudeResponseReceived notification to UI (reusing Message)")
         print("🔔 Message content length: \(claudeMessage.content.count)")
         print("🔔 Message ID: \(claudeMessage.id)")
         print("🔔 Project: name=\(project.name), path=\(project.path)")
-        
+
         NotificationCenter.default.post(
             name: .claudeResponseReceived,
             object: nil,
@@ -535,27 +535,27 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
                 "project": project
             ]
         )
-        
+
         print("🔔 Notification posted successfully")
     }
-    
+
     /// Extract unique notification ID from userInfo
     private func extractNotificationId(from userInfo: [AnyHashable: Any]) -> String {
         // Try to get existing message ID
         if let messageId = userInfo["messageId"] as? String {
             return messageId
         }
-        
+
         // Try to get correlation ID first (for better message tracking)
         if let correlationId = userInfo["correlationId"] as? String {
             return correlationId
         }
-        
+
         // Fall back to request ID
         if let requestId = userInfo["requestId"] as? String {
             return requestId
         }
-        
+
         // For small messages, create stable ID from content hash
         if let message = userInfo["message"] as? String,
            let projectPath = userInfo["projectPath"] as? String {
@@ -563,18 +563,18 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
             let combined = "\(projectPath):\(message)"
             return stableHash(of: combined)
         }
-        
+
         // Fallback to random ID (shouldn't happen)
         return UUID().uuidString
     }
-    
+
     /// Create stable hash that doesn't change between app launches
     private func stableHash(of string: String) -> String {
         let data = Data(string.utf8)
         let digest = SHA256.hash(data: data)
         return digest.compactMap { String(format: "%02x", $0) }.joined()
     }
-    
+
     /// Load processed message IDs from UserDefaults
     private func loadProcessedMessageIds() {
         processedMessageQueue.sync {
@@ -587,7 +587,7 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
             }
         }
     }
-    
+
     /// Save processed message IDs to UserDefaults
     private func saveProcessedMessageIds() {
         processedMessageQueue.sync {
@@ -596,14 +596,14 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
             print("💾 Saved \(processedMessageIds.count) processed message IDs to UserDefaults")
         }
     }
-    
+
     /// Clear processed message IDs for a specific project when chat is cleared
     public func clearProcessedMessagesForProject(_ projectPath: String) {
         processedMessageQueue.sync {
             // Get all delivered notifications for this project
             notificationCenter.getDeliveredNotifications { [weak self] notifications in
                 guard let self = self else { return }
-                
+
                 let projectNotificationIds = notifications
                     .filter { notification in
                         if let notificationProjectPath = notification.request.content.userInfo["projectPath"] as? String {
@@ -614,22 +614,22 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
                     .compactMap { notification in
                         self.extractNotificationId(from: notification.request.content.userInfo)
                     }
-                
+
                 // Remove these IDs from processed set
                 self.processedMessageQueue.sync {
                     for notificationId in projectNotificationIds {
                         self.processedMessageIds.remove(notificationId)
                     }
                 }
-                
+
                 // Save updated processed IDs
                 self.saveProcessedMessageIds()
-                
+
                 print("🗑️ Cleared \(projectNotificationIds.count) processed message IDs for project: \(projectPath)")
             }
         }
     }
-    
+
     /// Clean up old processed message IDs to prevent memory growth
     private func cleanupProcessedMessageIds() async {
         var didCleanup = false
@@ -645,13 +645,13 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
                 didCleanup = true
             }
         }
-        
+
         // Save to UserDefaults if we cleaned up
         if didCleanup {
             saveProcessedMessageIds()
         }
     }
-    
+
     /// Simple method to save Claude message to local storage
     /// Returns the created Message for reuse
     internal func saveClaudeMessage(
@@ -662,7 +662,7 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
         print("💾 === SAVING CLAUDE MESSAGE TO LOCAL STORAGE ===")
         print("💾 Message length: \(message.count) characters")
         print("💾 Project Path: \(projectPath)")
-        
+
         // Create Message object from Claude response
         // Trim trailing whitespace/newlines to prevent empty rows
         let trimmedContent = message.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -671,15 +671,15 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
             sender: .assistant,
             type: .markdown
         )
-        
+
         // Save to local storage using append (local-first pattern)
         MessagePersistenceService.shared.appendMessage(
             claudeMessage,
             to: projectPath
         )
-        
+
         print("💾 Claude message saved to local storage")
-        
+
         // Sync to CloudKit for cross-device availability
         print("☁️ PushNotificationService: Starting CloudKit sync task...")
         Task { @MainActor in
@@ -705,11 +705,11 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
                 // Don't fail the whole operation - local save was successful
             }
         }
-        
+
         return claudeMessage
     }
-    
-    
+
+
     /// Handle notification actions - NAVIGATION ONLY (WhatsApp/iMessage pattern)
     public func userNotificationCenter(
         _ center: UNUserNotificationCenter,
@@ -717,47 +717,47 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
         let userInfo = response.notification.request.content.userInfo
-        
+
         print("📱 === NOTIFICATION TAPPED ===")
         print("📱 Action: \(response.actionIdentifier)")
-        
+
         // WhatsApp/iMessage pattern: Tapping ONLY navigates, never processes messages
         // Messages should already be saved when received, not when tapped
-        
+
         // Navigation logic only
         switch response.actionIdentifier {
         case viewActionIdentifier,
              UNNotificationDefaultActionIdentifier:
             handleViewAction(userInfo: userInfo)
-            
+
         case dismissActionIdentifier:
             handleDismissAction(userInfo: userInfo)
-            
+
         case markReadActionIdentifier:
             handleMarkReadAction(userInfo: userInfo)
-            
+
         default:
             break
         }
-        
+
         completionHandler()
     }
-    
+
     private func handleViewAction(userInfo: [AnyHashable: Any]) {
         // Handle both old format (projectId) and new format (projectPath)
         let projectPath = userInfo["projectPath"] as? String ?? userInfo["projectId"] as? String
         let projectName = userInfo["projectName"] as? String ?? projectPath?.split(separator: "/").last.map(String.init) ?? "Project"
-        
+
         guard let projectPath = projectPath else {
             print("⚠️ No project path in notification")
             return
         }
-        
+
         print("👁 View action for project: \(projectName) at path: \(projectPath)")
-        
+
         // Clear notifications for this project
         clearProjectNotifications(projectPath)
-        
+
         Task { @MainActor in
             // Create project object
             let project = Project(
@@ -765,7 +765,7 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
                 path: projectPath,
                 type: "directory"
             )
-            
+
             // Post notification to navigate to project
             NotificationCenter.default.post(
                 name: .openProject,
@@ -776,29 +776,29 @@ extension PushNotificationService: UNUserNotificationCenterDelegate {
                     "projectName": projectName
                 ]
             )
-            
+
             print("✅ Posted navigation to project: \(projectName)")
         }
     }
-    
+
     private func handleDismissAction(userInfo: [AnyHashable: Any]) {
         guard let projectId = userInfo["projectId"] as? String else {
             return
         }
-        
+
         print("🗑 Dismiss action for project: \(projectId)")
-        
+
         // Clear notifications for this project
         clearProjectNotifications(projectId)
     }
-    
+
     private func handleMarkReadAction(userInfo: [AnyHashable: Any]) {
         guard let projectId = userInfo["projectId"] as? String else {
             return
         }
-        
+
         print("✓ Mark as read action for project: \(projectId)")
-        
+
         // Update badge count without clearing notifications
         if let count = pendingNotifications[projectId] {
             decrementBadgeCount(for: projectId, count: count)
@@ -824,20 +824,20 @@ struct PushNotificationPayload: Codable {
     let projectName: String
     let sessionId: String?
     let messageType: String
-    
+
     struct APSPayload: Codable {
         let alert: Alert
         let badge: Int?
         let sound: String?
         let threadId: String
         let category: String
-        
+
         struct Alert: Codable {
             let title: String
             let body: String
             let subtitle: String?
         }
-        
+
         enum CodingKeys: String, CodingKey {
             case alert, badge, sound
             case threadId = "thread-id"

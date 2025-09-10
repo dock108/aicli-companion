@@ -11,7 +11,6 @@ import Combine
 
 @MainActor
 final class SettingsViewModelTests: XCTestCase {
-
     var viewModel: SettingsViewModel!
     var settingsManager: SettingsManager!
     var serverManager: ServerManager!
@@ -188,8 +187,8 @@ final class SettingsViewModelTests: XCTestCase {
 
     func testMultipleChangesDetection() async {
         // Make multiple changes - autoStartServer is watched in setupBindings()
-        viewModel.autoStartServer = !viewModel.autoStartServer
-        viewModel.enableNotifications = !viewModel.enableNotifications
+        viewModel.autoStartServer.toggle()
+        viewModel.enableNotifications.toggle()
         viewModel.maxLogEntries = 2000
 
         // Wait for Combine publishers to process changes
@@ -225,7 +224,7 @@ final class SettingsViewModelTests: XCTestCase {
     func testRestartRequiredForAuthChange() {
         serverManager.isRunning = true
 
-        viewModel.requireAuthentication = !viewModel.requireAuthentication
+        viewModel.requireAuthentication.toggle()
         RunLoop.main.run(until: Date().addingTimeInterval(0.1))
 
         XCTAssertTrue(viewModel.needsRestart)
@@ -234,7 +233,7 @@ final class SettingsViewModelTests: XCTestCase {
     func testRestartRequiredForTunnelChange() {
         serverManager.isRunning = true
 
-        viewModel.enableTunnel = !viewModel.enableTunnel
+        viewModel.enableTunnel.toggle()
         RunLoop.main.run(until: Date().addingTimeInterval(0.1))
 
         XCTAssertTrue(viewModel.needsRestart)

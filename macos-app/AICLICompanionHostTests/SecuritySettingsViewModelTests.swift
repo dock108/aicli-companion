@@ -11,7 +11,6 @@ import Combine
 
 @MainActor
 final class SecuritySettingsViewModelTests: XCTestCase {
-
     var viewModel: SecuritySettingsViewModel!
     var settingsManager: SettingsManager!
     var cancellables: Set<AnyCancellable>!
@@ -326,7 +325,7 @@ final class SecuritySettingsViewModelTests: XCTestCase {
         // Make changes
         viewModel.blockedCommands = ["new_cmd"]
         viewModel.securityPreset = "unrestricted"
-        viewModel.requireConfirmation = !viewModel.requireConfirmation
+        viewModel.requireConfirmation.toggle()
 
         XCTAssertTrue(viewModel.hasUnsavedChanges)
 
@@ -361,7 +360,7 @@ final class SecuritySettingsViewModelTests: XCTestCase {
     func testMultipleChangesDetection() {
         viewModel.blockedCommands = ["cmd1"]
         viewModel.safeDirectories = ["/path1"]
-        viewModel.requireConfirmation = !viewModel.requireConfirmation
+        viewModel.requireConfirmation.toggle()
 
         RunLoop.main.run(until: Date().addingTimeInterval(0.1))
         XCTAssertTrue(viewModel.hasUnsavedChanges)

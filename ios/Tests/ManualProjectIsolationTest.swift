@@ -75,7 +75,7 @@ func testProjectIsolation() {
     
     print("   Project 2 messages: \(viewModel.messages.count)")
     print("   Project 2 session: \(viewModel.currentSessionId ?? "nil")")
-    assert(viewModel.messages.count == 0, "Project 2 should have no messages")
+    assert(viewModel.messages.isEmpty, "Project 2 should have no messages")
     assert(viewModel.currentSessionId == nil, "Project 2 should have no session ID")
     
     // Add messages to project 2

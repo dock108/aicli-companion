@@ -10,7 +10,6 @@ import XCTest
 
 @MainActor
 final class ProcessOutputHandlingTests: XCTestCase {
-
     var serverManager: ServerManager!
 
     override func setUp() async throws {
@@ -146,7 +145,7 @@ final class ProcessOutputHandlingTests: XCTestCase {
         }
 
         // Should detect various port formats
-        XCTAssertTrue(serverManager.logs.count > 0)
+        XCTAssertTrue(!serverManager.logs.isEmpty)
     }
 
     // MARK: - Tunnel URL Detection Tests

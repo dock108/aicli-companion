@@ -10,7 +10,6 @@ import XCTest
 
 @MainActor
 final class ExecutableDiscoveryTests: XCTestCase {
-
     var serverManager: ServerManager!
     var originalNodePath: String = ""
     var originalNpmPath: String = ""
@@ -229,7 +228,7 @@ final class ExecutableDiscoveryTests: XCTestCase {
         _ = await serverManager.findNpmExecutable()
 
         // Should have logs about the discovery process
-        XCTAssertTrue(serverManager.logs.count > 0)
+        XCTAssertTrue(!serverManager.logs.isEmpty)
 
         // Should have debug log about using configured path for node
         XCTAssertTrue(serverManager.logs.contains { log in

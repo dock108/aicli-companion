@@ -11,7 +11,6 @@ import SwiftUI
 
 @MainActor
 final class SecuritySettingsViewTests: ViewTestCase {
-
     var securityView: SecuritySettingsView!
     var viewModel: SecuritySettingsViewModel!
     var hostingController: NSHostingController<SecuritySettingsView>!
@@ -70,7 +69,7 @@ final class SecuritySettingsViewTests: ViewTestCase {
     func testStandardPreset() {
         viewModel.applyPreset("standard")
 
-        XCTAssertTrue(viewModel.blockedCommands.count > 0)
+        XCTAssertTrue(!viewModel.blockedCommands.isEmpty)
         XCTAssertTrue(viewModel.requireConfirmation)
         XCTAssertFalse(viewModel.readOnlyMode)
         XCTAssertTrue(viewModel.blockDestructiveCommands)
@@ -271,7 +270,7 @@ final class SecuritySettingsViewTests: ViewTestCase {
         let originalCommands = viewModel.blockedCommands
 
         viewModel.blockedCommands = ["new_cmd"]
-        viewModel.requireConfirmation = !viewModel.requireConfirmation
+        viewModel.requireConfirmation.toggle()
         XCTAssertTrue(viewModel.hasUnsavedChanges)
 
         viewModel.revertChanges()
@@ -283,7 +282,7 @@ final class SecuritySettingsViewTests: ViewTestCase {
     // MARK: - Dangerous Commands Tests
 
     func testDangerousCommandsList() {
-        XCTAssertTrue(viewModel.dangerousCommands.count > 0)
+        XCTAssertTrue(!viewModel.dangerousCommands.isEmpty)
         XCTAssertTrue(viewModel.dangerousCommands.contains("rm -rf /"))
         XCTAssertTrue(viewModel.dangerousCommands.contains("format"))
         XCTAssertTrue(viewModel.dangerousCommands.contains(":(){ :|:& };:"))

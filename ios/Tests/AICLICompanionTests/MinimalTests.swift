@@ -3,15 +3,6 @@ import XCTest
 
 @available(iOS 17.0, macOS 14.0, *)
 final class MinimalTests: XCTestCase {
-    
-    override func setUp() {
-        super.setUp()
-    }
-    
-    override func tearDown() {
-        super.tearDown()
-    }
-    
     // MARK: - Smoke Tests
     
     func testBasicAssertions() throws {

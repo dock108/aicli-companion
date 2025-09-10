@@ -9,7 +9,6 @@ import XCTest
 @testable import AICLICompanionHost
 
 final class KeychainManagerTests: XCTestCase {
-
     var mockKeychainManager: MockKeychainManager!
 
     override func setUp() {

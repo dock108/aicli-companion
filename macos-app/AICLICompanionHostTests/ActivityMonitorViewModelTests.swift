@@ -11,7 +11,6 @@ import Combine
 
 @MainActor
 final class ActivityMonitorViewModelTests: XCTestCase {
-
     var viewModel: ActivityMonitorViewModel!
     var serverManager: ServerManager!
     var cancellables: Set<AnyCancellable>!

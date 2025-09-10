@@ -11,7 +11,6 @@ import Combine
 
 @MainActor
 final class NetworkMonitorTests: XCTestCase {
-
     var mockNetworkMonitor: MockNetworkMonitor!
     var cancellables: Set<AnyCancellable>!
 

@@ -4,7 +4,6 @@ import AICLICompanionCore
 
 @available(iOS 17.0, macOS 14.0, *)
 final class KeychainManagerTests: XCTestCase {
-    
     var sut: KeychainManager!
     let testKey = "test_key_\(UUID().uuidString)"
     let testKeys: [String] = []

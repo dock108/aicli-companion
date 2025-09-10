@@ -4,7 +4,6 @@ import Combine
 
 @available(iOS 17.0, macOS 14.0, *)
 final class ProjectStatusTests: XCTestCase {
-    
     // MARK: - Project Tests
     
     func testProjectInitialization() {

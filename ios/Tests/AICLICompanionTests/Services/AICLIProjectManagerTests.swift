@@ -4,7 +4,6 @@ import Foundation
 
 @available(iOS 16.0, macOS 13.0, *)
 final class AICLIProjectManagerTests: XCTestCase {
-    
     var projectManager: AICLIProjectManager!
     var mockURLSession: MockURLSession!
     var mockConnectionManager: MockAICLIConnectionManager!

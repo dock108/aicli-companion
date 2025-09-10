@@ -5,7 +5,6 @@ import Combine
 /// Integration tests for CloudKit sync and device coordination working together
 @available(iOS 16.0, macOS 13.0, *)
 final class CloudKitDeviceCoordinationIntegrationTests: XCTestCase {
-    
     var chatViewModel: ChatViewModel!
     var cloudKitSync: CloudKitSyncManager!
     var deviceCoordinator: DeviceCoordinator!
@@ -359,7 +358,6 @@ final class CloudKitDeviceCoordinationIntegrationTests: XCTestCase {
 // MARK: - Test Utilities
 
 extension CloudKitDeviceCoordinationIntegrationTests {
-    
     /// Simulate multiple devices scenario
     func setupMultiDeviceScenario(deviceCount: Int) async throws -> [String] {
         var deviceIds: [String] = []
@@ -417,7 +415,6 @@ extension CloudKitDeviceCoordinationIntegrationTests {
 
 @available(iOS 16.0, macOS 13.0, *)
 extension CloudKitDeviceCoordinationIntegrationTests {
-    
     func testHighLoadMultiDeviceScenario() async throws {
         // Given
         let deviceCount = 10

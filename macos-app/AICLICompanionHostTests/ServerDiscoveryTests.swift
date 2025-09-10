@@ -10,7 +10,6 @@ import XCTest
 
 @MainActor
 final class ServerDiscoveryTests: XCTestCase {
-
     var serverManager: ServerManager!
     var originalServerCommand: String = ""
 
@@ -254,7 +253,7 @@ final class ServerDiscoveryTests: XCTestCase {
         }
 
         // Should have logged something about the search
-        XCTAssertTrue(serverManager.logs.count > 0)
+        XCTAssertTrue(!serverManager.logs.isEmpty)
     }
 
     func testLoggingDuringCommandParsing() async throws {
@@ -265,6 +264,6 @@ final class ServerDiscoveryTests: XCTestCase {
 
         // Should have logs about finding executables
         // (from the findNpmExecutable call)
-        XCTAssertTrue(serverManager.logs.count > 0)
+        XCTAssertTrue(!serverManager.logs.isEmpty)
     }
 }

@@ -11,7 +11,6 @@ import SwiftUI
 
 @MainActor
 final class ActivityMonitorViewTests: ViewTestCase {
-
     var activityView: ActivityMonitorView!
     var viewModel: ActivityMonitorViewModel!
     var serverManager: ServerManager!

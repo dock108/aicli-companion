@@ -10,7 +10,6 @@ import XCTest
 
 @MainActor
 final class ProcessConfigurationTests: XCTestCase {
-
     var serverManager: ServerManager!
     var originalSettings: [String: Any] = [:]
 

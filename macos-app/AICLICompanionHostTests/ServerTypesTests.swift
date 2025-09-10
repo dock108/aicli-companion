@@ -10,7 +10,6 @@ import SwiftUI
 @testable import AICLICompanionHost
 
 final class ServerTypesTests: XCTestCase {
-
     // MARK: - ServerHealth Tests
 
     func testServerHealthCases() throws {

@@ -110,7 +110,6 @@ extension View {
 // MARK: - Assertion Helpers
 
 extension XCTestCase {
-
     func assertViewExists<V: View>(_ view: V, file: StaticString = #file, line: UInt = #line) {
         let mirror = Mirror(reflecting: view)
         XCTAssertNotNil(mirror, "View should exist", file: file, line: line)

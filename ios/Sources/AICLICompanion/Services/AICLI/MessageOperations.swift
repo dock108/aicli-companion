@@ -105,6 +105,40 @@ public class AICLIMessageOperations {
         }
     }
     
+    // MARK: - Fetch Large Message
+    
+    func fetchLargeMessage(messageId: String) async throws -> (content: String, metadata: [String: Any]?) {
+        // Fetch large message from server's message storage endpoint
+        guard let messageURL = connectionManager.buildURL(path: "/api/messages/\(messageId)") else {
+            throw AICLICompanionError.invalidURL
+        }
+        
+        var request = connectionManager.createAuthenticatedRequest(url: messageURL, method: "GET")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AICLICompanionError.invalidResponse
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            if httpResponse.statusCode == 404 {
+                throw AICLICompanionError.notFound
+            }
+            throw AICLICompanionError.serverError("HTTP \(httpResponse.statusCode)")
+        }
+        
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        guard let result = json?["result"] as? [String: Any],
+              let content = result["content"] as? String else {
+            throw AICLICompanionError.invalidResponse
+        }
+        
+        let metadata = result["metadata"] as? [String: Any]
+        return (content: content, metadata: metadata)
+    }
+    
     // MARK: - Fetch Messages
     
     func fetchMessages(sessionId: String, completion: @escaping (Result<[Message], AICLICompanionError>) -> Void) {

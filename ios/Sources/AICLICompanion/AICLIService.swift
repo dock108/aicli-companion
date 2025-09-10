@@ -187,38 +187,11 @@ public class AICLIService: ObservableObject {
         return sessionManager.getSessionId(for: projectPath)
     }
     
-    // MARK: - Message Fetching
+    // MARK: - Large Message Fetching
     
-    public func fetchMessage(messageId: String) async throws -> (content: String, metadata: [String: Any]?) {
-        // Fetch large message from server
-        let url = baseURL.appendingPathComponent("api/messages/\(messageId)")
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.setValue(authToken, forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AICLICompanionError.invalidResponse
-        }
-        
-        guard httpResponse.statusCode == 200 else {
-            if httpResponse.statusCode == 404 {
-                throw AICLICompanionError.messageNotFound
-            }
-            throw AICLICompanionError.serverError(statusCode: httpResponse.statusCode)
-        }
-        
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        guard let result = json?["result"] as? [String: Any],
-              let content = result["content"] as? String else {
-            throw AICLICompanionError.invalidResponse
-        }
-        
-        let metadata = result["metadata"] as? [String: Any]
-        return (content: content, metadata: metadata)
+    public func fetchLargeMessage(messageId: String) async throws -> (content: String, metadata: [String: Any]?) {
+        // Use messageOperations to fetch large message from server
+        return try await messageOperations.fetchLargeMessage(messageId: messageId)
     }
     
     // MARK: - Kill Session

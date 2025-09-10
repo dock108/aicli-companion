@@ -343,14 +343,14 @@ extension PushNotificationService {
             print("📲 Preview: \(preview)")
             
             do {
-                let fullMessage = try await AICLIService.shared.fetchMessage(
+                let fullMessage = try await AICLIService.shared.fetchLargeMessage(
                     messageId: messageId
                 )
                 
                 print("✅ Message fetched: \(fullMessage.content.count) characters")
                 
                 // 2. Validate content
-                guard !fullMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                guard !fullMessage.content.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty else {
                     print("⚠️ Fetched empty message - skipping")
                     return
                 }

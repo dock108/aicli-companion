@@ -21,9 +21,9 @@ struct ChatMessageList: View {
     @State private var visibleHeight: CGFloat = 0
     @State private var showScrollButton: Bool = false
     @State private var unreadMessageCount: Int = 0
+    @State private var hasScrolledToThinking: Bool = false
+    @State private var lastScrollTime: Date = Date()
     
-    // For detecting bottom padding needs
-    @State private var keyboardHeight: CGFloat = 0
     
     var body: some View {
         ScrollViewReader { proxy in
@@ -39,14 +39,6 @@ struct ChatMessageList: View {
                         ThinkingIndicator(progressInfo: progressInfo)
                             .padding(.horizontal, 4)
                             .id("loading-indicator")
-                            .onAppear {
-                                // CRITICAL: Auto-scroll when thinking indicator appears
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                    withAnimation(.easeOut(duration: 0.3)) {
-                                        proxy.scrollTo("loading-indicator", anchor: .bottom)
-                                    }
-                                }
-                            }
                     } else if claudeStatus.isProcessing {
                         // Show typing bubble when Claude is working
                         let activity = claudeStatus.lastActivity ?? "Thinking"
@@ -57,23 +49,13 @@ struct ChatMessageList: View {
                             estimatedTimeRemaining: nil,
                             isIndeterminate: true
                         ))
-                        .onAppear {
-                            print("💬 ChatMessageList: Showing typing bubble - Activity: \(activity), Elapsed: \(claudeStatus.elapsedSeconds)s")
-                            // CRITICAL: Auto-scroll when Claude starts processing
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                withAnimation(.easeOut(duration: 0.3)) {
-                                    proxy.scrollTo("claude-processing", anchor: .bottom)
-                                }
-                            }
-                        }
                         .padding(.horizontal, 4)
                         .id("claude-processing")
                     }
                     
-                    // Bottom padding to ensure content is visible above input bar
-                    // This is critical for the thinking indicator visibility
+                    // Small bottom padding for scroll alignment
                     Color.clear
-                        .frame(height: 80 + keyboardHeight) // Input bar height + keyboard
+                        .frame(height: 20) // Just enough to prevent content from being cut off
                         .id("bottom-spacer")
                 }
                 .padding(.horizontal, isIPad && horizontalSizeClass == .regular ? 20 : 16)
@@ -100,38 +82,45 @@ struct ChatMessageList: View {
             )
             .onPreferenceChange(ScrollOffsetKey.self) { frame in
                 // Track scroll position more accurately
-                scrollOffset = frame.minY
-                contentHeight = frame.height
+                let newScrollOffset = frame.minY
+                let newContentHeight = frame.height
                 
-                // Calculate if we're near bottom (within 100 points)
-                let distanceFromBottom = contentHeight - visibleHeight + scrollOffset
-                isNearBottom = distanceFromBottom < 100
-                
-                // Show scroll button when user scrolls up more than 200 points
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    showScrollButton = distanceFromBottom > 200
-                }
-                
-                // If user scrolled up significantly (more than 150 points from bottom), disable auto-scroll
-                if distanceFromBottom > 150 {
-                    shouldAutoScroll = false
-                } else if distanceFromBottom < 50 {
-                    // Re-enable auto-scroll when very close to bottom
-                    shouldAutoScroll = true
-                    // Hide button when near bottom
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        showScrollButton = false
-                        unreadMessageCount = 0
+                // Only update if values have changed significantly (avoid micro-updates)
+                if abs(newScrollOffset - scrollOffset) > 1 || abs(newContentHeight - contentHeight) > 1 {
+                    scrollOffset = newScrollOffset
+                    contentHeight = newContentHeight
+                    
+                    // Calculate if we're near bottom (within 100 points)
+                    let distanceFromBottom = contentHeight - visibleHeight + scrollOffset
+                    isNearBottom = distanceFromBottom < 100
+                    
+                    // Only animate button visibility on significant changes
+                    if distanceFromBottom > 200 && !showScrollButton {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            showScrollButton = true
+                        }
+                    } else if distanceFromBottom <= 200 && showScrollButton {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            showScrollButton = false
+                        }
+                    }
+                    
+                    // Update auto-scroll state based on position
+                    if distanceFromBottom > 150 && shouldAutoScroll {
+                        shouldAutoScroll = false
+                    } else if distanceFromBottom < 50 && !shouldAutoScroll {
+                        shouldAutoScroll = true
+                        if unreadMessageCount > 0 {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                unreadMessageCount = 0
+                            }
+                        }
                     }
                 }
             }
             .onAppear {
                 // Start at bottom like iMessage
                 scrollToBottom(proxy, animated: false)
-                setupKeyboardObservers()
-            }
-            .onDisappear {
-                removeKeyboardObservers()
             }
             .onChange(of: messages.count) { oldCount, newCount in
                 // Auto-scroll on new messages if appropriate
@@ -149,40 +138,46 @@ struct ChatMessageList: View {
                     }
                 }
             }
-            .onChange(of: isLoading) { _, loading in
-                // Ensure thinking indicator is visible when it appears
-                if loading && shouldAutoScroll {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        withAnimation(.easeOut(duration: 0.3)) {
-                            proxy.scrollTo("loading-indicator", anchor: .bottom)
+            .onChange(of: isLoading) { oldValue, newValue in
+                // Only scroll when transitioning from not loading to loading
+                // Add debounce to prevent rapid triggering
+                let now = Date()
+                if !oldValue && newValue && shouldAutoScroll && !hasScrolledToThinking {
+                    // Check if enough time has passed since last scroll (300ms debounce)
+                    if now.timeIntervalSince(lastScrollTime) > 0.3 {
+                        hasScrolledToThinking = true
+                        lastScrollTime = now
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            withAnimation(.easeOut(duration: 0.3)) {
+                                proxy.scrollTo("loading-indicator", anchor: .bottom)
+                            }
                         }
                     }
+                } else if oldValue && !newValue {
+                    // Reset flag when loading completes
+                    hasScrolledToThinking = false
                 }
             }
-            .onChange(of: claudeStatus.isProcessing) { _, isProcessing in
-                // CRITICAL: Scroll when Claude status changes to processing
-                if isProcessing && shouldAutoScroll {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        withAnimation(.easeOut(duration: 0.3)) {
-                            proxy.scrollTo("claude-processing", anchor: .bottom)
+            .onChange(of: claudeStatus.isProcessing) { oldValue, newValue in
+                // Only scroll when transitioning from not processing to processing
+                // Add debounce to prevent rapid triggering
+                let now = Date()
+                if !oldValue && newValue && shouldAutoScroll && !hasScrolledToThinking {
+                    // Check if enough time has passed since last scroll (300ms debounce)
+                    if now.timeIntervalSince(lastScrollTime) > 0.3 {
+                        hasScrolledToThinking = true
+                        lastScrollTime = now
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            withAnimation(.easeOut(duration: 0.3)) {
+                                proxy.scrollTo("claude-processing", anchor: .bottom)
+                            }
                         }
                     }
+                } else if oldValue && !newValue {
+                    // Reset flag when processing completes
+                    hasScrolledToThinking = false
                 }
             }
-            #if os(iOS)
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notification in
-                handleKeyboardShow(notification)
-                // Scroll to bottom when keyboard appears (if near bottom)
-                if shouldAutoScroll {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        scrollToBottom(proxy, animated: true)
-                    }
-                }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { notification in
-                handleKeyboardHide(notification)
-            }
-            #endif
             
             // Scroll to bottom button overlay
             .overlay(alignment: .bottomTrailing) {
@@ -195,7 +190,7 @@ struct ChatMessageList: View {
                     unreadMessageCount = 0
                 }
                 .padding(.trailing, 16)
-                .padding(.bottom, 90) // Above input bar
+                .padding(.bottom, 100) // Above input bar with proper spacing
             }
         }
     }
@@ -203,8 +198,17 @@ struct ChatMessageList: View {
     // MARK: - Enhanced Scroll Management
     
     private func scrollToBottom(_ proxy: ScrollViewProxy, animated: Bool) {
-        // Try to scroll to bottom spacer for better positioning
-        let targetId = "bottom-spacer"
+        // Determine the best target to scroll to
+        let targetId: String
+        if isLoading {
+            targetId = "loading-indicator"
+        } else if claudeStatus.isProcessing {
+            targetId = "claude-processing"
+        } else if !messages.isEmpty {
+            targetId = messages.last?.id.uuidString ?? "bottom-spacer"
+        } else {
+            targetId = "bottom-spacer"
+        }
         
         if animated {
             withAnimation(.easeOut(duration: 0.3)) {
@@ -218,42 +222,6 @@ struct ChatMessageList: View {
         isNearBottom = true
         shouldAutoScroll = true
     }
-    
-    // MARK: - Keyboard Handling
-    
-    #if os(iOS)
-    private func setupKeyboardObservers() {
-        // Observers are already set up via onReceive
-    }
-    
-    private func removeKeyboardObservers() {
-        // Cleanup handled automatically by SwiftUI
-    }
-    
-    private func handleKeyboardShow(_ notification: Notification) {
-        guard let keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,
-              let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double else {
-            return
-        }
-        
-        withAnimation(.easeOut(duration: duration)) {
-            keyboardHeight = keyboardFrame.height
-        }
-    }
-    
-    private func handleKeyboardHide(_ notification: Notification) {
-        guard let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double else {
-            return
-        }
-        
-        withAnimation(.easeOut(duration: duration)) {
-            keyboardHeight = 0
-        }
-    }
-    #else
-    private func setupKeyboardObservers() {}
-    private func removeKeyboardObservers() {}
-    #endif
 }
 
 // MARK: - Preference Keys

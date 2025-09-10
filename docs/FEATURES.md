@@ -18,11 +18,11 @@ Last Updated: 2025-09-09
 | Code Review | ❌ Hidden | In Development | `showCodeReview = false` | AI-powered code review |
 | Refactor Assistant | ❌ Hidden | In Development | `showRefactorAssistant = false` | Intelligent refactoring suggestions |
 
-### Core Features (Always On)
+### Core Features
 | Feature | Status | Control | Description |
 |---------|--------|---------|-------------|
 | Queue System | ❌ Disabled | `isQueueSystemEnabled = false` | Message queueing system |
-| Attachments | ✅ Active | Settings-based | File attachments in chat |
+| Attachments | ❌ Disabled | `enableAttachments = false` | File attachments in chat |
 | CloudKit Sync | ✅ Active | Settings-based | iCloud synchronization |
 | WebSocket | ✅ Active | Always on | Real-time communication |
 | Push Notifications | ✅ Active | User permission required | Message delivery via APNS |
@@ -68,6 +68,9 @@ Last Updated: 2025-09-09
 - ❌ Planning Validation - Readiness analysis
 - ❌ Code Review - Coming soon
 - ❌ Refactor Assistant - Coming soon
+
+**UI Features:**
+- ❌ Attachments - File attachments in chat (disabled for beta)
 
 **System Features:**
 - ❌ Queue System - Message queueing

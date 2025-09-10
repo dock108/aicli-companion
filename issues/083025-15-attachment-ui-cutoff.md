@@ -1,11 +1,11 @@
-# Issue #15: Attachment UI Gets Cut Off at Top
+# Issue 083025-15: Attachment UI Gets Cut Off at Top
 
 **Priority**: Medium  
 **Component**: iOS App - Attachment View UI  
-**Beta Blocker**: No - Feature will be disabled via feature flag for beta  
+**Beta Blocker**: No - Feature is disabled via feature flag for beta  
 **Discovered**: 2025-08-21  
-**Status**: DEFERRED - Not needed for beta (disabled via feature flag)  
-**Reopened**: 2025-08-22
+**Status**: Deferred - Feature Disabled (enableAttachments = false)  
+**Resolved**: N/A - Deferred until post-beta
 
 ## Problem Description
 
@@ -152,4 +152,32 @@ NavigationStack {
 
 ## Status
 
-**REOPENED** - While the issue was resolved for iPhone devices, it still persists on iPad. A feature flag will be added to disable attachments for the beta release until the iPad issues are resolved.
+**Current Status**: Deferred - Feature Disabled (enableAttachments = false)  
+**Last Updated**: 2025-09-09
+
+### Implementation Checklist
+- [x] Root cause identified (safe area handling issues)
+- [x] Solution designed (NavigationStack implementation)
+- [x] Code changes made for iPhone
+- [ ] iPad-specific fixes implemented
+- [ ] Tests written
+- [ ] Manual testing completed
+- [ ] Code review passed
+- [ ] Deployed to beta
+
+### Completion Criteria (Ready for User Testing)
+- [x] Code compiles without errors
+- [ ] All tests pass (iPad issues remain)
+- [ ] Feature/fix is functional on all devices
+- [ ] Ready for user testing
+- [x] Any blockers clearly documented (iPad UI issues)
+
+### User Testing Confirmation
+- [ ] User has tested the fix/feature
+- [ ] User confirms issue is resolved
+- [ ] User approves moving to done/complete
+<!-- DO NOT move issue to done folder until all above are checked by user -->
+
+## Result
+
+Feature disabled for beta release via `FeatureFlags.enableAttachments = false`. iPhone fixes were implemented but iPad issues remain. Will be re-enabled post-beta after iPad-specific fixes are completed.

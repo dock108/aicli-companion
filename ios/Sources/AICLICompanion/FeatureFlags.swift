@@ -77,6 +77,13 @@ struct FeatureFlags {
     /// When false: Normal mode is hidden from selector
     static let showNormalMode: Bool = true
     
+    // MARK: - UI Features
+    
+    /// Enable/disable attachment functionality in chat
+    /// When true: Attachment button and picker are available
+    /// When false: Attachment feature is completely hidden
+    static let enableAttachments: Bool = false
+    
     // MARK: - Development Features
     
     /// Enable/disable debug logging for feature flags
@@ -127,6 +134,9 @@ extension FeatureFlags {
         - Planning Validation: \(showPlanningValidation ? "✅" : "❌")
         - Code Review: \(showCodeReview ? "✅" : "❌")
         - Refactor Assistant: \(showRefactorAssistant ? "✅" : "❌")
+        
+        UI Features:
+        - Attachments: \(enableAttachments ? "✅" : "❌")
         
         System Features:
         - Queue System: \(isQueueSystemEnabled ? "✅" : "❌")

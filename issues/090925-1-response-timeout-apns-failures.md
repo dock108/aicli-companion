@@ -4,8 +4,8 @@
 **Component**: Server - APNS/WebSocket/Timeout Handling  
 **Beta Blocker**: Yes (broken user experience for long-running requests)  
 **Discovered**: 2025-09-06  
-**Status**: Open - Awaiting Testing  
-**Resolved**: Not yet
+**Status**: Awaiting User Testing  
+**Resolved**: Not yet - only after user confirms testing complete
 
 ## Problem Description
 
@@ -100,6 +100,8 @@ REQUEST_TIMEOUT: 60 * 1000, // 60 seconds
 - Added processing state management when Claude operations start
 - Clear processing state in both success and failure paths
 - Added proper cleanup in finally block
+- Fixed duration calculation to handle missing start times gracefully (2025-09-09)
+- Added enhanced logging for session processing lifecycle
 
 **File Modified**: `server/src/services/aicli-session-manager/session-monitor.js`
 
@@ -293,7 +295,7 @@ curl http://localhost:3001/api/sessions/status
 
 ## Status
 
-**Current Status**: Open - Awaiting Testing  
+**Current Status**: Awaiting User Testing  
 **Last Updated**: 2025-09-09
 
 ### Implementation Checklist
@@ -304,6 +306,19 @@ curl http://localhost:3001/api/sessions/status
 - [ ] Manual testing completed
 - [ ] Code review passed
 - [ ] Deployed to beta
+
+### Completion Criteria (Ready for User Testing)
+- [x] Code compiles without errors
+- [x] All tests pass
+- [x] Feature/fix is functional
+- [x] Ready for user testing
+- [x] Any blockers clearly documented (none)
+
+### User Testing Confirmation
+- [ ] User has tested the fix/feature
+- [ ] User confirms issue is resolved
+- [ ] User approves moving to done/complete
+<!-- DO NOT move issue to done folder until all above are checked by user -->
 
 ## Result
 

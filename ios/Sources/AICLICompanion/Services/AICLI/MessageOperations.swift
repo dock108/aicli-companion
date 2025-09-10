@@ -124,7 +124,7 @@ public class AICLIMessageOperations {
         
         guard httpResponse.statusCode == 200 else {
             if httpResponse.statusCode == 404 {
-                throw AICLICompanionError.notFound
+                throw AICLICompanionError.notFound("Message not found")
             }
             throw AICLICompanionError.serverError("HTTP \(httpResponse.statusCode)")
         }

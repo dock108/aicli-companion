@@ -179,6 +179,124 @@ Get available project directories.
 }
 ```
 
+## Auto-Response System
+
+The enhanced auto-response system provides intelligent automation with multiple modes and AI-powered responses.
+
+### Start Auto-Response Session
+
+Start an auto-response session with specified settings.
+
+**Endpoint**: `POST /api/chat/auto-response/start`  
+**Authentication**: Required
+
+**Request Body**:
+```json
+{
+  "sessionId": "session-123",
+  "deviceToken": "apns-device-token",
+  "settings": {
+    "mode": "smartStop",
+    "maxIterations": 10,
+    "minConfidence": 0.6,
+    "timeLimits": {
+      "enabled": true,
+      "maxMinutes": 30
+    },
+    "aiSettings": {
+      "enabled": true,
+      "model": "gpt-3.5-turbo",
+      "temperature": 0.7,
+      "maxTokens": 150
+    }
+  }
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "sessionId": "session-123",
+  "autoResponseActive": true,
+  "settings": { /* applied settings */ }
+}
+```
+
+### Pause Auto-Response
+
+Temporarily pause auto-response for a session.
+
+**Endpoint**: `POST /api/chat/auto-response/pause`  
+**Authentication**: Required
+
+**Request Body**:
+```json
+{
+  "sessionId": "session-123"
+}
+```
+
+### Resume Auto-Response
+
+Resume a paused auto-response session.
+
+**Endpoint**: `POST /api/chat/auto-response/resume`  
+**Authentication**: Required
+
+**Request Body**:
+```json
+{
+  "sessionId": "session-123"
+}
+```
+
+### Stop Auto-Response
+
+Stop auto-response for a session.
+
+**Endpoint**: `POST /api/chat/auto-response/stop`  
+**Authentication**: Required
+
+**Request Body**:
+```json
+{
+  "sessionId": "session-123",
+  "reason": "manual_stop"
+}
+```
+
+### Get Session Progress
+
+Get auto-response session progress and status.
+
+**Endpoint**: `GET /api/chat/:sessionId/progress`  
+**Authentication**: Required
+
+**Response**:
+```json
+{
+  "sessionId": "session-123",
+  "autoResponseActive": true,
+  "isPaused": false,
+  "iterations": 5,
+  "maxIterations": 10,
+  "confidence": 0.75,
+  "startTime": "2025-09-11T10:00:00.000Z",
+  "lastResponse": "2025-09-11T10:05:00.000Z",
+  "mode": "smartStop",
+  "stopReason": null
+}
+```
+
+### Auto-Response Modes
+
+1. **Smart Stop** (`smartStop`): AI-powered completion detection
+2. **Until Completion** (`untilCompletion`): Runs until task is complete
+3. **Time-Based** (`timeBased`): Runs for specified duration
+4. **Message-Based** (`messageBased`): Processes set number of messages
+5. **Hybrid** (`hybrid`): Combines multiple stopping criteria
+
 ## Device Management
 
 ### Register Device
@@ -370,16 +488,42 @@ X-RateLimit-Reset: 1691577600
 
 Server configuration via environment variables:
 
+**Core Configuration**:
 - `PORT`: Server port (default: 3001)
 - `AUTH_TOKEN`: Authentication token (required)
 - `CLAUDE_EXECUTABLE_PATH`: Path to Claude Code CLI (default: auto-detect)
 - `SESSION_TIMEOUT`: Session timeout in milliseconds (default: 3600000)
 - `MESSAGE_QUEUE_MAX_SIZE`: Max queued messages per session (default: 100)
+
+**APNS Configuration**:
 - `APNS_CERT_PATH`: Path to APNS certificate
 - `APNS_KEY_PATH`: Path to APNS key
+- `APNS_KEY_ID`: APNS key identifier
+- `APNS_TEAM_ID`: Apple developer team ID
+- `APNS_BUNDLE_ID`: App bundle identifier (default: com.aiclicompanion.ios)
 - `APNS_PRODUCTION`: Use production APNS (default: false)
+
+**Auto-Response Configuration**:
+- `ENABLE_AUTO_RESPONSE`: Enable auto-response system (default: false)
+- `MAX_AUTO_ITERATIONS`: Maximum auto-response iterations (default: 10)
+- `MIN_CONFIDENCE`: Minimum confidence threshold (default: 0.6)
+
+**AI Response Generation**:
+- `USE_AI_RESPONSES`: Enable AI-powered responses (default: false)
+- `OPENAI_API_KEY`: OpenAI API key for AI responses
+- `AI_MODEL`: AI model to use (default: gpt-3.5-turbo)
+- `AI_TEMPERATURE`: AI response creativity (default: 0.7)
+- `AI_MAX_TOKENS`: Maximum AI response length (default: 150)
+- `AI_RATE_LIMIT`: AI API rate limit per hour (default: 20)
+
+**Training Data**:
+- `TRAINING_DATA_DIR`: Directory for training data (default: ./training-data)
+
+**Planning Mode**:
+- `PLANNING_MODE_STRICT`: Enforce planning mode server-side (default: false)
+- `PLANNING_MODE_EXTENSIONS`: Allowed file extensions in planning mode
 
 ---
 
-**Last Updated**: 2025-08-18  
-**API Version**: 1.0.0
+**Last Updated**: 2025-09-11  
+**API Version**: 1.1.0

@@ -70,6 +70,25 @@ DEBUG=claude:*
 # Claude settings for development
 CLAUDE_PERMISSION_MODE=acceptEdits
 CLAUDE_ALLOWED_TOOLS=Read,Write,Edit,Bash
+
+# Auto-Response System (optional)
+ENABLE_AUTO_RESPONSE=true
+MAX_AUTO_ITERATIONS=10
+MIN_CONFIDENCE=0.6
+
+# AI Response Generation (optional - requires OpenAI API key)
+USE_AI_RESPONSES=false
+OPENAI_API_KEY=your-openai-key-here
+AI_MODEL=gpt-3.5-turbo
+AI_TEMPERATURE=0.7
+AI_MAX_TOKENS=150
+
+# Training Data Collection
+TRAINING_DATA_DIR=./training-data
+
+# Planning Mode
+PLANNING_MODE_STRICT=false
+PLANNING_MODE_EXTENSIONS=.md,.txt,.plan,.todo
 ```
 
 **server/hostapp/.env**

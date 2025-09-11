@@ -9,6 +9,9 @@ import { createChatMessageHandler } from '../handlers/chat-message-handler.js';
 import { sendErrorResponse } from '../utils/response-utils.js';
 import { PlanningModeService } from '../services/planning-mode.js';
 import { webSocketService } from '../services/websocket-service.js';
+import { AutonomousAgent } from '../services/autonomous-agent.js';
+import { MessageAnalyzer } from '../services/message-analyzer.js';
+import { ResponseTemplates } from '../services/response-templates.js';
 
 const logger = createLogger('ChatAPI');
 const router = express.Router();
@@ -18,6 +21,14 @@ import { aicliService } from '../services/aicli-instance.js';
 
 // Initialize planning mode service
 const planningModeService = new PlanningModeService();
+
+// Initialize autonomous agent services
+const autonomousAgent = new AutonomousAgent({
+  enableAutoResponse: process.env.ENABLE_AUTO_RESPONSE === 'true',
+  maxIterations: parseInt(process.env.MAX_AUTO_ITERATIONS || '10'),
+});
+const messageAnalyzer = new MessageAnalyzer();
+const responseTemplates = new ResponseTemplates();
 
 /**
  * POST /api/chat - Send message to Claude and get response via APNS (always async)
@@ -633,6 +644,208 @@ router.post('/interrupt', async (req, res) => {
     requestId,
     clearedMessages: clearedCount,
   });
+});
+
+/**
+ * POST /api/chat/analyze - Analyze a message for auto-response
+ */
+router.post('/analyze', async (req, res) => {
+  const { message, sessionId, context } = req.body;
+  const requestId = req.headers['x-request-id'] || `ANALYZE_${randomUUID().substring(0, 8)}`;
+
+  if (!message) {
+    return res.status(400).json({
+      success: false,
+      error: 'Message is required for analysis',
+    });
+  }
+
+  try {
+    // Analyze the message
+    const analysis = messageAnalyzer.analyzeMessage(message, context?.messageHistory || []);
+
+    // Get response template if auto-response enabled
+    let suggestedResponse = null;
+    if (context?.autoResponseEnabled) {
+      suggestedResponse = responseTemplates.getResponse(analysis, {
+        variables: {
+          project_name: context.projectName,
+          task_name: context.currentTask,
+        },
+      });
+    }
+
+    logger.info('Message analyzed', {
+      requestId,
+      sessionId,
+      intent: analysis.intent.type,
+      confidence: analysis.intent.confidence,
+      recommendation: analysis.recommendation,
+    });
+
+    res.json({
+      success: true,
+      analysis: {
+        intent: analysis.intent,
+        completion: analysis.completion,
+        showstopper: analysis.showstopper,
+        progress: analysis.progress,
+        recommendation: analysis.recommendation,
+        priority: analysis.priority,
+      },
+      suggestedResponse,
+      requestId,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error('Failed to analyze message', {
+      requestId,
+      error: error.message,
+    });
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to analyze message',
+      details: error.message,
+      requestId,
+    });
+  }
+});
+
+/**
+ * GET /api/chat/auto-response/templates - Get available response templates
+ */
+router.get('/auto-response/templates', (req, res) => {
+  const { category } = req.query;
+
+  try {
+    let templates;
+    if (category) {
+      templates = responseTemplates.getTemplatesByCategory(category);
+    } else {
+      templates = responseTemplates.templates;
+    }
+
+    res.json({
+      success: true,
+      templates,
+      categories: Object.keys(responseTemplates.templates),
+    });
+  } catch (error) {
+    logger.error('Failed to get templates', { error: error.message });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve templates',
+    });
+  }
+});
+
+/**
+ * POST /api/chat/auto-response/select - Select appropriate auto-response
+ */
+router.post('/auto-response/select', async (req, res) => {
+  const { message, sessionId, context } = req.body;
+  const requestId = req.headers['x-request-id'] || `SELECT_${randomUUID().substring(0, 8)}`;
+
+  try {
+    // Get or create session in autonomous agent
+    if (!autonomousAgent.sessions.has(sessionId)) {
+      autonomousAgent.initializeSession(sessionId, context);
+    }
+
+    // Analyze and get response
+    const result = await autonomousAgent.analyzeMessage(message, sessionId);
+
+    logger.info('Auto-response selected', {
+      requestId,
+      sessionId,
+      shouldContinue: result.shouldContinue,
+      confidence: result.response?.confidence,
+    });
+
+    res.json({
+      success: true,
+      response: result.response,
+      analysis: result.analysis,
+      shouldContinue: result.shouldContinue,
+      sessionState: result.sessionState,
+      requestId,
+    });
+  } catch (error) {
+    logger.error('Failed to select auto-response', {
+      requestId,
+      error: error.message,
+    });
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to select auto-response',
+      details: error.message,
+      requestId,
+    });
+  }
+});
+
+/**
+ * GET /api/chat/auto-response/session/:sessionId - Get session summary
+ */
+router.get('/auto-response/session/:sessionId', (req, res) => {
+  const { sessionId } = req.params;
+
+  try {
+    const summary = autonomousAgent.getSessionSummary(sessionId);
+
+    if (!summary) {
+      return res.status(404).json({
+        success: false,
+        error: 'Session not found',
+      });
+    }
+
+    res.json({
+      success: true,
+      summary,
+    });
+  } catch (error) {
+    logger.error('Failed to get session summary', {
+      sessionId,
+      error: error.message,
+    });
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve session summary',
+    });
+  }
+});
+
+/**
+ * DELETE /api/chat/auto-response/session/:sessionId - Clear auto-response session
+ */
+router.delete('/auto-response/session/:sessionId', (req, res) => {
+  const { sessionId } = req.params;
+
+  try {
+    autonomousAgent.clearSession(sessionId);
+
+    logger.info('Auto-response session cleared', { sessionId });
+
+    res.json({
+      success: true,
+      message: 'Session cleared',
+      sessionId,
+    });
+  } catch (error) {
+    logger.error('Failed to clear session', {
+      sessionId,
+      error: error.message,
+    });
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to clear session',
+    });
+  }
 });
 
 export default router;

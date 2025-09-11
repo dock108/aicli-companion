@@ -22,6 +22,8 @@ struct ChatView: View {
     @State private var showingPlanningDashboard = false
     @State private var showingProjectCreation = false
     @State private var selectedMode: ChatMode = .normal // Will be loaded per project
+    @State private var showingAutoReplySettings = false
+    @StateObject private var autoReplyStore = AutoReplySettingsStore.shared
     
     // Removed complex scroll tracking - handled by ChatMessageList now
     
@@ -69,9 +71,12 @@ struct ChatView: View {
                 }
                 
                 
-                // FEATURE FLAG: Auto-response controls (currently hidden)
-                if FeatureFlags.showAutoModeUI {
-                    AutoResponseControls()
+                // Auto-Reply Controls - Replace old auto-response with new system
+                if let project = selectedProject {
+                    AutoReplyStatusBar(
+                        project: project,
+                        onShowSettings: { showingAutoReplySettings = true }
+                    )
                 }
                 
                 // Workspace Mode Features
@@ -259,6 +264,15 @@ struct ChatView: View {
         }
         .sheet(isPresented: $showingProjectCreation) {
             ProjectCreationWizard()
+        }
+        .sheet(isPresented: $showingAutoReplySettings) {
+            if let project = selectedProject {
+                let projectUUID = ProjectUUIDConverter.uuid(for: project)
+                AutoReplySettingsView(
+                    projectId: projectUUID,
+                    projectName: project.name
+                )
+            }
         }
         .onAppear {
             // Ensure proper setup on view appearance

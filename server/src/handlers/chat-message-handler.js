@@ -6,8 +6,23 @@
 import { createLogger } from '../utils/logger.js';
 import { storeMessage } from '../routes/messages.js';
 import { randomUUID } from 'crypto';
+import { AutonomousAgent } from '../services/autonomous-agent.js';
 
 const logger = createLogger('ChatMessageHandler');
+
+// Initialize autonomous agent with AI configuration
+const autonomousAgent = new AutonomousAgent({
+  enableAutoResponse: process.env.ENABLE_AUTO_RESPONSE === 'true',
+  enableShowstopperDetection: true,
+  maxIterations: parseInt(process.env.MAX_AUTO_ITERATIONS || '10'),
+  minConfidence: parseFloat(process.env.MIN_CONFIDENCE || '0.6'),
+  enableAIResponses: process.env.USE_AI_RESPONSES === 'true',
+  apiKey: process.env.OPENAI_API_KEY,
+  model: process.env.AI_MODEL,
+  temperature: process.env.AI_TEMPERATURE,
+  maxTokens: process.env.AI_MAX_TOKENS,
+  dataDir: process.env.TRAINING_DATA_DIR,
+});
 
 // APNS has a max payload size of 4KB, but we'll be conservative
 const MAX_MESSAGE_SIZE = 2000; // 2KB to leave room for other payload data
@@ -303,6 +318,64 @@ export function createChatMessageHandler(services) {
         requiresFetch,
         messageId,
       });
+
+      // Analyze response for auto-response if enabled
+      if (msgAutoResponse && msgAutoResponse.enabled) {
+        try {
+          const agentAnalysis = await autonomousAgent.analyzeMessage(content, claudeSessionId);
+
+          // Initialize session context if needed
+          if (!autonomousAgent.sessions.has(claudeSessionId)) {
+            autonomousAgent.initializeSession(claudeSessionId, {
+              projectPath: msgProjectPath,
+              projectName: msgAutoResponse.projectName || 'Unknown Project',
+              currentTask: msgAutoResponse.currentTask,
+            });
+          }
+
+          // Send analysis results with notification
+          if (agentAnalysis.response && agentAnalysis.shouldContinue) {
+            await pushNotificationService.sendAutoResponseNotification(msgDeviceToken, {
+              analysis: agentAnalysis.analysis,
+              suggestedResponse: agentAnalysis.response,
+              confidence: agentAnalysis.response.confidence,
+              shouldContinue: agentAnalysis.shouldContinue,
+              sessionState: agentAnalysis.sessionState,
+              projectPath: msgProjectPath,
+              sessionId: claudeSessionId,
+              requestId: msgRequestId,
+            });
+
+            logger.info('Auto-response analysis sent', {
+              requestId: msgRequestId,
+              sessionId: claudeSessionId,
+              intent: agentAnalysis.analysis.intent.type,
+              confidence: agentAnalysis.response.confidence,
+              shouldContinue: agentAnalysis.shouldContinue,
+            });
+          } else if (agentAnalysis.response && agentAnalysis.response.isEscalation) {
+            // Send escalation notification
+            await pushNotificationService.sendEscalationNotification(msgDeviceToken, {
+              reason: agentAnalysis.response.showstopperReasons || 'Critical issue detected',
+              message: agentAnalysis.response.message,
+              projectPath: msgProjectPath,
+              sessionId: claudeSessionId,
+              requestId: msgRequestId,
+            });
+
+            logger.warn('Escalation required', {
+              requestId: msgRequestId,
+              sessionId: claudeSessionId,
+              reasons: agentAnalysis.response.showstopperReasons,
+            });
+          }
+        } catch (analysisError) {
+          logger.error('Failed to analyze for auto-response', {
+            requestId: msgRequestId,
+            error: analysisError.message,
+          });
+        }
+      }
 
       // Clear processing state after successful completion
       if (msgSessionId) {

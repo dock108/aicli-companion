@@ -193,6 +193,130 @@ Users lose their place in the conversation and must manually navigate to recent 
 
 ---
 
+## Test Note 13: Cannot Dismiss Keyboard to View Chat
+**Date**: 2025-09-10
+
+### Issue Description
+Users cannot dismiss the keyboard while in a chat to view more of the conversation. This is particularly problematic given the typically long messages in conversations with Claude.
+
+### Observed Behavior
+- Keyboard remains persistent when user wants to read messages
+- No obvious way to dismiss keyboard to see more chat content
+- Keyboard takes up significant screen space
+- Particularly problematic with long Claude responses that need scrolling
+
+### Impact
+Users cannot properly read full conversations, especially longer responses from Claude, because the keyboard blocks a significant portion of the screen. This severely impacts readability and user experience.
+
+### Potential Causes
+- Missing tap-to-dismiss gesture on chat area
+- TextField maintaining focus inappropriately
+- Keyboard dismiss button not implemented or not visible
+- ScrollView not configured to dismiss keyboard on drag
+- Missing keyboard toolbar with dismiss action
+
+### Areas to Investigate
+- Implement tap gesture on chat area to dismiss keyboard
+- Add keyboard dismiss on scroll/drag gesture
+- Consider adding a keyboard toolbar with done/dismiss button
+- Ensure proper keyboard avoidance behavior
+- Test interaction between keyboard dismissal and message sending
+- Review iOS keyboard management best practices for chat interfaces
+
+---
+
+## Feature Suggestion: Automated Plan Execution with Auto-Response Engine
+**Date**: 2025-09-10
+
+### Feature Description
+Combine planning mode with the auto-response engine to create a workflow where Claude creates a detailed plan that, once approved, executes to completion without user interruptions.
+
+### Proposed Workflow
+1. User activates "Plan & Execute" mode
+2. Claude enters planning mode to create comprehensive implementation plan
+3. Plan is presented to user for review and validation
+4. Upon approval, system switches to execution mode with auto-response enabled
+5. Claude executes the entire plan autonomously to completion
+6. User receives final summary of completed work
+
+### Key Benefits
+- **Uninterrupted Execution**: Once approved, plan runs to completion without user intervention
+- **Predictable Scope**: User knows exactly what will be done before execution starts
+- **Time Efficiency**: User can approve plan and return later to see completed work
+- **Quality Assurance**: Plan review acts as safety checkpoint before autonomous execution
+- **Clear Documentation**: Plan serves as documentation of what was implemented
+
+### Technical Requirements
+- Integration between planning mode and auto-response engine
+- Plan approval UI/mechanism in the app
+- State management to track plan execution progress
+- Ability to pause/abort execution if needed
+- Progress indicators showing which plan steps are complete
+- Error handling for when plan steps fail
+
+### Use Cases
+- Large refactoring tasks
+- Multi-file feature implementations
+- Systematic bug fixes across codebase
+- Test suite creation
+- Documentation generation
+- Dependency updates and migrations
+
+### Considerations
+- Need rollback mechanism if execution fails partway
+- Should capture all outputs/changes for user review
+- May want approval levels (auto-approve minor changes, require approval for major ones)
+- Could store approved plans as templates for future use
+- Progress persistence in case of connection issues
+
+---
+
+## Test Note 14: Possible Missing Push Notifications (Under Observation)
+**Date**: 2025-09-10
+
+### Issue Description
+Suspicion that not all push notifications (APNS) are being received, though the issue is not confirmed. Chats and app functionality appear fine, but there may be notification delivery issues.
+
+### Observed Behavior (Preliminary)
+- Chats appear complete in the app
+- App functionality seems normal
+- Possible missing push notifications
+- **May occur when message arrives while actively in another chat**
+- May be related to notification coalescing or overlapping
+- One notification might be hiding/replacing another
+- Needs more observation to confirm pattern
+
+### Impact
+Users might miss real-time alerts about new messages, potentially discovering responses only when manually checking the app.
+
+### Potential Causes (Speculative)
+- APNS delivery issues or throttling
+- Notification coalescing by iOS when multiple arrive close together
+- Notification replacement when using same identifier
+- **App suppressing notifications when already in foreground/active chat**
+- Notification handling logic may skip alerts when user is in different chat
+- Silent notification failures
+- Background refresh not triggering properly
+- Network connectivity issues during notification delivery
+- App notification settings or entitlements issues
+
+### Areas to Monitor
+- Track correlation between sent messages and received notifications
+- **Test specifically when actively using another chat in the app**
+- Check if notifications are more likely to be missed in certain scenarios
+- Monitor for patterns (time of day, message frequency, app state)
+- Verify notification payload and identifiers aren't causing replacements
+- Check foreground vs background notification handling
+- Test if notifications for inactive chats show when app is in foreground
+- Check APNS delivery logs if available
+- Test with different notification priorities and types
+- Monitor for any iOS notification center anomalies
+
+### Status
+**Under Observation** - Not confirmed as an issue yet, needs more data points to establish if there's an actual problem or just perceived missing notifications.
+
+---
+
 ## Test Note 12: Claude Consistently Times Out at 5 Minutes with SIGTERM
 **Date**: 2025-09-10
 

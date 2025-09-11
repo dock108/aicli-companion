@@ -6,11 +6,13 @@ A native iOS application that brings Claude's AI assistance to your mobile devic
 
 ### Core Functionality
 - **Real-time Chat Interface**: Stream Claude's responses character-by-character
+- **Enhanced Auto-Response System**: 5 intelligent automation modes with AI integration
 - **Project Management**: Organize conversations by project with full context
 - **Message Persistence**: Never lose a conversation - synced with server
 - **Push Notifications**: Get notified when Claude completes tasks
 - **Offline Support**: Browse previous conversations without connection
 - **Rich Content Rendering**: Beautiful display of code, markdown, and tool outputs
+- **CloudKit Sync**: Cross-device conversation and settings synchronization
 
 ### User Experience
 - **Native iOS Design**: Follows Apple's Human Interface Guidelines

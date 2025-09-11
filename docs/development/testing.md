@@ -18,10 +18,10 @@ Comprehensive testing guide for AICLI Companion, covering unit tests, integratio
 ## JavaScript/Node.js Testing
 
 ### Test Framework
-- **Runner**: Vitest (fast, ESM-first)
-- **DOM**: Happy-DOM (lightweight)
-- **Mocking**: Built-in vi mocks
-- **Coverage**: v8 provider
+- **Runner**: Node.js built-in test runner (fast, ESM-native)
+- **Assertions**: Node.js built-in assert
+- **Mocking**: Built-in mock functions
+- **Coverage**: V8 provider with c8
 
 ### Running Tests
 
@@ -29,25 +29,26 @@ Comprehensive testing guide for AICLI Companion, covering unit tests, integratio
 # Run all tests
 npm test
 
-# Watch mode for development
-npm run test:watch
-
-# Coverage report
+# Run with coverage
 npm run test:coverage
 
-# UI mode
-npm run test:ui
+# Run specific test file
+npm test -- src/test/services/autonomous-agent.test.js
+
+# Run tests with debugging
+NODE_ENV=test node --test --test-reporter=spec src/test/**/*.test.js
 ```
 
 ### Test Structure
 
 ```javascript
-// Example test file: services/claude-code.test.js
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ClaudeCodeService } from '../claude-code.js';
+// Example test file: src/test/services/autonomous-agent.test.js
+import { describe, test, beforeEach, afterEach } from 'node:test';
+import assert from 'node:assert';
+import { AutonomousAgent } from '../../services/autonomous-agent.js';
 
-describe('ClaudeCodeService', () => {
-  let service;
+describe('AutonomousAgent', () => {
+  let agent;
   
   beforeEach(() => {
     service = new ClaudeCodeService();
@@ -236,6 +237,112 @@ mod tests {
         assert_eq!(response.status, "healthy");
     }
 }
+```
+
+## Auto-Response System Testing
+
+The enhanced auto-response system includes comprehensive testing for all 5 modes and AI integration:
+
+### Testing Auto-Response Components
+
+```bash
+# Test the autonomous agent
+npm test src/test/services/autonomous-agent.test.js
+
+# Test AI response generation
+npm test src/test/services/ai-response-generator.test.js
+
+# Test training data manager
+npm test src/test/services/training-data-manager.test.js
+
+# Test message analyzer
+npm test src/test/services/message-analyzer.test.js
+```
+
+### Testing Different Modes
+
+```javascript
+// Test Smart Stop mode
+describe('Smart Stop Mode', () => {
+  test('should stop when AI detects completion', async () => {
+    const agent = new AutonomousAgent({
+      enableAIResponses: true,
+      minConfidence: 0.8
+    });
+    
+    const analysis = {
+      intent: { type: 'completion' },
+      completion: { isComplete: true },
+      confidence: 0.9
+    };
+    
+    const result = await agent.analyzeMessage('Task completed successfully', 'test-session');
+    assert.strictEqual(result.shouldContinue, false);
+  });
+});
+
+// Test Time-Based mode
+describe('Time-Based Mode', () => {
+  test('should respect time limits', async () => {
+    const agent = new AutonomousAgent({
+      maxIterations: 100,
+      timeLimit: 1000 // 1 second for testing
+    });
+    
+    // Start session
+    const session = agent.initializeSession('test-session');
+    
+    // Wait for time limit
+    await new Promise(resolve => setTimeout(resolve, 1100));
+    
+    const result = await agent.analyzeMessage('Still working...', 'test-session');
+    assert.strictEqual(result.shouldContinue, false);
+    assert.strictEqual(result.reason, 'time_limit');
+  });
+});
+```
+
+### Mock AI Responses
+
+```javascript
+// Mock OpenAI for testing
+const mockAIResponse = {
+  generateResponse: vi.fn().mockResolvedValue({
+    message: 'Continue with the next step',
+    confidence: 0.85,
+    reasoning: 'Task appears to be in progress'
+  })
+};
+
+// Inject mock into autonomous agent
+const agent = new AutonomousAgent({
+  aiGenerator: mockAIResponse
+});
+```
+
+### Testing Training Data Collection
+
+```javascript
+describe('Training Data Manager', () => {
+  test('should record successful interactions', async () => {
+    const manager = new TrainingDataManager({
+      dataDir: './test-training-data'
+    });
+    
+    await manager.recordInteraction({
+      projectId: 'test-project',
+      claudeOutput: 'Task completed successfully',
+      analysis: { intent: { type: 'completion' } },
+      response: { message: 'Great work!' },
+      accepted: true,
+      confidence: 0.9
+    });
+    
+    const examples = manager.getRelevantExamples('test-project', 
+      { intent: { type: 'completion' } }, 1);
+    assert.strictEqual(examples.length, 1);
+  });
+});
 ```
 
 ## Integration Testing

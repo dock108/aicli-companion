@@ -31,6 +31,7 @@ public class AICLIMessageOperations {
         projectPath: String? = nil,
         attachments: [AttachmentData]? = nil,
         mode: ChatMode = .normal,
+        autoReplyConfig: ServerAutoResponseConfig? = nil,
         completion: @escaping (Result<ClaudeChatResponse, AICLICompanionError>) -> Void
     ) {
         guard connectionManager.hasValidConnection,
@@ -39,7 +40,7 @@ public class AICLIMessageOperations {
             return
         }
         
-        guard let request = createChatRequest(baseURL: baseURL, message: text, projectPath: projectPath, attachments: attachments, mode: mode) else {
+        guard let request = createChatRequest(baseURL: baseURL, message: text, projectPath: projectPath, attachments: attachments, mode: mode, autoReplyConfig: autoReplyConfig) else {
             completion(.failure(.invalidInput("Failed to create request")))
             return
         }
@@ -261,7 +262,7 @@ public class AICLIMessageOperations {
     
     // MARK: - Private Helper Methods
     
-    private func createChatRequest(baseURL: URL, message: String, projectPath: String?, attachments: [AttachmentData]? = nil, mode: ChatMode = .normal) -> URLRequest? {
+    private func createChatRequest(baseURL: URL, message: String, projectPath: String?, attachments: [AttachmentData]? = nil, mode: ChatMode = .normal, autoReplyConfig: ServerAutoResponseConfig? = nil) -> URLRequest? {
         let chatURL = baseURL.appendingPathComponent("/api/chat")
         var request = connectionManager.createAuthenticatedRequest(url: chatURL, method: "POST")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -313,6 +314,19 @@ public class AICLIMessageOperations {
                 ]
             }
             requestBody["attachments"] = attachmentData
+        }
+        
+        // Add auto-reply configuration if provided
+        if let autoReplyConfig = autoReplyConfig {
+            requestBody["autoResponse"] = [
+                "enabled": autoReplyConfig.enabled,
+                "mode": autoReplyConfig.mode,
+                "limits": autoReplyConfig.limits,
+                "projectName": autoReplyConfig.projectName,
+                "currentTask": autoReplyConfig.currentTask,
+                "useAI": autoReplyConfig.useAI,
+                "minConfidence": autoReplyConfig.minConfidence
+            ]
         }
         
         do {

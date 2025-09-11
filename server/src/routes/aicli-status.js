@@ -112,8 +112,6 @@ export function setupAICLIStatusRoutes(app, aicliService) {
         });
       }
 
-      // For HTTP sessions (isTemporary=true), process is null but session is still active
-      // Check if there's a message buffer to determine if session is truly active
       const hasBuffer = aicliService.sessionManager.getSessionBuffer(sessionId) !== null;
       const isHttpSession = session.isTemporary === true;
 

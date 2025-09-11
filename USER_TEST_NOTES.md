@@ -190,3 +190,36 @@ Users lose their place in the conversation and must manually navigate to recent 
 - Ensure scroll-to-bottom occurs after all messages are rendered
 - Verify content height calculations are complete before positioning
 - Consider adding explicit scroll-to-bottom on app resume/reopen
+
+---
+
+## Test Note 12: Claude Consistently Times Out at 5 Minutes with SIGTERM
+**Date**: 2025-09-10
+
+### Issue Description
+Claude consistently times out and exits with SIGTERM (exit code 143) at exactly the 5-minute mark during command execution through the companion server.
+
+### Observed Behavior
+- Claude reliably hits a 5-minute timeout during long-running conversations
+- Process exits with code 143 (SIGTERM) after approximately 75-110 tool uses
+- Server detects this and sends a continuation message: "I've completed many tasks and need to pause here. Send another message to continue where I left off."
+- Session ID is preserved, allowing continuation
+- Happens consistently across different types of tasks and conversations
+
+### Impact
+While the system handles this gracefully and users can continue their conversation, it interrupts the flow of long-running tasks and may cause confusion when Claude stops mid-task. Users need to manually send another message to continue, which breaks concentration and workflow.
+
+### Technical Details
+- Exit code: 143 (SIGTERM)
+- Timeout: Exactly 5 minutes from command start
+- Tool use count at timeout: ~75-110 operations
+- Server correctly treats this as successful completion, not an error
+- APNS and WebSocket both receive the continuation message
+- ChatView correctly updates from "thinking" to normal state
+
+### Areas to Investigate
+- Whether this is a Claude CLI configuration limit or hardcoded behavior
+- Possibility of extending the timeout through CLI flags or configuration
+- Whether chunking long tasks could avoid hitting the limit
+- Impact on complex multi-step operations that take longer than 5 minutes
+- User experience improvements to make continuation more seamless

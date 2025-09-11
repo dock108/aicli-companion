@@ -283,10 +283,7 @@ export class MessageProcessor {
     }
   }
 
-  // Deprecated: Use from aicli.js or implement your own classification
   static classifyAICLIMessage(message) {
-    // This method is deprecated and kept for backward compatibility
-    // The actual classification logic should be in aicli.js which handles the full context
     if (typeof message === 'string' || message === null || message === undefined) {
       return {
         eventType: 'streamData',

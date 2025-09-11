@@ -40,12 +40,8 @@ export class CommandExecutor {
       throw new Error(`Security violation: ${dirValidation.reason}`);
     }
 
-    // Build AICLI CLI arguments - use stream-json to avoid buffer limits
-    // Include --print flag as required by AICLI CLI for stdin input
     const args = ['--print', '--output-format', 'stream-json', '--verbose'];
 
-    // Add --resume flag with Claude session ID if this is a continuing conversation
-    // Use the claudeSessionId from the session, which is the ID from Claude's previous response
     if (claudeSessionId && claudeSessionId !== 'null' && claudeSessionId !== 'new') {
       args.push('--resume', claudeSessionId);
       sessionLogger.info('Using --resume with Claude session ID', {
@@ -59,7 +55,6 @@ export class CommandExecutor {
       });
     }
 
-    // Add permission configuration
     sessionLogger.info('Permission config before adding args', {
       skipPermissions: this.config.skipPermissions,
       allowedTools: this.config.allowedTools,
@@ -70,14 +65,12 @@ export class CommandExecutor {
       argsAfter: [...args],
     });
 
-    // Add attachment file paths if provided
     if (attachmentPaths && attachmentPaths.length > 0) {
       for (const filePath of attachmentPaths) {
         args.push('--file', filePath);
       }
     }
 
-    // Handle workspace mode - use the projects directory instead of __workspace__
     const actualWorkingDirectory =
       workingDirectory === '__workspace__' ? this.serverConfig.configPath : workingDirectory;
 
@@ -142,11 +135,12 @@ export class CommandExecutor {
       let healthMonitor = null;
 
       try {
-        // Spawn the AICLI process
-        aicliProcess = this.processManager.spawnProcess(args, {
+        logger.info('Spawning AICLI process', {
+          sessionId,
           cwd,
-          timeout: 300000, // 5 minute timeout
         });
+
+        aicliProcess = this.processManager.spawnProcess(args, { cwd });
 
         // Register process for tracking
         if (sessionId) {

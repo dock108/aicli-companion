@@ -2,8 +2,6 @@ import express from 'express';
 import { createLogger } from '../utils/logger.js';
 
 const logger = createLogger('DevicesAPI');
-// TODO: Check what validation middleware exists
-// import { validateRequest } from '../middleware/validation.js';
 import { pushNotificationService } from '../services/push-notification.js';
 
 const router = express.Router();

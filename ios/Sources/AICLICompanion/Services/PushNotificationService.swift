@@ -236,6 +236,19 @@ public class PushNotificationService: NSObject, ObservableObject {
         pendingNotifications.removeAll()
         updateApplicationBadge()
     }
+    
+    /// Mark a message as successfully processed
+    private func markMessageAsProcessed(_ notificationId: String) {
+        processedMessageQueue.sync { _ = processedMessageIds.insert(notificationId) }
+        saveProcessedMessageIds()
+        
+        // Clean up old entries if set gets too large (keep last 100)
+        Task {
+            await cleanupProcessedMessageIds()
+        }
+        
+        print("✅ Marked message as processed: \(notificationId)")
+    }
 
     /// Get notification settings
     func getNotificationSettings() async -> UNNotificationSettings {
@@ -306,14 +319,7 @@ extension PushNotificationService {
             return
         }
 
-        // Mark as processed
-        processedMessageQueue.sync { _ = processedMessageIds.insert(notificationId) }
-
-        // Save to UserDefaults to persist across app restarts
-        saveProcessedMessageIds()
-
-        // Clean up old entries if set gets too large (keep last 100)
-        await cleanupProcessedMessageIds()
+        // Don't mark as processed yet - wait until we successfully complete processing
 
         // Extract and store session ID if present
         if let projectPath = userInfo["projectPath"] as? String {
@@ -330,9 +336,23 @@ extension PushNotificationService {
             }
         }
 
-        // 1. Extract message data
-        if let requiresFetch = userInfo["requiresFetch"] as? Bool,
-           requiresFetch,
+        // Hybrid approach: Check for fetch requirement first, then fallback to payload
+        // Handle requiresFetch as Bool, NSNumber, or String for robustness
+        let requiresFetchValue: Bool = {
+            if let boolValue = userInfo["requiresFetch"] as? Bool {
+                return boolValue
+            } else if let numberValue = userInfo["requiresFetch"] as? NSNumber {
+                // NSNumber 1 = true, NSNumber 0 = false
+                return numberValue.intValue == 1
+            } else if let stringValue = userInfo["requiresFetch"] as? String {
+                return stringValue.lowercased() == "true" || stringValue == "1"
+            }
+            return false
+        }()
+        
+        print("🔍 Debug requiresFetch - Value: \(requiresFetchValue), Raw: \(userInfo["requiresFetch"] ?? "nil"), Type: \(type(of: userInfo["requiresFetch"]))")
+        
+        if requiresFetchValue,
            let messageId = userInfo["messageId"] as? String,
            let projectPath = userInfo["projectPath"] as? String {
             // Large message - fetch full content
@@ -349,24 +369,27 @@ extension PushNotificationService {
 
                 print("✅ Message fetched: \(fullMessage.content.count) characters")
 
-                // 2. Validate content
+                // Validate content
                 guard !fullMessage.content.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty else {
                     print("⚠️ Fetched empty message - skipping")
                     return
                 }
 
-                // 3. Save to storage and get the Message object
+                // Save to storage and get the Message object
                 let savedMessage = await saveClaudeMessage(
                     message: fullMessage.content,
                     projectPath: projectPath,
                     userInfo: userInfo
                 )
 
-                // 4. Post notification to UI with the same Message object
+                // Post notification to UI with the same Message object
                 await postClaudeResponseNotificationWithMessage(
                     savedMessage,
                     projectPath: projectPath
                 )
+                
+                // Mark as successfully processed after successful completion
+                markMessageAsProcessed(notificationId)
             } catch {
                 print("❌ Failed to fetch message: \(error)")
 
@@ -383,10 +406,13 @@ extension PushNotificationService {
                     savedErrorMessage,
                     projectPath: projectPath
                 )
+                
+                // Don't mark as processed if we failed - allow retry
+                print("⚠️ Not marking failed fetch as processed - allowing retry")
             }
-        } else if let claudeMessage = (userInfo["message"] as? String) ?? (userInfo["messagePreview"] as? String),
+        } else if let claudeMessage = userInfo["message"] as? String,
                   let projectPath = userInfo["projectPath"] as? String {
-            // Small message - process directly
+            // Small message - process directly from APNS payload
             print("🤖 Processing message: \(claudeMessage.count) characters")
             print("🤖 Project Path: \(projectPath)")
 
@@ -408,6 +434,9 @@ extension PushNotificationService {
                 savedMessage,
                 projectPath: projectPath
             )
+            
+            // Mark as successfully processed after successful completion
+            markMessageAsProcessed(notificationId)
 
             print("✅ Message processed and saved")
         } else {

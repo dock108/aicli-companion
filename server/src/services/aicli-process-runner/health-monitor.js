@@ -68,6 +68,7 @@ class ProcessHealthMonitor {
     this.lastActivity = Date.now();
     this.messageCount = 0;
     this.toolUseCount = 0;
+    this.lastActiveState = false; // Track activity state changes for selective logging
   }
 
   /**
@@ -146,10 +147,10 @@ class ProcessHealthMonitor {
       this.aicliProcess.stderr.on('data', this.stderrHandler);
     }
 
-    // Start heartbeat
+    // Start heartbeat - reduced frequency since we removed timeout detection
     this.heartbeatInterval = setInterval(() => {
       this.sendHeartbeat();
-    }, 5000); // Every 5 seconds
+    }, 60000); // Every 60 seconds - sufficient for activity tracking
 
     // Send initial heartbeat
     this.sendHeartbeat();
@@ -182,25 +183,20 @@ class ProcessHealthMonitor {
     // Emit heartbeat
     this.parent.emit('heartbeat', heartbeatData);
 
-    // Log heartbeat
-    logger.debug('Heartbeat sent', {
-      sessionId: this.sessionId,
-      isActive,
-      messageCount: this.messageCount,
-    });
-
-    // Check for timeout
-    if (!isActive && timeSinceLastActivity > 60000) {
-      logger.warn('Process appears to be hung', {
+    // Only log significant activity changes to reduce log noise
+    const significantActivityChange = this.messageCount > 0 && this.messageCount % 10 === 0;
+    if (significantActivityChange || isActive !== this.lastActiveState) {
+      logger.debug('Activity update', {
         sessionId: this.sessionId,
-        timeSinceLastActivity,
+        isActive,
+        messageCount: this.messageCount,
+        toolUseCount: this.toolUseCount || 0,
       });
-
-      this.parent.emit('timeout', {
-        sessionId: this.sessionId,
-        timeSinceLastActivity,
-      });
+      this.lastActiveState = isActive;
     }
+
+    // Removed timeout detection - let Claude process for as long as needed
+    // Tool use activity indicates the process is working, even during long thinking periods
   }
 
   /**

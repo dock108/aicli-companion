@@ -18,7 +18,7 @@ const MAX_MESSAGE_SIZE = 2000; // 2KB to leave room for other payload data
  * @returns {Function} Message handler function
  */
 export function createChatMessageHandler(services) {
-  const { aicliService, pushNotificationService } = services;
+  const { aicliService, pushNotificationService, webSocketService } = services;
 
   return async function handleQueuedMessage(queuedMessage, callback) {
     // Process Claude request asynchronously and deliver via APNS
@@ -145,6 +145,9 @@ export function createChatMessageHandler(services) {
         directResult: !!result?.result,
         directResultType: typeof result?.result,
         directResultLength: result?.result?.length || 0,
+        // SIGTERM detection
+        isSigterm: !!result?.isSigterm,
+        sigtermReason: result?.sigtermReason,
       });
 
       // Extract the Claude session ID from the response
@@ -204,34 +207,50 @@ export function createChatMessageHandler(services) {
           content = result.result;
         } else {
           // Streaming completed but no content accumulated
-          // This can happen if Claude hasn't responded yet or if there's a genuine issue
-          logger.info('Streaming response pending or empty', {
+          // Check if it's SIGTERM before giving up
+          if (!result?.isSigterm) {
+            logger.info('Streaming response pending or empty', {
+              requestId: msgRequestId,
+              sessionId: claudeSessionId,
+              source: result?.source,
+              hasResult: !!result?.result,
+            });
+
+            // Don't send anything - let the stream complete naturally
+            // The stall detection will handle truly stuck operations
+            callback(null, { success: true, sessionId: claudeSessionId });
+            return;
+          }
+        }
+      } else {
+        // Non-streaming empty response - check if it's SIGTERM before giving up
+        if (!result?.isSigterm) {
+          logger.warn('Non-streaming response was empty', {
             requestId: msgRequestId,
             sessionId: claudeSessionId,
-            source: result?.source,
-            hasResult: !!result?.result,
+            hasResponses:
+              typeof result?.response === 'object' ? !!result?.response?.responses : false,
+            responsesCount:
+              typeof result?.response === 'object' ? result?.response?.responses?.length || 0 : 0,
+            responseType: typeof result?.response,
           });
 
-          // Don't send anything - let the stream complete naturally
-          // The stall detection will handle truly stuck operations
+          // Don't send fallback - let stall detection handle truly stuck operations
           callback(null, { success: true, sessionId: claudeSessionId });
           return;
         }
-      } else {
-        // Non-streaming empty response - this is unusual but don't send fallback
-        logger.warn('Non-streaming response was empty', {
+      }
+
+      // If this was a SIGTERM, always use our continuation message instead of any partial response
+      if (result?.isSigterm) {
+        content =
+          "I've completed many tasks and need to pause here. Send another message to continue where I left off.";
+        logger.info('SIGTERM detected - replacing response with continuation message', {
           requestId: msgRequestId,
           sessionId: claudeSessionId,
-          hasResponses:
-            typeof result?.response === 'object' ? !!result?.response?.responses : false,
-          responsesCount:
-            typeof result?.response === 'object' ? result?.response?.responses?.length || 0 : 0,
-          responseType: typeof result?.response,
+          sigtermReason: result.sigtermReason,
+          originalContentLength: content.length,
         });
-
-        // Don't send fallback - let stall detection handle truly stuck operations
-        callback(null, { success: true, sessionId: claudeSessionId });
-        return;
       }
 
       // Check if message is too large for APNS
@@ -311,7 +330,7 @@ export function createChatMessageHandler(services) {
       // Report success to queue callback
       callback(null, { success: true, sessionId: claudeSessionId });
     } catch (error) {
-      // Determine error type and user-friendly message
+      // Regular error handling
       let userErrorMessage = 'Failed to process message';
       let errorType = 'PROCESSING_ERROR';
 
@@ -359,6 +378,24 @@ export function createChatMessageHandler(services) {
         logger.error('Failed to send error notification via APNS', {
           requestId: msgRequestId,
           error: pushError.message,
+        });
+      }
+
+      // Send error message via WebSocket to update UI state
+      try {
+        if (webSocketService && msgSessionId) {
+          webSocketService.sendError(msgSessionId, msgRequestId, userErrorMessage, errorType);
+          logger.info('Error message sent via WebSocket', {
+            requestId: msgRequestId,
+            sessionId: msgSessionId,
+            errorType,
+          });
+        }
+      } catch (wsError) {
+        logger.error('Failed to send WebSocket message', {
+          requestId: msgRequestId,
+          sessionId: msgSessionId,
+          error: wsError.message,
         });
       }
 

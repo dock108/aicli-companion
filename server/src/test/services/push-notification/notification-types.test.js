@@ -150,7 +150,7 @@ describe('NotificationTypes', () => {
         assert(notification);
       });
 
-      // Verify console log for large message
+      // Verify console log for large message requiring fetch
       assert(
         consoleLogSpy.mock.calls.some(
           (call) =>

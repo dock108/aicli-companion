@@ -8,11 +8,16 @@ const mockProvider = {
   shutdown: mock.fn(),
 };
 
+// Create a proper constructor function for Provider
+function MockProvider() {
+  return mockProvider;
+}
+
 const mockApn = {
-  Provider: mock.fn(() => mockProvider),
+  Provider: MockProvider,
 };
 
-// Mock fs module
+// Mock the fs module
 const mockFs = {
   existsSync: mock.fn(() => true),
 };
@@ -32,13 +37,20 @@ describe('APNsClient', () => {
     // Reset mocks
     mockProvider.send.mock.resetCalls();
     mockProvider.shutdown.mock.resetCalls();
-    mockApn.Provider.mock.resetCalls();
     mockFs.existsSync.mock.resetCalls();
 
-    client = new APNsClient();
+    // Reset mockFs.existsSync to return true by default
+    mockFs.existsSync.mock.mockImplementation(() => true);
 
-    // Override imports with mocks (since we can't mock ES modules directly)
-    // We'll test the logic by mocking the provider after initialization
+    // Track Provider calls
+    mockApn.providerCalls = [];
+    mockApn.Provider = function (options) {
+      mockApn.providerCalls.push(options);
+      return mockProvider;
+    };
+
+    // Create a new client with mocked apn and fs modules
+    client = new APNsClient(mockApn, mockFs);
   });
 
   afterEach(() => {
@@ -52,7 +64,7 @@ describe('APNsClient', () => {
     Object.assign(process.env, originalEnv);
   });
 
-  describe.skip('initialize', () => {
+  describe('initialize', () => {
     it('should initialize with config object', () => {
       const config = {
         keyPath: '/path/to/key.p8',
@@ -62,21 +74,23 @@ describe('APNsClient', () => {
         production: true,
       };
 
-      // Mock fs.existsSync by overriding the method
-      const originalExists = global.fs?.existsSync;
-      if (global.fs) {
-        global.fs.existsSync = () => true;
-      }
-
       client.initialize(config);
 
-      // Since we can't mock the import, we verify the state
+      // Verify initialization was successful
       assert.strictEqual(client.bundleId, 'com.test.app');
+      assert.strictEqual(client.isConfigured, true);
+      assert.strictEqual(client.provider, mockProvider);
+      assert.strictEqual(mockApn.providerCalls.length, 1);
 
-      // Restore
-      if (global.fs && originalExists) {
-        global.fs.existsSync = originalExists;
-      }
+      // Verify Provider was called with correct options
+      assert.deepStrictEqual(mockApn.providerCalls[0], {
+        token: {
+          key: '/path/to/key.p8',
+          keyId: 'KEY123',
+          teamId: 'TEAM456',
+        },
+        production: true,
+      });
     });
 
     it('should initialize with environment variables', () => {
@@ -86,11 +100,12 @@ describe('APNsClient', () => {
       process.env.APNS_BUNDLE_ID = 'com.env.app';
       process.env.APNS_PRODUCTION = 'true';
 
-      // We can't fully test initialization due to import limitations
-      // But we can verify the method doesn't throw
-      assert.doesNotThrow(() => {
-        client.initialize();
-      });
+      client.initialize();
+
+      // Verify initialization was successful
+      assert.strictEqual(client.bundleId, 'com.env.app');
+      assert.strictEqual(client.isConfigured, true);
+      assert.strictEqual(client.provider, mockProvider);
     });
 
     it('should handle missing configuration', () => {
@@ -106,34 +121,47 @@ describe('APNsClient', () => {
     });
 
     it('should handle missing key file', () => {
+      // Override the fs mock for this test
+      mockFs.existsSync.mock.mockImplementation(() => false);
+
       const config = {
         keyPath: '/nonexistent/key.p8',
         keyId: 'KEY123',
         teamId: 'TEAM456',
+        bundleId: 'com.test.app',
       };
 
-      // The real implementation would check fs.existsSync
-      // We verify it doesn't throw
-      assert.doesNotThrow(() => {
-        client.initialize(config);
-      });
+      client.initialize(config);
+
+      // Should not initialize provider when file doesn't exist
+      assert.strictEqual(client.isConfigured, false);
+      assert.strictEqual(client.provider, null);
+      // But bundleId should not be set since we return early
+      assert.strictEqual(client.bundleId, null);
     });
 
-    it('should handle initialization errors', () => {
+    it('should handle initialization errors gracefully', () => {
+      // Make Provider throw an error
+      mockApn.Provider = function () {
+        throw new Error('Provider creation failed');
+      };
+
       const config = {
         keyPath: '/path/to/key.p8',
         keyId: 'KEY123',
         teamId: 'TEAM456',
+        bundleId: 'com.test.app',
       };
 
-      // Force an error by manipulating the client
-      client.Provider = () => {
-        throw new Error('Provider error');
-      };
-
+      // The initialize method catches errors
       assert.doesNotThrow(() => {
         client.initialize(config);
       });
+
+      // Verify it didn't configure when error occurred
+      assert.strictEqual(client.isConfigured, false);
+      assert.strictEqual(client.provider, null);
+      assert.strictEqual(client.bundleId, null);
     });
 
     it('should set production mode from NODE_ENV', () => {
@@ -141,17 +169,40 @@ describe('APNsClient', () => {
       process.env.APNS_KEY_PATH = '/env/key.p8';
       process.env.APNS_KEY_ID = 'ENVKEY';
       process.env.APNS_TEAM_ID = 'ENVTEAM';
+      process.env.APNS_BUNDLE_ID = 'com.prod.app';
 
       client.initialize();
 
-      // We verify the method completes without error
-      assert.doesNotThrow(() => {
-        client.initialize();
-      });
+      assert.strictEqual(client.bundleId, 'com.prod.app');
+      assert.strictEqual(client.isConfigured, true);
+
+      // Verify production mode was set
+      assert.strictEqual(mockApn.providerCalls[0].production, true);
+    });
+
+    it('should prefer config.production over NODE_ENV', () => {
+      process.env.NODE_ENV = 'production';
+
+      const config = {
+        keyPath: '/path/to/key.p8',
+        keyId: 'KEY123',
+        teamId: 'TEAM456',
+        bundleId: 'com.test.app',
+        production: false, // Explicitly set to false
+      };
+
+      client.initialize(config);
+
+      // Verify initialization was successful
+      assert.strictEqual(client.bundleId, 'com.test.app');
+      assert.strictEqual(client.isConfigured, true);
+
+      // Verify production was set to false despite NODE_ENV
+      assert.strictEqual(mockApn.providerCalls[0].production, false);
     });
   });
 
-  describe.skip('send', () => {
+  describe('send', () => {
     beforeEach(() => {
       // Set up a mock provider
       client.provider = mockProvider;

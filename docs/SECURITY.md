@@ -1,385 +1,228 @@
-# Security Configuration Guide
+# Security Model: Prompt-Based Trust Architecture
 
 ## Overview
 
-Claude Companion provides comprehensive security controls to manage what commands Claude can execute and which directories it can access. This guide explains how to configure and use these security features.
+AICLI Companion uses a **prompt-based security model** with `--dangerously-skip-permissions` for optimal performance and reliability. Security is enforced through carefully crafted system prompts rather than CLI-level restrictions.
 
-## Quick Start
+> ⚠️ **Important**: This system trusts Claude Code CLI completely and relies on prompt-based guidelines for security boundaries. It is designed for trusted environments where users understand they are granting full system access to an AI assistant.
 
-### Default Security
+## Security Architecture
 
-By default, Claude Companion runs with the **Standard** security preset, which:
-- Blocks obviously dangerous commands (rm -rf /, format, etc.)
-- Requires confirmation for destructive operations
-- Enables audit logging
-- Allows operations in all directories (until you configure safe directories)
+### Core Principle: Trust with Guidance
 
-### Setting Safe Directories
+Instead of technical restrictions, we use comprehensive system prompts that:
+- Clearly define allowed vs restricted operations  
+- Establish project vs workspace boundaries
+- Provide explicit security guidelines to Claude
+- Rely on Claude's adherence to instructions
 
-To restrict Claude to specific directories, set the `AICLI_SAFE_DIRECTORIES` environment variable:
+### Why This Approach?
 
-```bash
-# In server/.env
-AICLI_SAFE_DIRECTORIES=/Users/username/projects,/Users/username/documents,/tmp
+1. **Eliminates SIGTERM Issues**: No more tool limits causing interrupted conversations
+2. **Better Performance**: No permission prompts or delays during operation
+3. **Cleaner Codebase**: Removes complex restart and session management logic
+4. **More Reliable**: Fewer failure points and edge cases
+5. **Appropriate for AI**: AI assistants work best with clear guidelines, not artificial barriers
+
+## Operating Modes
+
+### Project Mode
+When working within a specific project directory:
+
+```
+✅ ALLOWED WITHIN PROJECT:
+- Full file system access (read, write, edit, delete)
+- Execute any Bash commands and tools
+- Create, modify, and delete files and directories
+- Install dependencies and run development tools
+
+⛔ RESTRICTED OUTSIDE PROJECT:
+- READ-ONLY access to files outside project (reference only)
+- NO writing, editing, or deleting files outside project scope
+- NO executing commands that modify system or other projects
+- NO accessing sensitive files (credentials, SSH keys, system configs)
 ```
 
-### Choosing a Security Preset
+### Workspace Mode
+When operating in cross-project workspace mode:
 
-Three presets are available:
+```
+✅ ALLOWED OPERATIONS:
+📖 READ-ONLY ANALYSIS:
+- Browse and read files across ALL existing projects
+- Analyze project structures and dependencies
+- Compare implementations between projects
 
-1. **Unrestricted** - No restrictions (use with caution)
-2. **Standard** - Balanced security (default)
-3. **Restricted** - Read-only mode with minimal permissions
+🆕 NEW PROJECT CREATION:
+- Create entirely new project directories
+- Generate starter files for NEW projects only
+- Set up initial configuration files
 
-Set via environment variable:
-```bash
-AICLI_SECURITY_PRESET=standard
+⛔ STRICT RESTRICTIONS:
+- NO modifications to ANY existing project files
+- NO writing/editing in established projects
+- NO Bash commands that modify existing projects
 ```
 
-## Security Features
+## Security Prompts
 
-### 1. Command Filtering
+### Project Mode Prompt Structure
+```
+[PROJECT MODE SECURITY CONTEXT]
 
-Block specific commands or patterns:
+⚠️ CRITICAL: You are operating with FULL SYSTEM ACCESS via --dangerously-skip-permissions.
+   The security model relies entirely on your adherence to these guidelines.
 
-```bash
-# Block individual commands
-AICLI_BLOCKED_COMMANDS=rm -rf,format,diskutil erase
+🎯 PROJECT SCOPE: /path/to/project
 
-# Block all commands (restricted mode)
-AICLI_BLOCKED_COMMANDS=*
+✅ ALLOWED WITHIN PROJECT DIRECTORY: [detailed permissions]
+⛔ RESTRICTED OUTSIDE PROJECT DIRECTORY: [detailed restrictions]
+🛡️ SECURITY PRINCIPLES: [guidelines and verification steps]
+
+USER REQUEST: [actual user prompt]
 ```
 
-### 2. Directory Access Control
+### Workspace Mode Prompt Structure
+```
+[WORKSPACE MODE SECURITY CONTEXT]
 
-Limit Claude to specific directories:
+⚠️ CRITICAL: You are operating with FULL SYSTEM ACCESS via --dangerously-skip-permissions.
+   The security model relies entirely on your adherence to these workspace restrictions.
 
-```bash
-# Only allow operations in these directories
-AICLI_SAFE_DIRECTORIES=/Users/me/projects,/tmp
+🌐 WORKSPACE SCOPE: Cross-project operations and new project creation
 
-# Claude will be blocked from:
-# - System directories (/etc, /usr, /bin)
-# - Home directory (except allowed paths)
-# - Root directory operations
+✅ ALLOWED OPERATIONS: [detailed read-only and creation permissions]
+⛔ STRICT RESTRICTIONS: [detailed modification restrictions]
+🛡️ SECURITY PRINCIPLES: [guidelines and verification steps]
+
+USER REQUEST: [actual user prompt]
 ```
 
-### 3. Destructive Command Protection
+## Configuration
 
-Require confirmation for potentially destructive commands:
+### Enabling Prompt-Based Security
 
-```bash
-AICLI_DESTRUCTIVE_COMMANDS_REQUIRE_CONFIRMATION=true
-AICLI_DESTRUCTIVE_COMMANDS=rm -rf,mv,dd,format
-```
+In `server/src/services/aicli-process-runner/config.js`:
 
-### 4. Read-Only Mode
-
-Prevent all write operations:
-
-```bash
-AICLI_READONLY_MODE=true
-```
-
-### 5. File Size Limits
-
-Limit the size of files Claude can create/modify:
-
-```bash
-# 10MB limit (in bytes)
-AICLI_MAX_FILE_SIZE=10485760
-```
-
-### 6. Audit Logging
-
-Track all security validations:
-
-```bash
-AICLI_ENABLE_AUDIT=true
-```
-
-View audit logs via API:
-```bash
-curl http://localhost:3001/api/security/audit
-```
-
-## Configuration Methods
-
-### Method 1: Environment Variables (Server)
-
-Edit `server/.env`:
-
-```env
-# Security Configuration
-AICLI_SECURITY_PRESET=standard
-AICLI_SAFE_DIRECTORIES=/Users/me/projects,/Users/me/documents
-AICLI_BLOCKED_COMMANDS=rm -rf /,format
-AICLI_DESTRUCTIVE_COMMANDS_REQUIRE_CONFIRMATION=true
-AICLI_MAX_FILE_SIZE=10485760
-AICLI_READONLY_MODE=false
-AICLI_ENABLE_AUDIT=true
-```
-
-### Method 2: iOS App
-
-1. Open Settings in the Claude Companion iOS app
-2. Navigate to Security section
-3. Choose a security preset or customize:
-   - Toggle command filtering
-   - Add/remove safe directories
-   - Configure blocked commands
-   - Enable read-only mode
-
-### Method 3: macOS Host App
-
-1. Open Claude Companion Host preferences
-2. Go to Security tab
-3. Configure:
-   - Security preset
-   - Safe directories
-   - Blocked command patterns
-   - Advanced options
-
-### Method 4: API Configuration
-
-Update settings programmatically:
-
-```bash
-# Update security configuration
-curl -X PUT http://localhost:3001/api/security/settings \
-  -H "Content-Type: application/json" \
-  -d '{
-    "preset": "standard",
-    "safeDirectories": ["/Users/me/projects"],
-    "blockedCommands": ["rm -rf", "format"],
-    "readOnlyMode": false
-  }'
-
-# Test a command
-curl -X POST http://localhost:3001/api/security/test \
-  -H "Content-Type: application/json" \
-  -d '{
-    "command": "rm -rf /",
-    "workingDirectory": "/tmp"
-  }'
-```
-
-## Security API Endpoints
-
-### GET /api/security/settings
-Get current security configuration
-
-### PUT /api/security/settings
-Update security configuration
-
-### GET /api/security/audit
-View security audit log
-
-### POST /api/security/test
-Test if a command would be allowed
-
-### GET /api/security/presets
-View available security presets
-
-### GET /api/security/permissions
-View pending permission requests
-
-### POST /api/security/permissions/:id/approve
-Approve a permission request
-
-### POST /api/security/permissions/:id/deny
-Deny a permission request
-
-## Security Presets
-
-### Unrestricted
-```json
-{
-  "blockedCommands": [],
-  "requireConfirmation": false,
-  "readOnlyMode": false
+```javascript
+export class AICLIConfig {
+  constructor(options = {}) {
+    // Permission configuration
+    this.permissionMode = 'default';
+    this.allowedTools = ['Read', 'Write', 'Edit']; // Not used when skipPermissions = true
+    this.disallowedTools = [];
+    this.skipPermissions = true; // 🔑 This enables prompt-based security
+  }
 }
 ```
-**Use Case**: Development environments where you trust Claude completely
 
-### Standard (Default)
-```json
-{
-  "blockedCommands": [
-    "rm -rf /",
-    "rm -rf /*",
-    "format",
-    "diskutil eraseDisk",
-    "dd if=/dev/zero of=/dev/",
-    "mkfs",
-    ":(){ :|:& };:"
-  ],
-  "requireConfirmation": true,
-  "readOnlyMode": false
-}
-```
-**Use Case**: Normal development work with safety guardrails
+### No Environment Variables Required
 
-### Restricted
-```json
-{
-  "blockedCommands": ["*"],
-  "requireConfirmation": true,
-  "readOnlyMode": true
-}
-```
-**Use Case**: Code review, analysis, or untrusted environments
+Unlike traditional permission systems, this approach requires no additional configuration:
+- No `AICLI_SAFE_DIRECTORIES`
+- No `AICLI_BLOCKED_COMMANDS` 
+- No `AICLI_SECURITY_PRESET`
+- No complex permission API endpoints
 
-## Advanced Features
+## Benefits
 
-### Permission Requests
+### ✅ Advantages
+- **No SIGTERM interruptions**: Conversations can continue indefinitely
+- **Simplified architecture**: Removes hundreds of lines of complex restart logic
+- **Better user experience**: No permission prompts or delays
+- **More reliable**: Fewer failure modes and edge cases
+- **Appropriate trust model**: Users understand they're granting AI access
 
-When destructive commands require confirmation:
-
-1. Claude requests permission via the server
-2. Server sends push notification to iOS/macOS apps
-3. User approves/denies in the app
-4. Command proceeds or is blocked based on response
-
-### Activity Monitoring
-
-Track all Claude operations:
-
-- Command executions (allowed/blocked)
-- File operations
-- Security violations
-- Error patterns
-- Suspicious activity alerts
-
-### Emergency Stop
-
-Immediately halt all Claude operations:
-
-1. iOS App: Settings → Security → Emergency Stop
-2. macOS App: Menu Bar → Stop All Operations
-3. API: `POST /api/security/emergency-stop`
+### ⚠️ Considerations
+- **Requires trust**: Users must trust Claude to follow prompt guidelines
+- **No technical enforcement**: Security boundaries are guidance-based
+- **User responsibility**: Users should understand the implications of full access
 
 ## Best Practices
 
-### For Development
+### For Developers
+1. **Understand the model**: You're granting full system access to Claude
+2. **Use project mode**: Work within specific project directories when possible
+3. **Review operations**: Be aware of what Claude is doing in your environment
+4. **Backup important data**: As with any development tool that has write access
 
-```env
-AICLI_SECURITY_PRESET=standard
-AICLI_SAFE_DIRECTORIES=~/projects,~/documents,/tmp
-AICLI_ENABLE_AUDIT=true
-```
+### For Organizations
+1. **Train users**: Ensure users understand the trust-based security model
+2. **Use isolated environments**: Consider running on VMs or containers for additional isolation
+3. **Monitor activity**: Review logs and activity patterns
+4. **Have incident response**: Know how to respond if something goes wrong
 
-### For Production/Shared Environments
+### For System Administrators
+1. **Network isolation**: Limit network access from the Claude CLI environment
+2. **File system isolation**: Use containerization or VMs for additional boundaries
+3. **Regular backups**: Ensure critical systems are backed up regularly
+4. **Monitoring**: Watch for unusual activity patterns
 
-```env
-AICLI_SECURITY_PRESET=restricted
-AICLI_SAFE_DIRECTORIES=/specific/project/path
-AICLI_READONLY_MODE=true
-AICLI_ENABLE_AUDIT=true
-```
+## Security Principles
 
-### For Code Review
+### Trust-Based Architecture
+This system is built on the principle that:
+- Claude Code CLI is a legitimate development tool
+- Users understand they're granting file system access to an AI
+- Clear prompts effectively guide AI behavior
+- The benefits of uninterrupted operation outweigh technical restrictions
 
-```env
-AICLI_SECURITY_PRESET=restricted
-AICLI_READONLY_MODE=true
-AICLI_ALLOWED_TOOLS=Read,Grep,List
-```
+### Defense in Depth
+While relying on prompt-based security, consider additional layers:
+- **Environment isolation**: Use VMs or containers
+- **File system permissions**: Set appropriate user permissions
+- **Network restrictions**: Limit outbound network access
+- **Regular monitoring**: Watch for unexpected behavior
 
-## Troubleshooting
+### Incident Response
+If something goes wrong:
+1. **Stop the server**: Kill the process immediately
+2. **Review logs**: Check what operations were performed
+3. **Assess damage**: Determine what files were affected
+4. **Restore from backup**: Use your backup strategy
+5. **Update prompts**: Refine security guidance if needed
 
-### Commands Being Blocked
+## Migration from Permission-Based Systems
 
-1. Check audit log: `GET /api/security/audit`
-2. Test command: `POST /api/security/test`
-3. Review blocked patterns in configuration
-4. Ensure working directory is in safe directories list
+If migrating from systems with technical permission controls:
 
-### Permission Requests Not Arriving
+1. **Review current restrictions**: Understand what was previously blocked
+2. **Update documentation**: Ensure users understand the new trust model  
+3. **Test in safe environments**: Verify the system works as expected
+4. **Train users**: Educate on the prompt-based security approach
+5. **Monitor closely**: Watch activity during the transition period
 
-1. Verify push notifications are configured
-2. Check iOS/macOS app is connected
-3. Review server logs for errors
-4. Ensure `AICLI_DESTRUCTIVE_COMMANDS_REQUIRE_CONFIRMATION=true`
+## Monitoring and Logging
 
-### Security Settings Not Applied
+### What to Monitor
+- File operations outside project directories
+- Unusual command execution patterns
+- Failed operations or errors
+- Network activity from Claude CLI
+- Resource usage patterns
 
-1. Restart server after configuration changes
-2. Verify environment variables are set correctly
-3. Check for typos in configuration
-4. Review server startup logs
+### Log Analysis
+Look for patterns like:
+- Operations outside expected project boundaries
+- Repeated failed operations
+- Unusual file access patterns
+- Commands not typical for development work
 
-## Security Considerations
+## Support and Troubleshooting
 
-### What This Protects Against
+### Common Issues
+1. **Claude not respecting boundaries**: Review and strengthen prompt language
+2. **Unexpected file modifications**: Check that project paths are correctly identified
+3. **User confusion**: Ensure users understand the trust-based model
 
-- Accidental deletion of important files
-- Unauthorized access to system directories
-- Execution of malicious commands
-- Unintended modifications outside project scope
-- Resource exhaustion from large file operations
+### Getting Help
+1. Check server logs for operation details
+2. Review the prompt templates for clarity
+3. Verify project path detection is working correctly
+4. Ensure users understand they have full system access
 
-### What This Doesn't Protect Against
+## Conclusion
 
-- Malicious code within allowed directories
-- Logic bugs in allowed operations
-- Network-based attacks
-- Supply chain attacks in dependencies
-- Side-channel attacks
+This prompt-based security model prioritizes reliability and user experience while maintaining appropriate boundaries through clear communication with Claude. It's designed for environments where users understand and accept the trade-offs of granting full system access to an AI assistant in exchange for better performance and reliability.
 
-### Recommendations
-
-1. Always use safe directories in production
-2. Enable audit logging for compliance
-3. Regularly review audit logs for suspicious patterns
-4. Use restricted mode for untrusted contexts
-5. Keep blocked command list updated
-6. Test security configuration regularly
-7. Monitor activity for anomalies
-8. Have an incident response plan
-
-## Examples
-
-### Secure Development Setup
-
-```env
-# Balanced security for daily development
-AICLI_SECURITY_PRESET=standard
-AICLI_SAFE_DIRECTORIES=~/projects,~/documents
-AICLI_BLOCKED_COMMANDS=rm -rf /,format,:(){ :|:& };:
-AICLI_DESTRUCTIVE_COMMANDS_REQUIRE_CONFIRMATION=true
-AICLI_MAX_FILE_SIZE=52428800  # 50MB
-AICLI_ENABLE_AUDIT=true
-```
-
-### High Security Setup
-
-```env
-# Maximum security for sensitive environments
-AICLI_SECURITY_PRESET=restricted
-AICLI_SAFE_DIRECTORIES=/var/app/current
-AICLI_READONLY_MODE=true
-AICLI_ALLOWED_TOOLS=Read,Grep
-AICLI_ENABLE_AUDIT=true
-```
-
-### Testing Environment
-
-```env
-# Permissive setup for testing
-AICLI_SECURITY_PRESET=unrestricted
-AICLI_SAFE_DIRECTORIES=/tmp/test
-AICLI_ENABLE_AUDIT=true
-```
-
-## Support
-
-For security-related issues or questions:
-
-1. Check the audit log for details
-2. Review this documentation
-3. Check server logs: `npm run logs`
-4. Report security vulnerabilities privately
-5. Open an issue for feature requests
-
-Remember: Security is a shared responsibility. Configure appropriately for your use case and regularly review your security posture.
+The key to success with this model is user education, appropriate environment isolation, and clear prompt design that effectively communicates security expectations to Claude.

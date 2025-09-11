@@ -17,7 +17,7 @@ export class HealthMonitor {
       this.checkAllProcessHealth().catch((error) => {
         console.error('Health check error:', error);
       });
-    }, 30000); // Check every 30 seconds
+    }, 300000); // Check every 5 minutes - sufficient for detecting truly dead processes
   }
 
   stopProcessHealthMonitoring() {

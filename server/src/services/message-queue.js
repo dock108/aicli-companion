@@ -21,7 +21,7 @@ export const MessagePriority = {
 const DEFAULT_CONFIG = {
   maxQueueSize: 1000, // Maximum messages per queue
   processingTimeout: 300000, // 5 minutes timeout for processing
-  retryAttempts: 3, // Number of retry attempts
+  retryAttempts: 0, // Number of retry attempts - disabled to prevent auto-retry on SIGTERM
   retryDelay: 1000, // Delay between retries (ms)
   allowInterruption: true, // Allow high priority to interrupt processing
   metricsInterval: 60000, // Emit metrics every minute

@@ -14,11 +14,11 @@ export class AICLIConfig {
     this._aicliCommandPromise = null;
     this.spawnFunction = options.spawnFunction || spawn;
 
-    // Permission configuration
+    // Permission configuration - using prompt-based security
     this.permissionMode = 'default';
-    this.allowedTools = ['Read', 'Write', 'Edit'];
+    this.allowedTools = []; // Not used when skipPermissions = true
     this.disallowedTools = [];
-    this.skipPermissions = false;
+    this.skipPermissions = true; // Enable --dangerously-skip-permissions for prompt-based security
 
     // Initialize the command immediately
     this.initializeCommand();

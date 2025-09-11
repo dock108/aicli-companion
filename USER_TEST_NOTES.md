@@ -98,11 +98,11 @@ Returning users face a frustrating delay that makes the app feel slow and unresp
 
 ---
 
-## Test Note 9: iPad Keyboard Issue After Sending Message
-**Date**: 2025-09-09
+## Test Note 9: iOS Keyboard Issue After Sending Message
+**Date**: 2025-09-09 (Updated: 2025-09-10)
 
 ### Issue Description
-On iPad, when the keyboard remains open after hitting send, the UI goes wonky AND the message is sent but still appears in the text entry box.
+On iOS devices (both iPhone and iPad), when the keyboard remains open after hitting send, the UI goes wonky AND the message is sent but still appears in the text entry box.
 
 ### Observed Behavior
 - Keyboard stays open after tapping send button
@@ -112,18 +112,81 @@ On iPad, when the keyboard remains open after hitting send, the UI goes wonky AN
 - Creates confusion about whether message was actually sent
 
 ### Impact
-Users may accidentally send duplicate messages thinking the first one didn't go through, and the wonky UI creates a poor user experience on iPad.
+Users may accidentally send duplicate messages thinking the first one didn't go through, and the wonky UI creates a poor user experience on iOS devices.
 
 ### Potential Causes
-- iPad-specific keyboard dismissal behavior
+- iOS keyboard dismissal behavior
 - Text field not clearing properly after send
 - Race condition between send action and UI update
-- iPad multitasking or keyboard dock mode interfering
-- Focus management issues specific to iPadOS
+- iOS multitasking or keyboard dock mode interfering (iPad)
+- Focus management issues in iOS
 
 ### Areas to Investigate
-- TextField focus and keyboard dismissal on iPad
+- TextField focus and keyboard dismissal on iOS
 - Message send completion handler and UI cleanup
-- iPad-specific keyboard behaviors and split view scenarios
+- iOS keyboard behaviors and split view scenarios (iPad)
 - Ensure text field is cleared immediately after send validation
 - Test with external keyboards and keyboard dock modes
+- Test on both iPhone and iPad to identify any device-specific behaviors
+
+---
+
+## Test Note 10: Planning Mode Persistence Issue
+**Date**: 2025-09-10
+
+### Issue Description
+Claude sometimes gets stuck in planning mode even when the interface shows it has returned to normal mode.
+
+### Observed Behavior
+- User interface displays "normal" mode status
+- Claude continues to operate as if in planning mode
+- Cannot modify code files despite UI showing normal mode
+- Mode state appears to be out of sync between UI and actual behavior
+
+### Impact
+Users cannot get Claude to execute code changes even after planning mode appears to be disabled, requiring workarounds or session restarts to resolve.
+
+### Potential Causes
+- State synchronization issue between UI and backend
+- Mode transition not completing properly
+- Cached mode state not updating
+- Race condition during mode switching
+- Session state persistence issue
+
+### Areas to Investigate
+- Mode state management and synchronization
+- Verify mode transitions are atomic and complete
+- Check for any caching layers that might hold stale mode state
+- Ensure UI mode indicator reflects actual operational mode
+- Add logging to track mode transitions and identify where desync occurs
+
+---
+
+## Test Note 11: Chat Scroll Position on Reopen
+**Date**: 2025-09-10
+
+### Issue Description
+When reopening the app, the chat thread doesn't scroll to the bottom (latest messages) as expected. Instead, it opens near the top of the conversation, typically around the second response.
+
+### Observed Behavior
+- Chat opens at an arbitrary position near the top of the thread
+- Not at the very top, but around the second message/response
+- Users must manually scroll down to see recent messages
+- Latest conversation context is not immediately visible
+
+### Impact
+Users lose their place in the conversation and must manually navigate to recent messages, creating friction when resuming a conversation and potentially missing new responses.
+
+### Potential Causes
+- Scroll position restoration using incorrect anchor point
+- ScrollView state being restored to a saved position instead of bottom
+- Race condition between content loading and scroll positioning
+- Incorrect calculation of content height during initial render
+- Default scroll behavior overriding intended position
+
+### Areas to Investigate
+- ScrollView initialization and position setting
+- Check if scroll position is being persisted and restored incorrectly
+- Ensure scroll-to-bottom occurs after all messages are rendered
+- Verify content height calculations are complete before positioning
+- Consider adding explicit scroll-to-bottom on app resume/reopen

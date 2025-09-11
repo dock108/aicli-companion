@@ -3,7 +3,6 @@ import XCTest
 
 @available(iOS 16.0, macOS 13.0, *)
 final class LoadingStateCoordinatorTests: XCTestCase {
-    
     var coordinator: LoadingStateCoordinator!
     
     override func setUp() {

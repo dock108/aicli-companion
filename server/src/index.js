@@ -32,6 +32,7 @@ import { pushNotificationService } from './services/push-notification.js';
 import { tunnelService } from './services/tunnel.js';
 import { deviceRegistry } from './services/device-registry.js';
 import { messageQueueManager } from './services/message-queue.js';
+import { webSocketService } from './services/websocket-service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -293,6 +294,9 @@ class AICLICompanionServer {
 
     // Store in global for access from other modules
     global.wss = this.wss;
+
+    // Initialize WebSocket service with broadcast function
+    webSocketService.setBroadcastFunction(this.broadcastToSession.bind(this));
 
     // Handle WebSocket connections
     this.wss.on('connection', (ws, req) => {

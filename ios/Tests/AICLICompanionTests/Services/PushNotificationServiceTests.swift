@@ -3,7 +3,6 @@ import XCTest
 
 @available(iOS 16.0, macOS 13.0, *)
 final class PushNotificationServiceTests: XCTestCase {
-    
     // MARK: - Basic Logic Tests (No UserNotifications required)
     
     func testServiceExists() {
@@ -298,7 +297,6 @@ final class PushNotificationServiceTests: XCTestCase {
 // MARK: - Test Extensions
 
 extension PushNotificationServiceTests {
-    
     func testEdgeCaseHandling() {
         // Test various edge cases in data handling
         

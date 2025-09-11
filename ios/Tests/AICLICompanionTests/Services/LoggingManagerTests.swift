@@ -4,7 +4,6 @@ import os.log
 
 @available(iOS 16.0, macOS 13.0, *)
 final class LoggingManagerTests: XCTestCase {
-    
     var logger: LoggingManager!
     
     // Helper to check if we're in CI

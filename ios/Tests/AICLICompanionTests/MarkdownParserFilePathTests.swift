@@ -3,7 +3,6 @@ import XCTest
 
 @available(iOS 17.0, macOS 14.0, *)
 final class MarkdownParserFilePathTests: XCTestCase {
-    
     func testFilePathDetection() {
         // Test various file path formats
         let testCases = [
@@ -25,7 +24,7 @@ final class MarkdownParserFilePathTests: XCTestCase {
             ("Check utils/helper.js:123", ["utils/helper.js"]),
             
             // Mixed content
-            ("Fixed bugs in `server.js`, utils/config.json and • README.md", 
+            ("Fixed bugs in `server.js`, utils/config.json and • README.md",
              ["server.js", "utils/config.json", "README.md"])
         ]
         
@@ -40,14 +39,14 @@ final class MarkdownParserFilePathTests: XCTestCase {
                 }
             }
             
-            XCTAssertEqual(Set(foundFiles), Set(expectedFiles), 
+            XCTAssertEqual(Set(foundFiles), Set(expectedFiles),
                           "Failed to detect all files in: \(input)")
             
             // Also verify that file paths have links
             for run in attributedString.runs {
                 if let metadata = attributedString[run.range][FilePathAttributeKey.self] {
                     let link = attributedString[run.range].link
-                    XCTAssertNotNil(link, 
+                    XCTAssertNotNil(link,
                                    "File path \(metadata.path) should have a link attribute")
                     if let link = link {
                         XCTAssertTrue(link.absoluteString.starts(with: "file://"),
@@ -81,7 +80,7 @@ final class MarkdownParserFilePathTests: XCTestCase {
             "Time is 3.14", // Decimal numbers
             "IP: 192.168.1.1", // IP addresses
             "Just text.", // Sentence ending with period
-            "www.example.com", // Domain names without protocol
+            "www.example.com" // Domain names without protocol
         ]
         
         for input in invalidCases {
@@ -94,7 +93,7 @@ final class MarkdownParserFilePathTests: XCTestCase {
                 }
             }
             
-            XCTAssertEqual(foundFiles.count, 0, 
+            XCTAssertEqual(foundFiles.count, 0,
                           "Should not detect files in: \(input)")
         }
     }

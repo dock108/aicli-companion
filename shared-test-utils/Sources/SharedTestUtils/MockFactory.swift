@@ -2,9 +2,9 @@ import Foundation
 
 /// Unified factory for creating test data objects across iOS and macOS
 public struct MockFactory {
-    
+
     // MARK: - Common Message Creation
-    
+
     public static func createMessage(
         id: UUID = UUID(),
         content: String = "Test message",
@@ -20,7 +20,7 @@ public struct MockFactory {
             sessionId: sessionId
         )
     }
-    
+
     public static func createUserMessage(
         content: String = "Hello, Claude!",
         timestamp: Date = Date(),
@@ -35,7 +35,7 @@ public struct MockFactory {
             sessionId: sessionId
         )
     }
-    
+
     public static func createAssistantMessage(
         content: String = "Hello! How can I help you today?",
         timestamp: Date = Date(),
@@ -50,7 +50,7 @@ public struct MockFactory {
             sessionId: sessionId
         )
     }
-    
+
     public static func createSystemMessage(
         content: String = "System initialized",
         timestamp: Date = Date(),
@@ -64,9 +64,9 @@ public struct MockFactory {
             sessionId: "system"
         )
     }
-    
+
     // MARK: - Session Creation
-    
+
     public static func createSession(
         sessionId: String? = nil,
         deviceName: String = "Test Device",
@@ -80,9 +80,9 @@ public struct MockFactory {
             projectPath: projectPath
         )
     }
-    
+
     // MARK: - Conversation Creation
-    
+
     public static func createConversation(
         id: UUID = UUID(),
         projectPath: String = "/test/project",
@@ -100,9 +100,9 @@ public struct MockFactory {
             lastModified: createdAt
         )
     }
-    
+
     // MARK: - Log Entry Creation (macOS specific)
-    
+
     #if os(macOS)
     public static func createLogEntry(
         level: LogLevel = .info,
@@ -116,7 +116,7 @@ public struct MockFactory {
             timestamp: Date()
         )
     }
-    
+
     public static func createLogEntries(count: Int) -> [MockLogEntry] {
         (0..<count).map { index in
             let levels: [LogLevel] = [.debug, .info, .warning, .error]
@@ -128,9 +128,9 @@ public struct MockFactory {
         }
     }
     #endif
-    
+
     // MARK: - Batch Creation
-    
+
     public static func createMessageHistory(count: Int = 10) -> [MockMessage] {
         (0..<count).map { index in
             let isUserMessage = index % 2 == 0

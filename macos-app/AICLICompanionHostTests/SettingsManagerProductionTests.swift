@@ -12,7 +12,6 @@ import Combine
 
 @MainActor
 final class SettingsManagerProductionTests: XCTestCase {
-
     var settingsManager: SettingsManager!
     var cancellables: Set<AnyCancellable>!
     var originalValues: [String: Any] = [:]

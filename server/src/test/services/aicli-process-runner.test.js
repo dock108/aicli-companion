@@ -76,7 +76,8 @@ describe('AICLI Process Runner - Basic Tests', () => {
       assert.ok(args.includes('--dangerously-skip-permissions'));
     });
 
-    it('should add allowed tools to args', () => {
+    it('should add allowed tools to args when skip permissions is disabled', () => {
+      processRunner.setSkipPermissions(false); // Disable skip permissions first
       processRunner.setAllowedTools(['Read', 'Write']);
       const args = ['--print'];
       processRunner.addPermissionArgs(args);
@@ -84,7 +85,8 @@ describe('AICLI Process Runner - Basic Tests', () => {
       assert.ok(args.includes('--allowedTools'));
     });
 
-    it('should add disallowed tools to args', () => {
+    it('should add disallowed tools to args when skip permissions is disabled', () => {
+      processRunner.setSkipPermissions(false); // Disable skip permissions first
       processRunner.setDisallowedTools(['Bash']);
       const args = ['--print'];
       processRunner.addPermissionArgs(args);

@@ -11,7 +11,6 @@ import Combine
 
 @MainActor
 final class ServerManagerProductionTests: XCTestCase {
-
     var serverManager: ServerManager!
     var cancellables: Set<AnyCancellable>!
 

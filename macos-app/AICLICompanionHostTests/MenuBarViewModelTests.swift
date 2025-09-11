@@ -12,7 +12,6 @@ import AppKit
 
 @MainActor
 final class MenuBarViewModelTests: XCTestCase {
-
     var viewModel: MenuBarViewModel!
     var serverManager: ServerManager!
     var settingsManager: SettingsManager!
@@ -53,7 +52,7 @@ final class MenuBarViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.sessionCount, 0)
         XCTAssertNil(viewModel.publicURL)
         XCTAssertFalse(viewModel.showingQRCode)
-        XCTAssertTrue(viewModel.quickActions.count > 0)
+        XCTAssertTrue(!viewModel.quickActions.isEmpty)
     }
 
     func testQuickActionsSetup() {
@@ -377,7 +376,7 @@ final class MenuBarViewModelTests: XCTestCase {
         viewModel.$recentLogs
             .dropFirst()
             .sink { logs in
-                if logs.count > 0 {
+                if !logs.isEmpty {
                     expectation.fulfill()
                 }
             }

@@ -3,7 +3,6 @@ import XCTest
 
 @available(iOS 16.0, macOS 13.0, *)
 final class ChatModeTests: XCTestCase {
-    
     override func setUp() {
         super.setUp()
         // Clear any existing mode settings

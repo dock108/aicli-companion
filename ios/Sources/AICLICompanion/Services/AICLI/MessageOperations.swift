@@ -109,12 +109,26 @@ public class AICLIMessageOperations {
     
     func fetchLargeMessage(messageId: String) async throws -> (content: String, metadata: [String: Any]?) {
         // Fetch large message from server's message storage endpoint
-        guard let messageURL = connectionManager.buildURL(path: "/api/messages/\(messageId)") else {
+        // Build URL directly to avoid path component issues
+        guard let baseURL = connectionManager.currentBaseURL else {
             throw AICLICompanionError.invalidURL
         }
         
+        // Construct URL directly with proper path, handling trailing slash
+        var baseURLString = baseURL.absoluteString
+        if baseURLString.hasSuffix("/") {
+            baseURLString = String(baseURLString.dropLast())
+        }
+        let urlString = "\(baseURLString)/api/messages/\(messageId)"
+        guard let messageURL = URL(string: urlString) else {
+            throw AICLICompanionError.invalidURL
+        }
+        
+        print("📲 Fetching large message from: \(messageURL.absoluteString)")
+        
         var request = connectionManager.createAuthenticatedRequest(url: messageURL, method: "GET")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 30.0 // 30 second timeout for large messages
         
         let (data, response) = try await URLSession.shared.data(for: request)
         
@@ -123,19 +137,36 @@ public class AICLIMessageOperations {
         }
         
         guard httpResponse.statusCode == 200 else {
+            // Log error response for debugging
+            if let errorData = String(data: data, encoding: .utf8) {
+                print("❌ Fetch large message error (\(httpResponse.statusCode)): \(errorData)")
+            }
+            
             if httpResponse.statusCode == 404 {
                 throw AICLICompanionError.notFound("Message not found")
             }
             throw AICLICompanionError.serverError("HTTP \(httpResponse.statusCode)")
         }
         
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        guard let result = json?["result"] as? [String: Any],
+        // Log successful response for debugging
+        if let responseString = String(data: data, encoding: .utf8) {
+            print("✅ Fetch large message response: \(responseString.prefix(200))...")
+        }
+        
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            print("❌ Failed to parse JSON response")
+            throw AICLICompanionError.invalidResponse
+        }
+        
+        guard let result = json["result"] as? [String: Any],
               let content = result["content"] as? String else {
+            print("❌ Invalid response structure. Expected 'result' with 'content'")
+            print("❌ Actual JSON keys: \(Array(json.keys).joined(separator: ", "))")
             throw AICLICompanionError.invalidResponse
         }
         
         let metadata = result["metadata"] as? [String: Any]
+        print("✅ Successfully fetched large message: \(content.count) characters")
         return (content: content, metadata: metadata)
     }
     

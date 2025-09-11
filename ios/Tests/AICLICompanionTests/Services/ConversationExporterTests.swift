@@ -2,7 +2,6 @@ import XCTest
 @testable import AICLICompanion
 
 final class ConversationExporterTests: XCTestCase {
-    
     var exporter: ConversationExporter!
     var sampleConversation: Conversation!
     var multipleConversations: [Conversation]!

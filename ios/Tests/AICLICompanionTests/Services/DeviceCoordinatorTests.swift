@@ -4,7 +4,6 @@ import Combine
 
 @available(iOS 16.0, macOS 13.0, *)
 final class DeviceCoordinatorTests: XCTestCase {
-    
     var sut: DeviceCoordinator!
     var mockWebSocketManager: MockWebSocketManager!
     var cancellables: Set<AnyCancellable>!
@@ -437,7 +436,6 @@ class MockWebSocketManager: WebSocketManager {
 
 @available(iOS 16.0, macOS 13.0, *)
 extension DeviceCoordinatorTests {
-    
     func testFullDeviceCoordinationFlow() async throws {
         // Given
         let userId = "test-user"

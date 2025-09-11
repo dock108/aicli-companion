@@ -48,12 +48,14 @@ router.get('/:messageId', async (req, res) => {
     return sendNotFoundResponse(res, 'Message');
   }
 
-  // Return the message content
+  // Return the message content wrapped in result object (iOS expects this format)
   sendSuccessResponse(res, {
-    id: messageId,
-    content: message.content,
-    timestamp: message.timestamp,
-    metadata: message.metadata,
+    result: {
+      id: messageId,
+      content: message.content,
+      timestamp: message.timestamp,
+      metadata: message.metadata,
+    },
   });
 
   console.log(`📤 Delivered message ${messageId} (${message.content.length} chars)`);

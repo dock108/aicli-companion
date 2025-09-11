@@ -10,7 +10,6 @@ import XCTest
 
 @MainActor
 final class ServerManagerNetworkingTests: XCTestCase {
-
     var serverManager: ServerManager!
 
     override func setUp() async throws {

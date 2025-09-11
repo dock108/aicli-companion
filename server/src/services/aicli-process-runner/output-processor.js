@@ -16,7 +16,14 @@ export class OutputProcessor {
   /**
    * Process complete stdout from AICLI CLI
    */
-  processOutput(completeStdout, sessionId, promiseResolve, reject, requestId = null) {
+  processOutput(
+    completeStdout,
+    sessionId,
+    promiseResolve,
+    reject,
+    requestId = null,
+    sigtermInfo = null
+  ) {
     const sessionLogger = logger.child({ sessionId, requestId });
 
     try {
@@ -69,6 +76,7 @@ export class OutputProcessor {
           sessionId,
           isStreaming: true,
           metadata: result.metadata,
+          ...(sigtermInfo || {}), // Include SIGTERM info if present
         });
         return true;
       }
@@ -86,6 +94,7 @@ export class OutputProcessor {
           response: plainResult.response,
           sessionId,
           isStreaming: false,
+          ...(sigtermInfo || {}), // Include SIGTERM info if present
         });
         return true;
       }
@@ -101,6 +110,7 @@ export class OutputProcessor {
         error: 'No valid response from Claude',
         sessionId,
         rawOutput: completeStdout,
+        ...(sigtermInfo || {}), // Include SIGTERM info if present
       });
       return true;
     } catch (error) {

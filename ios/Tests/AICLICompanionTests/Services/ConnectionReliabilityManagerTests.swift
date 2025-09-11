@@ -5,7 +5,6 @@ import Network
 
 @available(iOS 16.0, macOS 13.0, *)
 final class ConnectionReliabilityManagerTests: XCTestCase {
-    
     // Helper to check if we're in CI
     private var isCI: Bool {
         ProcessInfo.processInfo.environment["CI"] != nil ||
@@ -63,7 +62,6 @@ final class ConnectionReliabilityManagerTests: XCTestCase {
     }
     
     func testConnectionQualityColors() {
-        
         XCTAssertEqual(ConnectionReliabilityManager.ConnectionQuality.excellent.color, "green")
         XCTAssertEqual(ConnectionReliabilityManager.ConnectionQuality.good.color, "blue")
         XCTAssertEqual(ConnectionReliabilityManager.ConnectionQuality.fair.color, "yellow")

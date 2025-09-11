@@ -182,19 +182,18 @@ export class PushNotificationService extends EventEmitter {
     }
 
     try {
-      // Check if message requires fetching (large message)
-      const requiresFetch = this.messageFormatter.requiresFetch(data.message);
+      // Use requiresFetch flag passed from chat handler (don't recalculate!)
+      // The chat handler already determined if fetch is needed and emptied data.message accordingly
+      const requiresFetch = data.requiresFetch || false;
 
       let messageId = data.messageId;
       if (requiresFetch && !messageId) {
+        // This shouldn't happen since chat handler should provide messageId for fetch messages
+        console.warn('⚠️ requiresFetch=true but no messageId provided - this indicates a bug');
         messageId = randomUUID();
-        // Store the full message
-        storeMessage(messageId, data.message, {
-          projectPath: data.projectPath,
-          projectName: data.projectName,
-          requestId: data.requestId,
-        });
       }
+
+      // Message storage is handled by chat-message-handler, not here
 
       const notification = this.notificationTypes.createClaudeResponseNotification(data, {
         requiresFetch,
@@ -385,12 +384,16 @@ export class PushNotificationService extends EventEmitter {
             return;
           }
 
-          // Check if message requires fetching (large message)
-          const requiresFetch = this.messageFormatter.requiresFetch(data.message);
+          // Use requiresFetch flag from data if available, otherwise calculate
+          const requiresFetch =
+            data.requiresFetch !== undefined
+              ? data.requiresFetch
+              : this.messageFormatter.requiresFetch(data.message);
+
           let messageId = data.messageId;
           if (requiresFetch && !messageId) {
             messageId = randomUUID();
-            // Store the full message
+            // Store the full message (only if not already stored)
             storeMessage(messageId, data.message, {
               projectPath: data.projectPath,
               projectName: data.projectName,

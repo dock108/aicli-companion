@@ -14,9 +14,8 @@ typealias TestDataGenerator = MockFactory
 
 /// Unified factory for creating test data objects across iOS and macOS
 public struct MockFactory {
-    
     // MARK: - Common Message Creation
-    
+
     public static func createMessage(
         id: UUID = UUID(),
         content: String = "Test message",
@@ -32,7 +31,7 @@ public struct MockFactory {
             sessionId: sessionId
         )
     }
-    
+
     public static func createUserMessage(
         content: String = "Hello, Claude!",
         timestamp: Date = Date(),
@@ -47,7 +46,7 @@ public struct MockFactory {
             sessionId: sessionId
         )
     }
-    
+
     public static func createAssistantMessage(
         content: String = "Hello! How can I help you today?",
         timestamp: Date = Date(),
@@ -62,7 +61,7 @@ public struct MockFactory {
             sessionId: sessionId
         )
     }
-    
+
     public static func createSystemMessage(
         content: String = "System initialized",
         timestamp: Date = Date(),
@@ -76,9 +75,9 @@ public struct MockFactory {
             sessionId: "system"
         )
     }
-    
+
     // MARK: - Session Creation
-    
+
     public static func createSession(
         sessionId: String? = nil,
         deviceName: String = "Test Device",
@@ -92,9 +91,9 @@ public struct MockFactory {
             projectPath: projectPath
         )
     }
-    
+
     // MARK: - Conversation Creation
-    
+
     public static func createConversation(
         id: UUID = UUID(),
         projectPath: String = "/test/project",
@@ -112,9 +111,9 @@ public struct MockFactory {
             lastModified: createdAt
         )
     }
-    
+
     // MARK: - Log Entry Creation (macOS specific)
-    
+
     public static func createLogEntry(
         level: AICLICompanionHost.LogLevel = .info,
         message: String = "Test log message",
@@ -127,7 +126,7 @@ public struct MockFactory {
             timestamp: Date()
         )
     }
-    
+
     public static func createLogEntries(count: Int) -> [MockLogEntry] {
         (0..<count).map { index in
             let levels: [AICLICompanionHost.LogLevel] = [.debug, .info, .warning, .error]
@@ -138,9 +137,9 @@ public struct MockFactory {
             )
         }
     }
-    
+
     // MARK: - Test Session Creation
-    
+
     public static func createTestSession(id: String? = nil, deviceName: String? = nil) -> Session {
         Session(
             sessionId: id ?? UUID().uuidString,
@@ -149,12 +148,12 @@ public struct MockFactory {
             signalStrength: 0.8
         )
     }
-    
+
     // MARK: - Test Logs Creation
-    
+
     public static func createTestLogs(count: Int = 10, withErrors: Bool = false) -> [LogEntry] {
         (0..<count).map { index in
-            let levels: [AICLICompanionHost.LogLevel] = withErrors 
+            let levels: [AICLICompanionHost.LogLevel] = withErrors
                 ? [.debug, .info, .warning, .error]
                 : [.debug, .info, .warning]
             let level = levels[index % levels.count]
@@ -164,9 +163,9 @@ public struct MockFactory {
             )
         }
     }
-    
+
     // MARK: - Batch Creation
-    
+
     public static func createMessageHistory(count: Int = 10) -> [MockMessage] {
         (0..<count).map { index in
             let isUserMessage = index % 2 == 0

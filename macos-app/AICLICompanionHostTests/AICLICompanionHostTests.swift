@@ -9,7 +9,6 @@ import XCTest
 @testable import AICLICompanionHost
 
 final class AICLICompanionHostTests: XCTestCase {
-
     @MainActor
     func testServerManagerInitialization() throws {
         let manager = ServerManager.shared

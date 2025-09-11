@@ -12,7 +12,6 @@ import AppKit
 
 @MainActor
 final class MenuBarViewTests: ViewTestCase {
-
     var menuBarViewModel: MenuBarViewModel!
     var serverManager: ServerManager!
     var settingsManager: SettingsManager!

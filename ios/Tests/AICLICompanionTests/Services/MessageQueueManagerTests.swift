@@ -3,7 +3,6 @@ import XCTest
 
 @available(iOS 16.0, macOS 13.0, *)
 final class MessageQueueManagerTests: XCTestCase {
-    
     var queueManager: MessageQueueManager!
     
     // Helper to check if we're in CI
@@ -93,8 +92,8 @@ final class MessageQueueManagerTests: XCTestCase {
         
         // Check all messages are queued
         for (messageId, sessionId) in messages {
-            let found = queueManager.queuedMessages.contains { 
-                $0.messageId == messageId && $0.sessionId == sessionId 
+            let found = queueManager.queuedMessages.contains {
+                $0.messageId == messageId && $0.sessionId == sessionId
             }
             XCTAssertTrue(found, "Message \(messageId) should be in queue")
         }
@@ -271,7 +270,7 @@ final class MessageQueueManagerTests: XCTestCase {
         let queueManager = MessageQueueManager.shared
         
         // Test progress message that starts queue processing
-        let _ = ProgressResponse(
+        _ = ProgressResponse(
             message: "Processing queued messages",
             progress: 0.0,
             stage: "queue",
@@ -283,7 +282,7 @@ final class MessageQueueManagerTests: XCTestCase {
         XCTAssertFalse(queueManager.isReceivingQueued)
         
         // Test progress message that finishes queue processing
-        let _ = ProgressResponse(
+        _ = ProgressResponse(
             message: "Queue processing complete",
             progress: 1.0,
             stage: "done",

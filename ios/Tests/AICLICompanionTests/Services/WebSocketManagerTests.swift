@@ -4,7 +4,6 @@ import Foundation
 
 @available(iOS 16.0, macOS 13.0, *)
 final class WebSocketManagerTests: XCTestCase {
-    
     // Helper to check if we're in CI
     private var isCI: Bool {
         ProcessInfo.processInfo.environment["CI"] != nil ||
@@ -57,7 +56,7 @@ final class WebSocketManagerTests: XCTestCase {
         // Test WebSocket message types
         let requestTypes: [WebSocketMessageType] = [
             .ask, .streamStart, .streamSend, .streamClose, .permission,
-            .ping, .subscribe, .setWorkingDirectory, .claudeCommand, 
+            .ping, .subscribe, .setWorkingDirectory, .claudeCommand,
             .getMessageHistory, .acknowledgeMessages, .clearChat
         ]
         
@@ -195,7 +194,7 @@ final class WebSocketManagerTests: XCTestCase {
     func testWebSocketURLValidation() {
         let validURLs = [
             "ws://localhost:3000/ws",
-            "wss://secure.example.com/websocket", 
+            "wss://secure.example.com/websocket",
             "ws://192.168.1.100:8080/stream"
         ]
         

@@ -10,7 +10,6 @@ import XCTest
 
 @MainActor
 final class SettingsManagerAdvancedTests: XCTestCase {
-
     var settingsManager: SettingsManager!
 
     override func setUp() async throws {

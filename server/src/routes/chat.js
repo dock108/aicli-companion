@@ -8,6 +8,7 @@ import { pushNotificationService } from '../services/push-notification.js';
 import { createChatMessageHandler } from '../handlers/chat-message-handler.js';
 import { sendErrorResponse } from '../utils/response-utils.js';
 import { PlanningModeService } from '../services/planning-mode.js';
+import { webSocketService } from '../services/websocket-service.js';
 
 const logger = createLogger('ChatAPI');
 const router = express.Router();
@@ -228,6 +229,7 @@ router.post('/', async (req, res) => {
     const handler = createChatMessageHandler({
       aicliService,
       pushNotificationService,
+      webSocketService,
     });
     messageQueueManager.setMessageHandler(queueSessionId, handler);
   }

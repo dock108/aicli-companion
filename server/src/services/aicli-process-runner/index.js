@@ -62,7 +62,7 @@ export class AICLIProcessRunner extends EventEmitter {
     // Handle health monitor error events to prevent unhandled errors
     this.healthMonitor.on('error', (data) => this.emit('healthMonitorError', data));
     this.healthMonitor.on('activity', (data) => this.emit('healthMonitorActivity', data));
-    this.healthMonitor.on('timeout', (data) => this.emit('healthMonitorTimeout', data));
+    // Removed timeout event handling - let Claude process naturally without server interference
     this.healthMonitor.on('rateLimitDetected', (data) => this.emit('rateLimitDetected', data));
     this.healthMonitor.on('sessionExpired', (data) => this.emit('sessionExpired', data));
 

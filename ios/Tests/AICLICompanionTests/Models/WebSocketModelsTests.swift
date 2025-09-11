@@ -3,7 +3,6 @@ import XCTest
 
 @available(iOS 17.0, macOS 14.0, *)
 final class WebSocketModelsTests: XCTestCase {
-    
     // MARK: - WebSocketMessage Tests
     
     func testWebSocketMessageInitialization() {

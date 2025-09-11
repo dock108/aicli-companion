@@ -3,7 +3,6 @@ import XCTest
 
 @available(iOS 16.0, macOS 13.0, *)
 final class PerformanceMonitorTests: XCTestCase {
-    
     var monitor: PerformanceMonitor!
     
     override func setUp() {

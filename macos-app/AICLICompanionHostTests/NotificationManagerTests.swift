@@ -10,7 +10,6 @@ import XCTest
 
 @MainActor
 final class NotificationManagerTests: XCTestCase {
-
     var mockNotificationManager: MockNotificationManager!
 
     override func setUp() {

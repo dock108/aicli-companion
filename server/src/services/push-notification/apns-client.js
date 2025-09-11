@@ -7,10 +7,12 @@ import apn from '@parse/node-apn';
 import fs from 'fs';
 
 export class APNsClient {
-  constructor() {
+  constructor(apnModule = null, fsModule = null) {
     this.provider = null;
     this.bundleId = null;
     this.isConfigured = false;
+    this.apn = apnModule; // Allow injection for testing
+    this.fs = fsModule || fs; // Allow fs injection for testing
   }
 
   /**
@@ -37,7 +39,7 @@ export class APNsClient {
       }
 
       // Check if .p8 key file exists
-      if (!fs.existsSync(keyPath)) {
+      if (!this.fs.existsSync(keyPath)) {
         console.log(`⚠️  APNs key file not found: ${keyPath}`);
         return;
       }
@@ -52,7 +54,9 @@ export class APNsClient {
         production,
       };
 
-      this.provider = new apn.Provider(options);
+      // Use injected apn module if available (for testing), otherwise use real one
+      const apnToUse = this.apn || apn;
+      this.provider = new apnToUse.Provider(options);
       this.bundleId = bundleId;
       this.isConfigured = true;
 

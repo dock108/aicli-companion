@@ -11,7 +11,6 @@ import SwiftUI
 
 @MainActor
 final class SettingsViewTests: ViewTestCase {
-
     var settingsView: SettingsView!
     var viewModel: SettingsViewModel!
     var hostingController: NSHostingController<SettingsView>!

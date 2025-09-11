@@ -39,7 +39,7 @@ export class NotificationTypes {
   }
 
   /**
-   * Create a Claude response notification
+   * Create a Claude response notification - Hybrid approach for efficiency
    */
   createClaudeResponseNotification(data, options = {}) {
     const notification = new apn.Notification();
@@ -75,8 +75,9 @@ export class NotificationTypes {
     notification.category = 'CLAUDE_RESPONSE';
     notification.threadId = data.projectPath || 'default';
 
-    // Build payload based on message size
+    // Hybrid approach: Use fetch for large messages, payload for small ones
     if (requiresFetch) {
+      // Large message - minimal payload with fetch signal
       notification.payload = {
         messageId,
         projectName: data.projectName,
@@ -87,28 +88,34 @@ export class NotificationTypes {
         timestamp: new Date().toISOString(),
         requestId: data.requestId,
         deliveryMethod: 'apns_signal',
-        sessionId: data.sessionId, // Include sessionId for large messages
-        claudeSessionId: data.sessionId, // Also as claudeSessionId for compatibility
+        sessionId: data.sessionId,
+        claudeSessionId: data.sessionId,
+        isLongRunningCompletion: data.isLongRunningCompletion || false,
       };
+
       console.log(
-        `📱 Large message (${data.message.length} chars) - sending signal with messageId: ${messageId}`
+        `📱 Large message (${data.message.length} chars) - fetch required with messageId: ${messageId}`
       );
     } else {
+      // Small message - include full content in payload
       notification.payload = {
         projectName: data.projectName,
         projectPath: data.projectPath,
-        message: data.message,
-        totalChunks: data.totalChunks,
+        message: data.message, // Full message for small messages
         timestamp: new Date().toISOString(),
-        isLongRunningCompletion: data.isLongRunningCompletion || false,
         requestId: data.requestId,
         deliveryMethod: 'apns_primary',
+        sessionId: data.sessionId,
+        claudeSessionId: data.sessionId,
+        isLongRunningCompletion: data.isLongRunningCompletion || false,
+        requiresFetch: false, // Explicitly set to false for small messages
+        // Optional metadata for small messages
         attachmentInfo: data.attachmentInfo || null,
         autoResponse: data.autoResponse || null,
         thinkingMetadata: data.thinkingMetadata || null,
-        sessionId: data.sessionId, // Include sessionId for small messages
-        claudeSessionId: data.sessionId, // Also as claudeSessionId for compatibility
       };
+
+      console.log(`📱 Small message (${data.message.length} chars) - included in APNS payload`);
     }
 
     // Add action buttons for long-running completions
@@ -267,21 +274,19 @@ export class NotificationTypes {
     notification.category = 'CLAUDE_MESSAGE';
     notification.threadId = data.projectPath || 'default';
 
-    const { message: _message, ...metadataOnly } = data;
-
-    // Build initial payload
+    // Build initial payload with full message (v0.7.0 approach + develop enhancements)
     let payload = {
-      ...metadataOnly,
+      ...data, // This includes data.message! (v0.7.0 working behavior)
       type: 'message',
       deliveryMethod: 'apns_message',
       sessionId: data.sessionId, // Ensure sessionId is explicitly included
       claudeSessionId: data.sessionId, // Also include as claudeSessionId for compatibility
       correlationId: data.correlationId || data.requestId, // Add correlation ID for tracking
-      messagePreview: data.message
-        ? this.formatter.truncateMessage(data.message, 150)
-        : 'New message', // Small preview only
       requiresFetch: data.requiresFetch || false, // Tell the app to fetch the full message if needed
       messageId: data.messageId || null, // Include message ID for fetching
+      messagePreview: data.message
+        ? this.formatter.truncateMessage(data.message, 150)
+        : 'New message', // Small preview for fallback
     };
 
     // Check payload size and truncate if needed (APNS max is 4KB)
@@ -289,8 +294,8 @@ export class NotificationTypes {
     let payloadString = JSON.stringify(payload);
 
     if (payloadString.length > MAX_PAYLOAD_SIZE) {
-      // Remove non-essential fields progressively
-      const fieldsToRemove = ['messagePreview', 'metadata', 'context'];
+      // Remove non-essential fields progressively (message field first for large payloads)
+      const fieldsToRemove = ['message', 'messagePreview', 'metadata', 'context'];
 
       for (const field of fieldsToRemove) {
         if (payload[field]) {

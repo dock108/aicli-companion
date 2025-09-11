@@ -60,7 +60,15 @@ export class CommandExecutor {
     }
 
     // Add permission configuration
+    sessionLogger.info('Permission config before adding args', {
+      skipPermissions: this.config.skipPermissions,
+      allowedTools: this.config.allowedTools,
+      argsBefore: [...args],
+    });
     this.config.addPermissionArgs(args);
+    sessionLogger.info('Permission config after adding args', {
+      argsAfter: [...args],
+    });
 
     // Add attachment file paths if provided
     if (attachmentPaths && attachmentPaths.length > 0) {
@@ -131,6 +139,7 @@ export class CommandExecutor {
       let stdout = '';
       let stderr = '';
       let processExited = false;
+      let healthMonitor = null;
 
       try {
         // Spawn the AICLI process
@@ -175,21 +184,53 @@ export class CommandExecutor {
           if (processExited) return; // Avoid duplicate handling
           processExited = true;
 
+          // Get human-readable signal name if available
+          const signalName = signal ? `${signal} (${code})` : code;
+
           logger.info('Command ended', {
             sessionId,
             code,
             signal,
+            signalName,
+            exitReason: signal ? `killed by signal ${signal}` : `exited with code ${code}`,
           });
 
-          if (code === 0) {
-            // Process output
+          // Stop health monitor
+          if (healthMonitor) {
+            healthMonitor.stop();
+          }
+
+          if (code === 0 || code === 143) {
+            // Process output for both success (0) and SIGTERM (143)
+            // SIGTERM is not an error - Claude has completed work and returned a session
             try {
+              // Special handling for SIGTERM - log it
+              if (code === 143) {
+                logger.info(
+                  'AICLI process exited with SIGTERM (143) - treating as successful completion',
+                  {
+                    code,
+                    signal,
+                    toolCount: healthMonitor?.toolUseCount || 0,
+                    messageCount: healthMonitor?.messageCount || 0,
+                    processRunTime: Date.now() - (healthMonitor?.startTime || Date.now()),
+                  }
+                );
+              }
+
+              // Pass SIGTERM info to output processor
               const result = this.outputProcessor.processOutput(
                 stdout,
                 sessionId,
                 resolve,
                 reject,
-                requestId
+                requestId,
+                code === 143
+                  ? {
+                      isSigterm: true,
+                      sigtermReason: `after ${healthMonitor?.toolUseCount || 'unknown'} tools`,
+                    }
+                  : null
               );
 
               if (!result) {
@@ -199,12 +240,18 @@ export class CommandExecutor {
                   stdout,
                   stderr,
                   code,
+                  isSigterm: code === 143,
+                  sigtermReason:
+                    code === 143
+                      ? `after ${healthMonitor?.toolUseCount || 'unknown'} tools`
+                      : undefined,
                 });
               }
             } catch (error) {
               reject(error);
             }
           } else {
+            // Any other non-zero exit code is treated as an error
             logger.error('AICLI process exited with error', {
               code,
               signal,
@@ -233,11 +280,11 @@ export class CommandExecutor {
           const isWorkspaceMode =
             options.cwd === this.serverConfig.configPath &&
             options.workingDirectory === '__workspace__';
-          this.handleStdinInput(aicliProcess, prompt, isWorkspaceMode);
+          this.handleStdinInput(aicliProcess, prompt, isWorkspaceMode, options.cwd);
         }
 
         // Create health monitor
-        const healthMonitor = this.healthMonitor.createForProcess(
+        healthMonitor = this.healthMonitor.createForProcess(
           aicliProcess,
           sessionId,
           cwd,
@@ -267,41 +314,86 @@ export class CommandExecutor {
   /**
    * Handle stdin input for the process
    */
-  handleStdinInput(aicliProcess, prompt, isWorkspaceMode = false) {
+  handleStdinInput(aicliProcess, prompt, isWorkspaceMode = false, projectPath = null) {
     let finalPrompt = prompt;
 
+    // Add path-based security restrictions for project mode
+    if (!isWorkspaceMode) {
+      const projectSecurityPrompt = `[PROJECT MODE SECURITY CONTEXT]
+
+⚠️  CRITICAL: You are operating with FULL SYSTEM ACCESS via --dangerously-skip-permissions.
+    The security model relies entirely on your adherence to these guidelines.
+
+🎯 PROJECT SCOPE: ${projectPath}
+
+✅ ALLOWED WITHIN PROJECT DIRECTORY:
+- Full file system access (read, write, edit, delete)
+- Execute any Bash commands and tools
+- Create, modify, and delete files and directories
+- Install dependencies and run development tools
+- Access and modify project configuration files
+
+⛔ RESTRICTED OUTSIDE PROJECT DIRECTORY:
+- READ-ONLY access to files outside the project (for reference only)
+- NO writing, editing, or deleting files outside project scope
+- NO executing commands that modify system or other projects
+- NO accessing sensitive files (credentials, SSH keys, system configs)
+- NO modifying other projects or system-wide settings
+
+🛡️ SECURITY PRINCIPLES:
+- ALWAYS confirm the file path is within the project before write operations
+- When reading external files, explicitly state this is for reference only
+- If unsure about a path, ask the user for clarification
+- Respect the user's trust - this system has no permission boundaries
+
+USER REQUEST:
+${prompt}`;
+
+      finalPrompt = projectSecurityPrompt;
+      logger.info('Added project security prompt', {
+        projectDir: projectPath,
+        originalLength: prompt.length,
+        finalLength: finalPrompt.length,
+      });
+    }
     // Add workspace mode system prompt if in workspace mode
-    if (isWorkspaceMode) {
-      const workspaceSystemPrompt = `[WORKSPACE MODE CONTEXT]
-You are currently in Workspace Mode, which is designed for high-level project management, cross-project operations, and PROJECT ONBOARDING.
+    else if (isWorkspaceMode) {
+      const workspaceSystemPrompt = `[WORKSPACE MODE SECURITY CONTEXT]
 
-IMPORTANT WORKSPACE MODE GUIDELINES:
+⚠️  CRITICAL: You are operating with FULL SYSTEM ACCESS via --dangerously-skip-permissions.
+    The security model relies entirely on your adherence to these workspace restrictions.
 
-PROJECT ONBOARDING & INITIALIZATION (ALLOWED):
-- Create new projects with initial folder structure
+🌐 WORKSPACE SCOPE: Cross-project operations and new project creation
+
+✅ ALLOWED OPERATIONS:
+📖 READ-ONLY ANALYSIS:
+- Browse, search, and read files across ALL existing projects
+- Analyze project structures, dependencies, and patterns
+- Compare implementations between projects
+- View and understand existing codebases
+- Generate project summaries and documentation
+
+🆕 NEW PROJECT CREATION:
+- Create entirely new project directories and structures
 - Generate starter files and boilerplate code for NEW projects
-- Set up project configuration files (package.json, tsconfig.json, etc.)
+- Set up initial configuration files (package.json, tsconfig.json, etc.)
 - Create initial README, documentation, and planning files
-- Establish project architecture and directory layout
-- Copy templates and starter code from other projects
+- Copy templates and patterns from existing projects to new ones
 
-CROSS-PROJECT OPERATIONS (ALLOWED):
-- Browse, search, and read files across multiple projects
-- Copy files and patterns between existing projects
-- Analyze project structures and dependencies
-- Compare implementations across projects
+⛔ STRICT RESTRICTIONS:
+🚫 EXISTING PROJECT MODIFICATIONS:
+- NO modifications to ANY existing project files
+- NO writing, editing, or deleting files in established projects  
+- NO Bash commands that modify existing project directories
+- NO installing dependencies in existing projects
+- NO running build/test commands that modify existing projects
 
-RESTRICTIONS:
-- Do NOT modify existing code files in established projects
-- Do NOT perform detailed feature implementations in existing projects
-- Do NOT refactor or debug code in existing projects
-- For coding tasks in existing projects, the user should switch to that specific project directory
-
-BEHAVIOR:
-- Provide concise, relevant responses to questions
-- Only do what is explicitly asked - no unsolicited project summaries
-- Focus on project structure, organization, and high-level planning
-- Be helpful with project initialization and setup tasks
+🛡️ SECURITY PRINCIPLES:
+- READ-ONLY means READ-ONLY for all existing projects
+- Only create files in NEW project directories you create
+- When creating new projects, explicitly state this is a new project
+- For ANY modifications to existing projects: inform user to switch to project mode
+- Respect the user's trust - this system has no permission boundaries
 
 USER REQUEST:
 ${prompt}`;

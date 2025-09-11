@@ -5,7 +5,6 @@ import Network
 
 @available(iOS 16.0, macOS 13.0, *)
 final class ServiceDiscoveryManagerTests: XCTestCase {
-    
     // Helper to check if we're in CI
     private var isCI: Bool {
         ProcessInfo.processInfo.environment["CI"] != nil ||

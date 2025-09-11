@@ -3,7 +3,6 @@ import XCTest
 
 @available(iOS 17.0, macOS 14.0, *)
 final class SecuritySettingsTests: XCTestCase {
-    
     // MARK: - SecurityPreset Tests
     
     func testSecurityPresetRawValues() {

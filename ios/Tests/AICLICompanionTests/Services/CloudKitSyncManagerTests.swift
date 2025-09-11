@@ -4,7 +4,6 @@ import CloudKit
 
 @available(iOS 16.0, macOS 13.0, *)
 final class CloudKitSyncManagerTests: XCTestCase {
-    
     var sut: CloudKitSyncManager!
     var mockContainer: MockCKContainer!
     var mockDatabase: MockCKDatabase!
@@ -331,7 +330,6 @@ class MockCKDatabase {
 // MARK: - Test Utilities
 
 extension CloudKitSyncManagerTests {
-    
     func createTestMessage() -> Message {
         return Message(
             content: "Test message content",
@@ -355,7 +353,6 @@ extension CloudKitSyncManagerTests {
 
 @available(iOS 16.0, macOS 13.0, *)
 extension CloudKitSyncManagerTests {
-    
     func testSyncPerformance() async throws {
         // Given
         let messageCount = 100

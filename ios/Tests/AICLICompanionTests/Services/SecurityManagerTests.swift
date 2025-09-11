@@ -5,7 +5,6 @@ import Foundation
 @available(iOS 16.0, macOS 13.0, *)
 @MainActor
 final class SecurityManagerTests: XCTestCase {
-    
     // MARK: - Security Manager Creation Tests
     
     func testSecurityManagerSharedInstance() {
@@ -144,7 +143,7 @@ final class SecurityManagerTests: XCTestCase {
         manager.applyPreset(.standard)
         
         XCTAssertEqual(manager.configuration.preset, .standard)
-        XCTAssertTrue(manager.configuration.blockedCommands.count > 0)
+        XCTAssertTrue(!manager.configuration.blockedCommands.isEmpty)
         XCTAssertTrue(manager.configuration.requireConfirmation)
         XCTAssertFalse(manager.configuration.readOnlyMode)
         XCTAssertTrue(manager.filterCommands)

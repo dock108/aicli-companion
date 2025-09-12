@@ -6,6 +6,19 @@ const logger = createLogger('Security');
 // Track failed auth attempts per IP
 const failedAuthAttempts = new Map();
 
+// Cleanup old entries every hour to prevent memory leaks
+setInterval(
+  () => {
+    const oneHourAgo = Date.now() - 60 * 60 * 1000;
+    for (const [ip, data] of failedAuthAttempts.entries()) {
+      if (data.lastAttempt && data.lastAttempt < oneHourAgo) {
+        failedAuthAttempts.delete(ip);
+      }
+    }
+  },
+  60 * 60 * 1000
+); // Run every hour
+
 /**
  * Create rate limiter for API endpoints
  * @param {boolean} isPublic - Whether server is publicly exposed
@@ -48,12 +61,14 @@ export function createAuthRateLimiter() {
       logger.error(`Auth rate limit exceeded for IP: ${ip}`);
 
       // Track failed attempts
-      const attempts = failedAuthAttempts.get(ip) || 0;
-      failedAuthAttempts.set(ip, attempts + 1);
+      const data = failedAuthAttempts.get(ip) || { attempts: 0, lastAttempt: 0 };
+      data.attempts += 1;
+      data.lastAttempt = Date.now();
+      failedAuthAttempts.set(ip, data);
 
       // Block IP after too many failures
-      if (attempts >= 10) {
-        logger.error(`IP ${ip} blocked after ${attempts} failed auth attempts`);
+      if (data.attempts >= 10) {
+        logger.error(`IP ${ip} blocked after ${data.attempts} failed auth attempts`);
       }
 
       res.status(429).json({
@@ -72,9 +87,9 @@ export function createAuthRateLimiter() {
 export function blockListMiddleware() {
   return (req, res, next) => {
     const ip = req.ip;
-    const attempts = failedAuthAttempts.get(ip) || 0;
+    const data = failedAuthAttempts.get(ip) || { attempts: 0, lastAttempt: 0 };
 
-    if (attempts >= 10) {
+    if (data.attempts >= 10) {
       logger.warn(`Blocked request from banned IP: ${ip}`);
       return res.status(403).json({
         error: 'Forbidden',
@@ -102,12 +117,14 @@ export function clearFailedAttempts(ip) {
  * @param {string} ip - IP address
  */
 export function trackFailedAuth(ip) {
-  const attempts = failedAuthAttempts.get(ip) || 0;
-  failedAuthAttempts.set(ip, attempts + 1);
-  logger.warn(`Failed auth attempt from IP ${ip} (attempt ${attempts + 1})`);
+  const data = failedAuthAttempts.get(ip) || { attempts: 0, lastAttempt: 0 };
+  data.attempts += 1;
+  data.lastAttempt = Date.now();
+  failedAuthAttempts.set(ip, data);
+  logger.warn(`Failed auth attempt from IP ${ip} (attempt ${data.attempts})`);
 
-  if (attempts + 1 >= 5) {
-    logger.warn(`⚠️ IP ${ip} has ${attempts + 1} failed auth attempts`);
+  if (data.attempts >= 5) {
+    logger.warn(`⚠️ IP ${ip} has ${data.attempts} failed auth attempts`);
   }
 }
 

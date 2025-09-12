@@ -29,10 +29,6 @@ export class TelemetryService {
       },
     };
 
-    // TODO: [QUESTION] Metric retention policy
-    // How long to keep metrics in memory?
-    // Should we persist to disk or external service?
-
     this.retentionTime = options.retentionTime || 3600000; // 1 hour default
     this.maxLatencyEntries = options.maxLatencyEntries || 1000;
 
@@ -64,7 +60,6 @@ export class TelemetryService {
     const connection = this.metrics.websocket.connections.get(clientId);
     if (connection) {
       const _duration = Date.now() - connection.connectedAt;
-      // TODO: [OPTIMIZE] Store connection duration statistics
       this.metrics.websocket.connections.delete(clientId);
     }
   }
@@ -190,7 +185,6 @@ export class TelemetryService {
    */
   recordMessageFiltered(_reason) {
     this.metrics.messages.filtered++;
-    // TODO: [OPTIMIZE] Track filter reasons
   }
 
   /**

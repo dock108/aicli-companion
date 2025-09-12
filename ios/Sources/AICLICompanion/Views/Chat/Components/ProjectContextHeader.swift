@@ -7,6 +7,7 @@ struct ProjectContextHeader: View {
     let messageCount: Int
     let onSwitchProject: () -> Void
     let onClearSession: () -> Void
+    let onShowAutoReplySettings: () -> Void
     
     @Environment(\.colorScheme) var colorScheme
     
@@ -60,8 +61,16 @@ struct ProjectContextHeader: View {
             
             Spacer()
             
-            // Clear chat menu
+            // Project settings menu
             Menu {
+                Button {
+                    onShowAutoReplySettings()
+                } label: {
+                    Label("Auto-Reply Settings...", systemImage: "play.circle")
+                }
+                
+                Divider()
+                
                 Button(role: .destructive) {
                     onClearSession()
                 } label: {

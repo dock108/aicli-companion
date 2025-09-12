@@ -23,7 +23,7 @@ AICLI Companion enables iOS users to interact with AI assistants (currently via 
 - **Rich Content Rendering**: Beautiful rendering of code blocks, markdown, and tool outputs
 - **Offline Support**: Browse previous conversations even without connection
 - **Attachment Support**: Send images, documents, and code files to Claude (up to 10MB)
-- **Auto-Response Mode**: "Jesus Take the Wheel" mode for automated task continuation
+- **Auto-Response System**: Enhanced auto-reply with 5 modes (Smart Stop, Until Completion, Time-Based, Message-Based, Hybrid) including AI-powered responses
 - **Thinking Indicator**: Real-time progress with duration and token count display
 
 ### macOS Companion
@@ -158,8 +158,22 @@ TEMP_FILE_PATH=/tmp/claude-attachments
 APNS_KEY_PATH=/path/to/key.p8
 APNS_KEY_ID=your-key-id
 APNS_TEAM_ID=your-team-id
-APNS_BUNDLE_ID=com.claude.companion
+APNS_BUNDLE_ID=com.aiclicompanion.ios
 APNS_PRODUCTION=false
+
+# Auto-Response System (Enhanced AI-powered responses)
+ENABLE_AUTO_RESPONSE=false
+OPENAI_API_KEY=your-openai-key
+USE_AI_RESPONSES=false
+AI_MODEL=gpt-3.5-turbo
+AI_TEMPERATURE=0.7
+MAX_AUTO_ITERATIONS=10
+MIN_CONFIDENCE=0.6
+TRAINING_DATA_DIR=./training-data
+
+# Planning Mode (documentation-only mode)
+PLANNING_MODE_STRICT=false
+PLANNING_MODE_EXTENSIONS=.md,.txt,.plan,.todo
 
 # Paths
 CONFIG_PATH=/path/to/projects

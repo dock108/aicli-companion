@@ -91,7 +91,6 @@ export class AICLIService extends EventEmitter {
       this.emit('securityViolation', data);
     });
 
-    // Legacy permission properties (delegated to permission handler)
     this.permissionMode = this.permissionHandler.permissionMode;
     this.allowedTools = this.permissionHandler.allowedTools;
     this.disallowedTools = this.permissionHandler.disallowedTools;
@@ -102,7 +101,6 @@ export class AICLIService extends EventEmitter {
     this.healthMonitor.startProcessHealthMonitoring();
   }
 
-  // Configure permission settings (delegated to permission handler)
   setPermissionMode(mode) {
     this.permissionHandler.setPermissionMode(mode);
     this.permissionMode = this.permissionHandler.permissionMode;

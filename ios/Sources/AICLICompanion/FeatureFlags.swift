@@ -21,22 +21,32 @@ struct FeatureFlags {
     /// When true: queue processing runs normally
     static let enableQueueProcessing: Bool = false
     
-    // MARK: - Auto Mode Features
+    // MARK: - Enhanced Auto-Response System
     
-    /// Enable/disable auto response mode
+    /// Enable/disable enhanced auto response system
     /// When false: auto response controls and logic are disabled
-    /// When true: auto response mode is available
-    static let isAutoModeEnabled: Bool = false
+    /// When true: auto response system with 5 modes is available
+    static let isAutoResponseEnabled: Bool = false
     
-    /// Show/hide auto mode UI controls
+    /// Show/hide auto response UI controls in chat
     /// When false: auto response controls are hidden from chat view
-    /// When true: auto response controls are visible
-    static let showAutoModeUI: Bool = false
+    /// When true: auto response controls and status bar are visible
+    static let showAutoResponseUI: Bool = false
     
-    /// Enable/disable auto mode settings
-    /// When false: auto mode settings are hidden from settings screens
-    /// When true: auto mode settings are visible and functional
-    static let enableAutoModeSettings: Bool = false
+    /// Enable/disable auto response settings interface
+    /// When false: auto response settings are hidden from settings screens
+    /// When true: comprehensive auto response settings are visible and functional
+    static let enableAutoResponseSettings: Bool = false
+    
+    /// Enable/disable AI-powered responses
+    /// When false: only template-based responses are used
+    /// When true: OpenAI integration for intelligent responses is available
+    static let enableAIResponses: Bool = false
+    
+    /// Show/hide training data collection features
+    /// When false: training data collection is disabled
+    /// When true: system learns from successful interactions
+    static let enableTrainingDataCollection: Bool = true
     
     // MARK: - Workspace Mode Features
     
@@ -77,6 +87,23 @@ struct FeatureFlags {
     /// When false: Normal mode is hidden from selector
     static let showNormalMode: Bool = true
     
+    // MARK: - CloudKit & Sync Features
+    
+    /// Enable/disable CloudKit conversation sync
+    /// When false: conversations are stored locally only
+    /// When true: conversations sync across all user devices via iCloud
+    static let enableCloudKitSync: Bool = true
+    
+    /// Enable/disable CloudKit settings sync
+    /// When false: settings are stored locally only
+    /// When true: auto-response and app settings sync via iCloud
+    static let enableCloudKitSettingsSync: Bool = true
+    
+    /// Show/hide sync status indicators
+    /// When false: sync status is hidden from UI
+    /// When true: sync indicators and status are visible
+    static let showSyncStatusUI: Bool = true
+    
     // MARK: - UI Features
     
     /// Enable/disable attachment functionality in chat
@@ -109,9 +136,19 @@ struct FeatureFlags {
         return isQueueSystemEnabled && enableQueueProcessing
     }
     
-    /// Check if auto mode should be active
-    static var shouldUseAutoMode: Bool {
-        return isAutoModeEnabled && enableAutoModeSettings
+    /// Check if auto response system should be active
+    static var shouldUseAutoResponse: Bool {
+        return isAutoResponseEnabled && enableAutoResponseSettings
+    }
+    
+    /// Check if CloudKit sync should be active
+    static var shouldUseCloudKitSync: Bool {
+        return enableCloudKitSync
+    }
+    
+    /// Check if AI responses should be available
+    static var shouldUseAIResponses: Bool {
+        return isAutoResponseEnabled && enableAIResponses
     }
 }
 
@@ -129,6 +166,18 @@ extension FeatureFlags {
         - Planning Mode: \(showPlanningMode ? "✅" : "❌")
         - Code Mode: \(showCodeMode ? "✅" : "❌")
         
+        Enhanced Auto-Response System:
+        - Auto Response Enabled: \(isAutoResponseEnabled ? "✅" : "❌")
+        - Auto Response UI: \(showAutoResponseUI ? "✅" : "❌")
+        - Auto Response Settings: \(enableAutoResponseSettings ? "✅" : "❌")
+        - AI Responses: \(enableAIResponses ? "✅" : "❌")
+        - Training Data Collection: \(enableTrainingDataCollection ? "✅" : "❌")
+        
+        CloudKit & Sync:
+        - CloudKit Conversation Sync: \(enableCloudKitSync ? "✅" : "❌")
+        - CloudKit Settings Sync: \(enableCloudKitSettingsSync ? "✅" : "❌")
+        - Sync Status UI: \(showSyncStatusUI ? "✅" : "❌")
+        
         Workspace Tools:
         - New Project: \(showProjectCreation ? "✅" : "❌")
         - Planning Validation: \(showPlanningValidation ? "✅" : "❌")
@@ -142,9 +191,6 @@ extension FeatureFlags {
         - Queue System: \(isQueueSystemEnabled ? "✅" : "❌")
         - Queue UI: \(showQueueUI ? "✅" : "❌")
         - Queue Processing: \(enableQueueProcessing ? "✅" : "❌")
-        - Auto Mode: \(isAutoModeEnabled ? "✅" : "❌")
-        - Auto Mode UI: \(showAutoModeUI ? "✅" : "❌")
-        - Auto Mode Settings: \(enableAutoModeSettings ? "✅" : "❌")
         - Experimental: \(enableExperimentalFeatures ? "✅" : "❌")
         """
     }

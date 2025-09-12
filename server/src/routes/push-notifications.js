@@ -24,9 +24,6 @@ router.get('/api/push-notifications/stats', authenticate, (req, res) => {
 /**
  * POST /api/push-notifications/test
  * Send a test notification to a specific client
- *
- * TODO: [QUESTION] Should this be restricted to development/admin only?
- * Currently protected by authentication, but may need additional restrictions
  */
 router.post('/api/push-notifications/test', authenticate, async (req, res) => {
   try {
@@ -65,8 +62,6 @@ router.post('/api/push-notifications/test', authenticate, async (req, res) => {
 /**
  * DELETE /api/push-notifications/bad-tokens
  * Clear bad tokens cache
- *
- * TODO: [QUESTION] Admin only endpoint?
  */
 router.delete('/api/push-notifications/bad-tokens', authenticate, (req, res) => {
   try {

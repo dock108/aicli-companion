@@ -207,12 +207,17 @@ final class ChatViewModel: ObservableObject {
             }
         }
         
+        // Get auto-reply configuration for this project
+        let projectUUID = ProjectUUIDConverter.uuid(for: project)
+        let autoReplyConfig = AutoReplySettingsStore.shared.settings(for: projectUUID)?.toAutoResponseConfig()
+        
         // Send to server
         aicliService.sendMessage(
             text,
             projectPath: project.path,
             attachments: attachments,
-            mode: mode
+            mode: mode,
+            autoReplyConfig: autoReplyConfig
         ) { [weak self] result in
             Task { @MainActor in
                 guard let self = self else { return }

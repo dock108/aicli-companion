@@ -49,6 +49,8 @@ iOS App/
 - `MessagePersistenceService`: Local storage with CoreData
 - `PushNotificationService`: APNS integration for receiving responses
 - `ConnectionReliabilityManager`: Network resilience
+- `AutoReplySettingsStore`: Manages auto-response configurations with CloudKit sync
+- `AutoReplySettingsView`: SwiftUI interface for 5 auto-response modes
 
 ### 2. Node.js Server
 
@@ -80,6 +82,10 @@ Server/
 - `MessageQueueService`: Message queuing for APNS
 - `StreamParserService`: Claude output parsing
 - `TelemetryService`: Performance monitoring
+- `AutonomousAgent`: Enhanced auto-response system with AI integration
+- `MessageAnalyzer`: Analyzes Claude output for response recommendations
+- `AIResponseGenerator`: OpenAI-powered intelligent response generation
+- `TrainingDataManager`: Machine learning training data collection
 
 ### 3. macOS Companion App
 
@@ -100,6 +106,52 @@ macOS App/
 ├── Views/               # Menu bar UI
 ├── Utilities/           # System integration
 └── Resources/           # Assets and config
+```
+
+## Enhanced Auto-Response System
+
+### Auto-Response Architecture
+
+The enhanced auto-response system provides intelligent automation with 5 distinct modes, AI-powered responses, and machine learning capabilities:
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│ iOS Auto-Reply  │────▶│ AutonomousAgent │────▶│ AI Integration  │
+│   Settings      │     │   Orchestrator  │     │  (OpenAI API)   │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+         │                       │                       │
+         ▼                       ▼                       ▼
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│ CloudKit Sync   │     │ MessageAnalyzer │     │ TrainingData    │
+│ Cross-Device    │     │   & Templates   │     │   Manager       │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+```
+
+### Auto-Response Modes
+
+1. **Smart Stop**: AI determines when to halt based on completion analysis
+2. **Until Completion**: Continues until task is fully complete
+3. **Time-Based**: Runs for specified duration (minutes/hours)
+4. **Message-Based**: Processes specific number of exchanges
+5. **Hybrid**: Combines time, message, and completion criteria
+
+### Response Selection Hierarchy
+
+```
+1. CLAUDE.md Rules    → Custom project-specific rules
+2. AI Generation      → OpenAI-powered intelligent responses  
+3. Template Fallback  → Predefined response templates
+```
+
+### Training Data Collection
+
+The system automatically collects successful interactions to improve AI responses:
+
+```
+Interaction → Analysis → Storage → Training → Improved Responses
+     ↓           ↓         ↓         ↓            ↓
+User/Claude   Intent    Project   ML Model    Better AI
+Exchange    Recognition  Data     Training   Suggestions
 ```
 
 ## Communication Protocols
@@ -378,5 +430,5 @@ This architecture provides a solid foundation for current needs while remaining 
 
 ---
 
-**Last Updated**: 2025-08-09  
-**Architecture Version**: 2.0.0
+**Last Updated**: 2025-09-11  
+**Architecture Version**: 2.1.0

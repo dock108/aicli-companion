@@ -108,24 +108,43 @@ static let showNormalMode = true            // Standard mode
 static let showPlanningMode = true          // Documentation only
 static let showCodeMode = false             // Fast generation
 
+// Enhanced Auto-Response System
+static let isAutoResponseEnabled = true     // 5-mode auto-response system
+static let showAutoResponseUI = true        // Status bar and controls
+static let enableAutoResponseSettings = true // Settings interface
+static let enableAIResponses = false        // OpenAI integration
+static let enableTrainingDataCollection = true // ML training
+
+// CloudKit & Sync
+static let enableCloudKitSync = true        // Cross-device sync
+static let enableCloudKitSettingsSync = true // Settings sync
+static let showSyncStatusUI = true          // Sync indicators
+
 // System features
-static let isQueueSystemEnabled = false     // Message queueing
-static let showAutoModeUI = false           // Auto-response mode
+static let isQueueSystemEnabled = false     // Message queueing (future)
 ```
 
-## Recent Updates (v1.0.1)
+## Recent Updates (v2.1.0)
 
-### Implemented Features
+### Major Features Added
+- **Enhanced Auto-Response System**: 5 intelligent automation modes (Smart Stop, Until Completion, Time-Based, Message-Based, Hybrid)
+- **AI-Powered Responses**: OpenAI integration for intelligent response generation (hidden by default)
+- **CloudKit Synchronization**: Cross-device sync for conversations and settings
+- **Training Data Collection**: Machine learning from successful interactions
+- **Real-Time Status UI**: Auto-response status bar with progress indicators
+- **Comprehensive Settings**: Full settings interface for auto-response configuration
+
+### System Improvements
+- Updated feature flag system to reflect all new capabilities
+- Enhanced CloudKit integration with conflict resolution
+- Improved auto-response safety controls and override mechanisms
+- Added comprehensive documentation and testing for all new features
+
+### Previous Updates (v1.0.1)
 - **Planning Validation Engine**: Real-time requirement extraction and readiness scoring
 - **Project Creation Wizard**: Template-based project creation with AI guidance
 - **Requirements Tracking**: Track project requirements across multiple domains
 - **Readiness Scoring**: Dynamic scoring based on project completeness
-
-### Bug Fixes
-- Fixed template scoring to be proportional (0-100% based on selection)
-- Fixed configuration scoring to be dynamic based on options
-- Fixed overall readiness calculation for proper thresholds
-- Resolved type conflicts between planning and project creation view models
 
 ### Performance Improvements
 - Cleaned build artifacts and SPM cache

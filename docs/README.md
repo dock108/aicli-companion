@@ -52,9 +52,11 @@ Welcome to the AICLI Companion documentation! This guide covers everything you n
 
 ### Mobile Experience
 - **Native iOS App**: Built with SwiftUI for optimal performance
+- **Enhanced Auto-Response**: 5 intelligent automation modes with AI integration
 - **Real-time Streaming**: See Claude's responses as they arrive
 - **Push Notifications**: Stay updated when Claude completes tasks
 - **Project Management**: Switch between coding projects seamlessly
+- **CloudKit Sync**: Cross-device conversation and settings synchronization
 
 ### Server Capabilities
 - **Claude Code Integration**: Direct integration with Anthropic's Claude Code CLI
@@ -86,5 +88,5 @@ Before you begin, ensure you have:
 
 ---
 
-**Last Updated**: 2025-08-18  
-**Documentation Version**: 2.0.0
+**Last Updated**: 2025-09-11  
+**Documentation Version**: 2.1.0

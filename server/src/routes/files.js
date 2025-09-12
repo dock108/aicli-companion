@@ -59,8 +59,6 @@ async function validateWorkingDirectory(workingDirectory) {
         // Get real path to resolve symlinks
         const realPath = await fs.realpath(resolvedDir);
 
-        // Double-check the real path is still within root
-        // Note: On macOS, /var is symlinked to /private/var, so we need to check both
         const resolvedRoot = await fs.realpath(ROOT_DIRECTORY);
         if (!realPath.startsWith(resolvedRoot) && !realPath.startsWith(ROOT_DIRECTORY)) {
           logger.warn(`Blocked symlink escape attempt: ${workingDirectory} -> ${realPath}`);
@@ -106,8 +104,6 @@ async function validateWorkingDirectory(workingDirectory) {
     // Get the real path to handle symlinks
     const realPath = await fs.realpath(resolvedDir);
 
-    // Final check: ensure the real path is still within the root directory
-    // Note: On macOS, /var is symlinked to /private/var, so we need to check both
     const resolvedRoot = await fs.realpath(ROOT_DIRECTORY);
     if (!realPath.startsWith(resolvedRoot) && !realPath.startsWith(ROOT_DIRECTORY)) {
       logger.warn(`Blocked symlink escape attempt: ${workingDirectory} -> ${realPath}`);

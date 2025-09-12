@@ -15,7 +15,6 @@ import { createLogger } from '../utils/logger.js';
 
 const logger = createLogger('CommandSecurity');
 
-// Regex prefix used to mark patterns as regular expressions
 const REGEX_PREFIX = 're:';
 
 /**

@@ -42,7 +42,7 @@ struct AutoReplyStatusBar: View {
                         HStack(spacing: 8) {
                             // Mode badge
                             Text(settings.mode.displayName)
-                                .font(Typography.font(.caption2))
+                                .font(.caption2)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background(
@@ -54,7 +54,7 @@ struct AutoReplyStatusBar: View {
                             // Progress info based on mode
                             if let progressText = getProgressText(for: settings) {
                                 Text(progressText)
-                                    .font(Typography.font(.caption2))
+                                    .font(.caption2)
                                     .foregroundColor(Colors.textSecondary(for: colorScheme))
                             }
                         }
@@ -96,7 +96,7 @@ struct AutoReplyStatusBar: View {
                             .foregroundColor(store.syncStatus.color)
                         
                         Text(store.syncStatus.displayName)
-                            .font(Typography.font(.caption2))
+                            .font(.caption2)
                             .foregroundColor(Colors.textSecondary(for: colorScheme))
                         
                         Spacer()
@@ -129,15 +129,15 @@ struct AutoReplyStatusBar: View {
         
         switch settings.mode {
         case .smartStop:
-            return Colors.accentSuccess
+            return Colors.accentWarning
         case .untilCompletion:
             return Colors.accentWarning
         case .timeBased:
             return Colors.accentPrimaryEnd
         case .messageBased:
-            return Colors.accentInfo
+            return Colors.accentPrimaryStart
         case .hybrid:
-            return Colors.accentPurple
+            return Colors.accentPrimaryEnd
         }
     }
     
@@ -243,6 +243,6 @@ struct AutoReplyStatusBar_Previews: PreviewProvider {
             )
         }
         .padding()
-        .background(Color(.systemBackground))
+        .background(Colors.bgCard)
     }
 }

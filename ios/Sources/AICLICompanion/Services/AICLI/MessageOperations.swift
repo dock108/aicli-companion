@@ -318,21 +318,53 @@ public class AICLIMessageOperations {
         
         // Add auto-reply configuration if provided
         if let autoReplyConfig = autoReplyConfig {
-            requestBody["autoResponse"] = [
+            // Convert limits struct to JSON-compatible dictionary
+            var limitsDict: [String: Any] = [
+                "stopOnError": autoReplyConfig.limits.stopOnError,
+                "stopOnCompletion": autoReplyConfig.limits.stopOnCompletion,
+                "requireExplicitCompletion": autoReplyConfig.limits.requireExplicitCompletion
+            ]
+            
+            // Add optional numeric limits if present
+            if let maxMessages = autoReplyConfig.limits.maxMessages {
+                limitsDict["maxMessages"] = maxMessages
+            }
+            if let maxMinutes = autoReplyConfig.limits.maxMinutes {
+                limitsDict["maxMinutes"] = maxMinutes
+            }
+            
+            var autoResponseDict: [String: Any] = [
                 "enabled": autoReplyConfig.enabled,
                 "mode": autoReplyConfig.mode,
-                "limits": autoReplyConfig.limits,
+                "limits": limitsDict,
                 "projectName": autoReplyConfig.projectName,
-                "currentTask": autoReplyConfig.currentTask,
                 "useAI": autoReplyConfig.useAI,
                 "minConfidence": autoReplyConfig.minConfidence
             ]
+            
+            // Only include currentTask if it's not nil
+            if let currentTask = autoReplyConfig.currentTask {
+                autoResponseDict["currentTask"] = currentTask
+            }
+            
+            requestBody["autoResponse"] = autoResponseDict
         }
         
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
             return request
         } catch {
+            print("❌ JSON Serialization Error: \(error)")
+            print("📋 Request body contents:")
+            for (key, value) in requestBody {
+                print("  - \(key): \(type(of: value)) = \(value)")
+            }
+            
+            // Log the specific auto-response structure if present
+            if let autoResponse = requestBody["autoResponse"] {
+                print("🤖 Auto-response config: \(autoResponse)")
+            }
+            
             return nil
         }
     }

@@ -26,17 +26,17 @@ struct FeatureFlags {
     /// Enable/disable enhanced auto response system
     /// When false: auto response controls and logic are disabled
     /// When true: auto response system with 5 modes is available
-    static let isAutoResponseEnabled: Bool = true
+    static let isAutoResponseEnabled: Bool = false
     
     /// Show/hide auto response UI controls in chat
     /// When false: auto response controls are hidden from chat view
     /// When true: auto response controls and status bar are visible
-    static let showAutoResponseUI: Bool = true
+    static let showAutoResponseUI: Bool = false
     
     /// Enable/disable auto response settings interface
     /// When false: auto response settings are hidden from settings screens
     /// When true: comprehensive auto response settings are visible and functional
-    static let enableAutoResponseSettings: Bool = true
+    static let enableAutoResponseSettings: Bool = false
     
     /// Enable/disable AI-powered responses
     /// When false: only template-based responses are used

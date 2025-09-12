@@ -66,7 +66,8 @@ struct ChatView: View {
                         session: session,
                         messageCount: viewModel.messages.count,
                         onSwitchProject: onSwitchProject,
-                        onClearSession: clearCurrentSession
+                        onClearSession: clearCurrentSession,
+                        onShowAutoReplySettings: { showingAutoReplySettings = true }
                     )
                 }
                 

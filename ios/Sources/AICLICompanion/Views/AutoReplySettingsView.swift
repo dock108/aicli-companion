@@ -8,9 +8,7 @@ import UIKit
 public struct AutoReplySettingsView: View {
     @StateObject private var store = AutoReplySettingsStore.shared
     @State private var settings: AutoReplySettings
-    @State private var showingQuickSetup = false
-    @State private var showingImportExport = false
-    @State private var showingDeleteConfirmation = false
+    // Removed unused state variables for simplified UI
     
     @Environment(\.dismiss) private var dismiss
     
@@ -33,9 +31,6 @@ public struct AutoReplySettingsView: View {
             Form {
                 mainSettingsSection
                 modeSpecificSection
-                aiSettingsSection
-                safetySection
-                advancedSection
                 
                 if store.syncStatus != .idle {
                     syncStatusSection
@@ -54,6 +49,11 @@ public struct AutoReplySettingsView: View {
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Save") {
+                        saveSettings()
+                        dismiss()
+                    }
+                }
                 #else
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
@@ -62,34 +62,14 @@ public struct AutoReplySettingsView: View {
                 }
                 
                 ToolbarItem(placement: .confirmationAction) {
-                #endif
                     Button("Save") {
                         saveSettings()
                         dismiss()
                     }
-                    .fontWeight(.semibold)
                 }
+                #endif
             }
-            .sheet(isPresented: $showingQuickSetup) {
-                QuickSetupView(
-                    projectId: projectId,
-                    projectName: projectName
-                ) { quickSettings in
-                    settings = quickSettings
-                }
-            }
-            .sheet(isPresented: $showingImportExport) {
-                ImportExportView()
-            }
-            .alert("Delete Settings", isPresented: $showingDeleteConfirmation) {
-                Button("Delete", role: .destructive) {
-                    store.deleteSettings(for: projectId)
-                    dismiss()
-                }
-                Button("Cancel", role: .cancel) { }
-            } message: {
-                Text("This will permanently delete the auto-reply settings for this project. This action cannot be undone.")
-            }
+            // Removed complex sheet presentations and alerts for simplified UI
         }
         .onAppear {
             if let existingSettings = store.settings(for: projectId) {
@@ -105,20 +85,32 @@ public struct AutoReplySettingsView: View {
             HStack {
                 Toggle("Enable Auto-Reply", isOn: $settings.isEnabled)
                     .toggleStyle(SwitchToggleStyle(tint: .blue))
+                    .onChange(of: settings.isEnabled) {
+                        // Force immediate UI update and save
+                        DispatchQueue.main.async {
+                            saveSettings()
+                        }
+                    }
             }
             
             if settings.isEnabled {
-                Picker("Mode", selection: $settings.mode) {
-                    ForEach(AutoReplyMode.allCases, id: \.self) { mode in
-                        Label(mode.displayName, systemImage: mode.icon)
-                            .tag(mode)
+                Group {
+                    Picker("Mode", selection: $settings.mode) {
+                        ForEach(AutoReplyMode.allCases, id: \.self) { mode in
+                            Label(mode.displayName, systemImage: mode.icon)
+                                .tag(mode)
+                        }
                     }
+                    .onChange(of: settings.mode) {
+                        saveSettings()
+                    }
+                    
+                    Text(settings.mode.description)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.top, 4)
                 }
-                
-                Text(settings.mode.description)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .padding(.top, 4)
+                .transition(.opacity.combined(with: .slide))
             }
         } header: {
             Text("Basic Settings")
@@ -165,6 +157,9 @@ public struct AutoReplySettingsView: View {
                         in: 1...5,
                         step: 1
                     )
+                    .onChange(of: settings.smartStopSettings.stuckDetectionSensitivity) {
+                        saveSettings()
+                    }
                     
                     Text("High")
                         .font(.caption)
@@ -172,20 +167,37 @@ public struct AutoReplySettingsView: View {
             }
             
             Toggle("Stop on Errors", isOn: $settings.smartStopSettings.stopOnErrors)
+                .onChange(of: settings.smartStopSettings.stopOnErrors) {
+                    saveSettings()
+                }
+            
             Toggle("Stop on Completion", isOn: $settings.smartStopSettings.stopOnCompletion)
+                .onChange(of: settings.smartStopSettings.stopOnCompletion) {
+                    saveSettings()
+                }
+            
             Toggle("Require Explicit Completion", isOn: $settings.smartStopSettings.requireExplicitCompletion)
+                .onChange(of: settings.smartStopSettings.requireExplicitCompletion) {
+                    saveSettings()
+                }
             
             Stepper(
                 "Max Loop Attempts: \(settings.smartStopSettings.maxLoopAttempts)",
                 value: $settings.smartStopSettings.maxLoopAttempts,
                 in: 3...20
             )
+            .onChange(of: settings.smartStopSettings.maxLoopAttempts) {
+                saveSettings()
+            }
         }
     }
     
     private var untilCompletionSection: some View {
         Section("Until Completion Settings") {
             Toggle("Require Explicit Completion", isOn: $settings.smartStopSettings.requireExplicitCompletion)
+                .onChange(of: settings.smartStopSettings.requireExplicitCompletion) {
+                    saveSettings()
+                }
             
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
@@ -211,6 +223,9 @@ public struct AutoReplySettingsView: View {
                     Text("8h")
                         .font(.caption)
                 }
+                .onChange(of: settings.timeLimits.minutes) {
+                    saveSettings()
+                }
             }
             
             Text("Safety limit prevents infinite loops")
@@ -222,6 +237,9 @@ public struct AutoReplySettingsView: View {
     private var timeBasedSection: some View {
         Section("Time-Based Settings") {
             Toggle("Enable Time Limit", isOn: $settings.timeLimits.enabled)
+                .onChange(of: settings.timeLimits.enabled) {
+                    saveSettings()
+                }
             
             if settings.timeLimits.enabled {
                 VStack(alignment: .leading, spacing: 4) {
@@ -248,15 +266,24 @@ public struct AutoReplySettingsView: View {
                         Text("4h")
                             .font(.caption)
                     }
+                    .onChange(of: settings.timeLimits.minutes) {
+                        saveSettings()
+                    }
                 }
                 
                 Toggle("Extend on Progress", isOn: $settings.timeLimits.extendOnProgress)
+                    .onChange(of: settings.timeLimits.extendOnProgress) {
+                        saveSettings()
+                    }
                 
                 Stepper(
                     "Warning: \(settings.timeLimits.warningMinutes) min before",
                     value: $settings.timeLimits.warningMinutes,
                     in: 1...30
                 )
+                .onChange(of: settings.timeLimits.warningMinutes) {
+                    saveSettings()
+                }
                 
                 Text("Estimated ~\(settings.timeLimits.estimatedMessages) messages")
                     .font(.caption)
@@ -268,6 +295,9 @@ public struct AutoReplySettingsView: View {
     private var messageBasedSection: some View {
         Section("Message-Based Settings") {
             Toggle("Enable Message Limit", isOn: $settings.messageLimits.enabled)
+                .onChange(of: settings.messageLimits.enabled) {
+                    saveSettings()
+                }
             
             if settings.messageLimits.enabled {
                 Stepper(
@@ -275,14 +305,23 @@ public struct AutoReplySettingsView: View {
                     value: $settings.messageLimits.maxMessages,
                     in: 1...100
                 )
+                .onChange(of: settings.messageLimits.maxMessages) {
+                    saveSettings()
+                }
                 
                 Toggle("Count Only Successful", isOn: $settings.messageLimits.countOnlySuccessful)
+                    .onChange(of: settings.messageLimits.countOnlySuccessful) {
+                        saveSettings()
+                    }
                 
                 Stepper(
                     "Warning at: \(settings.messageLimits.warningThreshold)",
                     value: $settings.messageLimits.warningCount,
                     in: 1...20
                 )
+                .onChange(of: settings.messageLimits.warningCount) {
+                    saveSettings()
+                }
                 
                 Text("Warning will show \(settings.messageLimits.warningCount) messages before limit")
                     .font(.caption)
@@ -294,8 +333,19 @@ public struct AutoReplySettingsView: View {
     private var hybridSection: some View {
         Section("Hybrid Settings") {
             Toggle("Time Limit", isOn: $settings.hybridSettings.enableTimeLimit)
+                .onChange(of: settings.hybridSettings.enableTimeLimit) {
+                    saveSettings()
+                }
+            
             Toggle("Message Limit", isOn: $settings.hybridSettings.enableMessageLimit)
+                .onChange(of: settings.hybridSettings.enableMessageLimit) {
+                    saveSettings()
+                }
+            
             Toggle("Smart Stop", isOn: $settings.hybridSettings.enableSmartStop)
+                .onChange(of: settings.hybridSettings.enableSmartStop) {
+                    saveSettings()
+                }
             
             Picker("Stop Priority", selection: $settings.hybridSettings.priority) {
                 ForEach(StopPriority.allCases, id: \.self) { priority in
@@ -307,6 +357,9 @@ public struct AutoReplySettingsView: View {
                     }
                     .tag(priority)
                 }
+            }
+            .onChange(of: settings.hybridSettings.priority) {
+                saveSettings()
             }
             
             if settings.hybridSettings.enableTimeLimit {
@@ -323,73 +376,11 @@ public struct AutoReplySettingsView: View {
         }
     }
     
-    private var aiSettingsSection: some View {
-        Section("AI Settings") {
-            Toggle("Use AI Responses", isOn: $settings.useAI)
-            
-            if settings.useAI {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text("Minimum Confidence")
-                        Spacer()
-                        Text("\(Int(settings.minConfidence * 100))%")
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    Slider(value: $settings.minConfidence, in: 0.3...0.95, step: 0.05) {
-                        Text("Confidence")
-                    } minimumValueLabel: {
-                        Text("30%")
-                            .font(.caption)
-                    } maximumValueLabel: {
-                        Text("95%")
-                            .font(.caption)
-                    }
-                }
-                
-                Toggle("Learning Enabled", isOn: $settings.learningEnabled)
-                
-                Text("AI will learn from accepted responses to improve future suggestions")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            } else {
-                Text("Using template-based responses only")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-        }
-    }
+    // AI Settings section removed for simplicity - keeping it basic
     
-    private var safetySection: some View {
-        Section("Safety") {
-            Toggle("Allow Override", isOn: $settings.allowOverride)
-            Toggle("Require Confirmation", isOn: $settings.requireConfirmation)
-            Toggle("Notify on Stop", isOn: $settings.notifyOnStop)
-            Toggle("Save History", isOn: $settings.saveHistory)
-        } footer: {
-            Text("Safety features help prevent unintended actions and provide transparency.")
-        }
-    }
+    // Safety section removed for simplicity - keeping it basic
     
-    private var advancedSection: some View {
-        Section("Advanced") {
-            Button("Quick Setup...") {
-                showingQuickSetup = true
-            }
-            
-            Button("Import/Export...") {
-                showingImportExport = true
-            }
-            
-            Button("Reset to Defaults") {
-                settings = store.getDefaultSettings(for: projectId, projectName: projectName)
-            }
-            
-            Button("Delete Settings", role: .destructive) {
-                showingDeleteConfirmation = true
-            }
-        }
-    }
+    // Advanced section removed for simplicity - keeping it basic
     
     private var syncStatusSection: some View {
         Section("Sync Status") {
@@ -431,200 +422,7 @@ public struct AutoReplySettingsView: View {
     }
 }
 
-// MARK: - Quick Setup View
-
-@available(iOS 16.0, macOS 13.0, *)
-private struct QuickSetupView: View {
-    let projectId: UUID
-    let projectName: String
-    let onSelect: (AutoReplySettings) -> Void
-    
-    @Environment(\.dismiss) private var dismiss
-    
-    var body: some View {
-        NavigationView {
-            List {
-                Section {
-                    ForEach(QuickSettingsScenario.allCases, id: \.self) { scenario in
-                        Button(action: {
-                            let settings = AutoReplySettingsStore.shared.createQuickSettings(
-                                for: projectId,
-                                projectName: projectName,
-                                scenario: scenario
-                            )
-                            onSelect(settings)
-                            dismiss()
-                        }) {
-                            HStack {
-                                Image(systemName: scenario.icon)
-                                    .foregroundColor(.blue)
-                                    .frame(width: 24)
-                                
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(scenario.displayName)
-                                        .font(.headline)
-                                        .foregroundColor(.primary)
-                                    
-                                    Text(scenario.description)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                                
-                                Spacer()
-                                
-                                Image(systemName: "chevron.right")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-                } header: {
-                    Text("Choose a Preset")
-                } footer: {
-                    Text("Select a preset configuration that matches your workflow. You can customize it further after selection.")
-                }
-            }
-            .navigationTitle("Quick Setup")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                #if os(iOS)
-                ToolbarItem(placement: .navigationBarTrailing) {
-                #else
-                ToolbarItem(placement: .confirmationAction) {
-                #endif
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Import/Export View
-
-@available(iOS 16.0, macOS 13.0, *)
-private struct ImportExportView: View {
-    @StateObject private var store = AutoReplySettingsStore.shared
-    @State private var showingFilePicker = false
-    @State private var showingShareSheet = false
-    @State private var exportedData: Data?
-    @State private var alertMessage: String?
-    @State private var showingAlert = false
-    
-    @Environment(\.dismiss) private var dismiss
-    
-    var body: some View {
-        NavigationView {
-            List {
-                Section {
-                    Button("Export All Settings") {
-                        exportSettings()
-                    }
-                    
-                    Button("Import Settings") {
-                        showingFilePicker = true
-                    }
-                } header: {
-                    Text("Settings Management")
-                } footer: {
-                    Text("Export your settings to backup or share with other devices. Import to restore previous settings.")
-                }
-                
-                Section {
-                    Button("Sync with CloudKit") {
-                        Task {
-                            await store.syncWithCloudKit()
-                        }
-                    }
-                    .disabled(store.syncStatus == .syncing)
-                    
-                    if store.syncStatus != .idle {
-                        HStack {
-                            Image(systemName: syncStatusIcon)
-                                .foregroundColor(store.syncStatus.color)
-                            Text(store.syncStatus.displayName)
-                        }
-                    }
-                } header: {
-                    Text("Cloud Sync")
-                } footer: {
-                    Text("Sync your settings across all your devices using iCloud.")
-                }
-            }
-            .navigationTitle("Import/Export")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                #if os(iOS)
-                ToolbarItem(placement: .navigationBarTrailing) {
-                #else
-                ToolbarItem(placement: .confirmationAction) {
-                #endif
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
-            }
-        }
-        .alert("Settings", isPresented: $showingAlert) {
-            Button("OK") { }
-        } message: {
-            if let alertMessage = alertMessage {
-                Text(alertMessage)
-            }
-        }
-        .sheet(isPresented: $showingShareSheet) {
-            #if os(iOS)
-            if let data = exportedData {
-                ShareSheet(items: [data])
-            }
-            #endif
-        }
-    }
-    
-    private var syncStatusIcon: String {
-        switch store.syncStatus {
-        case .idle: return "icloud"
-        case .syncing: return "icloud.and.arrow.up"
-        case .completed: return "checkmark.icloud"
-        case .failed: return "exclamationmark.icloud"
-        }
-    }
-    
-    private func exportSettings() {
-        do {
-            let data = try store.exportSettings()
-            exportedData = data
-            showingShareSheet = true
-        } catch {
-            alertMessage = "Failed to export settings: \(error.localizedDescription)"
-            showingAlert = true
-        }
-    }
-}
-
-// MARK: - Share Sheet
-
-#if os(iOS)
-@available(iOS 16.0, *)
-private struct ShareSheet: UIViewControllerRepresentable {
-    let items: [Any]
-    
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: items, applicationActivities: nil)
-    }
-    
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {
-    }
-}
-#endif
-
 // MARK: - Preview
-
 @available(iOS 16.0, macOS 13.0, *)
 struct AutoReplySettingsView_Previews: PreviewProvider {
     static var previews: some View {

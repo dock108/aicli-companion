@@ -1,5 +1,8 @@
 import Foundation
 import CloudKit
+#if os(iOS)
+import UIKit
+#endif
 
 // MARK: - Enhanced Auto-Reply Settings
 

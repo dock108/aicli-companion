@@ -69,7 +69,6 @@ struct SettingsView: View {
         case connection = "Connection"
         // TODO: [BETA] Re-enable Security tab after thorough testing
         // case security = "Security"
-        case autoResponse = "Auto Mode"
         case appearance = "Appearance"
         case behavior = "Behavior"
         case notifications = "Notifications"
@@ -82,7 +81,6 @@ struct SettingsView: View {
             case .connection: return "network"
             // TODO: [BETA] Re-enable when Security tab is restored
             // case .security: return "shield"
-            case .autoResponse: return "play.circle"
             case .appearance: return "paintbrush"
             case .behavior: return "gearshape"
             case .notifications: return "bell"
@@ -198,8 +196,6 @@ struct SettingsView: View {
         // TODO: [BETA] Re-enable Security settings after thorough testing
         // case .security:
         //     SecuritySettingsView()
-        case .autoResponse:
-            autoResponseSection
         case .appearance:
             appearanceSection
         case .behavior:
@@ -367,24 +363,7 @@ struct SettingsView: View {
         }
     }
     
-    // Use existing sections from the original SettingsView but simplified
-    private var autoResponseSection: some View {
-        SettingsSection(title: "Auto-Response Mode") {
-            Toggle(isOn: $autoResponseManager.config.enabled) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Enable Auto Mode")
-                        .font(Typography.font(.body))
-                        .foregroundColor(Colors.textPrimary(for: colorScheme))
-                    Text("Claude will automatically continue working")
-                        .font(Typography.font(.caption))
-                        .foregroundColor(Colors.textSecondary(for: colorScheme))
-                }
-            }
-            .toggleStyle(NeumorphicToggleStyle())
-            .padding(.horizontal, Spacing.md)
-            .padding(.vertical, Spacing.sm)
-        }
-    }
+    // Auto-response section removed - now handled per-project in chat context menu
     
     private var appearanceSection: some View {
         SettingsSection(title: "Appearance") {

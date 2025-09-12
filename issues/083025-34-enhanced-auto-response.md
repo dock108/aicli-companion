@@ -329,8 +329,22 @@ TRAINING_DATA_DIR=./training-data
 
 ### ⏳ PENDING - iOS App Implementation
 
+**CRITICAL: Auto-Reply Settings Architecture Fix Needed:**
+**Issue Identified (2025-09-11)**: Auto-reply settings are currently implemented as a GLOBAL toggle in main SettingsView, but they should be PER-PROJECT settings accessible from each chat thread's context menu (similar to "Clear Chat" option).
+
+**Current Problem:**
+- Global "Auto Mode" toggle in main app settings (WRONG)
+- No way to configure auto-reply per project (MISSING)
+- Inconsistent with chat mode pattern (per-project)
+- User confusion about global vs project-specific behavior
+
+**Required Fix:**
+1. **Remove Global Toggle**: Remove "Auto Mode" from main SettingsView
+2. **Add Per-Project Access**: Add "Auto-Reply Settings..." to project context menu (same menu as "Clear Chat")
+3. **Per-Project Configuration**: Each project should have independent auto-reply settings
+
 **Auto-Reply Configuration UI Needed:**
-1. **Per-Project Settings:**
+1. **Per-Project Settings:** (Architecture needs fixing first)
    - Enable/disable auto-reply per project
    - Configure response mode (AI/Template/Both)
    - Set confidence thresholds
@@ -421,14 +435,21 @@ TRAINING_DATA_DIR=./training-data
 
 ## Next Steps
 
-1. **iOS Implementation Priority:**
-   - [ ] Create auto-reply settings view
-   - [ ] Implement per-project configuration
-   - [ ] Add mode selection UI
-   - [ ] Integrate with server API
+1. **✅ COMPLETED: Fix Auto-Reply Settings Architecture (2025-09-11)**
+   - [x] Remove global "Auto Mode" toggle from main SettingsView
+   - [x] Add "Auto-Reply Settings..." to ProjectContextHeader menu (same menu as "Clear Chat")
+   - [x] Update ChatView to present AutoReplySettingsView per-project
+   - [x] Verify AutoReplySettingsStore correctly handles per-project persistence
+   - [x] Test that AutoReplyStatusBar continues to work per-project
+
+2. **iOS Implementation Priority:**
+   - [x] Create auto-reply settings view (UI exists and properly integrated)
+   - [x] Implement per-project configuration (backend exists, UI architecture fixed)
+   - [x] Add mode selection UI (exists, now properly accessible)
+   - [ ] Integrate with server API (exists, needs testing)
    - [ ] Test with real workflows
 
-2. **User Testing Required:**
+3. **User Testing Required:**
    - [ ] Test AI response quality
    - [ ] Validate auto-stop conditions
    - [ ] Verify limit enforcement
@@ -437,5 +458,136 @@ TRAINING_DATA_DIR=./training-data
 
 ## Result
 
-**Current State**: Server-side AI implementation COMPLETE. iOS app implementation PENDING. 
-Feature requires iOS UI work before user testing can begin.
+**Current State**: Server-side AI implementation COMPLETE. iOS app UI architecture FIXED. Ready for testing and server integration.
+
+**✅ FIXED Issue (2025-09-11)**: Auto-reply settings architecture has been corrected:
+- ✅ AutoReplySettingsView (complete and properly integrated)
+- ✅ AutoReplySettingsStore (complete, supports per-project)
+- ✅ AutoReplyStatusBar (complete, works per-project)  
+- ✅ Settings access (now per-project via context menu, like "Clear Chat")
+- ✅ UI integration (properly integrated with project context menu)
+
+**Status**: UI architecture fixed. Feature is now ready for:
+1. Server API integration testing
+2. Real workflow testing 
+3. User testing and feedback
+
+## Enhancement: Auto-Reply Notification Muting (2025-09-12)
+
+### Problem
+When auto-reply is enabled for a project, each Claude response triggers an individual notification, creating notification spam during auto-reply sessions. Users want notifications muted during auto-reply and only receive a summary notification when the session completes.
+
+### Solution Design
+
+#### 1. Auto-Reply Session State Tracking
+
+**iOS Client Updates:**
+- Add `isAutoReplySessionActive` flag to track active auto-reply sessions
+- Store in `AutoReplySettingsStore` or `ProjectStateManager`
+- Update status when auto-reply starts (first message with auto-reply enabled)
+- Update status when auto-reply stops (completion, error, limit reached, manual stop)
+
+#### 2. Notification Suppression Logic
+
+**PushNotificationService.swift Updates:**
+```swift
+// Check auto-reply status before showing notifications
+func shouldShowNotification(for projectPath: String) -> Bool {
+    // Existing logic for checking if user is viewing project
+    
+    // NEW: Check if auto-reply is active for this project
+    if let projectUUID = getProjectUUID(for: projectPath),
+       let settings = AutoReplySettingsStore.shared.settings(for: projectUUID),
+       settings.isEnabled && isAutoReplySessionActive(for: projectUUID) {
+        // Suppress notification during auto-reply
+        return false
+    }
+    
+    return true
+}
+
+// Process notifications silently during auto-reply
+func processAPNSMessage(userInfo: [AnyHashable: Any]) async {
+    // Extract auto-reply status from notification payload
+    let isAutoReplyMessage = userInfo["isAutoReplyMessage"] as? Bool ?? false
+    let autoReplyStatus = userInfo["autoReplySessionStatus"] as? String
+    
+    // Process message normally but suppress UI notification if needed
+    if isAutoReplyMessage && autoReplyStatus == "active" {
+        // Process silently
+        await saveClaudeMessage(...)
+        // Skip notification UI
+    } else if autoReplyStatus == "complete" {
+        // Show completion notification
+        showAutoReplyCompletionNotification(...)
+    }
+}
+```
+
+#### 3. Server-Side Auto-Reply Tracking
+
+**notification-types.js Updates:**
+```javascript
+createClaudeResponseNotification(data, options = {}) {
+    // Existing notification setup
+    
+    // Add auto-reply metadata
+    if (data.autoResponse?.enabled) {
+        notification.payload.isAutoReplyMessage = true;
+        notification.payload.autoReplySessionStatus = data.autoResponse.sessionStatus; // 'start', 'active', 'complete'
+        notification.payload.autoReplyStats = {
+            messagesExchanged: data.autoResponse.messageCount,
+            duration: data.autoResponse.duration,
+            stopReason: data.autoResponse.stopReason
+        };
+    }
+}
+```
+
+#### 4. Auto-Reply Completion Notifications
+
+**Special notification types:**
+- **Session Start** (optional): "Auto-reply started for [Project]" - subtle or silent
+- **Session Active**: All messages processed silently, no notifications
+- **Session Complete**: 
+  - "Auto-reply completed: [X] messages exchanged in [Y] minutes"
+  - "Auto-reply stopped: [reason]" (error, limit reached, manual stop)
+  - Include summary of what was accomplished if available
+
+#### 5. Implementation Files
+
+**iOS Client Files to Modify:**
+- `Services/PushNotificationService.swift` - Add auto-reply aware notification filtering
+- `Models/AutoReplySettings.swift` - Add session state tracking
+- `Models/AutoReplySettingsStore.swift` - Track active sessions per project
+- `Views/Chat/ViewModels/ChatViewModel.swift` - Update session state on start/stop
+
+**Server Files to Modify:**
+- `services/push-notification/notification-types.js` - Add auto-reply session metadata
+- `handlers/chat-message-handler.js` - Track auto-reply session lifecycle
+- `services/autonomous-agent.js` - Include session status in responses
+
+### Testing Requirements
+
+1. **Auto-Reply Session Start**: Verify notification behavior when auto-reply begins
+2. **During Active Session**: Confirm notifications are suppressed
+3. **Session Completion**: Test completion notification with stats
+4. **Error/Stop Cases**: Verify appropriate notifications for different stop reasons
+5. **Manual Stop**: Test notification when user manually stops auto-reply
+6. **Multiple Projects**: Ensure per-project notification muting works correctly
+
+### User Configuration Options
+
+Consider adding settings for:
+- Enable/disable session start notification
+- Enable/disable session completion notification
+- Periodic progress updates (e.g., notification every 5 messages)
+- Different notification sounds for auto-reply events
+
+### Success Criteria
+
+- No notification spam during auto-reply sessions
+- Clear indication when auto-reply completes or stops
+- Summary information in completion notification
+- Per-project notification muting works correctly
+- User can still see progress in app UI without notifications

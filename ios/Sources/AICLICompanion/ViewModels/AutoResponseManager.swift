@@ -64,8 +64,8 @@ public class AutoResponseManager: ObservableObject {
     /// Activate auto-response mode
     public func activate() {
         // FEATURE FLAG: Auto mode disabled
-        guard FeatureFlags.shouldUseAutoMode else {
-            FeatureFlags.logFeatureDisabled("AutoResponseManager.activate", reason: "Auto mode disabled by feature flag")
+        guard FeatureFlags.shouldUseAutoResponse else {
+            FeatureFlags.logFeatureDisabled("AutoResponseManager.activate", reason: "Auto response disabled by feature flag")
             return
         }
         guard canActivate else { return }
@@ -152,8 +152,8 @@ public class AutoResponseManager: ObservableObject {
      - Returns: An auto-generated response as a `String` if applicable, or `nil` if no response is generated or if auto-response mode is inactive, paused, or deactivated due to stop conditions.
      */
     func processMessage(_ message: Message) -> String? {
-        // FEATURE FLAG: Auto mode disabled
-        guard FeatureFlags.shouldUseAutoMode else {
+        // FEATURE FLAG: Auto response disabled
+        guard FeatureFlags.shouldUseAutoResponse else {
             return nil
         }
         guard isActive && !isPaused else { return nil }

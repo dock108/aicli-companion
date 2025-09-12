@@ -249,7 +249,7 @@ public class AutoReplySettingsStore: ObservableObject {
                 if let setting = try? AutoReplySettings.from(ckRecord: record) {
                     settings.append(setting)
                 }
-            case .failure(_):
+            case .failure:
                 // Failed to fetch setting - silently continue
                 break
             }

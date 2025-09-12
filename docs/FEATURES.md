@@ -1,23 +1,25 @@
 # AICLI Companion Features
 
 ## Feature Visibility Status
-Last Updated: 2025-09-11
+Last Updated: 2025-09-12
 
 ## 🚀 Enhanced Auto-Response System
 | Feature | App Visibility | Internal Status | Flag | Description |
 |---------|---------------|-----------------|------|-------------|
-| Auto-Response Core | ✅ Visible | Complete | `isAutoResponseEnabled = true` | 5-mode intelligent automation system |
-| Auto-Response UI | ✅ Visible | Complete | `showAutoResponseUI = true` | Status bar, controls, and progress indicators |
-| Auto-Response Settings | ✅ Visible | Complete | `enableAutoResponseSettings = true` | Comprehensive settings interface |
+| Auto-Response Core | ❌ Hidden | Complete | `isAutoResponseEnabled = false` | 5-mode intelligent automation system |
+| Auto-Response UI | ❌ Hidden | Complete | `showAutoResponseUI = false` | Status bar, controls, and progress indicators |
+| Auto-Response Settings | ❌ Hidden | Complete | `enableAutoResponseSettings = false` | Comprehensive settings interface |
 | AI-Powered Responses | ❌ Hidden | Complete | `enableAIResponses = false` | OpenAI integration for intelligent responses |
-| Training Data Collection | ✅ Active | Complete | `enableTrainingDataCollection = true` | Machine learning from successful interactions |
+| Training Data Collection | ❌ Inactive | Complete | `enableTrainingDataCollection = true` | Machine learning from successful interactions |
 
-### Auto-Response Modes (All Available)
+### Auto-Response Modes (Currently Disabled)
 1. **Smart Stop**: AI-powered completion detection
 2. **Until Completion**: Continues until task fully complete
 3. **Time-Based**: Runs for specified duration (1 min - 8 hours)
 4. **Message-Based**: Processes specific number of exchanges (1-100)
 5. **Hybrid**: Combines multiple stopping criteria
+
+**Note**: Auto-Response system is temporarily disabled via feature flags for stability testing.
 
 ## ☁️ CloudKit & Synchronization
 | Feature | App Visibility | Internal Status | Flag | Description |
@@ -60,12 +62,6 @@ Last Updated: 2025-09-11
 ## Current Configuration Summary
 
 ### ✅ What Users See:
-
-**Enhanced Auto-Response System:**
-- 🎯 5 intelligent automation modes (Smart Stop, Until Completion, Time-Based, Message-Based, Hybrid)
-- ⚙️ Comprehensive settings interface with AI configuration
-- 📊 Real-time status bar with progress indicators
-- 🔄 Training data collection for continuous improvement
 
 **Chat Modes:**
 - 💬 Normal mode - Full access to all operations

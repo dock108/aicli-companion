@@ -223,6 +223,12 @@ Output example:
 
 ## Version History
 
+### v2.1.1 (2025-09-12)
+- **Updated**: Disabled auto-response feature flags for stability testing
+- **Fixed**: JSON serialization crash when auto-reply was enabled
+- **Added**: Auto-reply notification muting design (documented in issue #083025-34)
+- **Status**: Auto-response system complete but temporarily disabled
+
 ### v2.1.0 (2025-09-11)
 - **Major**: Implemented Enhanced Auto-Response System with 5 intelligent modes
 - **Major**: Added AI-powered response generation with OpenAI integration
@@ -267,6 +273,6 @@ Output example:
 
 ---
 
-**Last Updated**: 2025-09-11  
-**Feature Documentation Version**: 2.1.0  
-**iOS App Version**: 2.1.0
+**Last Updated**: 2025-09-12  
+**Feature Documentation Version**: 2.1.1  
+**iOS App Version**: 2.1.1

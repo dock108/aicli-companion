@@ -67,24 +67,18 @@ struct SettingsView: View {
     
     enum SettingsTab: String, CaseIterable {
         case connection = "Connection"
-        // TODO: [BETA] Re-enable Security tab after thorough testing
-        // case security = "Security"
         case appearance = "Appearance"
         case behavior = "Behavior"
         case notifications = "Notifications"
-        case privacy = "Privacy"
         case advanced = "Advanced"
         case about = "About"
         
         var icon: String {
             switch self {
             case .connection: return "network"
-            // TODO: [BETA] Re-enable when Security tab is restored
-            // case .security: return "shield"
             case .appearance: return "paintbrush"
             case .behavior: return "gearshape"
             case .notifications: return "bell"
-            case .privacy: return "lock"
             case .advanced: return "wrench"
             case .about: return "info.circle"
             }
@@ -193,19 +187,16 @@ struct SettingsView: View {
         switch tab {
         case .connection:
             connectionSection
-        // TODO: [BETA] Re-enable Security settings after thorough testing
-        // case .security:
-        //     SecuritySettingsView()
         case .appearance:
             appearanceSection
         case .behavior:
             behaviorSection
         case .notifications:
             notificationSection
-        case .privacy:
-            privacySection
         case .advanced:
-            advancedSection
+            if FeatureFlags.enableExperimentalFeatures {
+                advancedSection
+            }
         case .about:
             aboutSection
         }
@@ -415,14 +406,51 @@ struct SettingsView: View {
             
             SettingsDivider()
             
-            Toggle(isOn: $settings.showThinkingIndicator) {
-                Text("Show thinking indicator")
+            Toggle(isOn: $settings.hapticFeedback) {
+                Text("Haptic feedback")
                     .font(Typography.font(.body))
                     .foregroundColor(Colors.textPrimary(for: colorScheme))
             }
             .toggleStyle(NeumorphicToggleStyle())
             .padding(.horizontal, Spacing.md)
             .padding(.vertical, Spacing.sm)
+            
+            SettingsDivider()
+            
+            Toggle(isOn: $settings.storeChatHistory) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Store chat history")
+                        .font(Typography.font(.body))
+                        .foregroundColor(Colors.textPrimary(for: colorScheme))
+                    Text("Messages are cached locally for performance")
+                        .font(Typography.font(.caption))
+                        .foregroundColor(Colors.textSecondary(for: colorScheme))
+                }
+            }
+            .toggleStyle(NeumorphicToggleStyle())
+            .padding(.horizontal, Spacing.md)
+            .padding(.vertical, Spacing.sm)
+            
+            if settings.storeChatHistory {
+                SettingsDivider()
+                
+                Button(action: {
+                    settings.clearChatHistory()
+                }) {
+                    HStack {
+                        Image(systemName: "trash")
+                        Text("Clear Chat History")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundColor(Colors.textSecondary(for: colorScheme))
+                    }
+                    .foregroundColor(.red)
+                    .padding(.horizontal, Spacing.md)
+                    .padding(.vertical, Spacing.sm)
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
         }
     }
     
@@ -439,33 +467,6 @@ struct SettingsView: View {
         }
     }
     
-    private var privacySection: some View {
-        SettingsSection(title: "Privacy") {
-            // Always store chat history locally (required for app to function properly)
-            VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text("Chat History")
-                    .font(Typography.font(.body))
-                    .foregroundColor(Colors.textPrimary(for: colorScheme))
-                Text("Messages are cached locally for performance and offline access")
-                    .font(Typography.font(.caption))
-                    .foregroundColor(Colors.textSecondary(for: colorScheme))
-            }
-            .padding(.horizontal, Spacing.md)
-            .padding(.vertical, Spacing.sm)
-            
-            SettingsDivider()
-            
-            Button(action: {
-                settings.clearChatHistory()
-            }) {
-                SettingsTile(title: "Clear Chat History") {
-                    EmptyView()
-                }
-                .foregroundColor(.red)
-            }
-            .buttonStyle(PlainButtonStyle())
-        }
-    }
     
     private var advancedSection: some View {
         SettingsSection(title: "Advanced") {

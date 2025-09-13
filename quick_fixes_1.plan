@@ -1,0 +1,105 @@
+# Quick Fixes 1 - Branch Plan
+
+## Branch: quick_fixes_1
+
+### Purpose
+Address critical UI issues and bugs that impact user experience, focusing on issues that can be resolved quickly without major architectural changes.
+
+### High Priority Issues to Address
+
+#### 1. Missing Thinking Indicator (091225-1)
+- **Problem**: No thinking indicator when queued messages go to in-progress
+- **Fix**: Ensure state transitions trigger UI updates
+- **Files**: ChatView.swift, ChatViewModel.swift
+
+#### 2. Auto-Reply UI When Disabled (091225-2)  
+- **Problem**: Auto-reply status shows even when feature is off
+- **Fix**: Add feature flag checks to UI components
+- **Files**: ChatView.swift, AutoReplyStatusView.swift
+
+#### 3. iPad Keyboard Bug (091225-7)
+- **Problem**: Message sent but remains in text field on iPad
+- **Fix**: Clear text field after successful send
+- **Files**: ChatInputView.swift
+
+#### 4. Keyboard Dismissal (091225-9)
+- **Problem**: Can't dismiss keyboard to read messages
+- **Fix**: Add tap-to-dismiss and scroll-to-dismiss
+- **Files**: ChatView.swift
+
+#### 5. Badge Clearing on iPad (091225-13)
+- **Problem**: Notification badges don't clear properly
+- **Fix**: Update badge clearing logic for iPad
+- **Files**: NotificationManager.swift
+
+### Medium Priority Issues
+
+#### 6. Project List Refresh (091225-11)
+- Add pull-to-refresh gesture
+- Add refresh button option
+- Files: ProjectListView.swift
+
+#### 7. Unsent Message Loss (091225-12)
+- Implement draft persistence
+- Add navigation warning for unsent text
+- Files: ChatInputView.swift, ChatViewModel.swift
+
+### Branch Creation Commands
+
+```bash
+# Create and checkout new branch
+git checkout -b quick_fixes_1
+
+# Stage and commit documentation changes
+git add USER_TEST_NOTES.md
+git add issues/091225-*.md
+git add issues/future_features/
+git add quick_fixes_1.plan
+git commit -m "docs: document critical issues for quick fixes
+
+- Added test notes for multiple iPad and iOS issues
+- Created issue tracking for 14 new problems
+- Organized future features separately
+- Created quick fixes plan"
+
+# Push branch to remote
+git push -u origin quick_fixes_1
+```
+
+### Implementation Order
+
+1. **Day 1**: Critical UI feedback issues
+   - Missing thinking indicator
+   - Auto-reply UI when disabled
+   - Message delivery but stuck thinking
+
+2. **Day 2**: iPad-specific issues  
+   - Keyboard bug
+   - Badge clearing
+   - Keyboard dismissal
+
+3. **Day 3**: Quality of life improvements
+   - Project list refresh
+   - Draft message persistence
+
+### Testing Checklist
+
+- [ ] Test thinking indicator in all message states
+- [ ] Verify auto-reply UI only shows when enabled
+- [ ] Test iPad keyboard behavior with message send
+- [ ] Confirm keyboard dismissal gestures work
+- [ ] Verify badges clear on iPad
+- [ ] Test project list refresh mechanisms
+- [ ] Confirm draft persistence works
+
+### Success Criteria
+
+- All critical UI feedback issues resolved
+- iPad experience improved significantly  
+- No data loss from navigation
+- Settings accurately reflected in UI
+- User confidence in app reliability restored
+
+---
+**Created**: 2025-09-12
+**Target Completion**: 2-3 days of focused work

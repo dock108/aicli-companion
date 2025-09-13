@@ -347,3 +347,210 @@ While the system handles this gracefully and users can continue their conversati
 - Whether chunking long tasks could avoid hitting the limit
 - Impact on complex multi-step operations that take longer than 5 minutes
 - User experience improvements to make continuation more seamless
+
+---
+
+## CLI Tools for AI Coding Assistants to Consider Supporting
+
+### Currently Supported
+- **Claude Code CLI** (Anthropic)
+  - Official CLI from Anthropic
+  - Node.js based
+  - Full featured with file system access
+  - WebSocket/HTTP communication
+
+### Other Notable CLI Tools to Consider
+
+#### 1. **OpenAI Codex CLI**
+- **Provider**: OpenAI
+- **Type**: Command line coding agent
+- **Language**: Node.js (brew/npm installs)
+- **Features**:
+  - Interactive TUI and non-interactive `exec` mode
+  - Reads/writes files and runs commands with approval modes
+  - Project-aware context
+- **API**: OpenAI API or ChatGPT auth
+- **Integration**: API key or login-based
+
+#### 2. **Aider CLI**
+- **Provider**: Paul Gauthier (Open Source)
+- **Type**: Command line coding assistant
+- **Language**: Python
+- **Features**:
+  - Git-aware editing
+  - Multiple file context
+  - Works with various LLMs (OpenAI, Anthropic, local)
+  - Automatic git commits
+- **API**: Python package, supports multiple LLM backends
+- **Integration**: Python API or subprocess
+
+#### 3. **GitHub Copilot CLI**
+- **Provider**: GitHub/Microsoft
+- **Type**: Command line interface for Copilot
+- **Language**: Node.js
+- **Features**:
+  - Git integration
+  - Command suggestions
+  - Shell script generation
+  - Explain commands
+- **API**: GitHub/Copilot APIs
+- **Integration**: OAuth/GitHub App authentication
+
+#### 4. **Continue.dev Server/API**
+- **Provider**: Continue.dev
+- **Type**: Open source assistant server/API
+- **Language**: Python/TypeScript
+- **Features**:
+  - Multiple LLM support (OpenAI, Anthropic, local)
+  - Extensible via plugins
+  - Self-hostable server with REST API
+- **API**: REST API (self-hosted)
+- **Integration**: API key based
+
+#### 5. **Codeium CLI/API**
+- **Provider**: Codeium
+- **Type**: AI coding assistant
+- **Language**: Go/TypeScript
+- **Features**:
+  - Code completion and chat
+  - Team features
+- **API**: REST API with authentication
+- **Integration**: API key based
+
+#### 6. **Sourcegraph Cody CLI**
+- **Provider**: Sourcegraph
+- **Type**: AI coding assistant
+- **Language**: Go/TypeScript
+- **Features**:
+  - Codebase-aware context
+  - Multiple LLM support
+  - Code search integration
+- **API**: GraphQL API
+- **Integration**: Sourcegraph instance or cloud
+
+### Integration Considerations
+
+#### Priority Candidates for Integration:
+1. **OpenAI Codex CLI** - Official CLI, strong automation support
+2. **Aider** - Open source, good documentation, multiple LLM support
+3. **Continue.dev** - Open source, extensible, good API
+4. **GitHub Copilot CLI** - Large user base, official Microsoft support
+5. **Codeium** - Free tier, growing popularity
+6. **Sourcegraph Cody CLI** - Codebase-aware with enterprise options
+
+#### Technical Requirements:
+- Authentication mechanism (API keys, OAuth, etc.)
+- Message format standardization
+- Session management approach
+- Error handling for different response formats
+- Rate limiting considerations
+- Pricing/subscription model compatibility
+
+#### Implementation Approach:
+1. Create abstraction layer for different CLI tools
+2. Standardize message format between app and server
+3. Implement provider-specific adapters
+4. Handle authentication per provider
+5. Unified error handling and status codes
+
+---
+
+## Test Note 15: Need Way to Refresh Project List
+**Date**: 2025-09-12
+
+### Issue Description
+There is no way to refresh the project list, which may be particularly problematic on iPad.
+
+### Observed Behavior
+- Project list doesn't update when new projects are added/removed
+- No pull-to-refresh or refresh button available
+- May be more noticeable on iPad due to multitasking usage patterns
+- Users must close and reopen app to see updated project list
+
+### Impact
+Users cannot see newly created projects or remove deleted ones without restarting the app, disrupting workflow especially when managing multiple projects.
+
+### Potential Solutions
+- Add pull-to-refresh gesture on project list
+- Add refresh button in navigation bar or toolbar
+- Implement automatic refresh on app foreground
+- Add refresh option in context menu
+- Consider periodic background refresh
+
+### iPad-Specific Considerations
+- iPad users more likely to keep app open in split view/slide over
+- May switch between Claude CLI and companion app frequently
+- Project changes made via CLI won't reflect in open iPad app
+- Multitasking makes app restarts more disruptive on iPad
+
+---
+
+## Test Note 16: Unsent Message Lost When Navigating Away
+**Date**: 2025-09-12
+
+### Issue Description
+If you type a message in a chat box and navigate away or to a new chat before sending, the message is lost.
+
+### Observed Behavior
+- User types message in chat input field
+- User navigates to different chat or leaves chat view
+- Original typed message is completely lost
+- No draft saving or warning about unsent message
+- User must retype entire message if they return
+
+### Impact
+Users lose potentially long or complex messages they were composing, causing frustration and requiring them to recreate their thoughts. This is especially problematic for detailed technical questions or multi-part requests.
+
+### Potential Causes
+- No draft persistence for chat input
+- TextField state not preserved on navigation
+- Missing warning dialog for unsent messages
+- No per-chat draft storage
+- View lifecycle clearing text field state
+
+### Recommended Solutions
+1. **Draft Persistence**: Save draft messages per chat
+2. **Navigation Warning**: Alert user when leaving with unsent text
+3. **Auto-save**: Periodically save draft to local storage
+4. **Restore on Return**: Reload draft when returning to chat
+5. **Draft Indicator**: Show visual indicator when draft exists
+
+### Areas to Investigate
+- Implement per-chat draft storage in local state
+- Add navigation interceptor to check for unsent text
+- Store drafts in UserDefaults or CoreData
+- Consider draft expiry/cleanup strategy
+- Test draft persistence across app restarts
+
+---
+
+## Test Note 17: Badges Don't Clear on iPad
+**Date**: 2025-09-12
+
+### Issue Description
+Badges (notification indicators) don't seem to clear properly on iPad.
+
+### Observed Behavior
+- Badge counts remain visible after viewing messages
+- Badges may not clear when entering a chat
+- Issue appears to be iPad-specific
+- App badge and/or chat badges may be affected
+
+### Impact
+Users see incorrect unread counts, leading to confusion about which chats have new messages and potentially causing unnecessary checking of already-read conversations.
+
+### Potential Causes
+- iPad-specific badge clearing logic issues
+- Different app lifecycle on iPad (multitasking, split view)
+- Badge update timing issues
+- UserNotifications framework behavior differences on iPad
+- Background refresh not updating badges correctly
+
+### Areas to Investigate
+- Test badge clearing in different iPad scenarios (split view, slide over)
+- Check if issue occurs in both app icon badges and in-app badges
+- Verify UNUserNotificationCenter badge update calls
+- Test with different notification delivery methods
+- Check if badges clear differently in foreground vs background
+- Review iPad-specific notification handling code
+- Test across different iPad models and iOS versions

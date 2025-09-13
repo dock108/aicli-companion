@@ -12,21 +12,14 @@ public class SettingsManager: ObservableObject {
     @Published var showTypingIndicators: Bool = true
     @Published var hapticFeedback: Bool = true
     @Published var storeChatHistory: Bool = true
-    @Published var isPremium: Bool = false
+    @Published var enableNotifications: Bool = true
     
     // Connection status
     @Published var isConnected: Bool = false
     @Published var currentSessionId: String?
     
-    // Additional settings for EnhancedSettingsView
-    @Published var showMarkdownPreview: Bool = true
-    @Published var showThinkingIndicator: Bool = true
-    @Published var enableNotifications: Bool = true
-    @Published var notificationSound: Bool = true
-    @Published var notificationVibration: Bool = true
-    @Published var notificationPreview: Bool = true
+    // Debug settings (only shown when experimental features enabled)
     @Published var debugMode: Bool = false
-    @Published var showNetworkActivity: Bool = false
 
     private let userDefaults = UserDefaults.standard
     private let keychain = KeychainManager.shared
@@ -79,7 +72,7 @@ public class SettingsManager: ObservableObject {
         showTypingIndicators = settings.showTypingIndicators
         hapticFeedback = settings.hapticFeedback
         storeChatHistory = settings.storeChatHistory
-        isPremium = settings.isPremium
+        enableNotifications = settings.enableNotifications
     }
 
     func saveSettings() {
@@ -91,7 +84,7 @@ public class SettingsManager: ObservableObject {
         settings.showTypingIndicators = showTypingIndicators
         settings.hapticFeedback = hapticFeedback
         settings.storeChatHistory = storeChatHistory
-        settings.isPremium = isPremium
+        settings.enableNotifications = enableNotifications
 
         appSettings = settings
     }
@@ -170,32 +163,6 @@ public class SettingsManager: ObservableObject {
         userDefaults.removeObject(forKey: SettingsKey.chatHistory.rawValue)
     }
 
-    // MARK: - Premium Features
-
-    func isPremiumFeatureAvailable(_ feature: PremiumFeature) -> Bool {
-        if isPremium {
-            return true
-        }
-
-        // Some features might be available in free tier with limitations
-        switch feature {
-        case .remoteConnections, .notifications, .offlineQueue, .cliMode, .multipleConnections, .advancedCustomization:
-            return false
-        }
-    }
-
-    func unlockPremiumFeatures() {
-        var settings = appSettings
-        settings.isPremium = true
-        settings.allowRemoteConnections = true
-        settings.enableNotifications = true
-        settings.enableOfflineQueue = true
-        settings.enableCLIMode = true
-        settings.allowMultipleConnections = true
-        appSettings = settings
-
-        isPremium = true
-    }
 
     // MARK: - Onboarding
 
@@ -272,17 +239,10 @@ public class SettingsManager: ObservableObject {
         showTypingIndicators = defaultSettings.showTypingIndicators
         hapticFeedback = defaultSettings.hapticFeedback
         storeChatHistory = defaultSettings.storeChatHistory
-        isPremium = defaultSettings.isPremium
+        enableNotifications = defaultSettings.enableNotifications
         
         // Reset additional properties
-        showMarkdownPreview = true
-        showThinkingIndicator = true
-        enableNotifications = true
-        notificationSound = true
-        notificationVibration = true
-        notificationPreview = true
         debugMode = false
-        showNetworkActivity = false
         isConnected = false
         currentSessionId = nil
     }
@@ -298,8 +258,7 @@ extension SettingsKey: CaseIterable {
             .savedConnections,
             .chatHistory,
             .lastSessionId,
-            .hasCompletedOnboarding,
-            .purchaseTransactions
+            .hasCompletedOnboarding
         ]
     }
 }
